@@ -1,0 +1,64 @@
+# Dependency consistency of the core ALICE crates, from their crates.io releases
+#
+# Resolves this repository's Cargo.toml against crates.io as it is today (the
+# committed Cargo.lock is replaced in the runner's checkout, never committed), then
+# scripts/dep_consistency.py checks the result: one version per alice-* crate, all
+# eight core crates present, and every alice-* requirement accepting the latest
+# release. The report goes to the job summary. Nothing compared is a failure.
+#
+# Weekly and on demand, and on a push that changes the check itself. It does not run
+# on pushes to the core crates; a new release is picked up by the next weekly run.
+
+name: Dependency consistency
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"   # Mondays 04:41 UTC
+  workflow_dispatch:
+  push:
+    branches: [main, "ci/**"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "scripts/**"
+      - "tools/**"
+      - ".github/workflows/dependency-consistency.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-consistency-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    name: One version per crate, requirements accept the latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Test the checker
+        run: python3 scripts/test_dep_consistency.py
+
+      - name: Compare the requirement matching with the semver crate
+        run: python3 scripts/semver_differential.py
+
+      - name: Resolve against crates.io as it is today
+        run: |
+          cargo --version
+          cargo generate-lockfile
+          echo "Changes to the committed Cargo.lock:"
+          git diff --stat -- Cargo.lock
+
+      - name: Check
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/dep_consistency.py > "$RUNNER_TEMP/report.md"
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/report.md"
+          exit "$rc"

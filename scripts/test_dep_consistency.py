@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""Tests of scripts/dep_consistency.py (python3 scripts/test_dep_consistency.py)
+
+No network: crates.io is replaced by a fixture.
+"""
+from __future__ import annotations
+
+import contextlib
+import importlib.util
+import io
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+spec = importlib.util.spec_from_file_location("dc", HERE / "dep_consistency.py")
+dc = importlib.util.module_from_spec(spec)
+sys.modules["dc"] = dc
+spec.loader.exec_module(dc)
+
+
+def lock(*pkgs: tuple[str, str]) -> str:
+    return "version = 4\n\n" + "".join(
+        f'[[package]]\nname = "{n}"\nversion = "{v}"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n\n'
+        for n, v in pkgs)
+
+
+ALL_CORE = [(c, "1.0.0") for c in dc.CORE]
+MANIFEST = "[package]\nname = \"x\"\n\n[dependencies]\n" + "".join(f'{c} = "1.0"\n' for c in dc.CORE)
+
+
+def fixture(latest: dict[str, str] | None = None, deps: dict[tuple[str, str], list[tuple[str, str, bool]]] | None = None):
+    latest = latest or {c: "1.0.0" for c in dc.CORE}
+    deps = deps or {}
+
+    def fetch(path: str) -> dict:
+        parts = path.split("/")
+        if len(parts) == 1:
+            return {"crate": {"max_stable_version": latest[parts[0]], "max_version": latest[parts[0]]}}
+        crate, version, _ = parts
+        return {"dependencies": [
+            {"crate_id": d, "req": r, "optional": o, "kind": "normal"} for d, r, o in deps.get((crate, version), [])
+        ] + [{"crate_id": "serde", "req": "^1", "optional": False, "kind": "normal"},
+             {"crate_id": "alice-zip", "req": "^0.1", "optional": False, "kind": "dev"}]}
+    return fetch
+
+
+class Matches(unittest.TestCase):
+    """Cargo's requirement rules (https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)"""
+
+    def test_caret(self):
+        for req, yes, no in [
+            ("^1.2.3", ["1.2.3", "1.9.0"], ["1.2.2", "2.0.0"]),
+            ("^1.2", ["1.2.0", "1.99.0"], ["1.1.9", "2.0.0"]),
+            ("^1", ["1.0.0", "1.9.9"], ["0.9.0", "2.0.0"]),
+            ("^0.2.3", ["0.2.3", "0.2.9"], ["0.2.2", "0.3.0"]),
+            ("^0.2", ["0.2.0", "0.2.9"], ["0.1.9", "0.3.0"]),
+            ("^0.0.3", ["0.0.3"], ["0.0.4", "0.0.2"]),
+            ("^0.0", ["0.0.0", "0.0.9"], ["0.1.0"]),
+            ("^0", ["0.0.0", "0.9.9"], ["1.0.0"]),
+            ("0.4", ["0.4.0", "0.4.7"], ["0.5.0", "0.3.9"]),  # a bare requirement is a caret
+        ]:
+            for v in yes:
+                self.assertTrue(dc.matches(req, v), f"{req} should accept {v}")
+            for v in no:
+                self.assertFalse(dc.matches(req, v), f"{req} should refuse {v}")
+
+    def test_tilde_exact_wildcard_and_ranges(self):
+        for req, yes, no in [
+            ("~1.2.3", ["1.2.3", "1.2.9"], ["1.3.0"]),
+            ("~1.2", ["1.2.0", "1.2.9"], ["1.3.0"]),
+            ("~1", ["1.0.0", "1.9.0"], ["2.0.0"]),
+            ("=1.2.3", ["1.2.3"], ["1.2.4"]),
+            ("=1.2", ["1.2.0", "1.2.9"], ["1.3.0"]),
+            ("*", ["0.0.1", "9.9.9"], []),
+            ("1.*", ["1.0.0", "1.9.9"], ["2.0.0"]),
+            (">= 1.2, < 1.5", ["1.2.0", "1.4.9"], ["1.5.0", "1.1.9"]),
+            ("> 1.2", ["1.3.0"], ["1.2.9"]),
+            ("> 1.2.3", ["1.2.4"], ["1.2.3"]),
+            ("<= 1.2", ["1.2.9"], ["1.3.0"]),
+            # a full version with a pre-release bounds the range exactly (found by the
+            # differential check against the semver crate: it was read as unbounded)
+            ("<=0.1.1-beta.1", ["0.1.1-beta.1", "0.1.0"], ["1.2.1", "0.1.1"]),
+            (">=0.3.0-beta.2", ["0.3.0", "1.0.0"], ["0.2.9"]),
+        ]:
+            for v in yes:
+                self.assertTrue(dc.matches(req, v), f"{req} should accept {v}")
+            for v in no:
+                self.assertFalse(dc.matches(req, v), f"{req} should refuse {v}")
+
+    def test_pre_releases(self):
+        # a pre-release satisfies a requirement only when it names the same x.y.z with a pre-release
+        self.assertTrue(dc.matches("^0.3.0-beta.1", "0.3.0-beta.2"))
+        self.assertTrue(dc.matches("^0.3.0-beta.1", "0.3.0"))
+        self.assertTrue(dc.matches("^0.3.0-beta.1", "0.3.5"))
+        self.assertFalse(dc.matches("^0.3.0-beta.2", "0.3.0-beta.1"))
+        self.assertFalse(dc.matches("^0.3", "0.3.1-beta.1"), "no pre-release named in the requirement")
+        self.assertFalse(dc.matches("^0.3.0-beta.1", "0.3.1-beta.1"), "another x.y.z's pre-release")
+        self.assertFalse(dc.matches("^0.14.0-preview.4", "2.2.0"))
+        self.assertTrue(dc.matches("=0.3.0-beta.2", "0.3.0-beta.2"))
+        self.assertFalse(dc.matches("=0.3.0-beta.2", "0.3.0"))
+        self.assertTrue(dc.Version("1.0.0-alpha") < dc.Version("1.0.0-alpha.1") < dc.Version("1.0.0-beta.2")
+                        < dc.Version("1.0.0-beta.11") < dc.Version("1.0.0-rc.1") < dc.Version("1.0.0"))
+
+    def test_unreadable_input_is_an_error(self):
+        for req in ("", "^x", "1.2.3.4"):
+            with self.assertRaises(ValueError, msg=req):
+                dc.matches(req, "1.0.0")
+
+
+class Checks(unittest.TestCase):
+    def run_check(self, lock_text, manifest=MANIFEST, fetch=None):
+        return dc.check(lock_text, manifest, fetch or fixture())
+
+    def test_a_consistent_set_passes(self):
+        _, problems, compared = self.run_check(lock(*ALL_CORE))
+        self.assertEqual(problems, [])
+        self.assertEqual(compared, 8 + 8 + 8, "8 crates, 8 presence checks, 8 requirements of this repository")
+
+    def test_two_versions_of_a_crate_fail(self):
+        _, problems, _ = self.run_check(lock(*ALL_CORE, ("alice-zip", "0.7.0")))
+        self.assertEqual(problems, ["alice-zip is linked at 2 versions: 0.7.0, 1.0.0"])
+
+    def test_a_non_core_alice_crate_is_also_checked(self):
+        _, problems, _ = self.run_check(lock(*ALL_CORE, ("alice-cache", "0.1.0"), ("alice-cache", "0.2.0")))
+        self.assertEqual(problems, ["alice-cache is linked at 2 versions: 0.1.0, 0.2.0"])
+
+    def test_a_missing_core_crate_fails(self):
+        _, problems, _ = self.run_check(lock(*[p for p in ALL_CORE if p[0] != "alice-crypto"]))
+        self.assertEqual(problems, ["alice-crypto is not in Cargo.lock"])
+
+    def test_a_requirement_that_refuses_the_latest_fails(self):
+        latest = {c: "1.0.0" for c in dc.CORE} | {"alice-zip": "1.1.0"}
+        deps = {("alice-db", "1.0.0"): [("alice-zip", "~1.0", False), ("alice-crypto", "^1", True)]}
+        _, problems, compared = self.run_check(lock(*ALL_CORE), fetch=fixture(latest, deps))
+        self.assertEqual(problems, ["alice-db 1.0.0 requires alice-zip ~1.0, which does not accept the latest release 1.1.0"])
+        self.assertEqual(compared, 8 + 8 + 8 + 2, "non-alice and dev dependencies are not compared")
+
+    def test_this_repository_must_follow_the_latest_too(self):
+        latest = {c: "1.0.0" for c in dc.CORE} | {"alice-lol": "2.0.0"}
+        _, problems, _ = self.run_check(lock(*ALL_CORE), fetch=fixture(latest))
+        self.assertEqual(problems, ["this repository requires alice-lol 1.0, which does not accept the latest release 2.0.0"])
+
+    def test_each_resolved_version_is_asked(self):
+        asked = []
+        base = fixture()
+
+        def fetch(path):
+            asked.append(path)
+            return base(path)
+        self.run_check(lock(*ALL_CORE, ("alice-zip", "0.7.0")), fetch=fetch)
+        self.assertIn("alice-zip/0.7.0/dependencies", asked)
+        self.assertIn("alice-zip/1.0.0/dependencies", asked)
+
+    def test_latest_is_the_latest_stable_release_when_there_is_one(self):
+        # crates.io's max_version includes pre-releases: 0.5.0-beta.1 published after 0.4.0
+        # must not make every `^0.4` requirement "behind"; with no stable release (alice-db
+        # today) the pre-release is the latest
+        def fetch(path):
+            if path == "alice-det-math":
+                return {"crate": {"max_stable_version": "1.0.0", "max_version": "1.1.0-beta.1"}}
+            if path == "alice-db":
+                return {"crate": {"max_stable_version": None, "max_version": "1.0.0-beta.2"}}
+            return fixture()(path)
+        self.assertEqual(dc.latest_release(fetch, "alice-det-math"), "1.0.0")
+        self.assertEqual(dc.latest_release(fetch, "alice-db"), "1.0.0-beta.2")
+        _, problems, _ = self.run_check(lock(*ALL_CORE), fetch=fetch)
+        self.assertEqual(problems, ["this repository requires alice-db 1.0, which does not accept the latest release 1.0.0-beta.2"])
+
+    def test_manifest_requirements(self):
+        text = ('[package]\nname = "x"\n[dependencies]\nalice-a = "0.3"\n'
+                'alice-b = { version = "0.3.0-beta.2", features = ["c"] }\nserde = "1"\n'
+                '[dev-dependencies]\nalice-c = "9"\n')
+        self.assertEqual(dc.manifest_requirements(text), {"alice-a": "0.3", "alice-b": "0.3.0-beta.2"})
+
+
+class Cli(unittest.TestCase):
+    def run_main(self, lock_text, manifest=MANIFEST, fetch=None):
+        with tempfile.TemporaryDirectory() as d:
+            lp, mp = Path(d, "Cargo.lock"), Path(d, "Cargo.toml")
+            if lock_text is not None:
+                lp.write_text(lock_text, encoding="utf-8")
+            mp.write_text(manifest, encoding="utf-8")
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = dc.main(["--lock", str(lp), "--manifest", str(mp)], fetch=fetch or fixture())
+            return code, out.getvalue(), err.getvalue()
+
+    def test_exit_codes(self):
+        self.assertEqual(self.run_main(lock(*ALL_CORE))[0], 0)
+        code, out, _ = self.run_main(lock(*ALL_CORE, ("alice-zip", "0.7.0")))
+        self.assertEqual(code, 1)
+        self.assertIn("1 problems", out)
+
+    def test_nothing_compared_fails(self):
+        self.assertEqual(self.run_main("version = 4\n")[0], 2, "an empty lock file")
+        self.assertEqual(self.run_main(None)[0], 2, "no lock file")
+
+    def test_crates_io_failure_is_not_a_pass(self):
+        def broken(path):
+            raise dc.urllib.error.URLError("offline")
+        self.assertEqual(self.run_main(lock(*ALL_CORE), fetch=broken)[0], 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

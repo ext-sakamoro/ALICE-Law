@@ -1,0 +1,12 @@
+# Reference for scripts/dep_consistency.py's requirement matching: the semver crate
+# (the implementation Cargo uses) answers whether each requirement accepts each version
+[package]
+name = "semver-oracle"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+semver = "1"
+
+[workspace]
