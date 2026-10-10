@@ -13,7 +13,7 @@ Everything here is built from the versions published on crates.io, with no path 
 
 ```sh
 cargo generate-lockfile                 # resolve against crates.io as it is today
-python3 scripts/dep_consistency.py      # Markdown report; exit 1 on a problem, 2 when nothing was compared
+python3 scripts/dep_consistency.py      # Markdown report; exit 1 on a problem, 2 when a check compared nothing
 ```
 
 The checks:
@@ -22,7 +22,9 @@ The checks:
 2. presence: all eight core crates are in the lock file
 3. requirement vs latest: the `alice-*` requirements of this repository and of every core crate at the version the lock file resolved must accept the latest release of the crate they name (the latest stable release, or the latest pre-release when a crate has no stable one). A requirement that does not is how a second version gets into a user's lock file
 
-The requirement matching follows Cargo's rules (carets, tildes, ranges, wildcards, pre-releases). `scripts/semver_differential.py` compares it with the [semver](https://crates.io/crates/semver) crate on several thousand generated requirement / version pairs (`tools/semver-oracle`) and fails on any disagreement.
+Each check reports how many comparisons it made, and a check that made none fails the run (exit 2), as does a dependency of this repository on an `alice-*` crate by path or git. This repository's own package is not one of the crates checked.
+
+The requirement matching follows Cargo's rules (carets, tildes, ranges, wildcards such as `1.2.*` and `1.x`, pre-releases). `scripts/semver_differential.py` compares it with the [semver](https://crates.io/crates/semver) crate (`tools/semver-oracle`) on generated requirement / version pairs and on a fixed grid of every operator and requirement shape against the versions one step away, and fails on any disagreement, including a requirement that one of the two reads and the other does not.
 
 CI (`.github/workflows/dependency-consistency.yml`) runs the tests, the comparison with the semver crate and the check every Monday, on demand, and on a push that changes the check. The report is in the job summary.
 
@@ -42,3 +44,7 @@ Linked at two or more versions:
 | alice-zip | 0.7.0, 0.8.0 | alice-db 0.3.0-beta.2 (`^0.7`), alice-analytics 0.3.0 (`^0.7`, optional) |
 
 Releases that would remove them, in dependency order: alice-analytics with `alice-zip ^0.8`; alice-db with `alice-zip ^0.8`, `alice-analytics ^0.3` and `alice-crypto ^0.4`; alice-physics with `alice-analytics ^0.3` and the new alice-db; alice-lol with `alice-sdf ^5.1` and `alice-physics ^2`.
+
+## License
+
+Apache-2.0 (see [LICENSE](LICENSE)).

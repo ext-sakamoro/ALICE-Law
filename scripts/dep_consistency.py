@@ -23,6 +23,7 @@ import json
 import re
 import sys
 import time
+import tomllib
 import urllib.error
 import urllib.request
 from collections import defaultdict
@@ -68,7 +69,8 @@ class Version:
         return self.text
 
 
-COMPARATOR_RE = re.compile(r"^(\^|~|=|>=|<=|>|<)?\s*(\d+|\*)(?:\.(\d+|\*))?(?:\.(\d+|\*))?(?:-([0-9A-Za-z.-]+))?$")
+COMPARATOR_RE = re.compile(r"^(\^|~|=|>=|<=|>|<)?\s*(\d+|[*xX])(?:\.(\d+|[*xX]))?(?:\.(\d+|[*xX]))?(?:-([0-9A-Za-z.-]+))?$")
+WILDCARDS = ("*", "x", "X")
 
 
 def _bounds(op: str, parts: list[int | None], pre: tuple) -> tuple[Version | None, bool, Version | None]:
@@ -112,6 +114,40 @@ def _bounds(op: str, parts: list[int | None], pre: tuple) -> tuple[Version | Non
     raise ValueError(op)
 
 
+def parse_requirement(req: str) -> list[tuple[str, list[int | None], tuple]]:
+    """(operator, [major, minor, patch] with None for an omitted part, pre-release) per comparator
+
+    Raises ValueError for anything Cargo would not read, so that a requirement is either
+    understood completely or not used at all (never half-read)
+    """
+    comparators = [c.strip() for c in req.split(",")]
+    if not req.strip() or any(not c for c in comparators):
+        raise ValueError(f"cannot read requirement {req!r}")
+    out = []
+    for c in comparators:
+        m = COMPARATOR_RE.match(c)
+        if not m:
+            raise ValueError(f"cannot read requirement {req!r}")
+        op = m.group(1) or ""
+        raw = m.group(2, 3, 4)
+        wild = [g in WILDCARDS for g in raw]
+        # a wildcard stands for an omitted part: `1.2.*` is `1.2`, `1.*.*` is `1`; a number
+        # after a wildcard (`1.*.3`), a pre-release with a wildcard, an operator before a
+        # wildcard major (`^*`, `>=*`), a wildcard major with more parts (`*.*`) and `*`
+        # beside other comparators are not requirements
+        if any(wild):
+            first = wild.index(True)
+            if any(g is not None and g not in WILDCARDS for g in raw[first:]) or m.group(5) \
+                    or (first == 0 and (op or len(comparators) > 1 or raw[1] is not None)):
+                raise ValueError(f"cannot read requirement {req!r}")
+            if not op:
+                op = "="  # a bare wildcard requirement is exact on its given parts, not a caret
+        nums = [None if g is None or g in WILDCARDS else int(g) for g in raw]
+        pre = tuple(m.group(5).split(".")) if m.group(5) else ()
+        out.append((op, nums, pre))
+    return out
+
+
 def matches(req: str, version: str) -> bool:
     """Whether `version` satisfies the Cargo requirement `req` (comma = and)
 
@@ -119,32 +155,24 @@ def matches(req: str, version: str) -> bool:
     names the same major.minor.patch with a pre-release (Cargo's rule)
     """
     ver = Version(version)
-    comparators = [c.strip() for c in req.split(",") if c.strip()]
-    if not comparators:
-        raise ValueError(f"empty requirement: {req!r}")
+    parsed = parse_requirement(req)  # the whole requirement is read before any of it is applied
     pre_allowed = not ver.pre
-    for c in comparators:
-        m = COMPARATOR_RE.match(c)
-        if not m:
-            raise ValueError(f"cannot read requirement {req!r}")
-        op = m.group(1) or ""
-        nums = [None if g in (None, "*") else int(g) for g in m.group(2, 3, 4)]
-        pre = tuple(m.group(5).split(".")) if m.group(5) else ()
-        if pre and nums[0] is not None and nums[1] is not None and nums[2] is not None \
-                and (nums[0], nums[1], nums[2]) == ver.core:
+    ok = True
+    for op, nums, pre in parsed:
+        if pre and None not in nums and tuple(nums) == ver.core:
             pre_allowed = True
         if None not in nums and op in ("=", ">=", ">", "<", "<="):
             # a full version: compare with it directly (pre-release included)
             t = Version(f"{nums[0]}.{nums[1]}.{nums[2]}" + ("-" + ".".join(pre) if pre else ""))
             if not {"=": ver == t, ">=": t <= ver, ">": t < ver, "<": ver < t, "<=": ver <= t}[op]:
-                return False
+                ok = False
             continue
         low, low_inc, high = _bounds(op, nums, pre)
         if low is not None and (ver < low if low_inc else ver <= low):
-            return False
+            ok = False
         if high is not None and not ver < high:
-            return False
-    return pre_allowed
+            ok = False
+    return ok and pre_allowed
 
 
 # ---------------------------------------------------------------- lock file and manifest
@@ -159,21 +187,24 @@ def lock_packages(text: str) -> dict[str, list[str]]:
     return out
 
 
-def manifest_requirements(text: str) -> dict[str, str]:
-    """`alice-*` requirements of the `[dependencies]` table (`name = "req"` or `{ version = "req" }`)"""
+def manifest_requirements(text: str) -> tuple[str, dict[str, str]]:
+    """(package name, `alice-*` requirements of `[dependencies]`)
+
+    Every form is read (`name = "req"`, inline tables, `[dependencies.name]` tables);
+    an `alice-*` dependency without a version (a path or git dependency) is an error,
+    since everything here must come from crates.io
+    """
+    data = tomllib.loads(text)
+    name = data.get("package", {}).get("name", "")
     out = {}
-    section = None
-    for line in text.splitlines():
-        s = line.split("#", 1)[0].strip()
-        if s.startswith("["):
-            section = s
+    for dep, spec in data.get("dependencies", {}).items():
+        if not dep.startswith("alice-"):
             continue
-        if section != "[dependencies]":
-            continue
-        m = re.match(r'^(alice-[a-z0-9-]+)\s*=\s*(?:"([^"]+)"|\{.*?\bversion\s*=\s*"([^"]+)")', s)
-        if m:
-            out[m.group(1)] = m.group(2) or m.group(3)
-    return out
+        req = spec if isinstance(spec, str) else spec.get("version")
+        if not req or (isinstance(spec, dict) and ("path" in spec or "git" in spec)):
+            raise ValueError(f"{dep} is not a crates.io dependency with a version: {spec!r}")
+        out[dep] = req
+    return name, out
 
 
 # ---------------------------------------------------------------- crates.io
@@ -210,17 +241,18 @@ def published_requirements(fetch: Fetch, crate: str, version: str) -> list[tuple
 
 # ---------------------------------------------------------------- the checks
 
-def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], list[str], int]:
-    """(report lines, problems, compared count)"""
+def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], list[str], dict[str, int]]:
+    """(report lines, problems, number of comparisons per check)"""
     lines: list[str] = []
     problems: list[str] = []
-    compared = 0
+    tally = {"one version per crate": 0, "core crates present": 0, "requirements accept the latest": 0}
 
+    own, own_reqs = manifest_requirements(manifest_text)
     pkgs = lock_packages(lock_text)
-    alice = {n: sorted(vs, key=Version) for n, vs in pkgs.items() if n.startswith("alice-")}
+    alice = {n: sorted(vs, key=Version) for n, vs in pkgs.items() if n.startswith("alice-") and n != own}
     lines += ["## 1. One version per crate", "", "| crate | versions in Cargo.lock | |", "|---|---|---|"]
     for name, vs in sorted(alice.items()):
-        compared += 1
+        tally["one version per crate"] += 1
         bad = len(vs) > 1
         lines.append(f"| {name} | {', '.join(vs)} | {'**2 or more versions**' if bad else 'ok'} |")
         if bad:
@@ -229,7 +261,7 @@ def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], 
 
     lines += ["## 2. Every core crate is present", ""]
     missing = [c for c in CORE if c not in alice]
-    compared += len(CORE)
+    tally["core crates present"] += len(CORE)
     lines.append(f"{len(CORE) - len(missing)} of {len(CORE)} core crates in Cargo.lock"
                  + (f"; missing: {', '.join(missing)}" if missing else ""))
     lines.append("")
@@ -239,7 +271,7 @@ def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], 
               "| crate (version) | requires | latest | |", "|---|---|---|---|"]
     latest = {c: latest_release(fetch, c) for c in CORE}
     sources: list[tuple[str, str, str, bool]] = [
-        ("this repository", dep, req, False) for dep, req in sorted(manifest_requirements(manifest_text).items())
+        ("this repository", dep, req, False) for dep, req in sorted(own_reqs.items())
     ]
     for crate in CORE:
         for version in alice.get(crate, []):
@@ -248,14 +280,14 @@ def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], 
     for who, dep, req, optional in sources:
         if dep not in CORE:
             continue
-        compared += 1
+        tally["requirements accept the latest"] += 1
         ok = matches(req, latest[dep])
         opt = " (optional)" if optional else ""
         lines.append(f"| {who} | {dep} {req}{opt} | {latest[dep]} | {'ok' if ok else '**does not accept the latest**'} |")
         if not ok:
             problems.append(f"{who} requires {dep} {req}{opt}, which does not accept the latest release {latest[dep]}")
     lines.append("")
-    return lines, problems, compared
+    return lines, problems, tally
 
 
 def main(argv: list[str] | None = None, fetch: Fetch = http_fetch) -> int:
@@ -268,20 +300,25 @@ def main(argv: list[str] | None = None, fetch: Fetch = http_fetch) -> int:
         print(f"error: {lock} or {manifest} is missing", file=sys.stderr)
         return 2
     try:
-        lines, problems, compared = check(lock.read_text(encoding="utf-8"),
-                                          manifest.read_text(encoding="utf-8"), fetch)
-    except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
+        lines, problems, tally = check(lock.read_text(encoding="utf-8"),
+                                       manifest.read_text(encoding="utf-8"), fetch)
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError, tomllib.TOMLDecodeError) as e:
         print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
     print("# Dependency consistency of the core ALICE crates\n")
     print("\n".join(lines))
-    if not lock_packages(lock.read_text(encoding="utf-8")) or compared == 0:
-        print("error: nothing was compared", file=sys.stderr)
-        return 2
-    print(f"{compared} comparisons, {len(problems)} problems\n")
+    print("| check | comparisons |\n|---|---|")
+    for name, n in tally.items():
+        print(f"| {name} | {n} |")
+    print(f"\n{sum(tally.values())} comparisons, {len(problems)} problems\n")
     for p in problems:
         print(f"- {p}")
         print(f"error: {p}", file=sys.stderr)
+    empty = [name for name, n in tally.items() if n == 0]
+    if empty:
+        # a check that compared nothing has not checked anything, whatever else passed
+        print(f"error: nothing was compared by: {', '.join(empty)}", file=sys.stderr)
+        return 2
     return 1 if problems else 0
 
 

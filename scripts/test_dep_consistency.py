@@ -79,6 +79,16 @@ class Matches(unittest.TestCase):
             ("> 1.2", ["1.3.0"], ["1.2.9"]),
             ("> 1.2.3", ["1.2.4"], ["1.2.3"]),
             ("<= 1.2", ["1.2.9"], ["1.3.0"]),
+            # wildcards stand for omitted parts, and a bare wildcard requirement is exact on the
+            # parts it gives (not a caret): `1.2.*` is `=1.2`, so 1.3.0 and 1.13.0 are refused
+            ("1.2.*", ["1.2.0", "1.2.9"], ["1.3.0", "1.13.0", "1.1.9", "1.2.0-beta.1"]),
+            ("1.2.x", ["1.2.5"], ["1.3.0"]),
+            ("1.X.*", ["1.0.0", "1.13.0"], ["2.0.0", "0.9.0"]),
+            ("0.*", ["0.0.0", "0.9.0"], ["1.0.0"]),
+            ("x", ["0.0.1", "9.0.0"], ["1.0.0-beta.1"]),
+            ("^1.2.*", ["1.2.0", "1.13.0"], ["2.0.0", "1.1.0"]),
+            (">1.2.*", ["1.3.0"], ["1.2.9"]),
+            ("<=1.*", ["1.9.9", "0.1.0"], ["2.0.0"]),
             # a full version with a pre-release bounds the range exactly (found by the
             # differential check against the semver crate: it was read as unbounded)
             ("<=0.1.1-beta.1", ["0.1.1-beta.1", "0.1.0"], ["1.2.1", "0.1.1"]),
@@ -104,7 +114,8 @@ class Matches(unittest.TestCase):
                         < dc.Version("1.0.0-beta.11") < dc.Version("1.0.0-rc.1") < dc.Version("1.0.0"))
 
     def test_unreadable_input_is_an_error(self):
-        for req in ("", "^x", "1.2.3.4"):
+        for req in ("", "^q", "1.2.3.4", "1.*.3", "*.2", "1.2.*-beta", "^x", "^*", ">=*", "~X", "*.*", "x.X",
+                    "<=1, *", ">=1.0, <2, x"):
             with self.assertRaises(ValueError, msg=req):
                 dc.matches(req, "1.0.0")
 
@@ -114,9 +125,11 @@ class Checks(unittest.TestCase):
         return dc.check(lock_text, manifest, fetch or fixture())
 
     def test_a_consistent_set_passes(self):
-        _, problems, compared = self.run_check(lock(*ALL_CORE))
+        _, problems, tally = self.run_check(lock(*ALL_CORE, ("x", "0.0.0")))
         self.assertEqual(problems, [])
-        self.assertEqual(compared, 8 + 8 + 8, "8 crates, 8 presence checks, 8 requirements of this repository")
+        self.assertEqual(tally, {"one version per crate": 8, "core crates present": 8,
+                                 "requirements accept the latest": 8},
+                         "8 crates (this repository's own package not counted), 8 presence checks, 8 requirements")
 
     def test_two_versions_of_a_crate_fail(self):
         _, problems, _ = self.run_check(lock(*ALL_CORE, ("alice-zip", "0.7.0")))
@@ -133,9 +146,9 @@ class Checks(unittest.TestCase):
     def test_a_requirement_that_refuses_the_latest_fails(self):
         latest = {c: "1.0.0" for c in dc.CORE} | {"alice-zip": "1.1.0"}
         deps = {("alice-db", "1.0.0"): [("alice-zip", "~1.0", False), ("alice-crypto", "^1", True)]}
-        _, problems, compared = self.run_check(lock(*ALL_CORE), fetch=fixture(latest, deps))
+        _, problems, tally = self.run_check(lock(*ALL_CORE), fetch=fixture(latest, deps))
         self.assertEqual(problems, ["alice-db 1.0.0 requires alice-zip ~1.0, which does not accept the latest release 1.1.0"])
-        self.assertEqual(compared, 8 + 8 + 8 + 2, "non-alice and dev dependencies are not compared")
+        self.assertEqual(tally["requirements accept the latest"], 8 + 2, "non-alice and dev dependencies are not compared")
 
     def test_this_repository_must_follow_the_latest_too(self):
         latest = {c: "1.0.0" for c in dc.CORE} | {"alice-lol": "2.0.0"}
@@ -171,8 +184,23 @@ class Checks(unittest.TestCase):
     def test_manifest_requirements(self):
         text = ('[package]\nname = "x"\n[dependencies]\nalice-a = "0.3"\n'
                 'alice-b = { version = "0.3.0-beta.2", features = ["c"] }\nserde = "1"\n'
+                '[dependencies.alice-d]\nversion = "0.8"\nfeatures = ["e"]\n'
                 '[dev-dependencies]\nalice-c = "9"\n')
-        self.assertEqual(dc.manifest_requirements(text), {"alice-a": "0.3", "alice-b": "0.3.0-beta.2"})
+        self.assertEqual(dc.manifest_requirements(text),
+                         ("x", {"alice-a": "0.3", "alice-b": "0.3.0-beta.2", "alice-d": "0.8"}))
+
+    def test_a_table_form_requirement_is_checked(self):
+        # `[dependencies.alice-lol]` must not read as "no requirement": here it is behind
+        manifest = MANIFEST.replace('alice-lol = "1.0"\n', "") + '[dependencies.alice-lol]\nversion = "0.9"\n'
+        _, problems, tally = self.run_check(lock(*ALL_CORE), manifest=manifest)
+        self.assertEqual(problems, ["this repository requires alice-lol 0.9, which does not accept the latest release 1.0.0"])
+        self.assertEqual(tally["requirements accept the latest"], 8)
+
+    def test_a_path_or_git_dependency_is_refused(self):
+        for spec in ('{ path = "../ALICE-LOL" }', '{ path = "../ALICE-LOL", version = "1" }',
+                     '{ git = "https://example.invalid/x" }'):
+            with self.assertRaises(ValueError, msg=spec):
+                dc.manifest_requirements(f'[package]\nname = "x"\n[dependencies]\nalice-lol = {spec}\n')
 
 
 class Cli(unittest.TestCase):
@@ -196,6 +224,26 @@ class Cli(unittest.TestCase):
     def test_nothing_compared_fails(self):
         self.assertEqual(self.run_main("version = 4\n")[0], 2, "an empty lock file")
         self.assertEqual(self.run_main(None)[0], 2, "no lock file")
+
+    def test_a_check_that_compares_nothing_fails(self):
+        # no alice-* requirement anywhere: check 3 compares nothing, so the run is not a pass
+        bare = '[package]\nname = "x"\n[dependencies]\nserde = "1"\n'
+        code, out, err = self.run_main(lock(*ALL_CORE), manifest=bare)
+        self.assertEqual(code, 2)
+        self.assertIn("nothing was compared by: requirements accept the latest", err)
+        self.assertIn("| requirements accept the latest | 0 |", out)
+
+    def test_this_repositorys_package_is_not_a_row(self):
+        code, out, _ = self.run_main(lock(*ALL_CORE, ("x", "0.0.0"), ("alice-law-x", "0.0.0")),
+                                     manifest=MANIFEST.replace('name = "x"', 'name = "alice-law-x"'))
+        self.assertEqual(code, 0)
+        self.assertNotIn("| alice-law-x |", out)
+        self.assertIn("| one version per crate | 8 |", out)
+
+    def test_a_path_dependency_stops_the_run(self):
+        code, _, err = self.run_main(lock(*ALL_CORE), manifest=MANIFEST + '[dependencies.alice-x]\npath = "../x"\n')
+        self.assertEqual(code, 2)
+        self.assertIn("not a crates.io dependency", err)
 
     def test_crates_io_failure_is_not_a_pass(self):
         def broken(path):
