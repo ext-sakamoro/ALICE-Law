@@ -1,0 +1,52 @@
+# End to end check of the core ALICE crates, from their crates.io releases
+#
+# The decisive gate: e2e/tests/law_to_storage_roundtrip.rs reads a law with
+# alice-lol, computes with alice-physics, fits and summarises with alice-zip and
+# alice-analytics, saves to alice-db, restores, and compares every value bit for bit,
+# the law record byte for byte, the alice-crypto digest of the run, the arithmetic
+# identifiers and one version per alice-* crate. Resolved against crates.io as it is
+# today: it is red until every core crate it needs is published at a version that
+# fits the others.
+#
+# Weekly and on demand, and on a push that changes the check. It does not run on
+# pushes to the core crates.
+
+name: End to end (published)
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"   # Mondays 05:17 UTC, after the dependency check
+  workflow_dispatch:
+  push:
+    branches: [main, "ci/**"]
+    paths:
+      - "e2e/**"
+      - ".github/workflows/e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-published-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  roundtrip:
+    name: Read, compute, save, restore, compare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Resolve against crates.io as it is today
+        run: |
+          cargo --version
+          cargo generate-lockfile
+          grep -A1 '^name = "alice-' Cargo.lock | grep -v '^--$' | paste - - | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Test
+        run: cargo test --release --locked -- --nocapture

@@ -1,2 +1,5 @@
 target/
 __pycache__/
+# resolved per mode (crates.io, or the checkouts of main), never committed
+e2e/Cargo.lock
+e2e/.cargo/

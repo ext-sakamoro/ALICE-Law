@@ -5,7 +5,7 @@ Integration checks across the core ALICE crates: ALICE-LOL, ALICE-DetMath, ALICE
 Everything here is built from the versions published on crates.io, with no path dependencies. Two kinds of check:
 
 - dependency consistency (in place): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, all eight core crates are present, and each `alice-*` requirement accepts the latest published version of the crate it names
-- end to end (planned): read a law, compute, save, restore, and compare every value bit for bit
+- end to end: read a law, compute, save, restore, and compare every value bit for bit
 
 ## Dependency consistency
 
@@ -28,6 +28,34 @@ The requirement matching follows Cargo's rules (carets, tildes, ranges, wildcard
 
 CI (`.github/workflows/dependency-consistency.yml`) runs the tests, the comparison with the semver crate and the check every Monday, on demand, and on a push that changes the check. The report is in the job summary.
 
+## End to end
+
+`e2e/` is a separate crate with one test, `tests/law_to_storage_roundtrip.rs`, that goes through the core crates with their public APIs:
+
+1. read: Newton's law of cooling, written as text, through the alice-lol research law reader, evaluated on a time grid
+2. compute: a thermal field law checked by alice-lol (solved by alice-physics), a rod cooling with `alice_physics::transient_thermal`, two bodies falling in a `PhysicsWorld`
+3. fit: an alice-zip `SignalLaw` to the cooling curve, and its residual summary from alice-analytics
+4. save: every value through the exact series of alice-db (`AliceDB::series`, not the fitted model store) and the law through its law store, to a directory
+5. restore: reopen the directory and read everything back
+6. compare: every value by `to_bits`, the law coefficients, domain, record and identifier, every field of the residual summary, and the alice-crypto digest of the whole run
+
+It also checks that the crates were built with one arithmetic (the `SEMANTICS_ID` of alice-det-math as alice-zip, alice-db, alice-analytics and alice-lol see it), that every `alice-*` crate is locked at one version, and that all eight core crates are in the build. Each comparison fails when it compared nothing. A golden digest of the computed run (`e2e/golden/run.digest`) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing.
+
+```sh
+cd e2e
+cargo test --release -- --nocapture             # published releases (resolved against crates.io)
+ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest again
+```
+
+Two modes run the same test:
+
+| mode | crates | workflow | meaning |
+|---|---|---|---|
+| published | crates.io releases | `e2e.yml` | the gate: red until every crate it needs is released at versions that fit together |
+| main | the main branches, side by side, patched in by `scripts/main_mode.py` | `e2e-main.yml` | early warning: what the next releases would change, and which crate on main is not taken because its version does not fit the others |
+
+`scripts/e2e_teeth.py` (main mode, the teeth job of `e2e-main.yml`) changes one line at a time in the checkouts and requires the test to fail with the expected message: a law coefficient decoded one ulp off, an f64 saved through f32, a restore that returns nothing, a flipped digest byte, `exp` from the platform libm, a slightly longer thermal step, a different arithmetic identifier, a residual one ulp off, and a second version of alice-zip in the build.
+
 ## Status
 
 Measured on 2026-10-11 (the committed `Cargo.lock`): **the check fails**, and is expected to until the core crates are released with requirements on each other's current versions.
@@ -44,6 +72,11 @@ Linked at two or more versions:
 | alice-zip | 0.7.0, 0.8.0 | alice-db 0.3.0-beta.2 (`^0.7`), alice-analytics 0.3.0 (`^0.7`, optional) |
 
 Releases that would remove them, in dependency order: alice-analytics with `alice-zip ^0.8`; alice-db with `alice-zip ^0.8`, `alice-analytics ^0.3` and `alice-crypto ^0.4`; alice-physics with `alice-analytics ^0.3` and the new alice-db; alice-lol with `alice-sdf ^5.1` and `alice-physics ^2`.
+
+End to end, measured on 2026-10-11:
+
+- published: **fails to resolve**, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet
+- main: the test passes (3776 values and records compared, digest `2a0f3d06…`); the check that every crate came from main fails, because alice-det-math 0.5.0 on main is not taken (every other crate requires `^0.4`), so the build uses 0.4.0 from crates.io
 
 ## License
 

@@ -1,0 +1,89 @@
+# End to end check of the core ALICE crates, from their main branches
+#
+# The same test as e2e.yml, with every core crate replaced by a checkout of its
+# repository's main branch (scripts/main_mode.py). An early warning: it says what the
+# next releases would do to the round trip and to the golden digest, and it fails
+# when a crate on main is not taken (its version does not fit what the others
+# require, so Cargo keeps the release from crates.io).
+#
+# The teeth job changes one line at a time in the checkouts and requires the test
+# to fail with the expected message (scripts/e2e_teeth.py); it rebuilds the test for
+# each change, so it runs on demand and when the test or the mutations change.
+#
+# Weekly and on demand, and on a push that changes the check. One run at a time;
+# the teeth job waits for the round trip and does not run on the weekly schedule.
+
+name: End to end (main)
+
+on:
+  schedule:
+    - cron: "47 5 * * 1"   # Mondays 05:47 UTC
+  workflow_dispatch:
+  push:
+    branches: [main, "ci/**"]
+    paths:
+      - "e2e/**"
+      - "scripts/main_mode.py"
+      - "scripts/e2e_teeth.py"
+      - ".github/workflows/e2e-main.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-main
+  cancel-in-progress: false
+
+env:
+  REPOSITORIES: ALICE-DetMath ALICE-Crypto ALICE-Zip ALICE-Analytics ALICE-DB ALICE-Physics ALICE-SDF ALICE-LOL ALICE-LLM
+
+jobs:
+  roundtrip:
+    name: Read, compute, save, restore, compare (main)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - &clone
+        name: Check out the main branches side by side
+        run: |
+          mkdir -p "$RUNNER_TEMP/core"
+          echo "| repository | main |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for r in $REPOSITORIES; do
+            git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
+            echo "| $r | $(git -C "$RUNNER_TEMP/core/$r" rev-parse --short HEAD) |" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - &patch
+        name: Patch the core crates with the checkouts
+        run: |
+          python3 scripts/main_mode.py patch "$RUNNER_TEMP/core"
+          cd e2e && cargo --version && cargo generate-lockfile
+
+      - name: Test
+        working-directory: e2e
+        run: cargo test --release --locked -- --nocapture
+
+      - name: Every core crate taken from main
+        if: always()
+        run: python3 scripts/main_mode.py verify | tee -a "$GITHUB_STEP_SUMMARY"
+
+  teeth:
+    name: Mutations the test has to catch (main)
+    # rebuilds the test once per mutation: on demand and when the check changes
+    if: github.event_name != 'schedule'
+    needs: roundtrip
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - *clone
+      - *patch
+      - name: Mutations
+        run: python3 scripts/e2e_teeth.py "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
