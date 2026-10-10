@@ -75,7 +75,7 @@ Releases that would remove them, in dependency order: alice-analytics with `alic
 
 End to end, measured on 2026-10-11:
 
-- published: **fails to resolve**, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet
+- published: **fails to resolve**, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 2.3.0, whose sink writes to the exact series of alice-db, is released
 - main: the test passes (3776 values and records compared, digest `2a0f3d06…`); the check that every crate came from main fails, because alice-det-math 0.5.0 on main is not taken (every other crate requires `^0.4`), so the build uses 0.4.0 from crates.io
 
 ## License
