@@ -73,8 +73,10 @@ jobs:
 
   teeth:
     name: Mutations the test has to catch (main)
-    # rebuilds the test once per mutation: on demand and when the check changes
-    if: github.event_name != 'schedule'
+    # rebuilds the test once per mutation: on demand and when the check changes.
+    # Runs after the round trip whatever its result (a crate not taken from main
+    # fails that job, and says nothing about the teeth)
+    if: ${{ !cancelled() && github.event_name != 'schedule' }}
     needs: roundtrip
     runs-on: ubuntu-24.04
     timeout-minutes: 60
