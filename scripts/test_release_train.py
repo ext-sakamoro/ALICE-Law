@@ -10,6 +10,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -81,15 +82,39 @@ def gate(manifest: str = ZIP, fetch=None, crate: str = "alice-zip", text: str = 
     return rt.publish_gate(roster(text), crate, manifest, fetch or fixture(PUBLISHED_DM))
 
 
-def run(argv: list[str], text: str, fetch, manifest: str | None = None) -> tuple[int, str]:
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
+                          env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                               "GIT_COMMITTER_EMAIL": "t@t", "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+                               "HOME": str(repo)}).stdout
+
+
+def make_repo(d: str, files: dict[str, str]) -> tuple[Path, str]:
+    """a git repository in d holding `files`, committed; (path, commit)"""
+    repo = Path(d, "repo")
+    repo.mkdir()
+    git(repo, "init", "-q")
+    for rel, text in files.items():
+        f = repo / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text, encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "x")
+    return repo, git(repo, "rev-parse", "HEAD").strip()
+
+
+def run(argv: list[str], text: str, fetch, manifest: str | None = None,
+        files: dict[str, str] | None = None, manifest_path: str = "Cargo.toml",
+        after=None) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
         p = Path(d, "release-train.toml")
         p.write_text(text, encoding="utf-8")
         extra = []
-        if manifest is not None:
-            m = Path(d, "Cargo.toml")
-            m.write_text(manifest, encoding="utf-8")
-            extra = ["--manifest", str(m)]
+        if manifest is not None or files is not None:
+            repo, ref = make_repo(d, files if files is not None else {manifest_path: manifest})
+            if after:
+                after(repo)
+            extra = ["--repo", str(repo), "--ref", ref, "--manifest-path", manifest_path]
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
             code = rt.main(["--roster", str(p), *argv, *extra], fetch=fetch)
@@ -133,6 +158,33 @@ alice-f = "0.6"
         self.assertEqual(reqs, {"alice-a": "0.1", "alice-b": "0.2", "alice-c": "0.3",
                                 "alice-d": "0.4", "alice-e": "0.5"})
 
+    def test_underscore_names_are_alice_crates(self):
+        text = """[package]\nname = "x"\nversion = "1.0.0"\n[dependencies]
+alice_det_math = "0.4"
+z = { package = "alice_zip", version = "0.9" }
+"""
+        self.assertEqual(rt.manifest_alice_requirements(text)[2], {"alice-det-math": "0.4", "alice-zip": "0.9"})
+
+    def test_another_registry_is_an_error(self):
+        for spec in ['{ version = "0.5", registry = "other" }', '{ version = "0.5", registry-index = "https://x" }']:
+            text = f'[package]\nname = "x"\nversion = "1.0.0"\n[dependencies]\nalice-a = {spec}\n'
+            with self.subTest(spec=spec), self.assertRaises(ValueError):
+                rt.manifest_alice_requirements(text)
+
+    def test_overrides_of_alice_crates_are_found(self):
+        text = """[patch.crates-io]
+alice-det-math = { path = "../dm" }
+serde = { path = "../serde" }
+[patch.'https://github.com/x/y']
+alice_zip = { path = "../z" }
+[replace]
+"alice-det-math:0.5.0" = { path = "../dm" }
+"""
+        self.assertEqual(rt.alice_overrides(text), ["[patch.crates-io] alice-det-math",
+                                                    "[patch.https://github.com/x/y] alice-zip",
+                                                    "[replace] alice-det-math:0.5.0"])
+        self.assertEqual(rt.alice_overrides("[patch.crates-io]\nserde = { path = \"x\" }\n"), [])
+
     def test_a_dependency_without_a_crates_io_requirement_is_an_error(self):
         for spec in ['{ path = "../x" }', '{ workspace = true }', '{ git = "https://x", version = "1" }']:
             text = f'[package]\nname = "x"\nversion = "1.0.0"\n[dependencies]\nalice-a = {spec}\n'
@@ -173,6 +225,16 @@ class PublishGate(unittest.TestCase):
     def test_refused_when_already_published(self):
         problems, _ = gate(fetch=fixture({**PUBLISHED_DM, ("alice-zip", "0.10.0"): False}))
         self.assertTrue(any("already on crates.io" in p for p in problems), problems)
+
+    def test_refused_when_the_manifest_or_the_root_overrides_an_alice_crate(self):
+        patched = ZIP + '\n[patch.crates-io]\nalice-det-math = { path = "../dm" }\n'
+        self.assertTrue(any("overrides an ALICE crate" in p for p in gate(patched)[0]))
+        root = '[workspace]\nmembers = ["x"]\n[replace]\n"alice-det-math:0.5.0" = { path = "../dm" }\n'
+        problems, _ = rt.publish_gate(roster(), "alice-zip", ZIP, fixture(PUBLISHED_DM), root)
+        self.assertTrue(any("[replace]" in p for p in problems), problems)
+        code, out = run(["publish-gate", "alice-zip"], ROSTER, fixture(PUBLISHED_DM),
+                        files={"sub/Cargo.toml": ZIP, "Cargo.toml": root}, manifest_path="sub/Cargo.toml")
+        self.assertEqual(code, 1, out)
 
     def test_refused_when_not_prepared_or_not_in_the_roster(self):
         m = ZIP.replace("alice-zip", "alice-analytics").replace("0.10.0", "0.5.0")
@@ -217,6 +279,16 @@ class Registry(unittest.TestCase):
             with self.subTest(body=body):
                 self.assertEqual(run(["publish-gate", "alice-zip"], ROSTER, self.answers(body), ZIP)[0], 2)
 
+    def test_a_latest_release_body_without_versions_exits_2(self):
+        m = ZIP + 'alice-codec = { version = "0.1", optional = true }\n'
+
+        def fetch(path: str) -> dict:
+            if path == "alice-codec":
+                return {}
+            return fixture(PUBLISHED_DM)(path)
+
+        self.assertEqual(run(["publish-gate", "alice-zip"], ROSTER, fetch, m)[0], 2)
+
     def test_main_exit_codes(self):
         self.assertEqual(run(["publish-gate", "alice-zip"], ROSTER, fixture(PUBLISHED_DM), ZIP)[0], 0)
         self.assertEqual(run(["publish-gate", "alice-zip"], ROSTER, fixture({}), ZIP)[0], 1)
@@ -245,6 +317,42 @@ class Roster(unittest.TestCase):
         r = rt.load_roster((HERE.parent / "release-train.toml").read_text(encoding="utf-8"))
         self.assertGreater(len(r), 0)
         self.assertTrue(any(c["state"] == "published" for c in r.values()))
+
+
+class Checkout(unittest.TestCase):
+    """the gate reads the committed manifest and refuses a checkout that is not that commit"""
+
+    def test_a_dirty_checkout_is_refused(self):
+        def dirty(repo: Path):
+            (repo / "Cargo.toml").write_text(ZIP + "# changed\n", encoding="utf-8")
+        code, out = run(["publish-gate", "alice-zip"], ROSTER, fixture(PUBLISHED_DM), ZIP, after=dirty)
+        self.assertEqual(code, 1)
+        self.assertIn("changes to tracked files", out)
+
+    def test_a_checkout_at_another_commit_is_refused(self):
+        def move(repo: Path):
+            (repo / "README").write_text("x", encoding="utf-8")
+            git(repo, "add", "README")
+            git(repo, "commit", "-q", "-m", "later")
+        code, out = run(["publish-gate", "alice-zip"], ROSTER, fixture(PUBLISHED_DM), ZIP, after=move)
+        self.assertEqual(code, 1)
+        self.assertIn("not ", out)
+
+    def test_the_committed_manifest_is_read_not_the_working_tree(self):
+        # an untracked file does not make the checkout dirty, and the gate reads the commit
+        def untracked(repo: Path):
+            (repo / "notes.txt").write_text("x", encoding="utf-8")
+        self.assertEqual(run(["publish-gate", "alice-zip"], ROSTER, fixture(PUBLISHED_DM), ZIP, after=untracked)[0], 0)
+
+    def test_an_unknown_ref_exits_2(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo, _ = make_repo(d, {"Cargo.toml": ZIP})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo),
+                                "--ref", "0" * 40], fetch=fixture(PUBLISHED_DM))
+            self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":

@@ -3,11 +3,17 @@
 
     next                                 the crate to publish now: the first in `order`
                                          that is not published (or exempt)
-    publish-gate <crate> --manifest M    run right before `cargo publish` of <crate>,
-                                         from its release checkout (M = its Cargo.toml);
-                                         refuses when
+    publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]
+                                         run right before `cargo publish` of <crate> from
+                                         the checkout DIR; the manifest (P, default
+                                         Cargo.toml) and the repository's root Cargo.toml
+                                         are read at SHA; refuses when
+      - DIR is not checked out at SHA, or has changes to tracked files (cargo publish
+        packages the working tree, so it must be the commit that was checked)
       - <crate> is not in the roster, or its state is not `prepared`
       - the manifest is not <crate> at its roster version
+      - the manifest or the root manifest overrides an `alice-*` crate ([patch.*],
+        [replace]) or names one with another registry (`registry`, `registry-index`)
       - <crate> is already on crates.io at that version
       - an `alice-*` dependency of the manifest (normal or build, optional or not, any
         target; read from the manifest itself, so the roster cannot list a different
@@ -18,7 +24,7 @@
           - is not a roster crate and its latest release on crates.io is missing, yanked
             or not accepted by the requirement
 
-usage: release_train.py [--roster release-train.toml] {next | publish-gate <crate> --manifest M}
+usage: release_train.py [--roster release-train.toml] {next | publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]}
 Exit 0 when the answer is "go" (next: a crate was found), 1 when it is "no", 2 when the
 roster or the manifest is unreadable, nothing was compared, or crates.io could not be
 read or answered something other than the version asked for.
@@ -28,6 +34,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import subprocess
 import sys
 import tomllib
 import urllib.error
@@ -89,13 +96,15 @@ def manifest_alice_requirements(text: str) -> tuple[str, str, dict[str, str]]:
     out: dict[str, str] = {}
     for deps in tables:
         for key, spec in deps.items():
-            name = spec.get("package", key) if isinstance(spec, dict) else key
-            if not name.startswith("alice-"):
+            name = alice_name(spec.get("package", key) if isinstance(spec, dict) else key)
+            if name is None:
                 continue
             if isinstance(spec, str):
                 req = spec
             elif spec.get("workspace") or "git" in spec or not spec.get("version"):
                 raise ValueError(f"{name}: no crates.io version requirement in the manifest: {spec!r}")
+            elif "registry" in spec or "registry-index" in spec:
+                raise ValueError(f"{name}: comes from another registry: {spec!r}")
             else:
                 req = spec["version"]
             dc.parse_requirement(req)
@@ -103,6 +112,54 @@ def manifest_alice_requirements(text: str) -> tuple[str, str, dict[str, str]]:
                 raise ValueError(f"{name}: two different requirements ({out[name]!r}, {req!r})")
             out[name] = req
     return pkg.get("name", ""), pkg.get("version", ""), out
+
+
+def alice_name(name: str) -> str | None:
+    """`name` as a crates.io crate name if it is an ALICE crate (crates.io treats `-` and
+    `_` as the same name), else None"""
+    n = name.replace("_", "-")
+    return n if n.startswith("alice-") else None
+
+
+def alice_overrides(text: str) -> list[str]:
+    """`alice-*` crates a manifest overrides with [patch.<source>] or [replace]"""
+    data = tomllib.loads(text)
+    found = []
+    for source, entries in data.get("patch", {}).items():
+        for key, spec in entries.items():
+            name = alice_name(spec.get("package", key) if isinstance(spec, dict) else key)
+            if name:
+                found.append(f"[patch.{source}] {name}")
+    for key in data.get("replace", {}):
+        name = alice_name(key.split(":")[0])
+        if name:
+            found.append(f"[replace] {key}")
+    return found
+
+
+def latest(fetch: dc.Fetch, crate: str) -> str:
+    """the latest release of a crate; a body without it is a RegistryError"""
+    try:
+        return dc.latest_release(fetch, crate)
+    except (KeyError, TypeError) as e:
+        raise RegistryError(f"{crate}: crates.io answered without a latest release ({e!r})") from None
+
+
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
+
+
+def checkout_problems(repo: Path, ref: str) -> list[str]:
+    """the checkout must be the commit `ref`, with no change to a tracked file"""
+    problems = []
+    head = git(repo, "rev-parse", "HEAD").strip()
+    want = git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").strip()
+    if head != want:
+        problems.append(f"the checkout is at {head[:12]}, not {ref} ({want[:12]})")
+    dirty = git(repo, "status", "--porcelain", "--untracked-files=no").strip()
+    if dirty:
+        problems.append(f"the checkout has changes to tracked files: {dirty.splitlines()[0]} ...")
+    return problems
 
 
 def release_state(fetch: dc.Fetch, crate: str, version: str) -> str:
@@ -132,14 +189,18 @@ def next_crate(roster: dict[str, dict]) -> tuple[str | None, int]:
 
 
 def publish_gate(roster: dict[str, dict], crate: str, manifest_text: str,
-                 fetch: dc.Fetch) -> tuple[list[str], int]:
-    """(problems, compared) for publishing `crate` now from the given manifest"""
+                 fetch: dc.Fetch, root_text: str | None = None) -> tuple[list[str], int]:
+    """(problems, compared) for publishing `crate` now from the given manifest (and the
+    repository's root manifest, when it is another file)"""
     if crate not in roster:
         return [f"{crate} is not in the roster"], 1
     c = roster[crate]
     problems: list[str] = []
     compared = 1
     name, version, requires = manifest_alice_requirements(manifest_text)
+    for text in (manifest_text,) if root_text is None else (manifest_text, root_text):
+        for o in alice_overrides(text):
+            problems.append(f"{crate}: the manifest overrides an ALICE crate: {o}")
     if name != crate or version != c["version"]:
         problems.append(f"the manifest is {name or '?'} {version or '?'}, the roster has {crate} {c['version']}")
     if c["state"] != "prepared":
@@ -156,7 +217,7 @@ def publish_gate(roster: dict[str, dict], crate: str, manifest_text: str,
                 continue
             target = d["version"]
         else:
-            target = dc.latest_release(fetch, dep)
+            target = latest(fetch, dep)
         state = release_state(fetch, dep, target)
         if state != "present":
             problems.append(f"{crate} requires {dep} {req!r}: {dep} {target} is {state} on crates.io")
@@ -173,7 +234,9 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch) -> int:
     sub.add_parser("next")
     g = sub.add_parser("publish-gate")
     g.add_argument("crate")
-    g.add_argument("--manifest", type=Path, required=True)
+    g.add_argument("--repo", type=Path, required=True, help="the release checkout")
+    g.add_argument("--ref", required=True, help="the commit being published")
+    g.add_argument("--manifest-path", default="Cargo.toml", help="the crate's manifest, relative to the repository")
     a = ap.parse_args(argv)
     try:
         roster = load_roster(a.roster.read_text(encoding="utf-8"))
@@ -188,8 +251,16 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch) -> int:
         print(f"next: {name} {roster[name]['version']} (state {roster[name]['state']}, {pending} unpublished)")
         return 0
     try:
-        manifest_text = a.manifest.read_text(encoding="utf-8")
-        problems, compared = publish_gate(roster, a.crate, manifest_text, fetch)
+        problems = checkout_problems(a.repo, a.ref)
+        manifest_text = git(a.repo, "show", f"{a.ref}:{a.manifest_path}")
+        root_text = None
+        if a.manifest_path.replace("\\", "/").lstrip("./") != "Cargo.toml":
+            root_text = git(a.repo, "show", f"{a.ref}:Cargo.toml")
+        gate_problems, compared = publish_gate(roster, a.crate, manifest_text, fetch, root_text)
+        problems += gate_problems
+    except subprocess.CalledProcessError as e:
+        print(f"error: git: {(e.stderr or '').strip()}", file=sys.stderr)
+        return 2
     except (OSError, ValueError, RegistryError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
         # OSError covers a reset connection; ValueError covers a malformed manifest,
         # requirement or version, and an unreadable JSON body
