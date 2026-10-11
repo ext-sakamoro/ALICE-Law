@@ -48,7 +48,7 @@ manifest-path = "libalice/Cargo.toml"
 
 [crate.alice-analytics]
 version = "0.5.0"
-state = "prepared-local"
+state = "published"
 order = 4
 repo = "ALICE-Analytics"
 
