@@ -89,7 +89,10 @@ End to end, measured on 2026-10-11:
 
 AGPL is a strong copyleft: a product, pipeline or service that incorporates these
 checks and is distributed or served to users must be released under the AGPL as well.
-The end to end test crate links AGPL-licensed core crates (alice-physics, alice-db,
-alice-crypto and others); alice-det-math is `MIT OR Apache-2.0`.
+Of the core crates the end to end test crate links, three are under the same dual
+licence: alice-physics, alice-db and alice-crypto. alice-lol, alice-zip and
+alice-analytics are `Apache-2.0` and alice-sdf is `MIT OR Apache-2.0`; alice-det-math
+is `MIT OR Apache-2.0` in the published 0.4.0 the test builds against, and
+`Apache-2.0` from 0.5.0.
 
 Commercial licence enquiries: <contact@extoria.co.jp>

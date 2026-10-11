@@ -1,6 +1,6 @@
 # ALICE-Law — Commercial License
 
-Copyright (c) 2024-2026 Moroya Sakamoto. All rights reserved.
+Copyright (c) 2026 Moroya Sakamoto. All rights reserved.
 
 ALICE-Law (the integration checks of the core ALICE crates: the scripts, the
 end to end test crate under `e2e/`, the tools and the workflows in this
@@ -43,9 +43,9 @@ repository) is dual-licensed:
 
 - Rights to **third-party dependencies**, which keep their own licences. Those
   terms continue to apply independently of this licence. The ALICE crates the
-  checks build against carry their own licences (several are
-  `AGPL-3.0-or-later OR LicenseRef-Commercial` and need their own Commercial
-  License for closed-source use).
+  checks build against carry their own licences: three of them (alice-physics,
+  alice-db and alice-crypto) are `AGPL-3.0-or-later OR LicenseRef-Commercial`
+  and need their own Commercial License for closed-source use.
 - Trademark rights over the "ALICE" or "ALICE-Law" names — see
   [TRADEMARK_NOTICE](TRADEMARK_NOTICE).
 
