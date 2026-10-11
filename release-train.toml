@@ -10,28 +10,26 @@
 #   planned         the version and requirements are the plan; nothing is built yet
 #   exempt          not published (this repository: it checks the others)
 #
-# `requires` lists the crate's `alice-*` requirements at `version` (the same strings
-# as in its Cargo.toml). `order` is the order of the train: a crate comes after every
-# crate it requires.
+# What a crate requires of the others is read from its Cargo.toml at the release
+# checkout (`publish-gate --manifest`), not listed here, so there is one source for
+# it. `order` is the order of the train: a crate comes after every crate it requires.
 #
 # The publisher updates `state` here in the same step as the publish, so this file
 # is the plan the next publish is checked against:
 #   python3 scripts/release_train.py next
-#   python3 scripts/release_train.py publish-gate <crate>
+#   python3 scripts/release_train.py publish-gate <crate> --manifest <its Cargo.toml>
 
 [crate.alice-det-math]
 version = "0.5.0"
 state = "published"
 order = 0
 repo = "ALICE-DetMath"
-requires = {}
 
 [crate.alice-crypto]
 version = "0.4.1"
 state = "published"
 order = 1
 repo = "ALICE-Crypto"
-requires = {}
 
 [crate.alice-zip]
 version = "0.10.0"
@@ -39,7 +37,6 @@ state = "prepared"
 order = 2
 repo = "ALICE-Zip"
 branch = "ci/zip-0.10.0-det-math-0.5"
-requires = { alice-det-math = "0.5" }
 
 [crate.alice-zip-cli]
 # libalice: the CLI / FFI crate in ALICE-Zip/libalice, released with alice-zip
@@ -49,60 +46,51 @@ state = "prepared"
 order = 3
 repo = "ALICE-Zip"
 branch = "ci/zip-0.10.0-det-math-0.5"
-requires = { alice-det-math = "0.5", alice-zip = "0.10" }
 
 [crate.alice-analytics]
 version = "0.5.0"
 state = "prepared-local"
 order = 4
 repo = "ALICE-Analytics"
-requires = { alice-det-math = "0.5", alice-zip = "0.10" }
 
 [crate.alice-db]
 version = "0.4.0"
 state = "planned"
 order = 5
 repo = "ALICE-DB"
-requires = { alice-det-math = "0.5", alice-zip = "0.10", alice-analytics = "0.5", alice-crypto = "0.4" }
 
 [crate.alice-physics]
 version = "2.3.0"
 state = "planned"
 order = 6
 repo = "ALICE-Physics"
-requires = { alice-det-math = "0.5", alice-analytics = "0.5", alice-db = "0.4" }
 
 [crate.alice-sdf]
 version = "5.2.0"
 state = "planned"
 order = 7
 repo = "ALICE-SDF"
-requires = { alice-det-math = "0.5", alice-physics = "2.3" }
 
 [crate.alice-lol-macro]
 version = "0.3.0"
 state = "planned"
 order = 8
 repo = "ALICE-LOL"
-requires = { alice-sdf = "5.2" }
 
 [crate.alice-lol]
 version = "0.4.0"
 state = "planned"
 order = 9
 repo = "ALICE-LOL"
-requires = { alice-det-math = "0.5", alice-sdf = "5.2", alice-physics = "2.3", alice-lol-macro = "0.3" }
 
 [crate.alice-edge]
 version = "0.2.0"
 state = "planned"
 order = 10
 repo = "ALICE-Edge"
-requires = { alice-det-math = "0.5", alice-zip = "0.10" }
 
 [crate.alice-law-integration]
 version = "0.0.0"
 state = "exempt"
 order = 11
 repo = "ALICE-Law"
-requires = { alice-lol = "0.4", alice-det-math = "0.5", alice-sdf = "5.2", alice-physics = "2.3", alice-db = "0.4", alice-zip = "0.10", alice-crypto = "0.4", alice-analytics = "0.5" }

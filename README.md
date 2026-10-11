@@ -30,14 +30,14 @@ CI (`.github/workflows/dependency-consistency.yml`) runs the tests, the comparis
 
 ## Release train
 
-`release-train.toml` is the plan for releasing the core crates together: for each crate, the version it is being released at, what it requires of the others at that version, its place in the order (a crate comes after everything it requires) and its state (`planned`, `prepared-local`, `prepared`, `published`, or `exempt` for this repository).
+`release-train.toml` is the plan for releasing the core crates together: for each crate, the version it is being released at, its place in the order (a crate comes after everything it requires) and its state (`planned`, `prepared-local`, `prepared`, `published`, or `exempt` for this repository). What a crate requires of the others is not listed there: it is read from the crate's own `Cargo.toml` at the release checkout, so there is one source for it.
 
 ```sh
-python3 scripts/release_train.py next                  # the crate that can be published now
-python3 scripts/release_train.py publish-gate alice-zip  # run right before `cargo publish`; exit 0 = go
+python3 scripts/release_train.py next                                         # the crate to publish now
+python3 scripts/release_train.py publish-gate alice-zip --manifest Cargo.toml   # right before `cargo publish`; exit 0 = go
 ```
 
-`next` names the first crate in the order that is not published and whose upstreams in the roster are all published. `publish-gate <crate>` refuses when the crate is not `prepared`, when its version is already on crates.io, or when a crate it requires is not in the roster, not `published` there, missing or yanked on crates.io at that version, or not accepted by the requirement (Cargo's rules: `"0.4"` does not accept 0.5.0). The publisher runs the gate first in every publish and updates the crate's `state` in the same step, so the next publish is checked against what is actually released. The requirement matching is the one in `scripts/dep_consistency.py`. CI runs the tests (`scripts/test_release_train.py`, crates.io replaced by a fixture) and prints `next`.
+`next` names the first crate in the order that is not published. `publish-gate <crate> --manifest <Cargo.toml>` refuses when the crate is not `prepared`, when the manifest is another crate or version than the roster's, when that version is already on crates.io, or when an `alice-*` dependency of the manifest (normal or build, optional or not, any target, renamed or not) has no crates.io version requirement, or names a crate that is not `published` in the roster, is missing or yanked on crates.io, or is not accepted by the requirement (Cargo's rules: `"0.4"` does not accept 0.5.0). A dependency outside the roster is checked against its latest release. Only an HTTP 404 counts as "not on crates.io"; any other answer (an error body, another version than the one asked for, a broken connection) stops the gate with exit 2. The publisher runs the gate first in every publish and updates the crate's `state` in the same step. The requirement matching is the one in `scripts/dep_consistency.py`. CI runs the tests (`scripts/test_release_train.py`, crates.io replaced by a fixture) and prints `next`.
 
 ## End to end
 

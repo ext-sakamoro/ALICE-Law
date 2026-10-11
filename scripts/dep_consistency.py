@@ -39,7 +39,8 @@ USER_AGENT = "alice-law-integration (https://github.com/ext-sakamoro/ALICE-Law)"
 
 # ---------------------------------------------------------------- versions (Cargo's semver rules)
 
-VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
+# numeric identifiers have no leading zeros (semver 2.0.0 section 2), as Cargo reads them
+VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
 
 class Version:
