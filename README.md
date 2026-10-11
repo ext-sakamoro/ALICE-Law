@@ -28,6 +28,17 @@ The requirement matching follows Cargo's rules (carets, tildes, ranges, wildcard
 
 CI (`.github/workflows/dependency-consistency.yml`) runs the tests, the comparison with the semver crate and the check every Monday, on demand, and on a push that changes the check. The report is in the job summary.
 
+## Release train
+
+`release-train.toml` is the plan for releasing the core crates together: for each crate, the version it is being released at, what it requires of the others at that version, its place in the order (a crate comes after everything it requires) and its state (`planned`, `prepared-local`, `prepared`, `published`, or `exempt` for this repository).
+
+```sh
+python3 scripts/release_train.py next                  # the crate that can be published now
+python3 scripts/release_train.py publish-gate alice-zip  # run right before `cargo publish`; exit 0 = go
+```
+
+`next` names the first crate in the order that is not published and whose upstreams in the roster are all published. `publish-gate <crate>` refuses when the crate is not `prepared`, when its version is already on crates.io, or when a crate it requires is not in the roster, not `published` there, missing or yanked on crates.io at that version, or not accepted by the requirement (Cargo's rules: `"0.4"` does not accept 0.5.0). The publisher runs the gate first in every publish and updates the crate's `state` in the same step, so the next publish is checked against what is actually released. The requirement matching is the one in `scripts/dep_consistency.py`. CI runs the tests (`scripts/test_release_train.py`, crates.io replaced by a fixture) and prints `next`.
+
 ## End to end
 
 `e2e/` is a separate crate with one test, `tests/law_to_storage_roundtrip.rs`, that goes through the core crates with their public APIs:

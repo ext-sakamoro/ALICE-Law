@@ -20,6 +20,7 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - "release-train.toml"
       - "scripts/**"
       - "tools/**"
       - ".github/workflows/dependency-consistency.yml"
@@ -41,6 +42,15 @@ jobs:
 
       - name: Test the checker
         run: python3 scripts/test_dep_consistency.py
+
+      # the release train (release-train.toml): its tests, and what the roster says
+      # is next (informational here; the publisher runs `publish-gate <crate>` right
+      # before each `cargo publish`)
+      - name: Test the release train
+        run: python3 scripts/test_release_train.py
+
+      - name: Release train, next crate (informational)
+        run: python3 scripts/release_train.py next || true
 
       - name: Compare the requirement matching with the semver crate
         run: python3 scripts/semver_differential.py
