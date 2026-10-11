@@ -3,7 +3,7 @@ name = "alice-law-integration"
 version = "0.0.0"
 edition = "2021"
 publish = false
-license = "Apache-2.0"
+license = "AGPL-3.0-or-later OR LicenseRef-Commercial"
 description = "Integration checks across the core ALICE crates, built from their crates.io releases"
 
 # The core crates, at their latest releases, with the features that turn on

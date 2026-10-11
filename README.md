@@ -80,4 +80,16 @@ End to end, measured on 2026-10-11:
 
 ## License
 
-Apache-2.0 (see [LICENSE](LICENSE)).
+`AGPL-3.0-or-later OR LicenseRef-Commercial`: dual-licensed, pick either.
+
+| Option | Terms | Use it when |
+|--------|-------|-------------|
+| **AGPL-3.0-or-later** | [LICENSE-AGPL](LICENSE-AGPL), free | your project is itself AGPL-compatible open source, or you run the checks internally |
+| **Commercial License** | [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md), paid, removes the copyleft | closed-source products or pipelines, proprietary SaaS, redistribution in a proprietary tool |
+
+AGPL is a strong copyleft: a product, pipeline or service that incorporates these
+checks and is distributed or served to users must be released under the AGPL as well.
+The end to end test crate links AGPL-licensed core crates (alice-physics, alice-db,
+alice-crypto and others); alice-det-math is `MIT OR Apache-2.0`.
+
+Commercial licence enquiries: <contact@extoria.co.jp>
