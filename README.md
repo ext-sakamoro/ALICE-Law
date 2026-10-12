@@ -66,7 +66,7 @@ Then commit `release-train.toml`, and land the requirement bumps that `followups
    - when a `required-ci` job does not have exactly its expected legs in the latest run of its workflow on the commit, or a leg is not completed with success;
    - when the package (`cargo package --list`) carries files under `.github/`, `scripts/` or `docs/`, or private notes (file and directory names held as sha256 in the script): the repository's tools and notes, not the crate. Set `include` in the manifest.
 
-   On go it runs `cargo package` (which builds the packaged crate as `cargo publish` does, `--locked` when a `Cargo.lock` is committed) and prints the commit, the sha256 of the `.crate` and the exact `cargo publish` command. With a committed `Cargo.lock` the `.crate` is the same bytes as the one `cargo publish` uploads; without one, cargo resolves the lock it puts in the package at that moment, so publish right after the gate.
+   On go it runs `cargo package` (which builds the packaged crate as `cargo publish` does, `--locked` when a `Cargo.lock` is committed) and prints the commit, the sha256 of the `.crate` and the exact `cargo publish` command. Before go it also unpacks that `.crate` into a fresh directory with no `Cargo.lock` or `Cargo.toml` above it and builds it as the path dependency of an empty crate, as a crates.io consumer builds it; a failed build, or one that compiled no library of the crate, is refused (`cargo package` verifies inside the repository, where a build script reading a lock above the crate still finds the repository's). With a committed `Cargo.lock` the `.crate` is the same bytes as the one `cargo publish` uploads; without one, cargo resolves the lock it puts in the package at that moment, so publish right after the gate.
 4. Publishing is the one step the scripts do not take.
 5. `publish-verify` reads the tag from the remote (`--remote`, default `origin`).
 6. `roster-mark published` runs `publish-verify` and changes the crate's `state = "prepared"` line to `published` only when every check passed. `publish-verify` (the same checks without the edit) refuses:
@@ -83,7 +83,7 @@ Only an HTTP 404 counts as "not on crates.io"; any other answer (an error body, 
 
 ## Public text
 
-This repository is public, and so is everything it publishes: file contents, paths and commit messages. `scripts/public_text_check.py` checks them for internal vocabulary (development-process words, internal tracker and note names, instruction sources, device names, private network addresses, and private names held only as SHA-256 hashes), with the vocabulary of ALICE-Physics `scripts/docs_lint.py`. A finding names the place and the kind of word, not the word.
+This repository is public, and so is everything it publishes: file contents, paths and commit messages. `scripts/public_text_check.py` checks them for internal vocabulary (development-process words, internal tracker and note names, instruction sources, device names, private network addresses, private names held only as SHA-256 hashes, and the short ids of the work sessions, also held as hashes, when one names a person or a review: followed by `の`, `'s`, `レビュー`, `review`, `session`, `セッション`, `指摘` or `検証`; and the labels of review findings, an F and a number named as a review), with the vocabulary of ALICE-Physics `scripts/docs_lint.py`. A finding names the place and the kind of word, not the word.
 
 ```sh
 python3 scripts/public_text_check.py --tree                     # every tracked file at HEAD

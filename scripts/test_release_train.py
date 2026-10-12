@@ -25,6 +25,11 @@ spec = importlib.util.spec_from_file_location("rt", HERE / "release_train.py")
 rt = importlib.util.module_from_spec(spec)
 sys.modules["rt"] = rt
 spec.loader.exec_module(rt)
+# the gate's consumer build runs cargo on the packaged crate; the fake packages of these
+# tests are not crates, so the gate tests use a consumer that accepts them, and the real
+# one is tested on its own (ConsumerBuild)
+REAL_CONSUMER_BUILD = rt.consumer_build
+rt.consumer_build = lambda body, name, version, target_dir: []
 
 ROSTER = """
 [crate.alice-det-math]
@@ -928,6 +933,97 @@ class RequiredCi(unittest.TestCase):
     def test_no_required_ci_asks_nothing(self):
         code, _, seen, _ = self.gate(self.green(), extra="")
         self.assertEqual((code, seen), (0, []))
+
+
+def tiny_crate(name: str, version: str, build_rs: str | None = None) -> bytes:
+    """a real, dependency-free .crate (optionally with a build script)"""
+    manifest = f'[package]\nname = "{name}"\nversion = "{version}"\nedition = "2021"\n'
+    files = {"Cargo.toml": manifest.encode(), "src/lib.rs": b"pub fn f() -> u32 { 1 }\n"}
+    if build_rs is not None:
+        files["build.rs"] = build_rs.encode()
+    return crate_bytes(name, version, files)
+
+
+# a build script that, like one reading the consumer's lock, needs a Cargo.lock above the crate
+NEEDS_LOCK_ABOVE = """
+use std::path::Path;
+fn main() {
+    let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let found = Path::new(&dir).ancestors().skip(1).any(|d| d.join("Cargo.lock").exists());
+    assert!(found, "no Cargo.lock above the crate");
+}
+"""
+
+
+@unittest.skipIf(rt.shutil.which("cargo") is None, "cargo is not installed")
+class ConsumerBuild(unittest.TestCase):
+    """the packaged crate is built as a crates.io consumer builds it"""
+
+    def build(self, body: bytes, name: str = "gate-probe", version: str = "0.1.0") -> list[str]:
+        with tempfile.TemporaryDirectory() as d:
+            return REAL_CONSUMER_BUILD(body, name, version, Path(d))
+
+    def test_a_plain_crate_builds(self):
+        self.assertEqual(self.build(tiny_crate("gate-probe", "0.1.0")), [])
+
+    def test_a_build_script_that_needs_a_lock_above_the_crate_is_refused(self):
+        problems = self.build(tiny_crate("gate-probe", "0.1.0", NEEDS_LOCK_ABOVE))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("does not build as a dependency", problems[0])
+
+    def test_the_same_build_script_passes_inside_a_tree_with_a_lock(self):
+        # the teeth of the check: inside the repository (where `cargo package` verifies)
+        # the same build script finds a lock and passes
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "Cargo.lock").write_text("", encoding="utf-8")
+            crate = Path(d, "c")
+            (crate / "src").mkdir(parents=True)
+            (crate / "Cargo.toml").write_text('[package]\nname = "gate-probe"\nversion = "0.1.0"\nedition = "2021"\n[workspace]\n', encoding="utf-8")
+            (crate / "src" / "lib.rs").write_text("", encoding="utf-8")
+            (crate / "build.rs").write_text(NEEDS_LOCK_ABOVE, encoding="utf-8")
+            r = subprocess.run(["cargo", "build", "-q", "--target-dir", str(Path(d, "t"))], cwd=crate, capture_output=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_a_crate_named_otherwise_compiles_nothing_and_is_refused(self):
+        # the .crate holds gate-other; asked for gate-probe there is no manifest to build
+        problems = self.build(tiny_crate("gate-other", "0.1.0"))
+        self.assertEqual(len(problems), 1, problems)
+
+    def test_no_library_artifact_is_refused(self):
+        self.assertFalse(rt.compiled_lib('{"reason":"build-finished","success":true}', "gate-probe", "0.1.0"))
+        self.assertFalse(rt.compiled_lib("", "gate-probe", "0.1.0"))
+        other = json.dumps({"reason": "compiler-artifact", "package_id": "path+file:///x#gate-other@0.1.0",
+                            "target": {"kind": ["lib"]}})
+        self.assertFalse(rt.compiled_lib(other, "gate-probe", "0.1.0"))
+        ours = other.replace("gate-other", "gate-probe")
+        self.assertTrue(rt.compiled_lib(ours, "gate-probe", "0.1.0"))
+        old_form = json.dumps({"reason": "compiler-artifact", "package_id": "gate-probe 0.1.0 (path+file:///x)",
+                               "target": {"kind": ["proc-macro"]}})
+        self.assertTrue(rt.compiled_lib(old_form, "gate-probe", "0.1.0"))
+        build_script = ours.replace('"lib"', '"custom-build"')
+        self.assertFalse(rt.compiled_lib(build_script, "gate-probe", "0.1.0"))
+
+    def test_a_lock_above_the_build_directory_is_found(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "Cargo.lock").write_text("", encoding="utf-8")
+            self.assertTrue(rt.manifests_above(Path(d, "a", "b")))
+
+
+class GateConsumer(unittest.TestCase):
+    def test_a_consumer_refusal_refuses_the_gate_after_packaging(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
+                               consumer=lambda body, name, version, t: [f"{name} {version}: does not build"])
+        self.assertEqual(code, 1)
+        self.assertIn("refused: alice-zip 0.10.0: does not build", out.getvalue())
+        self.assertNotIn("go for", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

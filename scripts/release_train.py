@@ -40,6 +40,12 @@
         .github/, scripts/ or docs/, or a file or directory of private notes (named by
         hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
         crate; a package that lists no file exits 2
+      - after those pass, the crate `cargo package` built is unpacked into a fresh
+        directory with no Cargo.lock or Cargo.toml above it and built as a dependency of
+        an empty crate there, as a crates.io consumer builds it (`cargo package` verifies
+        inside the repository, where a build script that reads a Cargo.lock above the
+        crate still finds the repository's); a failed build, or one that did not compile
+        the crate's library, is refused
 
 usage: release_train.py [--roster release-train.toml] {next | publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]}
 Exit 0 when the answer is "go" (next: a crate was found), 1 when it is "no", 2 when the
@@ -55,6 +61,7 @@ import importlib.util
 import io
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -506,6 +513,74 @@ def cargo_package(repo: Path, manifest_path: str, name: str, version: str, targe
     return target_dir / "package" / f"{name}-{version}.crate"
 
 
+CONSUMER_MANIFEST = """[package]
+name = "release-gate-consumer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+{name} = {{ path = "../pkg/{name}-{version}" }}
+
+[workspace]
+"""
+
+
+def manifests_above(path: Path) -> list[Path]:
+    """Cargo.lock / Cargo.toml files in the ancestors of path (which Cargo or a build
+    script reading a lock above the crate would find)"""
+    return [d / f for d in path.resolve().parents for f in ("Cargo.lock", "Cargo.toml") if (d / f).exists()]
+
+
+def compiled_lib(stdout: str, name: str, version: str) -> bool:
+    """the JSON messages of a cargo build carry a compiler artifact of the crate's library"""
+    for line in stdout.splitlines():
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        if msg.get("reason") != "compiler-artifact":
+            continue
+        pid = msg.get("package_id", "")
+        kinds = msg.get("target", {}).get("kind", [])
+        if (pid.endswith(f"#{name}@{version}") or pid.startswith(f"{name} {version} ")) and \
+                any(k in ("lib", "rlib", "proc-macro", "dylib", "cdylib", "staticlib") for k in kinds):
+            return True
+    return False
+
+
+def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None) -> list[str]:
+    """build the packaged crate the way a crates.io consumer does: unpacked into a fresh
+    directory with no Cargo.lock or Cargo.toml above it, as the path dependency of an
+    empty crate; the problems (none when it built and compiled the crate's library)"""
+    root = Path(tempfile.mkdtemp(prefix="release-gate-consumer-"))
+    try:
+        above = manifests_above(root / "consumer")
+        if above:
+            return [f"{name} {version}: the consumer build directory {root} has {above[0]} above it"]
+        with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as t:
+            t.extractall(root / "pkg", filter="data")
+        if not (root / "pkg" / f"{name}-{version}" / "Cargo.toml").is_file():
+            return [f"{name} {version}: the .crate has no {name}-{version}/Cargo.toml"]
+        consumer = root / "consumer"
+        (consumer / "src").mkdir(parents=True)
+        (consumer / "Cargo.toml").write_text(CONSUMER_MANIFEST.format(name=name, version=version), encoding="utf-8")
+        (consumer / "src" / "lib.rs").write_text("", encoding="utf-8")
+        env = {k: v for k, v in os.environ.items() if not k.startswith("CARGO_TARGET_DIR")}
+        r = subprocess.run(["cargo", "build", "--message-format=json-render-diagnostics",
+                            "--target-dir", str((target_dir or root) / "consumer-target")],
+                           cwd=consumer, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+        if r.returncode != 0:
+            tail = "; ".join(l.strip() for l in r.stderr.strip().splitlines()[-3:])
+            return [f"{name} {version}: the unpacked .crate does not build as a dependency of an empty crate "
+                    f"with no Cargo.lock above it ({tail})"]
+        if not compiled_lib(r.stdout, name, version):
+            return [f"{name} {version}: the consumer build compiled no library of {name} {version}"]
+        return []
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def publish_command(repo: Path, manifest_path: str, locked: bool) -> str:
     return (f"(cd {repo} && cargo publish{' --locked' if locked else ''} --manifest-path {manifest_path})")
 
@@ -692,7 +767,7 @@ def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) ->
 
 def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
-         docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs) -> int:
+         docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -784,10 +859,17 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             with tempfile.TemporaryDirectory() as tmp:
                 crate_path = packager(a.repo, a.manifest_path, a.crate, version, a.target_dir or Path(tmp))
                 body = crate_path.read_bytes()
+            consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir)
+            for p in consumer_problems:
+                print(f"refused: {p}")
+            if consumer_problems:
+                return 1
+            compared += 1
             digest = hashlib.sha256(body).hexdigest()
             print(f"publish-gate: go for {a.crate} {version} ({compared} checks)")
             print(f"  commit:        {commit}")
             print(f"  .crate sha256: {digest} ({len(crate_files(body))} files, built by cargo package)")
+            print("  consumer:      the unpacked .crate built as a dependency, no Cargo.lock above it")
             print(f"  publish:       {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")
             print(f"  then:          python3 scripts/release_train.py roster-mark published {a.crate} "
                   f"--repo {a.repo} --ref {commit} --expect-sha256 {digest}"

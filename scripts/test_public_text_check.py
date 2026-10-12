@@ -19,7 +19,7 @@ sys.modules["ptc"] = ptc
 spec.loader.exec_module(ptc)
 
 ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-       "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"}
+       "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "GIT_OPTIONAL_LOCKS": "0"}
 MADE_UP = "zorblat quux"  # stands in for a private name; only its hash is in the set during a test
 
 
@@ -149,6 +149,47 @@ class Vocabulary(unittest.TestCase):
         code, out = run(HERE.parent, "--tree")
         self.assertEqual(code, 0, out)
 
+
+
+class SessionIds(Base):
+    """short session ids, held by hash, found when they name a person or a review"""
+    FAKE = ("e9", "c1")  # made-up ids, not ones in use
+
+    def setUp(self):
+        super().setUp()
+        self.saved_ids = ptc.SESSION_ID_HASHES
+        ptc.SESSION_ID_HASHES = {hashlib.sha256(i.encode()).hexdigest() for i in self.FAKE}
+
+    def tearDown(self):
+        ptc.SESSION_ID_HASHES = self.saved_ids
+        super().tearDown()
+
+    def test_an_id_in_context_is_found(self):
+        for line in ("e9 レビュー対応", "e9 の指摘で直した", "c1's ruling", "c1 review", "per e9 session",
+                     "c1レビュー", "e9 セッション", "c1 検証"):
+            self.assertEqual(ptc.kinds(line), ["session id"], line)
+
+    def test_an_id_without_context_or_an_unknown_id_passes(self):
+        for line in ("e9 tests", "0xe9 の値", "#c1 の色", "ae9 の", "e91 の", "d4 の候補", "e9", "c1-c2"):
+            self.assertEqual(ptc.kinds(line), [], line)
+
+    def test_review_labels_are_found(self):
+        for line in ("F1/F2 review", "F3 の指摘", "F4 レビュー"):
+            self.assertEqual(ptc.kinds(line), ["session id"], line)
+        self.assertEqual(ptc.kinds("F1 score and F2 keys"), [])
+
+    def test_a_commit_message_with_an_id_is_found_and_the_id_not_printed(self):
+        commit(self.repo, {"a.txt": "x\n"}, message="fix: e9 の指摘")
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("message:1: session id", out)
+        # the commit hashes in the output are hex and may hold the two letters; the id as a word may not
+        self.assertNotRegex(out, r"(?<![0-9a-f])e9(?![0-9a-f])")
+        self.assertNotIn("の指摘", out)
+
+    def test_the_id_hashes_are_sha256(self):
+        for h in self.saved_ids:
+            self.assertRegex(h, r"^[0-9a-f]{64}$")
 
 if __name__ == "__main__":
     unittest.main()
