@@ -138,11 +138,31 @@ class ExpectedFailure(unittest.TestCase):
 
     def test_an_entry_no_workflow_runs_is_an_orphan(self):
         wrapped = {"a.yml": "run: python3 ../scripts/expected_failure.py resolve -- cargo generate-lockfile\n"}
-        self.assertEqual(self.check(ROSTER + ENTRY, wrapped)[0], 0)
+        self.assertEqual(self.check(ROSTER + ENTRY + "exit = 101\n", wrapped)[0], 0)
         rc, out = self.check(ROSTER + ENTRY, {"a.yml": "run: python3 scripts/test_expected_failure.py resolve\n- name: x\n"})
         self.assertEqual(rc, 1)
         self.assertIn("orphan: expected-failure.lol-0-4", out)
         self.assertEqual(self.check(ROSTER + ENTRY, {})[0], 2)
+
+    def test_a_cargo_step_without_exit_is_red(self):
+        wrapped = {"a.yml": "run: python3 ../scripts/expected_failure.py resolve -- cargo generate-lockfile\n"}
+        rc, out = self.check(ROSTER + ENTRY, wrapped)
+        self.assertEqual(rc, 1)
+        self.assertIn("no exit: expected-failure.lol-0-4 wraps a cargo command", out)
+        self.assertEqual(self.check(ROSTER + ENTRY + "exit = 101\n", wrapped)[0], 0)
+        other = {"a.yml": "run: python3 ../scripts/expected_failure.py resolve -- make build\n"}
+        self.assertEqual(self.check(ROSTER + ENTRY, other)[0], 0)
+
+    def test_the_repository_entries_name_cargo_exit_101(self):
+        entries = ef.load_entries((HERE.parent / "release-train.toml").read_text(encoding="utf-8"))
+        self.assertTrue(entries)
+        for step, e in entries.items():
+            self.assertEqual(e["exit"], 101, step)
+
+    def test_an_expected_line_then_a_crash_is_red(self):
+        rc, out, _, _ = self.run_step(ROSTER + ENTRY + "exit = 101\n", 139, FAILS)
+        self.assertEqual(rc, 1)
+        self.assertIn("exit status 139, the entry expects 101", out)
 
     def test_the_repository_has_no_orphan(self):
         with contextlib.redirect_stdout(io.StringIO()):

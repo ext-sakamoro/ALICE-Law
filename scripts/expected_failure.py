@@ -37,7 +37,10 @@ that quotes an error further in is not an error line.
     expected_failure.py --check [--roster FILE] [--workflows DIR]
                                           every entry's step is run through this script
                                           by a workflow (an entry no workflow uses is
-                                          an orphan: exit 1)
+                                          an orphan: exit 1), and an entry whose step
+                                          runs `cargo` names its `exit` (cargo fails
+                                          with 101; another status, such as a crash,
+                                          is then red)
 
 A malformed entry, or a step listed twice, exits 2. So a red step is a problem to fix;
 a step that fails as planned is named, explained and bounded by a release.
@@ -56,7 +59,7 @@ DEFAULT_ROSTER = Path(__file__).resolve().parent.parent / "release-train.toml"
 DEFAULT_WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 ERROR_LINE = re.compile(r"^(?:error(?:\[[A-Za-z0-9]+\])?(?::|\s|$)|fatal:|thread '[^']*' panicked at )", re.IGNORECASE)
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
-WRAPPED_STEP = re.compile(r"(?<![A-Za-z0-9_])expected_failure\.py[ \t]+([A-Za-z][A-Za-z0-9_.-]*)")
+WRAPPED_STEP = re.compile(r"(?<![A-Za-z0-9_])expected_failure\.py[ \t]+([A-Za-z][A-Za-z0-9_.-]*)([^\n]*)")
 
 
 class EntryError(ValueError):
@@ -135,16 +138,22 @@ def check(entries: dict[str, dict], workflows: Path) -> int:
     if not files:
         print(f"error: no workflow in {workflows}", file=sys.stderr)
         return 2
-    wrapped = set()
+    commands: dict[str, list[str]] = {}
     for f in files:
-        wrapped |= set(WRAPPED_STEP.findall(f.read_text(encoding="utf-8")))
-    orphans = sorted(s for s in entries if s not in wrapped)
+        for step, rest in WRAPPED_STEP.findall(f.read_text(encoding="utf-8")):
+            commands.setdefault(step, []).append(rest.partition(" -- ")[2].strip())
+    orphans = sorted(s for s in entries if s not in commands)
     for s in orphans:
         print(f"orphan: expected-failure.{entries[s]['name']} names step {s!r}, which no workflow runs "
               f"through expected_failure.py")
-    print(f"expected failure: {len(entries)} entries, {len(wrapped)} wrapped steps in {len(files)} workflows, "
-          f"{len(orphans)} orphans")
-    return 1 if orphans else 0
+    no_exit = sorted(s for s in entries if s in commands and entries[s]["exit"] is None
+                     and any(c.split()[:1] == ["cargo"] for c in commands[s]))
+    for s in no_exit:
+        print(f"no exit: expected-failure.{entries[s]['name']} wraps a cargo command, so it must name "
+              f"`exit = 101` (another status, such as a crash, is then red)")
+    print(f"expected failure: {len(entries)} entries, {len(commands)} wrapped steps in {len(files)} workflows, "
+          f"{len(orphans)} orphans, {len(no_exit)} cargo steps without exit")
+    return 1 if orphans or no_exit else 0
 
 
 def append(env: str, text: str) -> None:
