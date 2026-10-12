@@ -26,3 +26,4 @@ workflows are the interface, so changes to what they check are recorded here.
 - This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4 and alice-physics 3, the latest releases
 - `release-train.toml`: alice-physics 3.0.0 is published (its pending entry removed; the problems alice-sdf 5.1.1 still brings through alice-physics 2.2 are listed until alice-sdf 6.0.0)
 - This repository requires alice-sdf 6; `release-train.toml`: alice-sdf 6.0.0 is published (its pending entry removed, 17 expected problems remain until alice-lol 0.4.0 and alice-edge 0.2.0)
+- `release-train.toml`: alice-edge 0.2.0 lists its required commits, CHANGELOG lines and CI jobs; alice-ml is in the roster (not a dependency of this repository) so that its next publish is refused until it requires the published alice-det-math and alice-db (alice-edge's `ml` feature takes the published alice-ml 0.2.0)
