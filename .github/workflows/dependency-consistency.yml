@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python3 scripts/dep_consistency.py > "$RUNNER_TEMP/report.md"
+          python3 scripts/dep_consistency.py --roster release-train.toml > "$RUNNER_TEMP/report.md"
           rc=$?
           set -e
           cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"

@@ -22,6 +22,8 @@ The checks:
 2. presence: all eight core crates are in the lock file
 3. requirement vs latest: the `alice-*` requirements of this repository and of every core crate at the version the lock file resolved must accept the latest release of the crate they name (the latest stable release, or the latest pre-release when a crate has no stable one). A requirement that does not is how a second version gets into a user's lock file
 
+A problem that a release still to come removes is listed in `release-train.toml` under `[pending.<name>]`, with that release (`until = "<crate> <version>"`) and the problems it removes (`linked = [<crate>, ...]`, `requires = ["<crate> <version> -> <dependency> <requirement>", ...]`). With `--roster release-train.toml` (as CI runs it) the report counts them as expected per entry. A problem that is not listed fails the run, as does an entry whose release the roster marks `published` (stale: remove it and raise the requirements that release allows) and a listed item that matches no problem (out of date). This repository's own requirements and a missing core crate cannot be listed: they are raised or added, not waited for. So a red run is a problem to fix, not a release still to come.
+
 Each check reports how many comparisons it made, and a check that made none fails the run (exit 2), as does a dependency of this repository on an `alice-*` crate by path or git. This repository's own package is not one of the crates checked.
 
 The requirement matching follows Cargo's rules (carets, tildes, ranges, wildcards such as `1.2.*` and `1.x`, pre-releases). `scripts/semver_differential.py` compares it with the [semver](https://crates.io/crates/semver) crate (`tools/semver-oracle`) on generated requirement / version pairs and on a fixed grid of every operator and requirement shape against the versions one step away, and fails on any disagreement, including a requirement that one of the two reads and the other does not.
@@ -115,7 +117,7 @@ Two modes run the same test:
 
 ## Status
 
-Measured on 2026-10-12 (the committed `Cargo.lock`): **the check fails**, and is expected to until alice-physics, alice-sdf and alice-lol are released on alice-det-math 0.5. This repository's own requirements accept every latest release (alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4, alice-crypto 0.4); what remains comes from the published alice-physics 2.2.0, alice-sdf 5.1.1 and alice-lol 0.3.0.
+Measured on 2026-10-12 (the committed `Cargo.lock`): **the check passes with 19 expected problems**, in three pending entries (alice-physics 3.0.0: 10, alice-sdf 6.0.0: 2, alice-lol 0.4.0: 7). This repository's own requirements accept every latest release (alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4, alice-crypto 0.4); what remains comes from the published alice-physics 2.2.0, alice-sdf 5.1.1 and alice-lol 0.3.0.
 
 Linked at two or more versions:
 

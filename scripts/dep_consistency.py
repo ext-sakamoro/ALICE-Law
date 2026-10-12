@@ -12,9 +12,20 @@ Three checks, each of which compares something and fails when it compared nothin
    lock file resolved, accepts the latest release of that crate (a requirement that
    does not is how a second version gets into a consumer's lock file)
 
-usage: dep_consistency.py [--lock Cargo.lock] [--manifest Cargo.toml]
+A problem that a release still to come will remove can be listed in the roster
+(`--roster release-train.toml`) under `[pending.<name>]`, with the release that
+removes it (`until = "<crate> <version>"`, a roster crate at its roster version):
+`linked = ["<crate>", ...]` (linked at two or more versions) and
+`requires = ["<crate> <version> -> <dependency> <requirement>", ...]`. Such a problem
+is reported as expected and counted. It is still a problem when it is not listed, when
+the release its entry waits for is `published` in the roster (the entry is stale), and
+a listed item that matches no problem is one too (the entry is out of date). This
+repository's own requirements and a missing core crate cannot be listed.
+
+usage: dep_consistency.py [--lock Cargo.lock] [--manifest Cargo.toml] [--roster release-train.toml]
 Prints a Markdown report. Exit 1 when a check finds a problem, 2 when a check
-compared nothing or crates.io could not be read.
+compared nothing, the roster's pending entries are malformed, or crates.io could not
+be read.
 """
 from __future__ import annotations
 
@@ -36,6 +47,18 @@ CORE = (
 )
 API = "https://crates.io/api/v1/crates"
 USER_AGENT = "alice-law-integration (https://github.com/ext-sakamoro/ALICE-Law)"
+
+
+
+class Problem(str):
+    """a problem message with the key a pending entry names it by"""
+    key: tuple
+
+    def __new__(cls, message: str, key: tuple) -> "Problem":
+        p = super().__new__(cls, message)
+        p.key = key
+        return p
+
 
 # ---------------------------------------------------------------- versions (Cargo's semver rules)
 
@@ -257,7 +280,7 @@ def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], 
         bad = len(vs) > 1
         lines.append(f"| {name} | {', '.join(vs)} | {'**2 or more versions**' if bad else 'ok'} |")
         if bad:
-            problems.append(f"{name} is linked at {len(vs)} versions: {', '.join(vs)}")
+            problems.append(Problem(f"{name} is linked at {len(vs)} versions: {', '.join(vs)}", ("linked", name)))
     lines.append("")
 
     lines += ["## 2. Every core crate is present", ""]
@@ -266,7 +289,7 @@ def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], 
     lines.append(f"{len(CORE) - len(missing)} of {len(CORE)} core crates in Cargo.lock"
                  + (f"; missing: {', '.join(missing)}" if missing else ""))
     lines.append("")
-    problems += [f"{c} is not in Cargo.lock" for c in missing]
+    problems += [Problem(f"{c} is not in Cargo.lock", ("missing", c)) for c in missing]
 
     lines += ["## 3. Requirements accept the latest release", "",
               "| crate (version) | requires | latest | |", "|---|---|---|---|"]
@@ -286,32 +309,117 @@ def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], 
         opt = " (optional)" if optional else ""
         lines.append(f"| {who} | {dep} {req}{opt} | {latest[dep]} | {'ok' if ok else '**does not accept the latest**'} |")
         if not ok:
-            problems.append(f"{who} requires {dep} {req}{opt}, which does not accept the latest release {latest[dep]}")
+            problems.append(Problem(f"{who} requires {dep} {req}{opt}, which does not accept the latest release "
+                                    f"{latest[dep]}", ("requires", who, dep, req)))
     lines.append("")
     return lines, problems, tally
+
+
+# ---------------------------------------------------------------- problems a coming release removes
+
+class PendingError(ValueError):
+    pass
+
+
+def load_pending(roster_text: str) -> list[dict]:
+    """the `[pending.<name>]` entries of the roster, each with its keys and whether the
+    release it waits for is already published"""
+    data = tomllib.loads(roster_text)
+    crates = data.get("crate", {})
+    out = []
+    for name, entry in data.get("pending", {}).items():
+        until = entry.get("until")
+        if not isinstance(until, str) or len(until.split()) != 2:
+            raise PendingError(f"pending.{name}: `until` must be \"<crate> <version>\"")
+        crate, version = until.split()
+        if crate not in crates or crates[crate].get("version") != version:
+            raise PendingError(f"pending.{name}: until {until!r} is not a roster crate at its roster version")
+        keys = []
+        for item in entry.get("linked", []):
+            keys.append(("linked", item))
+        for item in entry.get("requires", []):
+            who, sep, rest = item.partition(" -> ")
+            dep, _, req = rest.partition(" ")
+            if who == "this repository":
+                raise PendingError(f"pending.{name}: this repository's own requirements are raised, not listed")
+            if not sep or not req or len(who.split()) != 2:
+                raise PendingError(f"pending.{name}: requires {item!r} is not \"<crate> <version> -> <dependency> <requirement>\"")
+            keys.append(("requires", who, dep, req))
+        if not keys:
+            raise PendingError(f"pending.{name}: lists no problem")
+        unknown = set(entry) - {"until", "why", "linked", "requires"}
+        if unknown:
+            raise PendingError(f"pending.{name}: unknown keys {sorted(unknown)}")
+        out.append({"name": name, "until": until, "keys": keys,
+                    "past": crates[crate].get("state") == "published"})
+    seen: dict[tuple, str] = {}
+    for e in out:
+        for k in e["keys"]:
+            if k in seen:  # also a problem listed twice in one entry
+                raise PendingError(f"pending.{e['name']} and pending.{seen[k]} list the same problem {k}")
+            seen[k] = e["name"]
+    return out
+
+
+def apply_pending(problems: list[Problem], pending: list[dict]) -> tuple[list[str], dict[str, int]]:
+    """(problems that remain, expected count per pending entry)"""
+    remaining: list[str] = []
+    expected = {e["name"]: 0 for e in pending}
+    owner = {k: e for e in pending for k in e["keys"]}
+    used: set[tuple] = set()
+    for p in problems:
+        e = owner.get(p.key)
+        if e is None:
+            remaining.append(p)
+            continue
+        used.add(p.key)
+        if e["past"]:
+            remaining.append(f"{p} (listed as pending until {e['until']}, which is published: the entry "
+                             f"pending.{e['name']} is stale)")
+        else:
+            expected[e["name"]] += 1
+    for e in pending:
+        for k in e["keys"]:
+            if k not in used:
+                remaining.append(f"pending.{e['name']} lists {k}, which is not a problem any more: "
+                                 f"remove it from the roster")
+    return remaining, expected
 
 
 def main(argv: list[str] | None = None, fetch: Fetch = http_fetch) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--lock", default="Cargo.lock")
     ap.add_argument("--manifest", default="Cargo.toml")
+    ap.add_argument("--roster", help="release-train.toml, whose [pending.*] entries name expected problems")
     a = ap.parse_args(argv)
     lock, manifest = Path(a.lock), Path(a.manifest)
     if not lock.is_file() or not manifest.is_file():
         print(f"error: {lock} or {manifest} is missing", file=sys.stderr)
         return 2
     try:
-        lines, problems, tally = check(lock.read_text(encoding="utf-8"),
-                                       manifest.read_text(encoding="utf-8"), fetch)
+        pending = load_pending(Path(a.roster).read_text(encoding="utf-8")) if a.roster else []
+    except (OSError, PendingError, tomllib.TOMLDecodeError) as e:
+        print(f"error: {a.roster}: {e}", file=sys.stderr)
+        return 2
+    try:
+        lines, found, tally = check(lock.read_text(encoding="utf-8"),
+                                    manifest.read_text(encoding="utf-8"), fetch)
     except (urllib.error.URLError, TimeoutError, KeyError, ValueError, tomllib.TOMLDecodeError) as e:
         print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    problems, expected = apply_pending(found, pending)
     print("# Dependency consistency of the core ALICE crates\n")
     print("\n".join(lines))
+    if pending:
+        print("## Expected until a release\n\n| pending | until | expected |\n|---|---|---|")
+        for e in pending:
+            print(f"| {e['name']} | {e['until']}{' (published: stale)' if e['past'] else ''} | {expected[e['name']]} |")
+        print()
     print("| check | comparisons |\n|---|---|")
     for name, n in tally.items():
         print(f"| {name} | {n} |")
-    print(f"\n{sum(tally.values())} comparisons, {len(problems)} problems\n")
+    print(f"\n{sum(tally.values())} comparisons, {len(problems)} problems, "
+          f"expected ({sum(expected.values())}) until a release\n")
     for p in problems:
         print(f"- {p}")
         print(f"error: {p}", file=sys.stderr)

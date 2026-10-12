@@ -105,3 +105,41 @@ version = "0.0.0"
 state = "exempt"
 order = 11
 repo = "ALICE-Law"
+
+# Problems of the dependency consistency check (scripts/dep_consistency.py --roster)
+# that a release still to come removes. Each entry names the release (`until`); once
+# the roster marks it published, the entry is stale and the check fails until the
+# entry is removed (and the requirements that release lets this repository raise are
+# raised). An item that matches no problem fails the check too.
+
+[pending.alice-physics-3]
+until = "alice-physics 3.0.0"
+why = "alice-physics 2.2.0 requires the previous alice-det-math, alice-analytics and alice-db (alice-db 0.3.0 the previous alice-zip)"
+linked = ["alice-analytics", "alice-db", "alice-zip"]
+requires = [
+    "alice-physics 2.2.0 -> alice-analytics ^0.1",
+    "alice-physics 2.2.0 -> alice-db ^0.3.0-beta.1",
+    "alice-physics 2.2.0 -> alice-det-math ^0.4",
+    "alice-db 0.3.0 -> alice-analytics ^0.4",
+    "alice-db 0.3.0 -> alice-det-math ^0.4",
+    "alice-db 0.3.0 -> alice-zip ^0.9",
+    "alice-zip 0.9.0 -> alice-det-math ^0.4",
+]
+
+[pending.alice-sdf-6]
+until = "alice-sdf 6.0.0"
+why = "alice-sdf 5.1.1 requires the previous alice-det-math (alice-det-math stays at two versions while alice-sdf 5.1.1 is linked)"
+linked = ["alice-det-math"]
+requires = ["alice-sdf 5.1.1 -> alice-det-math ^0.4"]
+
+[pending.alice-lol-0-4]
+until = "alice-lol 0.4.0"
+why = "alice-lol 0.3.0 requires alice-sdf 1.x and an alice-physics pre-release, which bring their own dependencies"
+linked = ["alice-physics", "alice-sdf"]
+requires = [
+    "alice-lol 0.3.0 -> alice-physics ^0.14.0-preview.4",
+    "alice-lol 0.3.0 -> alice-sdf ^1.9.0",
+    "alice-sdf 1.13.0 -> alice-physics ^1.1",
+    "alice-physics 0.14.0-preview.8 -> alice-analytics ^0.1",
+    "alice-physics 0.14.0-preview.8 -> alice-db ^0.2.0-beta.1",
+]

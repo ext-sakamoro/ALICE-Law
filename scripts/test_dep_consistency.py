@@ -251,5 +251,93 @@ class Cli(unittest.TestCase):
         self.assertEqual(self.run_main(lock(*ALL_CORE), fetch=broken)[0], 2)
 
 
+ROSTER_BASE = """
+[crate.alice-db]
+version = "2.0.0"
+state = "prepared"
+order = 0
+"""
+# alice-zip linked twice (0.7.0 brought by alice-db 1.0.0, whose ^0.7 does not accept the latest)
+TWO_ZIP = dict(lock_pkgs=(*ALL_CORE, ("alice-zip", "0.7.0")),
+               deps={("alice-db", "1.0.0"): [("alice-zip", "^0.7", False)]})
+PENDING = """
+[pending.db-2]
+until = "alice-db 2.0.0"
+linked = ["alice-zip"]
+requires = ["alice-db 1.0.0 -> alice-zip ^0.7"]
+"""
+
+
+class Pending(unittest.TestCase):
+    """problems a coming release removes: named, counted, and time-boxed to that release"""
+
+    def run_main(self, roster, lock_pkgs=ALL_CORE, deps=None, manifest=MANIFEST):
+        with tempfile.TemporaryDirectory() as d:
+            lp, mp, rp = Path(d, "Cargo.lock"), Path(d, "Cargo.toml"), Path(d, "r.toml")
+            lp.write_text(lock(*lock_pkgs), encoding="utf-8")
+            mp.write_text(manifest, encoding="utf-8")
+            rp.write_text(roster, encoding="utf-8")
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = dc.main(["--lock", str(lp), "--manifest", str(mp), "--roster", str(rp)],
+                               fetch=fixture(None, deps))
+            return code, out.getvalue(), err.getvalue()
+
+    def test_listed_problems_are_expected_and_counted(self):
+        code, out, err = self.run_main(ROSTER_BASE + PENDING, **TWO_ZIP)
+        self.assertEqual(code, 0, err)
+        self.assertIn("| db-2 | alice-db 2.0.0 | 2 |", out)
+        self.assertIn("0 problems, expected (2) until a release", out)
+
+    def test_without_the_roster_they_are_problems(self):
+        with tempfile.TemporaryDirectory() as d:
+            lp, mp = Path(d, "Cargo.lock"), Path(d, "Cargo.toml")
+            lp.write_text(lock(*TWO_ZIP["lock_pkgs"]), encoding="utf-8")
+            mp.write_text(MANIFEST, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                code = dc.main(["--lock", str(lp), "--manifest", str(mp)], fetch=fixture(None, TWO_ZIP["deps"]))
+        self.assertEqual(code, 1)
+
+    def test_an_unlisted_problem_is_still_a_problem(self):
+        roster = ROSTER_BASE + PENDING.replace('requires = ["alice-db 1.0.0 -> alice-zip ^0.7"]\n', "")
+        code, _, err = self.run_main(roster, **TWO_ZIP)
+        self.assertEqual(code, 1)
+        self.assertIn("alice-db 1.0.0 requires alice-zip ^0.7", err)
+
+    def test_a_pending_entry_past_its_release_is_stale(self):
+        roster = ROSTER_BASE.replace('state = "prepared"', 'state = "published"') + PENDING
+        code, _, err = self.run_main(roster, **TWO_ZIP)
+        self.assertEqual(code, 1)
+        self.assertIn("is stale", err)
+
+    def test_an_item_that_matches_no_problem_fails(self):
+        roster = ROSTER_BASE + PENDING.replace('linked = ["alice-zip"]', 'linked = ["alice-zip", "alice-sdf"]')
+        code, _, err = self.run_main(roster, **TWO_ZIP)
+        self.assertEqual(code, 1)
+        self.assertIn("('linked', 'alice-sdf'), which is not a problem any more", err)
+        code, _, err = self.run_main(ROSTER_BASE + PENDING)  # nothing is linked twice at all
+        self.assertEqual(code, 1)
+
+    def test_the_requirement_must_match_exactly(self):
+        roster = ROSTER_BASE + PENDING.replace("alice-zip ^0.7", "alice-zip ^0.6")
+        self.assertEqual(self.run_main(roster, **TWO_ZIP)[0], 1)
+
+    def test_malformed_entries_exit_2(self):
+        for bad in (PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-db 9.9.9"'),  # not the roster version
+                    PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-nope 1.0.0"'),
+                    PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-db"'),
+                    PENDING.replace("alice-db 1.0.0 -> alice-zip ^0.7", "alice-db 1.0.0 alice-zip ^0.7"),
+                    PENDING.replace("alice-db 1.0.0 -> alice-zip ^0.7", "this repository -> alice-zip 0.7"),
+                    PENDING.replace('linked = ["alice-zip"]', 'linked = ["alice-zip", "alice-zip"]'),
+                    PENDING.replace('linked = ["alice-zip"]', 'linkd = ["alice-zip"]'),
+                    '[pending.empty]\nuntil = "alice-db 2.0.0"\n',
+                    PENDING + PENDING.replace("db-2", "db-2b")):  # the same problem in two entries
+            self.assertEqual(self.run_main(ROSTER_BASE + bad, **TWO_ZIP)[0], 2, bad)
+
+    def test_the_repository_roster_entries_are_well_formed(self):
+        entries = dc.load_pending((HERE.parent / "release-train.toml").read_text(encoding="utf-8"))
+        self.assertTrue(all(e["keys"] for e in entries))
+
+
 if __name__ == "__main__":
     unittest.main()
