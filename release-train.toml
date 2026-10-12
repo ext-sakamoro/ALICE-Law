@@ -60,7 +60,7 @@ repo = "ALICE-DB"
 
 [crate.alice-physics]
 version = "3.0.0"
-state = "planned"
+state = "prepared"
 order = 6
 repo = "ALICE-Physics"
 
