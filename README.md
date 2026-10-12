@@ -135,7 +135,7 @@ Releases that would remove them, in dependency order: alice-physics 3.0.0 (alice
 
 End to end, measured on 2026-10-12:
 
-- published: **fails to resolve**, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 2.3.0, whose sink writes to the exact series of alice-db, is released
+- published: **fails to resolve**, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 3.0.0, whose sink writes to the exact series of alice-db, is released
 - main: **fails before the test**: alice-lol on main requires `alice-physics ^2.0`, and alice-physics on main is 3.0.0, so the checkouts cannot be patched in together until alice-lol on main raises the requirement (the last passing run compared 3776 values and records, digest `2a0f3d06…`)
 
 ## License
