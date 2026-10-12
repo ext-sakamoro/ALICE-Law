@@ -99,7 +99,7 @@ required-ci = [
 
 [crate.alice-sdf]
 version = "6.0.0"
-state = "prepared"
+state = "published"
 order = 7
 repo = "ALICE-SDF"
 # 6.0.0 は main の min / max の Law (77bcbaf まで) と、その上の det-math 0.5・physics 3・max / min の
@@ -185,18 +185,6 @@ repo = "ALICE-Law"
 # the roster marks it published, the entry is stale and the check fails until the
 # entry is removed (and the requirements that release lets this repository raise are
 # raised). An item that matches no problem fails the check too.
-
-[pending.alice-sdf-6]
-until = "alice-sdf 6.0.0"
-why = "alice-sdf 5.1.1 requires the previous alice-det-math and, with its physics feature, alice-physics 2.2 (which brings the previous alice-det-math, alice-analytics and alice-db requirements)"
-linked = ["alice-det-math"]
-requires = [
-    "alice-sdf 5.1.1 -> alice-det-math ^0.4",
-    "alice-sdf 5.1.1 -> alice-physics ^2.2",
-    "alice-physics 2.2.0 -> alice-analytics ^0.1",
-    "alice-physics 2.2.0 -> alice-db ^0.3.0-beta.1",
-    "alice-physics 2.2.0 -> alice-det-math ^0.4",
-]
 
 [pending.alice-lol-0-4]
 until = "alice-lol 0.4.0"

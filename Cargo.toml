@@ -12,7 +12,7 @@ description = "Integration checks across the core ALICE crates, built from their
 [dependencies]
 alice-lol = { version = "0.3", features = ["physics"] }
 alice-det-math = "0.5"
-alice-sdf = { version = "5.1", features = ["physics"] }
+alice-sdf = { version = "6", features = ["physics"] }
 alice-physics = { version = "3", features = ["analytics", "replay"] }
 alice-db = { version = "0.4", features = ["analytics", "crypto"] }
 alice-zip = "0.10"
