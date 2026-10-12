@@ -10,6 +10,7 @@ cd "$(dirname "$0")/.."
 echo "== tests of the scripts"
 python3 scripts/test_dep_consistency.py
 python3 scripts/test_release_train.py
+python3 scripts/test_expected_failure.py
 python3 scripts/test_public_text_check.py
 
 echo "== public text: the tree"

@@ -49,6 +49,9 @@ jobs:
       - name: Test the release train
         run: python3 scripts/test_release_train.py
 
+      - name: Test the expected-failure wrapper
+        run: python3 scripts/test_expected_failure.py
+
       - name: Release train, next crate (informational)
         run: python3 scripts/release_train.py next || true
 

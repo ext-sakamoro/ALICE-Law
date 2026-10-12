@@ -25,6 +25,8 @@ on:
       - "e2e/**"
       - "scripts/main_mode.py"
       - "scripts/e2e_teeth.py"
+      - "scripts/expected_failure.py"
+      - "release-train.toml"
       - ".github/workflows/e2e-main.yml"
 
 permissions:
@@ -57,18 +59,23 @@ jobs:
             git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
             echo "| $r | $(git -C "$RUNNER_TEMP/core/$r" rev-parse --short HEAD) |" >> "$GITHUB_STEP_SUMMARY"
           done
+      # a failure the roster lists under [expected-failure.*] (named, explained, until a
+      # release) is reported as expected and skips the steps that need it; any other is red
       - &patch
         name: Patch the core crates with the checkouts
+        id: patch
         run: |
           python3 scripts/main_mode.py patch "$RUNNER_TEMP/core"
-          cd e2e && cargo --version && cargo generate-lockfile
+          cd e2e && cargo --version
+          python3 ../scripts/expected_failure.py e2e-main-patch -- cargo generate-lockfile
 
       - name: Test
+        if: steps.patch.outputs.expected != 'true'
         working-directory: e2e
         run: cargo test --release --locked -- --nocapture
 
       - name: Every core crate taken from main
-        if: always()
+        if: always() && steps.patch.outputs.expected != 'true'
         run: python3 scripts/main_mode.py verify | tee -a "$GITHUB_STEP_SUMMARY"
 
   teeth:
@@ -88,4 +95,5 @@ jobs:
       - *clone
       - *patch
       - name: Mutations
+        if: steps.patch.outputs.expected != 'true'
         run: python3 scripts/e2e_teeth.py "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"

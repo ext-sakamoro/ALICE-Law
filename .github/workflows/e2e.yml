@@ -22,6 +22,8 @@ on:
     paths:
       - "e2e/**"
       - ".github/workflows/e2e.yml"
+      - "scripts/expected_failure.py"
+      - "release-train.toml"
 
 permissions:
   contents: read
@@ -42,11 +44,18 @@ jobs:
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
+      # a failure the roster lists under [expected-failure.*] (named, explained, until a
+      # release) is reported as expected and skips the steps that need it; any other is red
       - name: Resolve against crates.io as it is today
+        id: resolve
         run: |
           cargo --version
-          cargo generate-lockfile
-          grep -A1 '^name = "alice-' Cargo.lock | grep -v '^--$' | paste - - | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 ../scripts/expected_failure.py e2e-published-resolve -- cargo generate-lockfile
+
+      - name: The alice crates in the lock file
+        if: steps.resolve.outputs.expected != 'true'
+        run: grep -A1 '^name = "alice-' Cargo.lock | grep -v '^--$' | paste - - | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Test
+        if: steps.resolve.outputs.expected != 'true'
         run: cargo test --release --locked -- --nocapture

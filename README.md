@@ -117,6 +117,10 @@ Two modes run the same test:
 
 `scripts/e2e_teeth.py` (main mode, the teeth job of `e2e-main.yml`) changes one line at a time in the checkouts and requires the test to fail with the expected message: a law coefficient decoded one ulp off, an f64 saved through f32, a restore that returns nothing, a flipped digest byte, `exp` from the platform libm, a slightly longer thermal step, a different arithmetic identifier, a residual one ulp off, and a second version of alice-zip in the build.
 
+## Steps that fail until a release
+
+A CI step that cannot pass before a release (the end to end crate resolving alice-lol 0.4 from crates.io before it is published, or the main branches patched in together while alice-lol on main still requires the previous alice-physics) is wrapped in `scripts/expected_failure.py <step> -- <command>` and listed in `release-train.toml` under `[expected-failure.<name>]` with the release it waits for (`until`), the text its failure must contain (`expect`) and why (`why`). It is then reported as expected in the job summary and the steps that need it are skipped. The step is red when it fails another way, when it still fails after its release is `published` in the roster, and when it passes while it is still listed (remove the entry). So a red run is a problem to fix.
+
 ## Status
 
 Measured on 2026-10-12 (the committed `Cargo.lock`): **the check passes with 19 expected problems**, in three pending entries (alice-physics 3.0.0: 10, alice-sdf 6.0.0: 2, alice-lol 0.4.0: 7). This repository's own requirements accept every latest release (alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4, alice-crypto 0.4); what remains comes from the published alice-physics 2.2.0, alice-sdf 5.1.1 and alice-lol 0.3.0.
@@ -136,8 +140,8 @@ Releases that would remove them, in dependency order: alice-physics 3.0.0 (alice
 
 End to end, measured on 2026-10-12:
 
-- published: **fails to resolve**, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 3.0.0, whose sink writes to the exact series of alice-db, is released
-- main: **fails before the test**: alice-lol on main requires `alice-physics ^2.0`, and alice-physics on main is 3.0.0, so the checkouts cannot be patched in together until alice-lol on main raises the requirement (the last passing run compared 3776 values and records, digest `2a0f3d06…`)
+- published: **expected failure until alice-lol 0.4.0** (`expected-failure.e2e-published-lol-0-4`): fails to resolve, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 3.0.0, whose sink writes to the exact series of alice-db, is released
+- main: **expected failure until alice-lol 0.4.0** (`expected-failure.e2e-main-lol-physics-3`), fails before the test: alice-lol on main requires `alice-physics ^2.0`, and alice-physics on main is 3.0.0, so the checkouts cannot be patched in together until alice-lol on main raises the requirement (the last passing run compared 3776 values and records, digest `2a0f3d06…`)
 
 ## License
 

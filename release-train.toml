@@ -169,3 +169,19 @@ requires = [
     "alice-physics 0.14.0-preview.8 -> alice-analytics ^0.1",
     "alice-physics 0.14.0-preview.8 -> alice-db ^0.2.0-beta.1",
 ]
+
+# CI steps that fail until a release (scripts/expected_failure.py, wrapped around the
+# step): reported as expected and the steps that need them skipped. A step listed here
+# that passes, or still fails after its release, or fails another way, is red.
+
+[expected-failure.e2e-published-lol-0-4]
+step = "e2e-published-resolve"
+until = "alice-lol 0.4.0"
+expect = ["failed to select a version for the requirement `alice-lol = \"^0.4\"`"]
+why = "the end to end crate needs alice-lol 0.4 (its research law reader), which is not on crates.io yet"
+
+[expected-failure.e2e-main-lol-physics-3]
+step = "e2e-main-patch"
+until = "alice-lol 0.4.0"
+expect = ["failed to select a version for the requirement `alice-physics = \"^2.0\"`"]
+why = "alice-lol on main requires alice-physics ^2.0 while alice-physics on main is 3.0.0; alice-lol 0.4.0 raises it"
