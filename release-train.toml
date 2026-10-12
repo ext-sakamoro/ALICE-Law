@@ -99,7 +99,7 @@ required-ci = [
 
 [crate.alice-sdf]
 version = "6.0.0"
-state = "planned"
+state = "prepared"
 order = 7
 repo = "ALICE-SDF"
 # 6.0.0 は main の min / max の Law (77bcbaf まで) と、その上の det-math 0.5・physics 3・max / min の
