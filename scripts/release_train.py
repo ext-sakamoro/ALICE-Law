@@ -23,6 +23,15 @@
             does not accept (Cargo's rules: "0.4" does not accept 0.5.0)
           - is not a roster crate and its latest release on crates.io is missing, yanked
             or not accepted by the requirement
+      - the roster lists `must-contain` commits for <crate> and one of them is not an
+        ancestor of SHA (or is not in the repository)
+      - the roster lists `changelog-has` lines for <crate> and the CHANGELOG.md next to
+        the manifest (else the repository's) at SHA has no `## [<version>]` section, or
+        the section does not contain each of them
+      - the package (`cargo package --list` of the manifest) carries a file under
+        .github/, scripts/ or docs/, or a file or directory of private notes (named by
+        hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
+        crate; a package that lists no file exits 2
 
 usage: release_train.py [--roster release-train.toml] {next | publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]}
 Exit 0 when the answer is "go" (next: a crate was found), 1 when it is "no", 2 when the
@@ -32,12 +41,19 @@ read or answered something other than the version asked for.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
+import io
 import json
+import re
 import subprocess
 import sys
+import tarfile
+import tempfile
+import time
 import tomllib
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -45,6 +61,15 @@ _spec = importlib.util.spec_from_file_location("dep_consistency", HERE / "dep_co
 dc = importlib.util.module_from_spec(_spec)
 sys.modules["dep_consistency"] = dc
 _spec.loader.exec_module(dc)
+
+# what the published package must not carry: the repository's CI, tools and notes
+PACKAGE_EXCLUDED_DIRS = (".github/", "scripts/", "docs/")
+# file / directory names of private notes, anywhere in the package: the sha256 of the
+# lower-case name (the names themselves are not written in this public repository)
+PRIVATE_NAME_SHA256 = frozenset({
+    "e026f56c08dcdea441a2aa620ab410ce91162062609b2430f5a13bc9b7cf93f1",
+    "bccc86317c281a19e56f3f941077ea61b3fb37d5bd527c518b92b188c4461251",
+})
 
 STATES = ("planned", "prepared-local", "prepared", "published", "exempt")
 DEFAULT_ROSTER = HERE.parent / "release-train.toml"
@@ -70,6 +95,10 @@ def load_roster(text: str) -> dict[str, dict]:
                 raise RosterError(f"{name}: missing `{key}`")
         if "requires" in c:
             raise RosterError(f"{name}: `requires` is read from the crate's Cargo.toml, not the roster")
+        for key in ("must-contain", "changelog-has"):
+            if key in c and (not isinstance(c[key], list) or not c[key]
+                             or not all(isinstance(x, str) and x.strip() for x in c[key])):
+                raise RosterError(f"{name}: `{key}` must be a non-empty list of non-empty strings")
         if c["state"] not in STATES:
             raise RosterError(f"{name}: state {c['state']!r} is not one of {STATES}")
         dc.Version(c["version"])  # raises on a malformed version
@@ -162,6 +191,93 @@ def checkout_problems(repo: Path, ref: str) -> list[str]:
     return problems
 
 
+def cargo_package_list(repo: Path, manifest_path: str) -> list[str]:
+    """the files `cargo package` puts in the crate, relative to the package root"""
+    out = subprocess.run(["cargo", "package", "--list", "--manifest-path", str(repo / manifest_path)],
+                         cwd=repo, check=True, capture_output=True, text=True).stdout
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def package_problems(crate: str, files: list[str]) -> list[str]:
+    """the files of the package that belong to the repository, not the crate; an empty
+    list is a ValueError (nothing was compared)"""
+    if not files:
+        raise ValueError(f"{crate}: cargo package --list listed no file")
+    leaked: dict[str, int] = {}
+    for f in files:
+        f = f.replace("\\", "/")
+        top = next((d for d in PACKAGE_EXCLUDED_DIRS if f.startswith(d)), None)
+        if top is None:
+            parts = f.split("/")
+            for i, part in enumerate(parts):
+                if hashlib.sha256(part.lower().encode()).hexdigest() in PRIVATE_NAME_SHA256:
+                    top = "/".join(parts[:i + 1]) + ("/" if i + 1 < len(parts) else "")
+                    break
+        if top is not None:
+            leaked[top] = leaked.get(top, 0) + 1
+    if not leaked:
+        return []
+    listed = ", ".join(f"{k} ({n})" for k, n in sorted(leaked.items()))
+    return [f"{crate}: the package carries {sum(leaked.values())} of {len(files)} files that are "
+            f"not the crate's: {listed}; set `include` (or `exclude`) in the manifest"]
+
+
+def changelog_section(text: str, version: str) -> str | None:
+    """the body of the `## [version]` section of a Keep a Changelog file, or None"""
+    lines = text.splitlines()
+    head = f"## [{version}]"
+    for i, line in enumerate(lines):
+        if line.startswith(head):
+            body = []
+            for rest in lines[i + 1:]:
+                if rest.startswith("## "):
+                    break
+                body.append(rest)
+            return "\n".join(body)
+    return None
+
+
+def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: str) -> tuple[list[str], int]:
+    """(problems, compared) for the roster's `must-contain` commits and `changelog-has`
+    lines of `crate`, read at `ref`"""
+    problems: list[str] = []
+    compared = 0
+    for commit in c.get("must-contain", []):
+        compared += 1
+        known = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{commit}^{{commit}}"],
+                               capture_output=True).returncode == 0
+        if not known:
+            problems.append(f"{crate}: must contain {commit}, which is not in the repository")
+            continue
+        r = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, ref],
+                           capture_output=True, text=True)
+        if r.returncode == 1:
+            problems.append(f"{crate}: {ref} does not contain {commit}")
+        elif r.returncode != 0:
+            raise subprocess.CalledProcessError(r.returncode, ["git", "merge-base"], stderr=r.stderr)
+    wanted = c.get("changelog-has", [])
+    if wanted:
+        here = str(Path(manifest_path).parent).replace("\\", "/")
+        candidates = ([f"{here}/CHANGELOG.md"] if here not in ("", ".") else []) + ["CHANGELOG.md"]
+        text = None
+        for path in candidates:
+            try:
+                text = git(repo, "show", f"{ref}:{path}")
+                break
+            except subprocess.CalledProcessError:
+                continue
+        if text is None:
+            return problems + [f"{crate}: no CHANGELOG.md at {ref}"], compared + 1
+        section = changelog_section(text, c["version"])
+        if section is None:
+            return problems + [f"{crate}: CHANGELOG.md has no [{c['version']}] section"], compared + 1
+        for line in wanted:
+            compared += 1
+            if line not in section:
+                problems.append(f"{crate}: the [{c['version']}] section of CHANGELOG.md does not contain {line!r}")
+    return problems, compared
+
+
 def release_state(fetch: dc.Fetch, crate: str, version: str) -> str:
     """'missing' (HTTP 404), 'yanked' or 'present' for one version on crates.io; anything
     else crates.io answers is a RegistryError"""
@@ -227,19 +343,269 @@ def publish_gate(roster: dict[str, dict], crate: str, manifest_text: str,
     return problems, compared
 
 
-def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch) -> int:
+# ---------------------------------------------------------------- after the gate: package, verify, mark
+
+DOCS_RS = "https://docs.rs/crate"
+STATIC_CRATES = "https://static.crates.io/crates"
+
+
+def http_get(url: str) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": dc.USER_AGENT})
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                body = r.read()
+            time.sleep(1)  # crates.io asks for at most one request per second
+            return body
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, TimeoutError, OSError):
+            if attempt == 2:
+                raise
+            time.sleep(2 * (attempt + 1))
+    raise AssertionError("unreachable")
+
+
+def docs_rs_status(crate: str, version: str) -> dict:
+    return json.loads(http_get(f"{DOCS_RS}/{crate}/{version}/status.json"))
+
+
+def lock_tracked(repo: Path, manifest_path: str) -> bool:
+    """a Cargo.lock is committed next to the manifest or at the repository root"""
+    here = Path(manifest_path).parent
+    for p in {str(here / "Cargo.lock"), "Cargo.lock"}:
+        r = subprocess.run(["git", "-C", str(repo), "ls-files", "--error-unmatch", p], capture_output=True)
+        if r.returncode == 0:
+            return True
+    return False
+
+
+def cargo_package(repo: Path, manifest_path: str, name: str, version: str, target_dir: Path) -> Path:
+    """`cargo package` (which builds the packaged crate, as `cargo publish` does) into
+    target_dir; the .crate it wrote"""
+    cmd = ["cargo", "package", "--manifest-path", str(repo / manifest_path), "--target-dir", str(target_dir)]
+    if lock_tracked(repo, manifest_path):
+        cmd.append("--locked")
+    subprocess.run(cmd, cwd=repo, check=True, capture_output=True, text=True)
+    return target_dir / "package" / f"{name}-{version}.crate"
+
+
+def publish_command(repo: Path, manifest_path: str, locked: bool) -> str:
+    return (f"(cd {repo} && cargo publish{' --locked' if locked else ''} --manifest-path {manifest_path})")
+
+
+def crate_files(data: bytes) -> list[str]:
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
+        return [m.name for m in t.getmembers() if m.isfile()]
+
+
+def vcs_info(data: bytes, name: str, version: str) -> dict | None:
+    """the .cargo_vcs_info.json cargo writes into a .crate (the commit it was packaged from)"""
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
+        try:
+            f = t.extractfile(f"{name}-{version}/.cargo_vcs_info.json")
+        except KeyError:
+            return None
+        return json.load(f) if f else None
+
+
+def remote_tag_commit(repo: Path, remote: str, tag: str) -> str | None:
+    """the commit the tag names on the remote (an annotated tag is peeled), or None"""
+    out = git(repo, "ls-remote", remote, f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}")
+    direct = peeled = None
+    for line in out.splitlines():
+        sha, ref = line.split("\t")
+        if ref.endswith("^{}"):
+            peeled = sha
+        else:
+            direct = sha
+    return peeled or direct
+
+
+def tag_name(c: dict) -> str:
+    return c.get("tag", "v{version}").replace("{version}", c["version"])
+
+
+def publish_verify(roster: dict[str, dict], owners: list[str], crate: str, commit: str,
+                   manifest_text: str, manifest_dir: str, expect_sha256: str, fetch: dc.Fetch,
+                   download, tag_commit) -> tuple[list[str], int]:
+    """(problems, compared) for the release of `crate` at its roster version, read back
+    from crates.io and the repository after `cargo publish`"""
+    if crate not in roster:
+        return [f"{crate} is not in the roster"], 1
+    c = roster[crate]
+    version = c["version"]
+    problems: list[str] = []
+    compared = 1
+    try:
+        data = fetch(f"{crate}/{version}")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return [f"{crate} {version} is not on crates.io"], compared
+        raise
+    v = data.get("version") if isinstance(data, dict) else None
+    if not isinstance(v, dict) or v.get("num") != version:
+        raise RegistryError(f"{crate}/{version}: crates.io answered {str(data)[:200]}")
+    if v.get("yanked"):
+        problems.append(f"{crate} {version} is yanked")
+    checksum = v.get("checksum")
+    compared += 1
+    if not checksum or checksum != expect_sha256:
+        problems.append(f"{crate} {version}: crates.io has checksum {checksum}, the gate packaged {expect_sha256}")
+    compared += 1
+    license_here = tomllib.loads(manifest_text).get("package", {}).get("license")
+    if v.get("license") != license_here:
+        problems.append(f"{crate} {version}: crates.io has license {v.get('license')!r}, the manifest {license_here!r}")
+    compared += 1
+    users = fetch(f"{crate}/owners").get("users")
+    if not isinstance(users, list):
+        raise RegistryError(f"{crate}/owners: crates.io answered without users")
+    found = sorted(u.get("login", "?") for u in users)
+    if found != sorted(owners):
+        problems.append(f"{crate}: crates.io owners are {found}, the roster has {sorted(owners)}")
+    compared += 1
+    body = download(f"{STATIC_CRATES}/{crate}/{crate}-{version}.crate")
+    got = hashlib.sha256(body).hexdigest()
+    if got != checksum:
+        problems.append(f"{crate} {version}: the downloaded .crate has sha256 {got}, crates.io lists {checksum}")
+    else:
+        info = vcs_info(body, crate, version)
+        compared += 1
+        if info is None:
+            problems.append(f"{crate} {version}: the .crate has no .cargo_vcs_info.json (packaged outside git)")
+        else:
+            sha1 = info.get("git", {}).get("sha1")
+            if sha1 != commit:
+                problems.append(f"{crate} {version}: the .crate was packaged from {sha1}, not {commit}")
+            if info.get("git", {}).get("dirty"):
+                problems.append(f"{crate} {version}: the .crate was packaged from a dirty checkout")
+            if info.get("path_in_vcs", "") != manifest_dir:
+                problems.append(f"{crate} {version}: the .crate was packaged from {info.get('path_in_vcs')!r}, "
+                                f"not {manifest_dir!r}")
+    compared += 1
+    tag = tag_name(c)
+    at = tag_commit(tag)
+    if at is None:
+        problems.append(f"{crate}: tag {tag} is not on the remote")
+    elif at != commit:
+        problems.append(f"{crate}: tag {tag} names {at}, not {commit}")
+    return problems, compared
+
+
+def mark_published(text: str, crate: str) -> str:
+    """the roster text with `crate`'s state changed from prepared to published"""
+    head = f"[crate.{crate}]"
+    lines = text.splitlines(keepends=True)
+    block = False
+    changed = 0
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith("["):
+            block = s == head
+            continue
+        if block and re.fullmatch(r'state\s*=\s*"prepared"\s*(#.*)?', s):
+            lines[i] = line.replace('"prepared"', '"published"', 1)
+            changed += 1
+    if changed != 1:
+        raise RosterError(f"{crate}: the roster has no single `state = \"prepared\"` line to mark")
+    new = "".join(lines)
+    if load_roster(new)[crate]["state"] != "published":
+        raise RosterError(f"{crate}: marking it published did not take")
+    return new
+
+
+# ---------------------------------------------------------------- after the publish: who has to follow
+
+DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+
+
+def requirements_on(text: str, crate: str) -> list[tuple[str, str | None]]:
+    """(table, requirement or None when there is no version) of every dependency of a
+    manifest on `crate`, in every table cargo reads (normal, dev, build, target, workspace)"""
+    data = tomllib.loads(text)
+    tables = [(t, data.get(t, {})) for t in DEP_TABLES]
+    for cfg, target in data.get("target", {}).items():
+        tables += [(f"target.{cfg}.{t}", target.get(t, {})) for t in DEP_TABLES]
+    tables.append(("workspace.dependencies", data.get("workspace", {}).get("dependencies", {})))
+    out = []
+    for table, deps in tables:
+        for key, spec in deps.items():
+            name = alice_name(spec.get("package", key) if isinstance(spec, dict) else key)
+            if name != crate:
+                continue
+            if isinstance(spec, str):
+                out.append((table, spec))
+            elif spec.get("workspace"):
+                continue  # the requirement is the workspace's, listed under workspace.dependencies
+            else:
+                out.append((table, spec.get("version")))
+    return out
+
+
+def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) -> tuple[list[str], list[str], int]:
+    """(to bump, already accept, manifests read): every Cargo.toml at `at` in the
+    repositories of the roster that requires `crate` without accepting its roster version"""
+    version = roster[crate]["version"]
+    own = roster[crate].get("repo")
+    bump, ok = [], []
+    read = 0
+    for repo_name in sorted({c["repo"] for c in roster.values() if "repo" in c}):
+        repo = repos_root / repo_name
+        if not (repo / ".git").exists():
+            raise FileNotFoundError(f"{repo}: not a checkout (followups reads every repository of the roster)")
+        names = git(repo, "ls-tree", "-r", "--name-only", at).splitlines()
+        for path in sorted(n for n in names if n == "Cargo.toml" or n.endswith("/Cargo.toml")):
+            text = git(repo, "show", f"{at}:{path}")
+            read += 1
+            if tomllib.loads(text).get("package", {}).get("name") == crate:
+                continue
+            for table, req in requirements_on(text, crate):
+                where = f"{repo_name}/{path} [{table}] {crate}"
+                if req is None:
+                    if repo_name == own:
+                        continue  # a path to the crate in its own repository (fuzz, examples) follows by itself
+                    bump.append(f"{where}: no version requirement (path or git only)")
+                elif not dc.matches(req, version):
+                    bump.append(f"{where} = {req!r} does not accept {version}")
+                else:
+                    ok.append(f"{where} = {req!r} accepts {version}")
+    return bump, ok, read
+
+
+# ---------------------------------------------------------------- command line
+
+def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
+         lister=cargo_package_list, packager=cargo_package, download=http_get,
+         docs=docs_rs_status, tags=remote_tag_commit) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("next")
+
+    def release_args(p, verify: bool):
+        p.add_argument("crate")
+        p.add_argument("--repo", type=Path, required=True, help="the release checkout")
+        p.add_argument("--ref", required=True, help="the commit being (or that was) published")
+        p.add_argument("--manifest-path", default="Cargo.toml", help="the crate's manifest, relative to the repository")
+        if verify:
+            p.add_argument("--expect-sha256", required=True, help="the .crate sha256 the gate printed")
+            p.add_argument("--remote", default="origin", help="where the tag is read")
+
     g = sub.add_parser("publish-gate")
-    g.add_argument("crate")
-    g.add_argument("--repo", type=Path, required=True, help="the release checkout")
-    g.add_argument("--ref", required=True, help="the commit being published")
-    g.add_argument("--manifest-path", default="Cargo.toml", help="the crate's manifest, relative to the repository")
+    release_args(g, False)
+    g.add_argument("--target-dir", type=Path, help="where cargo package builds (default: a temporary directory)")
+    release_args(sub.add_parser("publish-verify"), True)
+    m = sub.add_parser("roster-mark")
+    m.add_argument("state", choices=["published"])
+    release_args(m, True)
+    f = sub.add_parser("followups")
+    f.add_argument("crate")
+    f.add_argument("--repos-root", type=Path, required=True, help="the directory holding a checkout of every roster repository")
+    f.add_argument("--at", default="origin/main", help="the commit read in each checkout (fetch first)")
     a = ap.parse_args(argv)
     try:
-        roster = load_roster(a.roster.read_text(encoding="utf-8"))
+        roster_text = a.roster.read_text(encoding="utf-8")
+        roster = load_roster(roster_text)
     except (OSError, ValueError) as e:
         print(f"error: {a.roster}: {e}", file=sys.stderr)
         return 2
@@ -250,27 +616,92 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch) -> int:
             return 1
         print(f"next: {name} {roster[name]['version']} (state {roster[name]['state']}, {pending} unpublished)")
         return 0
+    if a.cmd != "followups" and a.crate not in roster:
+        print(f"refused: {a.crate} is not in the roster")
+        return 1
     try:
+        if a.cmd == "followups":
+            if a.crate not in roster:
+                print(f"error: {a.crate} is not in the roster", file=sys.stderr)
+                return 2
+            bump, ok, read = followups(roster, a.crate, a.repos_root, a.at)
+            if read == 0:
+                print("error: no Cargo.toml was read", file=sys.stderr)
+                return 2
+            for line in bump:
+                print(f"bump: {line}")
+            for line in ok:
+                print(f"ok:   {line}")
+            print(f"followups for {a.crate} {roster[a.crate]['version']}: {len(bump)} to bump, "
+                  f"{len(ok)} accept it ({read} manifests at {a.at})")
+            return 1 if bump else 0
         problems = checkout_problems(a.repo, a.ref)
+        commit = git(a.repo, "rev-parse", "--verify", f"{a.ref}^{{commit}}").strip()
         manifest_text = git(a.repo, "show", f"{a.ref}:{a.manifest_path}")
-        root_text = None
-        if a.manifest_path.replace("\\", "/").lstrip("./") != "Cargo.toml":
-            root_text = git(a.repo, "show", f"{a.ref}:Cargo.toml")
-        gate_problems, compared = publish_gate(roster, a.crate, manifest_text, fetch, root_text)
-        problems += gate_problems
+        manifest_dir = str(Path(a.manifest_path).parent).replace("\\", "/")
+        manifest_dir = "" if manifest_dir == "." else manifest_dir
+        if a.cmd == "publish-gate":
+            root_text = None
+            if manifest_dir:
+                root_text = git(a.repo, "show", f"{a.ref}:Cargo.toml")
+            gate_problems, compared = publish_gate(roster, a.crate, manifest_text, fetch, root_text)
+            problems += gate_problems
+            hist, n = history_problems(a.repo, a.ref, a.crate, roster[a.crate], a.manifest_path)
+            problems += hist
+            compared += n
+            problems += package_problems(a.crate, lister(a.repo, a.manifest_path))
+            compared += 1
+            for p in problems:
+                print(f"refused: {p}")
+            if problems:
+                return 1
+            version = roster[a.crate]["version"]
+            with tempfile.TemporaryDirectory() as tmp:
+                crate_path = packager(a.repo, a.manifest_path, a.crate, version, a.target_dir or Path(tmp))
+                body = crate_path.read_bytes()
+            digest = hashlib.sha256(body).hexdigest()
+            print(f"publish-gate: go for {a.crate} {version} ({compared} checks)")
+            print(f"  commit:        {commit}")
+            print(f"  .crate sha256: {digest} ({len(crate_files(body))} files, built by cargo package)")
+            print(f"  publish:       {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")
+            print(f"  then:          python3 scripts/release_train.py roster-mark published {a.crate} "
+                  f"--repo {a.repo} --ref {commit} --expect-sha256 {digest}"
+                  + (f" --manifest-path {a.manifest_path}" if manifest_dir else ""))
+            return 0
+        # publish-verify / roster-mark
+        owners = tomllib.loads(roster_text).get("train", {}).get("owners")
+        if not isinstance(owners, list) or not owners:
+            print(f"error: {a.roster}: [train] owners (the crates.io owners every release must have) is missing",
+                  file=sys.stderr)
+            return 2
+        verify_problems, compared = publish_verify(
+            roster, owners, a.crate, commit, manifest_text, manifest_dir, a.expect_sha256, fetch, download,
+            lambda tag: tags(a.repo, a.remote, tag))
+        problems += verify_problems
+        version = roster[a.crate]["version"]
+        try:
+            d = docs(a.crate, version)
+            print(f"docs.rs: {a.crate} {version} doc_status={d.get('doc_status')} (information, not a check)")
+        except (OSError, ValueError, urllib.error.URLError) as e:
+            print(f"docs.rs: {a.crate} {version} status not read ({e}) (information, not a check)")
     except subprocess.CalledProcessError as e:
-        print(f"error: git: {(e.stderr or '').strip()}", file=sys.stderr)
+        print(f"error: {Path(str(e.cmd[0])).name}: {(e.stderr or '').strip()}", file=sys.stderr)
         return 2
-    except (OSError, ValueError, RegistryError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
-        # OSError covers a reset connection; ValueError covers a malformed manifest,
-        # requirement or version, and an unreadable JSON body
+    except (OSError, ValueError, RegistryError, urllib.error.URLError, TimeoutError, json.JSONDecodeError,
+            tarfile.TarError) as e:
+        # OSError covers a reset connection and a missing checkout; ValueError covers a
+        # malformed manifest, requirement or version, and an unreadable JSON body
         print(f"error: {e}", file=sys.stderr)
         return 2
     for p in problems:
         print(f"refused: {p}")
     if problems:
         return 1
-    print(f"publish-gate: go for {a.crate} {roster[a.crate]['version']} ({compared} checks)")
+    if a.cmd == "publish-verify":
+        print(f"publish-verify: {a.crate} {version} is the release of {commit} ({compared} checks)")
+        return 0
+    a.roster.write_text(mark_published(roster_text, a.crate), encoding="utf-8")
+    print(f"roster-mark: {a.crate} {version} is published (verified, {compared} checks); commit {a.roster}")
     return 0
 
 

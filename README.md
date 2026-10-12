@@ -30,14 +30,48 @@ CI (`.github/workflows/dependency-consistency.yml`) runs the tests, the comparis
 
 ## Release train
 
-`release-train.toml` is the plan for releasing the core crates together: for each crate, the version it is being released at, its place in the order (a crate comes after everything it requires) and its state (`planned`, `prepared-local`, `prepared`, `published`, or `exempt` for this repository). What a crate requires of the others is not listed there: it is read from the crate's own `Cargo.toml` at the release checkout, so there is one source for it.
+`release-train.toml` is the plan for releasing the core crates together: for each crate, the version it is being released at, its place in the order (a crate comes after everything it requires), its state (`planned`, `prepared-local`, `prepared`, `published`, or `exempt` for this repository), its repository and, where the repository holds more than one crate, its manifest path and tag name (`tag`, default `v{version}`). `[train] owners` lists the crates.io owners every release must have. What a crate requires of the others is not listed there: it is read from the crate's own `Cargo.toml` at the release checkout, so there is one source for it. A crate can also list `must-contain` (commits the published commit must include) and `changelog-has` (lines its `## [<version>]` CHANGELOG section must contain).
+
+### Runbook: one crate
 
 ```sh
-python3 scripts/release_train.py next                                         # the crate to publish now
-python3 scripts/release_train.py publish-gate alice-zip --repo ../ALICE-Zip --ref <sha>   # right before `cargo publish`; exit 0 = go
+S=scripts/release_train.py
+python3 $S next                                                      # 1. the crate to publish now
+git clone <its repository> /tmp/rel && git -C /tmp/rel checkout <sha> # 2. a clean checkout of the release commit
+python3 $S publish-gate <crate> --repo /tmp/rel --ref <sha>          # 3. exit 0 = go; prints the .crate sha256 and the publish command
+(cd /tmp/rel && cargo publish --locked --manifest-path Cargo.toml)    # 4. the command the gate printed, run by a person
+git -C /tmp/rel tag -a <tag> <sha> -m "<crate> <version>" && git -C /tmp/rel push origin <tag>   # 5. the tag at the published commit
+python3 $S roster-mark published <crate> --repo /tmp/rel --ref <sha> --expect-sha256 <from 3>   # 6. verify, then mark the roster
+python3 $S followups <crate> --repos-root <dir with every roster checkout>                      # 7. who has to raise a requirement
 ```
 
-`next` names the first crate in the order that is not published. `publish-gate <crate> --repo <checkout> --ref <sha> [--manifest-path <path>]` reads the crate's manifest (and the repository's root `Cargo.toml`) at that commit, and refuses when the checkout is not that commit or has changes to tracked files (`cargo publish` packages the working tree), when the crate is not `prepared`, when the manifest is another crate or version than the roster's, when a manifest overrides an `alice-*` crate (`[patch.*]`, `[replace]`) or takes one from another registry, when that version is already on crates.io, or when an `alice-*` dependency of the manifest (normal or build, optional or not, any target, renamed or not, `-` or `_` in the name) has no crates.io version requirement, or names a crate that is not `published` in the roster, is missing or yanked on crates.io, or is not accepted by the requirement (Cargo's rules: `"0.4"` does not accept 0.5.0). A dependency outside the roster is checked against its latest release. Only an HTTP 404 counts as "not on crates.io"; any other answer (an error body, another version than the one asked for, a broken connection) stops the gate with exit 2. The publisher runs the gate first in every publish and updates the crate's `state` in the same step. The requirement matching is the one in `scripts/dep_consistency.py`. CI runs the tests (`scripts/test_release_train.py`, crates.io replaced by a fixture) and prints `next`.
+Then commit `release-train.toml`, and land the requirement bumps that `followups` lists (the next crate in the order is one of them).
+
+1. `next` names the first crate in the order that is not published.
+2. `cargo publish` packages the working tree, so the gate runs on a clone at the commit, not on a working copy.
+3. `publish-gate <crate> --repo <checkout> --ref <sha> [--manifest-path <path>]` reads the crate's manifest (and the repository's root `Cargo.toml`) at that commit, and refuses:
+   - when the checkout is not that commit, or has changes to tracked files;
+   - when the crate is not `prepared`, or the manifest is another crate or version than the roster's;
+   - when a manifest overrides an `alice-*` crate (`[patch.*]`, `[replace]`) or takes one from another registry;
+   - when that version is already on crates.io;
+   - when an `alice-*` dependency of the manifest (normal or build, optional or not, any target, renamed or not, `-` or `_` in the name) has no crates.io version requirement, or names a crate that is not `published` in the roster, is missing or yanked on crates.io, or is not accepted by the requirement (Cargo's rules: `"0.4"` does not accept 0.5.0). A dependency outside the roster is checked against its latest release;
+   - when a `must-contain` commit is not an ancestor of the commit, or the CHANGELOG has no `## [<version>]` section with every `changelog-has` line;
+   - when the package (`cargo package --list`) carries files under `.github/`, `scripts/` or `docs/`, or private notes (file and directory names held as sha256 in the script): the repository's tools and notes, not the crate. Set `include` in the manifest.
+
+   On go it runs `cargo package` (which builds the packaged crate as `cargo publish` does, `--locked` when a `Cargo.lock` is committed) and prints the commit, the sha256 of the `.crate` and the exact `cargo publish` command. With a committed `Cargo.lock` the `.crate` is the same bytes as the one `cargo publish` uploads; without one, cargo resolves the lock it puts in the package at that moment, so publish right after the gate.
+4. Publishing is the one step the scripts do not take.
+5. `publish-verify` reads the tag from the remote (`--remote`, default `origin`).
+6. `roster-mark published` runs `publish-verify` and changes the crate's `state = "prepared"` line to `published` only when every check passed. `publish-verify` (the same checks without the edit) refuses:
+   - when the version is not on crates.io, or is yanked;
+   - when its checksum is not the sha256 the gate printed;
+   - when its license is not the manifest's, or its owners are not `[train] owners`;
+   - when the downloaded `.crate` does not hash to that checksum, or its `.cargo_vcs_info.json` names another commit, a dirty checkout or another directory;
+   - when the tag is missing on the remote or names another commit.
+
+   It also prints the docs.rs build status, as information (docs.rs builds after the publish).
+7. `followups <crate> --repos-root <dir> [--at origin/main]` reads every `Cargo.toml` at `--at` in the checkouts of every roster repository (fetch first) and lists each requirement on the crate (normal, dev, build, target, workspace) that does not accept its roster version, and each one without a version outside the crate's own repository. Exit 1 while there is one to raise.
+
+Only an HTTP 404 counts as "not on crates.io"; any other answer (an error body, another version than the one asked for, a broken connection) stops a command with exit 2, as does a command that compared nothing (no roster crate, no package file, no manifest read, no `[train] owners`). The requirement matching is the one in `scripts/dep_consistency.py`. CI runs the tests (`scripts/test_release_train.py`, crates.io, cargo and the remote replaced by fixtures) and prints `next`.
 
 ## End to end
 

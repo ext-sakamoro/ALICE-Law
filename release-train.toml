@@ -19,6 +19,10 @@
 #   python3 scripts/release_train.py next
 #   python3 scripts/release_train.py publish-gate <crate> --manifest <its Cargo.toml>
 
+[train]
+# the crates.io owners every release must have, and no other (publish-verify)
+owners = ["ext-sakamoro"]
+
 [crate.alice-det-math]
 version = "0.5.0"
 state = "published"
@@ -45,6 +49,7 @@ state = "published"
 order = 3
 repo = "ALICE-Zip"
 manifest-path = "libalice/Cargo.toml"
+tag = "alice-zip-cli-v{version}"
 
 [crate.alice-analytics]
 version = "0.5.0"
@@ -63,6 +68,11 @@ version = "3.0.0"
 state = "prepared"
 order = 6
 repo = "ALICE-Physics"
+# 3.0.0 は等しいゼロの max / min を全 target で揃える変更を含めて公開する (x86_64 の
+# 保存値が変わるが PHYSICS_SEMANTICS_ID は 3.0.0 の値のまま、公開後なら識別子の更新が要る)
+# 取り込み前の commit を指す 取り込まれたら main 上の commit に置き換える
+must-contain = ["22b65e0bb45803b9d4f863cc3c219a84d42e84a0"]
+changelog-has = ["**Behavior change:**"]
 
 [crate.alice-sdf]
 version = "6.0.0"
@@ -75,12 +85,14 @@ version = "0.3.0"
 state = "planned"
 order = 8
 repo = "ALICE-LOL"
+tag = "alice-lol-macro-v{version}"
 
 [crate.alice-lol]
 version = "0.4.0"
 state = "planned"
 order = 9
 repo = "ALICE-LOL"
+tag = "alice-lol-v{version}"
 
 [crate.alice-edge]
 version = "0.2.0"
