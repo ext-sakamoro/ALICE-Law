@@ -18,6 +18,6 @@ alice-db = { version = "0.4", features = ["analytics", "crypto"] }
 alice-zip = "0.10"
 alice-crypto = "0.4"
 alice-analytics = { version = "0.5", features = ["law"] }
-alice-edge = { version = "0.1", features = ["sdf", "db", "dashboard"] }
+alice-edge = { version = "0.2", features = ["sdf", "db", "dashboard"] }
 
 [workspace]
