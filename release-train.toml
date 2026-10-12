@@ -59,13 +59,13 @@ order = 5
 repo = "ALICE-DB"
 
 [crate.alice-physics]
-version = "2.3.0"
+version = "3.0.0"
 state = "planned"
 order = 6
 repo = "ALICE-Physics"
 
 [crate.alice-sdf]
-version = "5.2.0"
+version = "6.0.0"
 state = "planned"
 order = 7
 repo = "ALICE-SDF"
