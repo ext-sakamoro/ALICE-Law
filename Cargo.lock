@@ -40,34 +40,13 @@ dependencies = [
 
 [[package]]
 name = "alice-analytics"
-version = "0.2.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fc5c8d0dac558a6957b6c3e96f15b6a627b7022bdecabe0791c47808ce3e119"
+checksum = "f88494dfa330a02ea22c5846d54ca0efe742f477db7c4894b9eaa6fb0d057e31"
 dependencies = [
- "alice-det-math 0.3.2",
+ "alice-det-math 0.5.0",
+ "alice-zip 0.10.0",
  "libm",
-]
-
-[[package]]
-name = "alice-analytics"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4499b6b29f208708590a0060a77a794b61cf1713f83a22cbbb5c35104f4bb85c"
-dependencies = [
- "alice-det-math 0.4.0",
- "alice-zip 0.7.0",
- "libm",
-]
-
-[[package]]
-name = "alice-crypto"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a5f50427d28cdfb642a1c859a00d186e2671e2a7f815c5c4700bd13d32ee00"
-dependencies = [
- "blake3",
- "chacha20poly1305",
- "getrandom",
 ]
 
 [[package]]
@@ -85,13 +64,38 @@ dependencies = [
 
 [[package]]
 name = "alice-db"
-version = "0.3.0-beta.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deb7d61160652a10e79286006a82185860d74de664a0dbe99f4cdfcc8b0e1f5d"
+checksum = "39acf361df9ff3c4dd1dd33345a6a2b9ec1a807681f9dd1a88f6f031e4cfa556"
 dependencies = [
- "alice-analytics 0.2.0",
- "alice-crypto 0.1.0",
- "alice-zip 0.7.0",
+ "alice-det-math 0.4.0",
+ "alice-zip 0.9.0",
+ "bincode 1.3.3",
+ "crc32fast",
+ "crossbeam-channel",
+ "fs2",
+ "getrandom",
+ "js-sys",
+ "log",
+ "lzma-rs",
+ "memmap2",
+ "parking_lot",
+ "rayon",
+ "rkyv",
+ "serde",
+ "wide",
+]
+
+[[package]]
+name = "alice-db"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0f23e5f99b21d7637e62fc92b627091fa436e569f9786d81be4ac5ce633af9f"
+dependencies = [
+ "alice-analytics 0.5.0",
+ "alice-crypto",
+ "alice-det-math 0.5.0",
+ "alice-zip 0.10.0",
  "bincode 1.3.3",
  "crc32fast",
  "crossbeam-channel",
@@ -110,12 +114,6 @@ dependencies = [
 
 [[package]]
 name = "alice-det-math"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b30996b43377046e6b1332f49e795792babc9a224bcef3caabd23e639028bea1"
-
-[[package]]
-name = "alice-det-math"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eef90265249a97cc0fac787cf918f62639991513c0219c33e1853de7f1a28a03"
@@ -125,17 +123,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "alice-det-math"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98c80b31a6e6751c58fd3f2794a12dbb5304946f1cd5bf791840b4df041444d2"
+
+[[package]]
 name = "alice-law-integration"
 version = "0.0.0"
 dependencies = [
- "alice-analytics 0.3.0",
- "alice-crypto 0.4.1",
- "alice-db",
- "alice-det-math 0.4.0",
+ "alice-analytics 0.5.0",
+ "alice-crypto",
+ "alice-db 0.4.0",
+ "alice-det-math 0.5.0",
  "alice-lol",
  "alice-physics 2.2.0",
- "alice-sdf 5.1.0",
- "alice-zip 0.8.0",
+ "alice-sdf 5.1.1",
+ "alice-zip 0.10.0",
 ]
 
 [[package]]
@@ -174,7 +178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "157e98527e8d6c77b7211d09175cbfd19d55f50288dced3b81114981b93e0652"
 dependencies = [
  "alice-analytics 0.1.1",
- "alice-db",
+ "alice-db 0.3.0",
  "alice-det-math 0.4.0",
  "sha2",
 ]
@@ -198,9 +202,9 @@ dependencies = [
 
 [[package]]
 name = "alice-sdf"
-version = "5.1.0"
+version = "5.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be97f91ca0def421298f86f9e1f0208b6ec22225f2712e601e8b47dd78499b2d"
+checksum = "a0baef850f471d3d12c0bbda83bbc6d8f2eae3a6cbceff43a10827d6b9074f02"
 dependencies = [
  "alice-det-math 0.4.0",
  "alice-physics 2.2.0",
@@ -218,9 +222,9 @@ dependencies = [
 
 [[package]]
 name = "alice-zip"
-version = "0.7.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1f94e967d864cfe3f4654a563f1ac7401d94fd4043cec4ec4ab14b6b232d18c"
+checksum = "ffa4a63eedd9ce8dfaa483ca6a5e9052fb0cded2c93f3960d5c85682398a84fd"
 dependencies = [
  "alice-det-math 0.4.0",
  "flate2",
@@ -232,11 +236,11 @@ dependencies = [
 
 [[package]]
 name = "alice-zip"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f495875be71f89350189fa875b2cc3feb10181f214175b7bacfbbf77f8b8e4f3"
+checksum = "0c74382778e10a48c4f3269a1b904dec6cc8a424690daadf51b655b49554a3e4"
 dependencies = [
- "alice-det-math 0.4.0",
+ "alice-det-math 0.5.0",
  "flate2",
  "libm",
  "rand",
@@ -427,9 +431,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a649af8a827553c29fb0cb4bd4a6f1a0dd695bd3232b9bc98bd9c8a3ffbb8b"
+checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -507,7 +511,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -1134,14 +1138,14 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
 name = "serde_json"
-version = "1.0.152"
+version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1741ab7a6cc54a03a89b5d563ed60075c277d9e3cfa73ad0c1f23f23974703c6"
+checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
  "itoa",
  "memchr",
@@ -1227,9 +1231,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.7"
+version = "3.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d62a2e0561533f2ca2561d0cf27fd9fedb640a1bf2616ff5d5c80d99017faadc"
+checksum = "01016da373cd8f7ef12624f796309f5c31ba8d646dd08856c02cd741d823c622"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1259,7 +1263,7 @@ checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -1276,9 +1280,9 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.26"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
+checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "universal-hash"
@@ -1362,7 +1366,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
  "wasm-bindgen-shared",
 ]
 

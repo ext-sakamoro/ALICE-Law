@@ -11,12 +11,12 @@ description = "Integration checks across the core ALICE crates, built from their
 # them). No path dependencies: everything comes from crates.io.
 [dependencies]
 alice-lol = { version = "0.3", features = ["physics"] }
-alice-det-math = "0.4"
+alice-det-math = "0.5"
 alice-sdf = { version = "5.1", features = ["physics"] }
 alice-physics = { version = "2.2", features = ["analytics", "replay"] }
-alice-db = { version = "0.3.0-beta.2", features = ["analytics", "crypto"] }
-alice-zip = "0.8"
+alice-db = { version = "0.4", features = ["analytics", "crypto"] }
+alice-zip = "0.10"
 alice-crypto = "0.4"
-alice-analytics = { version = "0.3", features = ["law"] }
+alice-analytics = { version = "0.5", features = ["law"] }
 
 [workspace]

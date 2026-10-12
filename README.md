@@ -115,25 +115,25 @@ Two modes run the same test:
 
 ## Status
 
-Measured on 2026-10-11 (the committed `Cargo.lock`): **the check fails**, and is expected to until the core crates are released with requirements on each other's current versions.
+Measured on 2026-10-12 (the committed `Cargo.lock`): **the check fails**, and is expected to until alice-physics, alice-sdf and alice-lol are released on alice-det-math 0.5. This repository's own requirements accept every latest release (alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4, alice-crypto 0.4); what remains comes from the published alice-physics 2.2.0, alice-sdf 5.1.1 and alice-lol 0.3.0.
 
 Linked at two or more versions:
 
 | crate | versions | brought in by |
 |---|---|---|
-| alice-analytics | 0.1.1, 0.2.0, 0.3.0 | alice-physics 2.2.0 (`^0.1`), alice-db 0.3.0-beta.2 (`^0.2`) |
-| alice-crypto | 0.1.0, 0.4.1 | alice-db 0.3.0-beta.2 (`^0.1`) |
-| alice-det-math | 0.3.2, 0.4.0 | alice-analytics 0.2.0 (`^0.3`) |
-| alice-physics | 0.14.0-preview.8, 2.2.0 | alice-lol 0.3.0 (`^0.14.0-preview.4`) |
-| alice-sdf | 1.13.0, 5.1.0 | alice-lol 0.3.0 (`^1.9.0`) |
-| alice-zip | 0.7.0, 0.8.0 | alice-db 0.3.0-beta.2 (`^0.7`), alice-analytics 0.3.0 (`^0.7`, optional) |
+| alice-analytics | 0.1.1, 0.5.0 | alice-physics 2.2.0 (`^0.1`, optional) |
+| alice-db | 0.3.0, 0.4.0 | alice-physics 2.2.0 (`^0.3.0-beta.1`, optional) |
+| alice-det-math | 0.4.0, 0.5.0 | alice-physics 2.2.0, alice-sdf 5.1.1, and alice-db 0.3.0 / alice-zip 0.9.0 through alice-physics 2.2.0 (`^0.4`) |
+| alice-physics | 0.14.0-preview.8, 2.2.0 | alice-lol 0.3.0 (`^0.14.0-preview.4`, optional) |
+| alice-sdf | 1.13.0, 5.1.1 | alice-lol 0.3.0 (`^1.9.0`) |
+| alice-zip | 0.9.0, 0.10.0 | alice-db 0.3.0 through alice-physics 2.2.0 (`^0.9`) |
 
-Releases that would remove them, in dependency order: alice-analytics with `alice-zip ^0.8`; alice-db with `alice-zip ^0.8`, `alice-analytics ^0.3` and `alice-crypto ^0.4`; alice-physics with `alice-analytics ^0.3` and the new alice-db; alice-lol with `alice-sdf ^5.1` and `alice-physics ^2`.
+Releases that would remove them, in dependency order: alice-physics 3.0.0 (alice-det-math 0.5, alice-analytics 0.5, alice-db 0.4), alice-sdf 6.0.0 (alice-det-math 0.5, alice-physics 3), alice-lol 0.4.0 (alice-sdf 6, alice-physics 3); then this repository's alice-physics, alice-sdf and alice-lol requirements are raised to them.
 
-End to end, measured on 2026-10-11:
+End to end, measured on 2026-10-12:
 
-- published: **fails to resolve**, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 3.0.0, whose sink writes to the exact series of alice-db, is released
-- main: the test passes (3776 values and records compared, digest `2a0f3d06…`); the check that every crate came from main fails, because alice-det-math 0.5.0 on main is not taken (every other crate requires `^0.4`), so the build uses 0.4.0 from crates.io
+- published: **fails to resolve**, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 2.3.0, whose sink writes to the exact series of alice-db, is released
+- main: **fails before the test**: alice-lol on main requires `alice-physics ^2.0`, and alice-physics on main is 3.0.0, so the checkouts cannot be patched in together until alice-lol on main raises the requirement (the last passing run compared 3776 values and records, digest `2a0f3d06…`)
 
 ## License
 
