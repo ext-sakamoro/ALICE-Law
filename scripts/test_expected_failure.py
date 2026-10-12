@@ -148,6 +148,31 @@ class ExpectedFailure(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(ef.main(["--check"]), 0)
 
+    def test_error_lines_in_any_case_and_from_anyhow_count(self):
+        for extra in ("Error: config not found\n", "ERROR something broke\n", "ERROR\n", "error[E0425]: x\n",
+                      "Error: Caused by: y\n"):
+            rc, out, _, _ = self.run_step(ROSTER + ENTRY, 101, FAILS + extra)
+            self.assertEqual(rc, 1, extra)
+            self.assertIn("not explained by `expect`", out)
+        # words that only start like it are not error lines
+        self.assertEqual(self.run_step(ROSTER + ENTRY, 101, FAILS + "errors were fixed\nErroneous\n")[0], 0)
+
+    def test_colour_codes_are_removed_before_matching(self):
+        coloured = "\x1b[1m\x1b[31merror\x1b[0m\x1b[1m: failed to select a version for the requirement `alice-lol = \"^0.4\"`\x1b[0m\n"
+        self.assertEqual(self.run_step(ROSTER + ENTRY, 101, coloured)[0], 0)
+        rc, out, _, _ = self.run_step(ROSTER + ENTRY, 101, FAILS + "\x1b[31merror\x1b[0m: something else\n")
+        self.assertEqual(rc, 1)
+        self.assertIn("error: something else", out)
+
+    def test_the_exit_status_must_match_when_the_entry_names_it(self):
+        entry = ENTRY + "exit = 101\n"
+        self.assertEqual(self.run_step(ROSTER + entry, 101, FAILS)[0], 0)
+        rc, out, _, _ = self.run_step(ROSTER + entry, 1, FAILS)
+        self.assertEqual(rc, 1)
+        self.assertIn("exit status 1, the entry expects 101", out)
+        for bad in ("exit = 0\n", 'exit = "101"\n', "exit = true\n"):
+            self.assertEqual(self.run_step(ROSTER + ENTRY + bad, 101, FAILS)[0], 2, bad)
+
     def test_malformed_entries_exit_2(self):
         for bad in (ENTRY.replace('until = "alice-lol 0.4.0"', 'until = "alice-lol 9.9.9"'),
                     ENTRY.replace('until = "alice-lol 0.4.0"', 'until = "alice-lol"'),

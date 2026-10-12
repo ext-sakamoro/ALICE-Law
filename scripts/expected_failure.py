@@ -10,6 +10,8 @@ The roster lists such steps under `[expected-failure.<name>]`:
                                         after which the step must pass
     expect = ["<text>", ...]            text of the error lines the failure must have
     why    = "..."                      one line for the job summary
+    exit   = <status>                   optional: the exit status the failure must have
+                                        (101 for a cargo panic)
 
 The command runs with its output shown as it comes. Then:
 
@@ -25,7 +27,9 @@ The command runs with its output shown as it comes. Then:
                                           a line in $GITHUB_STEP_SUMMARY
 
 The failure is read from its own error lines: a line that starts (at its first
-column) with `error:` / `error[...]:` / `fatal:` or a `thread '...' panicked at`.
+column, after terminal colour codes are removed) with `error` in any case followed by
+`:`, `[...]`, a space or the end of the line (`error:`, `Error: ...` from anyhow,
+`ERROR ...`), `fatal:`, or a `thread '...' panicked at`.
 Every such line must contain one of the `expect` texts, and every `expect` text must be
 in one of them; a failure with no error line is not one this can explain. A log line
 that quotes an error further in is not an error line.
@@ -50,7 +54,8 @@ from pathlib import Path
 
 DEFAULT_ROSTER = Path(__file__).resolve().parent.parent / "release-train.toml"
 DEFAULT_WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
-ERROR_LINE = re.compile(r"^(?:error(?:\[[A-Za-z0-9]+\])?:|fatal:|thread '[^']*' panicked at )")
+ERROR_LINE = re.compile(r"^(?:error(?:\[[A-Za-z0-9]+\])?(?::|\s|$)|fatal:|thread '[^']*' panicked at )", re.IGNORECASE)
+ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 WRAPPED_STEP = re.compile(r"(?<![A-Za-z0-9_])expected_failure\.py[ \t]+([A-Za-z][A-Za-z0-9_.-]*)")
 
 
@@ -64,7 +69,7 @@ def load_entries(text: str) -> dict[str, dict]:
     crates = data.get("crate", {})
     out: dict[str, dict] = {}
     for name, e in data.get("expected-failure", {}).items():
-        unknown = set(e) - {"step", "until", "expect", "why"}
+        unknown = set(e) - {"step", "until", "expect", "why", "exit"}
         if unknown:
             raise EntryError(f"expected-failure.{name}: unknown keys {sorted(unknown)}")
         step, until, expect, why = e.get("step"), e.get("until"), e.get("expect"), e.get("why")
@@ -79,9 +84,12 @@ def load_entries(text: str) -> dict[str, dict]:
             raise EntryError(f"expected-failure.{name}: `expect` must be a non-empty list of texts")
         if not isinstance(why, str) or not why:
             raise EntryError(f"expected-failure.{name}: `why` must say why the step fails")
+        status = e.get("exit")
+        if status is not None and (not isinstance(status, int) or isinstance(status, bool) or status == 0):
+            raise EntryError(f"expected-failure.{name}: `exit` must be a non-zero exit status")
         if step in out:
             raise EntryError(f"expected-failure.{name}: step {step!r} is listed twice")
-        out[step] = {"name": name, "until": until, "expect": expect, "why": why,
+        out[step] = {"name": name, "until": until, "expect": expect, "why": why, "exit": status,
                      "past": crates[crate].get("state") == "published"}
     return out
 
@@ -99,11 +107,14 @@ def run(cmd: list[str]) -> tuple[int, str]:
 
 
 def error_lines(output: str) -> list[str]:
-    return [line for line in output.splitlines() if ERROR_LINE.match(line)]
+    plain = (ANSI.sub("", line) for line in output.splitlines())
+    return [line for line in plain if ERROR_LINE.match(line)]
 
 
-def explain(entry: dict, output: str) -> list[str]:
+def explain(entry: dict, output: str, code: int) -> list[str]:
     """why the failure is not the one the entry expects (empty when it is)"""
+    if entry["exit"] is not None and code != entry["exit"]:
+        return [f"exit status {code}, the entry expects {entry['exit']}"]
     errors = error_lines(output)
     if not errors:
         return ["the output has no error line"]
@@ -191,7 +202,7 @@ def main(argv: list[str] | None = None, runner=run) -> int:
         print(f"expected failure: {a.step} still fails after {entry['until']} is published: "
               f"expected-failure.{entry['name']} is stale")
         return 1
-    why_not = explain(entry, output)
+    why_not = explain(entry, output, code)
     if why_not:
         print(f"expected failure: {a.step} failed, but not (only) as expected-failure.{entry['name']} says:")
         for w in why_not:
