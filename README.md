@@ -7,6 +7,10 @@ Everything here is built from the versions published on crates.io, with no path 
 - dependency consistency (in place): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, all eight core crates are present, and each `alice-*` requirement accepts the latest published version of the crate it names
 - end to end: read a law, compute, save, restore, and compare every value bit for bit
 
+It also holds the release train of the core crates (the plan, and the scripts run before and after each publish: [runbook](#runbook-one-crate)) and the checks of the text this repository publishes.
+
+Contents: [Dependency consistency](#dependency-consistency) · [Release train](#release-train) · [Public text](#public-text) · [End to end](#end-to-end) · [Steps that fail until a release](#steps-that-fail-until-a-release) · [Status](#status) · [License](#license)
+
 ## Dependency consistency
 
 `Cargo.toml` depends on the latest release of each core crate, with the features that turn on their dependencies on each other, so the lock file shows every link between them.
