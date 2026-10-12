@@ -22,6 +22,8 @@
 [train]
 # the crates.io owners every release must have, and no other (publish-verify)
 owners = ["ext-sakamoro"]
+# the GitHub owner of the repositories (required-ci reads the check runs of the commit there)
+github = "ext-sakamoro"
 
 [crate.alice-det-math]
 version = "0.5.0"
@@ -73,6 +75,9 @@ repo = "ALICE-Physics"
 # 取り込み前の commit を指す 取り込まれたら main 上の commit に置き換える
 must-contain = ["22b65e0bb45803b9d4f863cc3c219a84d42e84a0"]
 changelog-has = ["**Behavior change:**"]
+# CI jobs (every matrix leg) that must be green on the published commit: the tests on
+# every OS, clippy with the library gate (no f32 / f64 max and min), the wheel
+required-ci = ["Test", "Clippy", "Build, install and test the wheel"]
 
 [crate.alice-sdf]
 version = "6.0.0"
@@ -93,6 +98,8 @@ state = "planned"
 order = 9
 repo = "ALICE-LOL"
 tag = "alice-lol-v{version}"
+# the geometry digests on every OS and profile
+required-ci = ["Geometry digests"]
 
 [crate.alice-edge]
 version = "0.2.0"

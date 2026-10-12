@@ -28,6 +28,9 @@
       - the roster lists `changelog-has` lines for <crate> and the CHANGELOG.md next to
         the manifest (else the repository's) at SHA has no `## [<version>]` section, or
         the section does not contain each of them
+      - the roster lists `required-ci` job names for <crate> and, among the GitHub check
+        runs of SHA, a name has no run, or a run of it (a matrix leg "<name> (...)"
+        counts as a run of it) is not completed with success (skipped is not success)
       - the package (`cargo package --list` of the manifest) carries a file under
         .github/, scripts/ or docs/, or a file or directory of private notes (named by
         hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
@@ -95,7 +98,7 @@ def load_roster(text: str) -> dict[str, dict]:
                 raise RosterError(f"{name}: missing `{key}`")
         if "requires" in c:
             raise RosterError(f"{name}: `requires` is read from the crate's Cargo.toml, not the roster")
-        for key in ("must-contain", "changelog-has"):
+        for key in ("must-contain", "changelog-has", "required-ci"):
             if key in c and (not isinstance(c[key], list) or not c[key]
                              or not all(isinstance(x, str) and x.strip() for x in c[key])):
                 raise RosterError(f"{name}: `{key}` must be a non-empty list of non-empty strings")
@@ -275,6 +278,35 @@ def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: s
             compared += 1
             if line not in section:
                 problems.append(f"{crate}: the [{c['version']}] section of CHANGELOG.md does not contain {line!r}")
+    return problems, compared
+
+
+def github_check_runs(owner_repo: str, sha: str) -> list[dict]:
+    """every check run GitHub has for the commit (name, status, conclusion), through gh"""
+    out = subprocess.run(["gh", "api", "--paginate", f"repos/{owner_repo}/commits/{sha}/check-runs?per_page=100",
+                          "--jq", ".check_runs[] | {name, status, conclusion}"],
+                         check=True, capture_output=True, text=True).stdout
+    return [json.loads(line) for line in out.splitlines() if line.strip()]
+
+
+def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, checks) -> tuple[list[str], int]:
+    """(problems, compared) for the roster's `required-ci` jobs of `crate` on `commit`"""
+    wanted = c.get("required-ci", [])
+    if not wanted:
+        return [], 0
+    runs = checks(owner_repo, commit)
+    problems: list[str] = []
+    compared = 0
+    for name in wanted:
+        mine = [r for r in runs if r.get("name") == name or str(r.get("name", "")).startswith(name + " (")]
+        compared += 1
+        if not mine:
+            problems.append(f"{crate}: required CI job {name!r} has no run on {commit[:12]}")
+            continue
+        bad = sorted({f"{r.get('name')}: {r.get('status')}/{r.get('conclusion')}" for r in mine
+                      if r.get("status") != "completed" or r.get("conclusion") != "success"})
+        if bad:
+            problems.append(f"{crate}: required CI job {name!r} is not green on {commit[:12]}: {'; '.join(bad)}")
     return problems, compared
 
 
@@ -576,7 +608,7 @@ def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) ->
 
 def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
-         docs=docs_rs_status, tags=remote_tag_commit) -> int:
+         docs=docs_rs_status, tags=remote_tag_commit, checks=github_check_runs) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -649,6 +681,15 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             hist, n = history_problems(a.repo, a.ref, a.crate, roster[a.crate], a.manifest_path)
             problems += hist
             compared += n
+            if roster[a.crate].get("required-ci"):
+                github = tomllib.loads(roster_text).get("train", {}).get("github")
+                if not isinstance(github, str) or not github or "repo" not in roster[a.crate]:
+                    print(f"error: {a.roster}: required-ci needs [train] github (the owner) and the crate's repo",
+                          file=sys.stderr)
+                    return 2
+                ci, n = ci_problems(a.crate, roster[a.crate], f"{github}/{roster[a.crate]['repo']}", commit, checks)
+                problems += ci
+                compared += n
             problems += package_problems(a.crate, lister(a.repo, a.manifest_path))
             compared += 1
             for p in problems:

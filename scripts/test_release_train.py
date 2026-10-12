@@ -716,5 +716,67 @@ class Followups(unittest.TestCase):
         self.assertEqual(self.run_followups({"Z": {"Cargo.toml": ZIP}})[0], 2)
 
 
+class RequiredCi(unittest.TestCase):
+    """the jobs the roster names must be green on the commit, every matrix leg of them"""
+
+    def gate(self, runs, extra='required-ci = ["geometry-digest", "clippy-lib"]', train='\n[train]\ngithub = "owner"\n',
+             repo='repo = "R"\n'):
+        roster = ROSTER.replace('state = "prepared"\norder = 1', 'state = "prepared"\norder = 1\n' + repo + extra) + train
+        seen = []
+
+        def checks(owner_repo, sha):
+            seen.append((owner_repo, sha))
+            return runs
+        with tempfile.TemporaryDirectory() as d:
+            repo_dir, ref = make_repo(d, {"Cargo.toml": ZIP})
+            p = Path(d, "r.toml")
+            p.write_text(roster, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo_dir), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"],
+                               packager=fake_packager, checks=checks)
+        return code, out.getvalue(), seen, ref
+
+    GREEN = [{"name": "geometry-digest (ubuntu, debug)", "status": "completed", "conclusion": "success"},
+             {"name": "geometry-digest (windows, release)", "status": "completed", "conclusion": "success"},
+             {"name": "clippy-lib", "status": "completed", "conclusion": "success"},
+             {"name": "other", "status": "completed", "conclusion": "failure"}]
+
+    def test_green_jobs_go_and_the_commit_is_asked_for(self):
+        code, out, seen, ref = self.gate(self.GREEN)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(seen, [("owner/R", ref)])
+
+    def test_a_missing_job_is_refused(self):
+        code, out, _, _ = self.gate([r for r in self.GREEN if r["name"] != "clippy-lib"])
+        self.assertEqual(code, 1)
+        self.assertIn("'clippy-lib' has no run", out)
+
+    def test_one_red_skipped_or_running_leg_is_refused(self):
+        for status, conclusion in (("completed", "failure"), ("completed", "skipped"), ("in_progress", None),
+                                   ("completed", "cancelled")):
+            runs = self.GREEN + [{"name": "geometry-digest (macos, release)", "status": status, "conclusion": conclusion}]
+            code, out, _, _ = self.gate(runs)
+            self.assertEqual(code, 1, (status, conclusion))
+            self.assertIn("geometry-digest (macos, release)", out)
+
+    def test_a_name_that_only_starts_like_the_job_does_not_count(self):
+        runs = [r for r in self.GREEN if r["name"] != "clippy-lib"] + [
+            {"name": "clippy-library", "status": "completed", "conclusion": "success"}]
+        self.assertEqual(self.gate(runs)[0], 1)
+
+    def test_without_the_owner_or_the_repo_exits_2(self):
+        self.assertEqual(self.gate(self.GREEN, train="")[0], 2)
+        self.assertEqual(self.gate(self.GREEN, repo="")[0], 2)
+
+    def test_an_empty_list_is_malformed(self):
+        self.assertEqual(self.gate(self.GREEN, extra="required-ci = []")[0], 2)
+
+    def test_no_required_ci_asks_nothing(self):
+        code, _, seen, _ = self.gate(self.GREEN, extra="")
+        self.assertEqual((code, seen), (0, []))
+
+
 if __name__ == "__main__":
     unittest.main()
