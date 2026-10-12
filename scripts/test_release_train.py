@@ -870,6 +870,24 @@ class RequiredCi(unittest.TestCase):
                       'required-ci = [{ workflow = "CI", job = "C", leg = 1 }]'):
             self.assertEqual(self.gate(self.green(), extra=extra)[0], 2, extra)
 
+    def test_an_entry_since_a_later_version_is_not_asked_yet(self):
+        later = self.REQ.replace('{ workflow = "CI", job = "Clippy" }', '{ workflow = "CI", job = "Clippy", since = "0.10.1" }')
+        w = self.green()
+        w["CI"] = [j for j in w["CI"] if j["name"] != "Clippy"]
+        self.assertEqual(self.gate(w, extra=later)[0], 0)  # alice-zip is at 0.10.0 in the roster
+        self.assertEqual(self.gate(w, extra=later.replace('since = "0.10.1"', 'since = "0.10.0"'))[0], 1)
+        self.assertEqual(self.gate(w, extra=later.replace('since = "0.10.1"', 'since = "0.9.0"'))[0], 1)
+
+    def test_a_malformed_since_is_a_roster_error_for_every_command(self):
+        roster = ROSTER.replace('state = "prepared"\norder = 1', 'state = "prepared"\norder = 1\nrequired-ci = [{ workflow = "CI", job = "C", since = "x" }]')
+        with self.assertRaises(ValueError):
+            rt.load_roster(roster)
+
+    def test_a_malformed_since_exits_2(self):
+        for since in ('since = "x"', "since = 3"):
+            extra = self.REQ.replace('{ workflow = "CI", job = "Clippy" }', '{ workflow = "CI", job = "Clippy", ' + since + ' }')
+            self.assertEqual(self.gate(self.green(), extra=extra)[0], 2, since)
+
     def test_no_required_ci_asks_nothing(self):
         code, _, seen, _ = self.gate(self.green(), extra="")
         self.assertEqual((code, seen), (0, []))

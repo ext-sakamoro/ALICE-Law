@@ -91,6 +91,9 @@ required-ci = [
     { workflow = "CI", job = "Clippy" },
     { workflow = "Python binding", job = "Build, install and test the wheel" },
 ]
+# 3.0.1 から (3.0.0 の commit には無い): 決定論試験の release leg (macos-latest は fma の分かれを
+# 見る唯一の leg、ubuntu-24.04-arm と ubuntu-latest も) を、その job が main に入って workflow 名と
+# leg 名が確定した時に `since = "3.0.1"` の entry として足す
 
 [crate.alice-sdf]
 version = "6.0.0"

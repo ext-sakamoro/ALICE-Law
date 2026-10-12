@@ -31,7 +31,8 @@
       - the roster lists `changelog-has` lines for <crate> and the CHANGELOG.md next to
         the manifest (else the repository's) at SHA has no `## [<version>]` section, or
         the section does not contain each of them
-      - the roster lists `required-ci` jobs for <crate> ({workflow, job, legs}) and, in
+      - the roster lists `required-ci` jobs for <crate> ({workflow, job, legs, since}; an
+        entry with `since` applies from that version of the crate on) and, in
         the latest GitHub Actions run of that workflow on SHA, the job does not have
         exactly the expected legs (a count of "<job>" / "<job> (...)" names, or the exact
         names), or one leg is not completed with success (skipped is not success)
@@ -113,7 +114,12 @@ def load_roster(text: str) -> dict[str, dict]:
                 raise RosterError(f"{name}: `required-ci` must be a non-empty list of {{workflow, job, legs}}")
             for j in jobs:
                 legs = j.get("legs", 1) if isinstance(j, dict) else None
-                if (not isinstance(j, dict) or set(j) - {"workflow", "job", "legs"}
+                since = j.get("since") if isinstance(j, dict) else None
+                if since is not None:
+                    if not isinstance(since, str):
+                        raise RosterError(f"{name}: required-ci `since` must be a version string")
+                    dc.Version(since)  # raises on a malformed version
+                if (not isinstance(j, dict) or set(j) - {"workflow", "job", "legs", "since"}
                         or not all(isinstance(j.get(k), str) and j[k].strip() for k in ("workflow", "job"))
                         or not ((isinstance(legs, int) and not isinstance(legs, bool) and legs > 0)
                                 or (isinstance(legs, list) and legs and all(isinstance(x, str) and x for x in legs)))):
@@ -343,7 +349,8 @@ def github_actions_jobs(owner_repo: str, sha: str) -> dict[str, list[dict]]:
 
 def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, actions) -> tuple[list[str], int]:
     """(problems, compared) for the roster's `required-ci` jobs of `crate` on `commit`"""
-    wanted = c.get("required-ci", [])
+    wanted = [w for w in c.get("required-ci", [])
+              if "since" not in w or dc.Version(c["version"]) >= dc.Version(w["since"])]
     if not wanted:
         return [], 0
     try:
