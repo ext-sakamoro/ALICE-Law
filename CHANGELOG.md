@@ -17,6 +17,8 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/expected_failure.py`: a CI step that fails until a release is listed under `[expected-failure.<name>]` (`step`, `until`, `expect`, `why`); only a failure whose own error lines are all explained by the expected text passes, and the steps that need it are skipped; every run lists the entries in the job summary and `--check` fails on an entry no workflow runs; the end to end workflows use it until alice-lol 0.4.0
 - `scripts/public_text_check.py`: file contents, paths and commit messages checked for internal vocabulary (private names held as SHA-256 hashes, parts split at `-` `_` `.` too); run by `scripts/preflight.sh` before a push and by `.github/workflows/public-text.yml` on every push
 - `e2e/`: read a law, compute, save, restore and compare every value bit for bit, against the published releases and against the main branches (`scripts/main_mode.py`), with mutations the test must catch (`scripts/e2e_teeth.py`)
+- `docs/CONFORMANCE.md` and `conformance/gates.toml`: the 14 gates a Law-bearing crate's arithmetic must meet (G1 banning a direct platform transcendental call through G14 banning a build flag that changes floating-point semantics), in human-readable and generator-readable form; each gate's definition, the kinds of evidence a passing crate must cite, and the manifest shape (`status`/`evidence`/`since`/`note`/`reference_repo`) a crate's own `alice-law-conformance.toml` follows
+- `scripts/readme_roster_check.py`: fails when this file's own crate list in README.md falls behind `release-train.toml`'s roster
 
 ### Changed
 - This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5 and alice-db 0.4, the latest releases

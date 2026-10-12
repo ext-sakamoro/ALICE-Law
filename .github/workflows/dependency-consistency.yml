@@ -2,8 +2,8 @@
 #
 # Resolves this repository's Cargo.toml against crates.io as it is today (the
 # committed Cargo.lock is replaced in the runner's checkout, never committed), then
-# scripts/dep_consistency.py checks the result: one version per alice-* crate, all
-# eight core crates present, and every alice-* requirement accepting the latest
+# scripts/dep_consistency.py checks the result: one version per alice-* crate, every
+# core crate present, and every alice-* requirement accepting the latest
 # release. The report goes to the job summary. Nothing compared is a failure.
 #
 # Weekly and on demand, and on a push that changes the check itself. It does not run
@@ -21,6 +21,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "release-train.toml"
+      - "README.md"
       - "scripts/**"
       - ".github/workflows/**"
       - "tools/**"
@@ -43,6 +44,12 @@ jobs:
 
       - name: Test the checker
         run: python3 scripts/test_dep_consistency.py
+
+      - name: Test the README-names-every-roster-repository checker
+        run: python3 scripts/test_readme_roster_check.py
+
+      - name: README names every release-train repository
+        run: python3 scripts/readme_roster_check.py
 
       # the release train (release-train.toml): its tests, and what the roster says
       # is next (informational here; the publisher runs `publish-gate <crate>` right

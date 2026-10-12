@@ -1,15 +1,15 @@
 # ALICE-Law
 
-Integration checks across the core ALICE crates: ALICE-LOL, ALICE-DetMath, ALICE-SDF, ALICE-Physics, ALICE-DB, ALICE-Zip, ALICE-Crypto and ALICE-Analytics.
+Integration checks across the crates in the release train (`release-train.toml`): ALICE-LOL, ALICE-DetMath, ALICE-SDF, ALICE-Physics, ALICE-DB, ALICE-Zip, ALICE-Crypto, ALICE-Analytics and ALICE-Edge. `scripts/readme_roster_check.py` fails this file's own check if this sentence falls behind the roster.
 
 Everything here is built from the versions published on crates.io, with no path dependencies. Two kinds of check:
 
-- dependency consistency (in place): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, all eight core crates are present, and each `alice-*` requirement accepts the latest published version of the crate it names
+- dependency consistency (in place): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, every crate `scripts/dep_consistency.py`'s own `CORE` list names is present, and each `alice-*` requirement accepts the latest published version of the crate it names
 - end to end: read a law, compute, save, restore, and compare every value bit for bit
 
 It also holds the release train of the core crates (the plan, and the scripts run before and after each publish: [runbook](#runbook-one-crate)) and the checks of the text this repository publishes.
 
-Contents: [Dependency consistency](#dependency-consistency) · [Release train](#release-train) · [Public text](#public-text) · [End to end](#end-to-end) · [Steps that fail until a release](#steps-that-fail-until-a-release) · [Status](#status) · [License](#license)
+Contents: [Dependency consistency](#dependency-consistency) · [Release train](#release-train) · [Public text](#public-text) · [Conformance](#conformance) · [End to end](#end-to-end) · [Steps that fail until a release](#steps-that-fail-until-a-release) · [Status](#status) · [License](#license)
 
 ## Dependency consistency
 
@@ -23,7 +23,7 @@ python3 scripts/dep_consistency.py      # Markdown report; exit 1 on a problem, 
 The checks:
 
 1. one version per crate: two versions of one crate in a lock file are two copies of its types and its arithmetic, and a value saved through one is not the same type as the value the other reads back
-2. presence: all eight core crates are in the lock file
+2. presence: every crate `CORE` names is in the lock file
 3. requirement vs latest: the `alice-*` requirements of this repository and of every core crate at the version the lock file resolved must accept the latest release of the crate they name (the latest stable release, or the latest pre-release when a crate has no stable one). A requirement that does not is how a second version gets into a user's lock file
 
 A problem that a release still to come removes is listed in `release-train.toml` under `[pending.<name>]`, with that release (`until = "<crate> <version>"`) and the problems it removes (`linked = [<crate>, ...]`, `requires = ["<crate> <version> -> <dependency> <requirement>", ...]`). With `--roster release-train.toml` (as CI runs it) the report counts them as expected per entry. A problem that is not listed fails the run, as does an entry whose release the roster marks `published` (stale: remove it and raise the requirements that release allows) and a listed item that matches no problem (out of date). This repository's own requirements and a missing core crate cannot be listed: they are raised or added, not waited for. So a red run is a problem to fix, not a release still to come.
@@ -93,6 +93,12 @@ scripts/preflight.sh                                            # the script tes
 
 CI (`.github/workflows/public-text.yml`) runs the tests and both scans on every push and pull request. A scan that compared nothing (no file, no commit) fails.
 
+## Conformance
+
+`docs/CONFORMANCE.md` is the human-readable specification of what a Law-bearing crate's arithmetic must guarantee — 14 gates, from banning a direct call to a platform transcendental function (G1) through banning a build flag that changes floating-point semantics (G14). `conformance/gates.toml` is the same 14 gates in the form a generator reads: id, name, one-line definition, and the kinds of evidence a passing crate must cite.
+
+Each crate in the release train carries its own `alice-law-conformance.toml` at its repository root, one entry per gate (`status`: `pass` / `missing` / `n/a`, `evidence`, `since`, `note`, `reference_repo`); this repository does not hold those manifests itself, only the gates they answer against.
+
 ## End to end
 
 `e2e/` is a separate crate with one test, `tests/law_to_storage_roundtrip.rs`, that goes through the core crates with their public APIs:
@@ -104,7 +110,7 @@ CI (`.github/workflows/public-text.yml`) runs the tests and both scans on every 
 5. restore: reopen the directory and read everything back
 6. compare: every value by `to_bits`, the law coefficients, domain, record and identifier, every field of the residual summary, and the alice-crypto digest of the whole run
 
-It also checks that the crates were built with one arithmetic (the `SEMANTICS_ID` of alice-det-math as alice-zip, alice-db, alice-analytics and alice-lol see it), that every `alice-*` crate is locked at one version, and that all eight core crates are in the build. Each comparison fails when it compared nothing. A golden digest of the computed run (`e2e/golden/run.digest`) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing.
+It also checks that the crates were built with one arithmetic (the `SEMANTICS_ID` of alice-det-math as alice-zip, alice-db, alice-analytics and alice-lol see it), that every `alice-*` crate is locked at one version, and that every crate this repository's own `Cargo.toml` depends on is in the build. Each comparison fails when it compared nothing. A golden digest of the computed run (`e2e/golden/run.digest`) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing.
 
 ```sh
 cd e2e
