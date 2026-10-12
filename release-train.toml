@@ -170,6 +170,8 @@ required-ci = [
 version = "0.2.0"
 state = "planned"
 order = 10
+# 0.2.0 は alice-sdf 6 を要求して公開する (optional でも: publish-gate は roster の版を受けない要求を
+# 拒否する、test_an_optional_requirement_on_an_older_major_is_refused)
 repo = "ALICE-Edge"
 
 [crate.alice-law-integration]

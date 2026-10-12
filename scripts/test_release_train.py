@@ -248,6 +248,32 @@ class PublishGate(unittest.TestCase):
         problems, _ = gate(ZIP.replace('version = "0.5"', 'version = "0.4"'))
         self.assertTrue(any("does not accept the published 0.5.0" in p for p in problems), problems)
 
+    def test_an_optional_requirement_on_an_older_major_is_refused(self):
+        # alice-edge 0.2.0 must not ship with `alice-sdf = "1.9"` once alice-sdf 6.0.0 is published
+        roster_text = """
+[crate.alice-sdf]
+version = "6.0.0"
+state = "published"
+order = 0
+
+[crate.alice-edge]
+version = "0.2.0"
+state = "prepared"
+order = 1
+"""
+        edge = """[package]
+name = "alice-edge"
+version = "0.2.0"
+
+[dependencies]
+alice-sdf = { version = "1.9", optional = true, default-features = false }
+"""
+        fetch = fixture({("alice-sdf", "6.0.0"): False})
+        problems, _ = rt.publish_gate(rt.load_roster(roster_text), "alice-edge", edge, fetch)
+        self.assertTrue(any("alice-sdf '1.9', which does not accept the published 6.0.0" in p for p in problems), problems)
+        problems, _ = rt.publish_gate(rt.load_roster(roster_text), "alice-edge", edge.replace('"1.9"', '"6"'), fetch)
+        self.assertEqual(problems, [])
+
     def test_refused_when_already_published(self):
         problems, _ = gate(fetch=fixture({**PUBLISHED_DM, ("alice-zip", "0.10.0"): False}))
         self.assertTrue(any("already on crates.io" in p for p in problems), problems)
