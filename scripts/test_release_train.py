@@ -339,6 +339,17 @@ class Roster(unittest.TestCase):
             with self.subTest(bad=bad[:40]), self.assertRaises(ValueError):
                 rt.load_roster(bad)
 
+    def test_the_library_crates_of_the_roster_are_dep_consistency_core(self):
+        repo = rt.load_roster((HERE.parent / "release-train.toml").read_text(encoding="utf-8"))
+        self.assertTrue(rt.library_crates(repo))
+        self.assertEqual(rt.library_crates(repo), sorted(rt.dc.CORE))
+
+    def test_library_crates_leave_out_exempt_and_non_dependencies(self):
+        r = roster(ROSTER.replace('state = "prepared-local"', 'state = "prepared-local"\nlaw-dependency = false'))
+        self.assertEqual(rt.library_crates(r), ["alice-det-math", "alice-zip"])
+        with self.assertRaises(ValueError):
+            roster(ROSTER.replace('state = "prepared-local"', 'state = "prepared-local"\nlaw-dependency = "no"'))
+
     def test_the_repository_roster_is_well_formed(self):
         r = rt.load_roster((HERE.parent / "release-train.toml").read_text(encoding="utf-8"))
         self.assertGreater(len(r), 0)

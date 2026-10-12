@@ -22,5 +22,6 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/conformance_docs_schema_check.py`: fails when a `### G<n> — <name>` heading in `docs/CONFORMANCE.md` and the matching `[[gate]]` entry in `conformance/gates.toml` disagree in id, name, or count
 
 ### Changed
+- The dependency consistency check covers alice-edge (this repository requires alice-edge 0.1 with its sdf, db and dashboard features) and alice-lol-macro; the core crate list is the roster's library crates (`release-train.toml`, every crate not exempt and not marked `law-dependency = false`), held equal by a test
 - This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4 and alice-physics 3, the latest releases
 - `release-train.toml`: alice-physics 3.0.0 is published (its pending entry removed; the problems alice-sdf 5.1.1 still brings through alice-physics 2.2 are listed until alice-sdf 6.0.0)

@@ -41,9 +41,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Callable
 
+# the release train's library crates (release-train.toml: every crate that is not
+# exempt and not marked `law-dependency = false`); a test holds the two equal
 CORE = (
-    "alice-lol", "alice-det-math", "alice-sdf", "alice-physics",
-    "alice-db", "alice-zip", "alice-crypto", "alice-analytics",
+    "alice-lol", "alice-lol-macro", "alice-det-math", "alice-sdf", "alice-physics",
+    "alice-db", "alice-zip", "alice-crypto", "alice-analytics", "alice-edge",
 )
 API = "https://crates.io/api/v1/crates"
 USER_AGENT = "alice-law-integration (https://github.com/ext-sakamoro/ALICE-Law)"

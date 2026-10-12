@@ -133,7 +133,7 @@ A CI step that cannot pass before a release (the end to end crate resolving alic
 
 ## Status
 
-Measured on 2026-10-13 (the committed `Cargo.lock`): **the check passes with 13 expected problems**, in two pending entries (alice-sdf 6.0.0: 6, alice-lol 0.4.0: 7). alice-physics 3.0.0 is published, and this repository's own requirements accept every latest release (alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4, alice-crypto 0.4, alice-physics 3); what remains comes from the published alice-sdf 5.1.1 and alice-lol 0.3.0.
+Measured on 2026-10-13 (the committed `Cargo.lock`): **the check passes with 23 expected problems**, in three pending entries (alice-sdf 6.0.0: 6, alice-lol 0.4.0: 7, alice-edge 0.2.0: 10). alice-physics 3.0.0 is published, and this repository's own requirements accept every latest release (alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4, alice-crypto 0.4, alice-physics 3); what remains comes from the published alice-sdf 5.1.1, alice-lol 0.3.0 and alice-edge 0.1.1 (linked with its sdf, db and dashboard features). The end to end test does not exercise alice-edge yet.
 
 Linked at two or more versions:
 
@@ -142,8 +142,11 @@ Linked at two or more versions:
 | alice-det-math | 0.4.0, 0.5.0 | alice-sdf 5.1.1 (`^0.4`), and alice-physics 2.2.0 through it |
 | alice-physics | 0.14.0-preview.8, 2.2.0, 3.0.0 | alice-lol 0.3.0 (`^0.14.0-preview.4`, optional), alice-sdf 5.1.1 (`^2.2`, its physics feature) |
 | alice-sdf | 1.13.0, 5.1.1 | alice-lol 0.3.0 (`^1.9.0`) |
+| alice-analytics | 0.1.1, 0.5.0 | alice-db 0.2.0-beta.3 (`^0.1`, optional) through alice-edge 0.1.1 |
+| alice-db | 0.2.0-beta.3, 0.4.0 | alice-edge 0.1.1 (`^0.2.0-beta.2`, its db feature) |
+| alice-zip | 0.4.0, 0.10.0 | alice-db 0.2.0-beta.3 (`^0.4`) through alice-edge 0.1.1 |
 
-Releases that would remove them, in dependency order: alice-sdf 6.0.0 (alice-det-math 0.5, alice-physics 3), alice-lol 0.4.0 (alice-sdf 6, alice-physics 3); then this repository's alice-sdf and alice-lol requirements are raised to them.
+Releases that would remove them, in dependency order: alice-sdf 6.0.0 (alice-det-math 0.5, alice-physics 3), alice-lol 0.4.0 (alice-sdf 6, alice-physics 3), alice-edge 0.2.0 (alice-db 0.4, alice-analytics 0.5, and alice-sdf 6); then this repository's alice-sdf, alice-lol and alice-edge requirements are raised to them.
 
 End to end, measured on 2026-10-12:
 

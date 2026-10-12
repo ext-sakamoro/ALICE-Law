@@ -52,6 +52,8 @@ order = 3
 repo = "ALICE-Zip"
 manifest-path = "libalice/Cargo.toml"
 tag = "alice-zip-cli-v{version}"
+# a CLI / FFI crate: not a library this repository links (scripts/dep_consistency.py CORE)
+law-dependency = false
 
 [crate.alice-analytics]
 version = "0.5.0"
@@ -221,3 +223,17 @@ step = "e2e-main-patch"
 until = "alice-lol 0.4.0"
 expect = ["failed to select a version for the requirement `alice-physics = \"^2.0\"`"]
 why = "alice-lol on main requires alice-physics ^2.0 while alice-physics on main is 3.0.0; alice-lol 0.4.0 raises it"
+
+[pending.alice-edge-0-2]
+until = "alice-edge 0.2.0"
+why = "alice-edge 0.1.1 requires the previous alice-analytics, alice-db, alice-sdf and alice-zip; with its db feature it brings alice-db 0.2.0-beta.3 and, through it, alice-zip 0.4 and alice-analytics 0.1"
+linked = ["alice-analytics", "alice-db", "alice-zip"]
+requires = [
+    "alice-edge 0.1.1 -> alice-analytics ^0.1",
+    "alice-edge 0.1.1 -> alice-db ^0.2.0-beta.2",
+    "alice-edge 0.1.1 -> alice-sdf ^1.9",
+    "alice-edge 0.1.1 -> alice-zip ^0.5",
+    "alice-db 0.2.0-beta.3 -> alice-analytics ^0.1",
+    "alice-db 0.2.0-beta.3 -> alice-crypto ^0.1",
+    "alice-db 0.2.0-beta.3 -> alice-zip ^0.4",
+]

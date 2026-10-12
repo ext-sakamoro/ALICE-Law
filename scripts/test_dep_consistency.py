@@ -127,9 +127,10 @@ class Checks(unittest.TestCase):
     def test_a_consistent_set_passes(self):
         _, problems, tally = self.run_check(lock(*ALL_CORE, ("x", "0.0.0")))
         self.assertEqual(problems, [])
-        self.assertEqual(tally, {"one version per crate": 8, "core crates present": 8,
-                                 "requirements accept the latest": 8},
-                         "8 crates (this repository's own package not counted), 8 presence checks, 8 requirements")
+        n = len(dc.CORE)
+        self.assertEqual(tally, {"one version per crate": n, "core crates present": n,
+                                 "requirements accept the latest": n},
+                         "one row per core crate (this repository's own package not counted)")
 
     def test_two_versions_of_a_crate_fail(self):
         _, problems, _ = self.run_check(lock(*ALL_CORE, ("alice-zip", "0.7.0")))
@@ -148,7 +149,7 @@ class Checks(unittest.TestCase):
         deps = {("alice-db", "1.0.0"): [("alice-zip", "~1.0", False), ("alice-crypto", "^1", True)]}
         _, problems, tally = self.run_check(lock(*ALL_CORE), fetch=fixture(latest, deps))
         self.assertEqual(problems, ["alice-db 1.0.0 requires alice-zip ~1.0, which does not accept the latest release 1.1.0"])
-        self.assertEqual(tally["requirements accept the latest"], 8 + 2, "non-alice and dev dependencies are not compared")
+        self.assertEqual(tally["requirements accept the latest"], len(dc.CORE) + 2, "non-alice and dev dependencies are not compared")
 
     def test_this_repository_must_follow_the_latest_too(self):
         latest = {c: "1.0.0" for c in dc.CORE} | {"alice-lol": "2.0.0"}
@@ -194,7 +195,7 @@ class Checks(unittest.TestCase):
         manifest = MANIFEST.replace('alice-lol = "1.0"\n', "") + '[dependencies.alice-lol]\nversion = "0.9"\n'
         _, problems, tally = self.run_check(lock(*ALL_CORE), manifest=manifest)
         self.assertEqual(problems, ["this repository requires alice-lol 0.9, which does not accept the latest release 1.0.0"])
-        self.assertEqual(tally["requirements accept the latest"], 8)
+        self.assertEqual(tally["requirements accept the latest"], len(dc.CORE))
 
     def test_a_path_or_git_dependency_is_refused(self):
         for spec in ('{ path = "../ALICE-LOL" }', '{ path = "../ALICE-LOL", version = "1" }',
@@ -238,7 +239,7 @@ class Cli(unittest.TestCase):
                                      manifest=MANIFEST.replace('name = "x"', 'name = "alice-law-x"'))
         self.assertEqual(code, 0)
         self.assertNotIn("| alice-law-x |", out)
-        self.assertIn("| one version per crate | 8 |", out)
+        self.assertIn(f"| one version per crate | {len(dc.CORE)} |", out)
 
     def test_a_path_dependency_stops_the_run(self):
         code, _, err = self.run_main(lock(*ALL_CORE), manifest=MANIFEST + '[dependencies.alice-x]\npath = "../x"\n')

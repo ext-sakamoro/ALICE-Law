@@ -104,6 +104,8 @@ def load_roster(text: str) -> dict[str, dict]:
                 raise RosterError(f"{name}: missing `{key}`")
         if "requires" in c:
             raise RosterError(f"{name}: `requires` is read from the crate's Cargo.toml, not the roster")
+        if "law-dependency" in c and not isinstance(c["law-dependency"], bool):
+            raise RosterError(f"{name}: `law-dependency` must be true or false")
         for key in ("must-contain", "must-contain-patch", "changelog-has"):
             if key in c and (not isinstance(c[key], list) or not c[key]
                              or not all(isinstance(x, str) and x.strip() for x in c[key])):
@@ -401,6 +403,12 @@ def release_state(fetch: dc.Fetch, crate: str, version: str) -> str:
     if v["num"] != version:
         raise RegistryError(f"{crate}/{version}: crates.io answered version {v['num']}")
     return "yanked" if v.get("yanked") else "present"
+
+
+def library_crates(roster: dict[str, dict]) -> list[str]:
+    """the crates this repository links (scripts/dep_consistency.py CORE): every roster crate
+    that is not exempt and not marked `law-dependency = false`"""
+    return sorted(n for n, c in roster.items() if c["state"] != "exempt" and c.get("law-dependency", True))
 
 
 def next_crate(roster: dict[str, dict]) -> tuple[str | None, int]:
