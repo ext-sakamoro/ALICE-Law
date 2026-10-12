@@ -54,7 +54,7 @@ repo = "ALICE-Analytics"
 
 [crate.alice-db]
 version = "0.4.0"
-state = "planned"
+state = "published"
 order = 5
 repo = "ALICE-DB"
 
