@@ -68,7 +68,7 @@ class ExpectedFailure(unittest.TestCase):
     def test_a_failure_for_another_reason_is_red(self):
         rc, out, gout, _ = self.run_step(ROSTER + ENTRY, 101, "error: could not compile\n")
         self.assertEqual(rc, 1)
-        self.assertIn("not as expected-failure.lol-0-4 says", out)
+        self.assertIn("not (only) as expected-failure.lol-0-4 says", out)
         self.assertNotIn("expected=true", gout)
 
     def test_every_expected_text_must_be_there(self):
@@ -93,6 +93,60 @@ class ExpectedFailure(unittest.TestCase):
 
     def test_another_step_is_not_covered(self):
         self.assertEqual(self.run_step(ROSTER + ENTRY, 101, FAILS, step="test")[0], 101)
+
+    def test_the_expected_error_plus_an_unrelated_one_is_red(self):
+        out_text = FAILS + "error: failed to download `serde v1.0.0` (HTTP 503)\n"
+        rc, out, gout, _ = self.run_step(ROSTER + ENTRY, 101, out_text)
+        self.assertEqual(rc, 1)
+        self.assertIn("not explained by `expect`: error: failed to download", out)
+        self.assertNotIn("expected=true", gout)
+
+    def test_a_log_line_quoting_the_text_does_not_count(self):
+        out_text = ("INFO previous run said: " + FAILS +
+                    "thread 'main' panicked at src/main.rs:3:5:\nboom\n")
+        rc, out, gout, _ = self.run_step(ROSTER + ENTRY, 101, out_text)
+        self.assertEqual(rc, 1)
+        self.assertIn("not explained by `expect`: thread 'main' panicked", out)
+        self.assertIn("`expect` text in no error line", out)
+
+    def test_a_failure_with_no_error_line_is_red(self):
+        rc, out, _, _ = self.run_step(ROSTER + ENTRY, 1, "    " + FAILS)  # indented: not an error line
+        self.assertEqual(rc, 1)
+        self.assertIn("no error line", out)
+
+    def test_cargo_details_under_the_error_are_not_error_lines(self):
+        cargo = (FAILS + "candidate versions found which didn't match: 0.3.0\n"
+                 "location searched: crates.io index\nrequired by package `x v0.0.0`\n")
+        self.assertEqual(self.run_step(ROSTER + ENTRY, 101, cargo)[0], 0)
+
+    def test_every_run_lists_the_entries_in_the_summary(self):
+        for code, output in ((0, "ok\n"), (101, FAILS)):
+            _, _, _, summ = self.run_step(ROSTER + ENTRY, code, output, step="other")
+            self.assertIn("| resolve | alice-lol 0.4.0 | alice-lol 0.4 is not on crates.io yet |", summ)
+
+    def check(self, roster, workflows):
+        with tempfile.TemporaryDirectory() as d:
+            p, w = Path(d, "r.toml"), Path(d, "wf")
+            p.write_text(roster, encoding="utf-8")
+            w.mkdir()
+            for name, text in workflows.items():
+                (w / name).write_text(text, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                rc = ef.main(["--check", "--roster", str(p), "--workflows", str(w)])
+            return rc, out.getvalue()
+
+    def test_an_entry_no_workflow_runs_is_an_orphan(self):
+        wrapped = {"a.yml": "run: python3 ../scripts/expected_failure.py resolve -- cargo generate-lockfile\n"}
+        self.assertEqual(self.check(ROSTER + ENTRY, wrapped)[0], 0)
+        rc, out = self.check(ROSTER + ENTRY, {"a.yml": "run: python3 scripts/test_expected_failure.py resolve\n- name: x\n"})
+        self.assertEqual(rc, 1)
+        self.assertIn("orphan: expected-failure.lol-0-4", out)
+        self.assertEqual(self.check(ROSTER + ENTRY, {})[0], 2)
+
+    def test_the_repository_has_no_orphan(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(ef.main(["--check"]), 0)
 
     def test_malformed_entries_exit_2(self):
         for bad in (ENTRY.replace('until = "alice-lol 0.4.0"', 'until = "alice-lol 9.9.9"'),

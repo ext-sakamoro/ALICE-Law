@@ -8,7 +8,7 @@ The roster lists such steps under `[expected-failure.<name>]`:
     step   = "<step>"                   the name a workflow passes here
     until  = "<crate> <version>"        a roster crate at its roster version: the release
                                         after which the step must pass
-    expect = ["<text>", ...]            text the failing output must contain (why it fails)
+    expect = ["<text>", ...]            text of the error lines the failure must have
     why    = "..."                      one line for the job summary
 
 The command runs with its output shown as it comes. Then:
@@ -18,11 +18,22 @@ The command runs with its output shown as it comes. Then:
     failed, no entry                      exit with the command's status
     failed, an entry, `until` published   exit 1: the entry is stale (the release is out
                                           and the step still fails)
-    failed, an entry, an `expect` text    exit 1: it failed for another reason
-      missing from the output
+    failed, an entry, and the error       exit 1: it failed for another reason, or for
+      lines do not match `expect`         this reason and another one too
     failed as the entry expects           exit 0, `expected=true` in $GITHUB_OUTPUT (the
                                           workflow skips the steps that need this one) and
                                           a line in $GITHUB_STEP_SUMMARY
+
+The failure is read from its own error lines: a line that starts (at its first
+column) with `error:` / `error[...]:` / `fatal:` or a `thread '...' panicked at`.
+Every such line must contain one of the `expect` texts, and every `expect` text must be
+in one of them; a failure with no error line is not one this can explain. A log line
+that quotes an error further in is not an error line.
+
+    expected_failure.py --check [--roster FILE] [--workflows DIR]
+                                          every entry's step is run through this script
+                                          by a workflow (an entry no workflow uses is
+                                          an orphan: exit 1)
 
 A malformed entry, or a step listed twice, exits 2. So a red step is a problem to fix;
 a step that fails as planned is named, explained and bounded by a release.
@@ -31,12 +42,16 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
 
 DEFAULT_ROSTER = Path(__file__).resolve().parent.parent / "release-train.toml"
+DEFAULT_WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+ERROR_LINE = re.compile(r"^(?:error(?:\[[A-Za-z0-9]+\])?:|fatal:|thread '[^']*' panicked at )")
+WRAPPED_STEP = re.compile(r"(?<![A-Za-z0-9_])expected_failure\.py[ \t]+([A-Za-z][A-Za-z0-9_.-]*)")
 
 
 class EntryError(ValueError):
@@ -83,6 +98,44 @@ def run(cmd: list[str]) -> tuple[int, str]:
     return p.wait(), "".join(lines)
 
 
+def error_lines(output: str) -> list[str]:
+    return [line for line in output.splitlines() if ERROR_LINE.match(line)]
+
+
+def explain(entry: dict, output: str) -> list[str]:
+    """why the failure is not the one the entry expects (empty when it is)"""
+    errors = error_lines(output)
+    if not errors:
+        return ["the output has no error line"]
+    out = [f"error line not explained by `expect`: {e[:200]}" for e in errors
+           if not any(x in e for x in entry["expect"])]
+    out += [f"`expect` text in no error line: {x!r}" for x in entry["expect"] if not any(x in e for e in errors)]
+    return out
+
+
+def summary_table(entries: dict[str, dict], step: str) -> str:
+    rows = "".join(f"| {'**' + s + '**' if s == step else s} | {e['until']} | {e['why']} |\n"
+                   for s, e in sorted(entries.items()))
+    return f"\nSteps expected to fail until a release (`[expected-failure.*]`):\n\n| step | until | why |\n|---|---|---|\n{rows}"
+
+
+def check(entries: dict[str, dict], workflows: Path) -> int:
+    files = sorted(workflows.glob("*.yml")) + sorted(workflows.glob("*.yaml"))
+    if not files:
+        print(f"error: no workflow in {workflows}", file=sys.stderr)
+        return 2
+    wrapped = set()
+    for f in files:
+        wrapped |= set(WRAPPED_STEP.findall(f.read_text(encoding="utf-8")))
+    orphans = sorted(s for s in entries if s not in wrapped)
+    for s in orphans:
+        print(f"orphan: expected-failure.{entries[s]['name']} names step {s!r}, which no workflow runs "
+              f"through expected_failure.py")
+    print(f"expected failure: {len(entries)} entries, {len(wrapped)} wrapped steps in {len(files)} workflows, "
+          f"{len(orphans)} orphans")
+    return 1 if orphans else 0
+
+
 def append(env: str, text: str) -> None:
     path = os.environ.get(env)
     if path:
@@ -92,6 +145,18 @@ def append(env: str, text: str) -> None:
 
 def main(argv: list[str] | None = None, runner=run) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["--check"]:
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--check", action="store_true")
+        ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
+        ap.add_argument("--workflows", type=Path, default=DEFAULT_WORKFLOWS)
+        a = ap.parse_args(argv)
+        try:
+            entries = load_entries(a.roster.read_text(encoding="utf-8"))
+        except (OSError, EntryError, tomllib.TOMLDecodeError) as e:
+            print(f"error: {a.roster}: {e}", file=sys.stderr)
+            return 2
+        return check(entries, a.workflows)
     if "--" not in argv:
         print("usage: expected_failure.py <step> [--roster FILE] -- <command> [args...]", file=sys.stderr)
         return 2
@@ -105,10 +170,13 @@ def main(argv: list[str] | None = None, runner=run) -> int:
         print("error: no command after --", file=sys.stderr)
         return 2
     try:
-        entry = load_entries(a.roster.read_text(encoding="utf-8")).get(a.step)
+        entries = load_entries(a.roster.read_text(encoding="utf-8"))
+        entry = entries.get(a.step)
     except (OSError, EntryError, tomllib.TOMLDecodeError) as e:
         print(f"error: {a.roster}: {e}", file=sys.stderr)
         return 2
+    if entries:
+        append("GITHUB_STEP_SUMMARY", summary_table(entries, a.step))
     code, output = runner(cmd)
     append("GITHUB_OUTPUT", "expected=false\n" if code == 0 or entry is None else "")
     if code == 0:
@@ -123,10 +191,11 @@ def main(argv: list[str] | None = None, runner=run) -> int:
         print(f"expected failure: {a.step} still fails after {entry['until']} is published: "
               f"expected-failure.{entry['name']} is stale")
         return 1
-    missing = [t for t in entry["expect"] if t not in output]
-    if missing:
-        print(f"expected failure: {a.step} failed, but not as expected-failure.{entry['name']} says "
-              f"(missing from the output: {missing})")
+    why_not = explain(entry, output)
+    if why_not:
+        print(f"expected failure: {a.step} failed, but not (only) as expected-failure.{entry['name']} says:")
+        for w in why_not:
+            print(f"  {w}")
         return 1
     append("GITHUB_OUTPUT", "expected=true\n")
     append("GITHUB_STEP_SUMMARY", f"\n**Expected failure until {entry['until']}** ({a.step}, "
