@@ -1,0 +1,42 @@
+# The text this public repository publishes (files, paths, commit messages) carries no
+# internal vocabulary: scripts/public_text_check.py on the tree and on the pushed commits.
+name: Public text
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-text:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Test the checker
+        run: python3 scripts/test_public_text_check.py
+
+      - name: The tree
+        run: python3 scripts/public_text_check.py --tree HEAD
+
+      - name: The pushed commits
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            base="$BEFORE"
+          else
+            base=$(git merge-base origin/main HEAD)
+          fi
+          if [ "$(git rev-list --count "$base..HEAD")" -gt 0 ]; then
+            python3 scripts/public_text_check.py --range "$base..HEAD"
+          else
+            echo "no new commit (base $base is HEAD)"
+          fi

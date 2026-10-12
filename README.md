@@ -73,6 +73,18 @@ Then commit `release-train.toml`, and land the requirement bumps that `followups
 
 Only an HTTP 404 counts as "not on crates.io"; any other answer (an error body, another version than the one asked for, a broken connection) stops a command with exit 2, as does a command that compared nothing (no roster crate, no package file, no manifest read, no `[train] owners`). The requirement matching is the one in `scripts/dep_consistency.py`. CI runs the tests (`scripts/test_release_train.py`, crates.io, cargo and the remote replaced by fixtures) and prints `next`.
 
+## Public text
+
+This repository is public, and so is everything it publishes: file contents, paths and commit messages. `scripts/public_text_check.py` checks them for internal vocabulary (development-process words, internal tracker and note names, instruction sources, device names, private network addresses, and private names held only as SHA-256 hashes), with the vocabulary of ALICE-Physics `scripts/docs_lint.py`. A finding names the place and the kind of word, not the word.
+
+```sh
+python3 scripts/public_text_check.py --tree                     # every tracked file at HEAD
+python3 scripts/public_text_check.py --range origin/main..HEAD  # the messages, added lines and added paths of the commits
+scripts/preflight.sh                                            # the script tests and both scans, before a push
+```
+
+CI (`.github/workflows/public-text.yml`) runs the tests and both scans on every push and pull request. A scan that compared nothing (no file, no commit) fails.
+
 ## End to end
 
 `e2e/` is a separate crate with one test, `tests/law_to_storage_roundtrip.rs`, that goes through the core crates with their public APIs:
