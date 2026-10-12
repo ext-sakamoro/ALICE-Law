@@ -76,7 +76,7 @@ repo = "ALICE-Physics"
 # patch id (git patch-id --stable) で持つ: rebase された写しでも当たる
 must-contain-patch = [
     "713407beaf620dcc766632eab58d414d13146230",  # fix: 等しいゼロを max / min にかけた時の符号を全 target で揃える
-    "d2983433973ce3fbe888ad755cde211043706eeb",  # ci: library の code で f32 / f64 の max と min を使えなくする
+    "12181a10bfd8ab5d0dfc5003f4bacd151154e79e",  # ci: library の code で f32 / f64 の max と min を使えなくする (wasm / python の lib pass を含む版)
 ]
 changelog-has = ["**Behavior change:**"]
 # CI jobs that must be green on the published commit, with every leg named: the tests
