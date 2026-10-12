@@ -22,4 +22,5 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/conformance_docs_schema_check.py`: fails when a `### G<n> — <name>` heading in `docs/CONFORMANCE.md` and the matching `[[gate]]` entry in `conformance/gates.toml` disagree in id, name, or count
 
 ### Changed
-- This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5 and alice-db 0.4, the latest releases
+- This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4 and alice-physics 3, the latest releases
+- `release-train.toml`: alice-physics 3.0.0 is published (its pending entry removed; the problems alice-sdf 5.1.1 still brings through alice-physics 2.2 are listed until alice-sdf 6.0.0)

@@ -11,7 +11,7 @@ description = "End to end check across the core ALICE crates: read a law, comput
 # patches these with the main branches of the eight repositories.
 [dependencies]
 alice-lol = { version = "0.4", features = ["physics"] }
-alice-physics = { version = "2.2", default-features = false, features = ["std"] }
+alice-physics = { version = "3", default-features = false, features = ["std"] }
 alice-sdf = "5.1"
 alice-db = "0.4"
 alice-zip = "0.10"
