@@ -100,6 +100,47 @@ version = "6.0.0"
 state = "planned"
 order = 7
 repo = "ALICE-SDF"
+# 6.0.0 は main の min / max の Law (77bcbaf まで) と、その上の det-math 0.5・physics 3・max / min の
+# 2 周目の変更を含めて公開する (後者は patch id で持つ: rebase された写しでも当たる)
+must-contain = ["77bcbaf1d3a318d660b93b9f32468f7d78b1bead"]
+must-contain-patch = [
+    "db667f3fc8beb9916c306c0a1e76709ebe5238a1",  # deps: alice-det-math 0.5、version 6.0.0
+    "662232e39bd46ac984a62e121acb15946f2495e6",  # jit: simd_sincos_det を det-math 0.5 の範囲還元に
+    "c9b523f749dc45163eb379fc1f9ba51319f991d2",  # deps: alice-physics 3、alice-det-math を 1 版に
+    "82d65ad8870621f7f456e6ccf96309d1dd0aed34",  # library の f32 / f64 / f32x8 の max・min を Law / raw に
+    "dd393a4a7d8dcd3c3343754c504457ee81424518",  # prim_table_simd の SIMD max・min を Law に
+    "3af712708a9b776764fbcc03eddb8fd13fbc681f",  # Real::max / min (f32x8) を比較と blend に
+    "05a3b69dcba43e5983b3d04505b9ff7ac073bdef",  # f32x8 の Law min / max の NaN の組
+    "306c6d2ae597a5519cbf3f3f028d9df926f6c574",  # libm の allow の下に残っていた max・min
+    "282a6edf2faea1ee7a7c58c052a3dfc72feb0802",  # ci: library の max・min を禁じる clippy と canary
+    "6c9b1d77801ac9340ebe3077ff7428c6d7e2c6ff",  # ci: raw max/min の manifest を default-deny に
+]
+changelog-has = [
+    "**破壊的変更:** `alice-det-math` を 0.4 から 0.5 に更新",
+    "`alice-physics` の要求を 2.2 から 3 に上げた",
+    "**Behavior change:**",
+]
+required-ci = [
+    { workflow = "CI", job = "Test — Linux (x86_64)" },
+    { workflow = "CI", job = "Test — macOS (ARM64)" },
+    { workflow = "CI", job = "Test — Windows (x86_64)" },
+    { workflow = "CI", job = "Clippy (core strict, -D warnings)" },
+    { workflow = "CI", job = "Wiring guard", legs = ["Wiring guard (ubuntu-latest)", "Wiring guard (macos-latest)", "Wiring guard (windows-latest)"] },
+    { workflow = "CI", job = "Format" },
+    { workflow = "CI", job = "MSRV (rust-version = 1.85)" },
+    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
+    { workflow = "CI", job = "Bridges (each feature alone, no stubs)" },
+    { workflow = "CI", job = "GPU parity (lavapipe)" },
+    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
+    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
+    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
+    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
+    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_asdf_decode" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_bincode_roundtrip" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_eval_parity" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_sdf_eval" },
+]
 
 [crate.alice-lol-macro]
 version = "0.3.0"
