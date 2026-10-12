@@ -168,7 +168,7 @@ required-ci = [
 
 [crate.alice-edge]
 version = "0.2.0"
-state = "planned"
+state = "prepared"
 order = 10
 # 0.2.0 は alice-sdf 6 を要求して公開する (optional でも: publish-gate は roster の版を受けない要求を
 # 拒否する、test_an_optional_requirement_on_an_older_major_is_refused)
@@ -214,9 +214,10 @@ repo = "ALICE-Law"
 [crate.alice-ml]
 # alice-edge 0.2.0 の ml feature は公開済みの alice-ml 0.2.0 (alice-* は optional の alice-db だけ、
 # alice-edge は使わない) を引く ML の main は alice-det-math 0.4 / alice-db 0.2.0-beta.2 を要求するので、
-# 次の公開は publish-gate が拒否する (最新でない版を受ける要求) det-math 0.5 / db 0.4 に上げてから prepared にする
-version = "0.3.0"
-state = "planned"
+# 次の版をここで prepared にすると publish-gate が拒否する (最新でない版を受ける要求) det-math 0.5 /
+# db 0.4 に上げてから次の版にする
+version = "0.2.0"
+state = "published"
 order = 12
 repo = "ALICE-ML"
 # この repository は alice-ml を引かない (scripts/dep_consistency.py CORE の外)
