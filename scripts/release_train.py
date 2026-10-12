@@ -25,12 +25,16 @@
             or not accepted by the requirement
       - the roster lists `must-contain` commits for <crate> and one of them is not an
         ancestor of SHA (or is not in the repository)
+      - the roster lists `must-contain-patch` patch ids (`git patch-id --stable`) for
+        <crate> and none of the last PATCH_DEPTH non-merge commits of SHA has that patch
+        (a rebased or cherry-picked copy of a change counts; a conflict-resolved one does not)
       - the roster lists `changelog-has` lines for <crate> and the CHANGELOG.md next to
         the manifest (else the repository's) at SHA has no `## [<version>]` section, or
         the section does not contain each of them
-      - the roster lists `required-ci` job names for <crate> and, among the GitHub check
-        runs of SHA, a name has no run, or a run of it (a matrix leg "<name> (...)"
-        counts as a run of it) is not completed with success (skipped is not success)
+      - the roster lists `required-ci` jobs for <crate> ({workflow, job, legs}) and, in
+        the latest GitHub Actions run of that workflow on SHA, the job does not have
+        exactly the expected legs (a count of "<job>" / "<job> (...)" names, or the exact
+        names), or one leg is not completed with success (skipped is not success)
       - the package (`cargo package --list` of the manifest) carries a file under
         .github/, scripts/ or docs/, or a file or directory of private notes (named by
         hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
@@ -45,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import importlib.util
 import io
 import json
@@ -98,10 +103,22 @@ def load_roster(text: str) -> dict[str, dict]:
                 raise RosterError(f"{name}: missing `{key}`")
         if "requires" in c:
             raise RosterError(f"{name}: `requires` is read from the crate's Cargo.toml, not the roster")
-        for key in ("must-contain", "changelog-has", "required-ci"):
+        for key in ("must-contain", "must-contain-patch", "changelog-has"):
             if key in c and (not isinstance(c[key], list) or not c[key]
                              or not all(isinstance(x, str) and x.strip() for x in c[key])):
                 raise RosterError(f"{name}: `{key}` must be a non-empty list of non-empty strings")
+        if "required-ci" in c:
+            jobs = c["required-ci"]
+            if not isinstance(jobs, list) or not jobs:
+                raise RosterError(f"{name}: `required-ci` must be a non-empty list of {{workflow, job, legs}}")
+            for j in jobs:
+                legs = j.get("legs", 1) if isinstance(j, dict) else None
+                if (not isinstance(j, dict) or set(j) - {"workflow", "job", "legs"}
+                        or not all(isinstance(j.get(k), str) and j[k].strip() for k in ("workflow", "job"))
+                        or not ((isinstance(legs, int) and not isinstance(legs, bool) and legs > 0)
+                                or (isinstance(legs, list) and legs and all(isinstance(x, str) and x for x in legs)))):
+                    raise RosterError(f"{name}: required-ci entry {j!r} is not {{workflow, job, legs (a count > 0 "
+                                      f"or the exact leg names)}}")
         if c["state"] not in STATES:
             raise RosterError(f"{name}: state {c['state']!r} is not one of {STATES}")
         dc.Version(c["version"])  # raises on a malformed version
@@ -177,8 +194,14 @@ def latest(fetch: dc.Fetch, crate: str) -> str:
         raise RegistryError(f"{crate}: crates.io answered without a latest release ({e!r})") from None
 
 
+# the gate only reads the repository: no optional locks (git status would otherwise
+# refresh the index), so a check leaves the checkout as it found it
+GIT_ENV = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+
+
 def git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
+                          env=GIT_ENV).stdout
 
 
 def checkout_problems(repo: Path, ref: str) -> list[str]:
@@ -240,6 +263,18 @@ def changelog_section(text: str, version: str) -> str | None:
     return None
 
 
+PATCH_DEPTH = 2000
+
+
+def patch_ids(repo: Path, ref: str) -> set[str]:
+    """the stable patch ids of the last PATCH_DEPTH non-merge commits of ref"""
+    log = subprocess.run(["git", "-C", str(repo), "log", "-p", "--no-merges", "-n", str(PATCH_DEPTH), ref],
+                         check=True, capture_output=True, env=GIT_ENV).stdout
+    out = subprocess.run(["git", "-C", str(repo), "patch-id", "--stable"], input=log, check=True,
+                         capture_output=True, env=GIT_ENV).stdout.decode()
+    return {line.split()[0] for line in out.splitlines() if line.strip()}
+
+
 def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: str) -> tuple[list[str], int]:
     """(problems, compared) for the roster's `must-contain` commits and `changelog-has`
     lines of `crate`, read at `ref`"""
@@ -248,16 +283,22 @@ def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: s
     for commit in c.get("must-contain", []):
         compared += 1
         known = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{commit}^{{commit}}"],
-                               capture_output=True).returncode == 0
+                               capture_output=True, env=GIT_ENV).returncode == 0
         if not known:
             problems.append(f"{crate}: must contain {commit}, which is not in the repository")
             continue
         r = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, ref],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, env=GIT_ENV)
         if r.returncode == 1:
             problems.append(f"{crate}: {ref} does not contain {commit}")
         elif r.returncode != 0:
             raise subprocess.CalledProcessError(r.returncode, ["git", "merge-base"], stderr=r.stderr)
+    if c.get("must-contain-patch"):
+        have = patch_ids(repo, ref)
+        for pid in c["must-contain-patch"]:
+            compared += 1
+            if pid not in have:
+                problems.append(f"{crate}: no commit in the last {PATCH_DEPTH} of {ref} has the patch {pid}")
     wanted = c.get("changelog-has", [])
     if wanted:
         here = str(Path(manifest_path).parent).replace("\\", "/")
@@ -281,32 +322,60 @@ def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: s
     return problems, compared
 
 
-def github_check_runs(owner_repo: str, sha: str) -> list[dict]:
-    """every check run GitHub has for the commit (name, status, conclusion), through gh"""
-    out = subprocess.run(["gh", "api", "--paginate", f"repos/{owner_repo}/commits/{sha}/check-runs?per_page=100",
-                          "--jq", ".check_runs[] | {name, status, conclusion}"],
-                         check=True, capture_output=True, text=True).stdout
+def gh_json_lines(path: str, jq: str) -> list[dict]:
+    out = subprocess.run(["gh", "api", "--paginate", path, "--jq", jq], check=True, capture_output=True, text=True).stdout
     return [json.loads(line) for line in out.splitlines() if line.strip()]
 
 
-def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, checks) -> tuple[list[str], int]:
+def github_actions_jobs(owner_repo: str, sha: str) -> dict[str, list[dict]]:
+    """{workflow name: the jobs (name, status, conclusion) of its latest run on the commit}
+    from the GitHub Actions API (a job of another workflow or app cannot stand in)"""
+    runs = gh_json_lines(f"repos/{owner_repo}/actions/runs?head_sha={sha}&per_page=100",
+                         ".workflow_runs[] | {id, name, created_at}")
+    latest: dict[str, dict] = {}
+    for r in runs:
+        if r["name"] not in latest or r["created_at"] > latest[r["name"]]["created_at"]:
+            latest[r["name"]] = r
+    return {name: gh_json_lines(f"repos/{owner_repo}/actions/runs/{r['id']}/jobs?per_page=100",
+                                ".jobs[] | {name, status, conclusion}")
+            for name, r in latest.items()}
+
+
+def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, actions) -> tuple[list[str], int]:
     """(problems, compared) for the roster's `required-ci` jobs of `crate` on `commit`"""
     wanted = c.get("required-ci", [])
     if not wanted:
         return [], 0
-    runs = checks(owner_repo, commit)
+    try:
+        by_workflow = actions(owner_repo, commit)
+    except subprocess.CalledProcessError as e:
+        return [f"{crate}: the CI jobs of {commit[:12]} could not be read: {(e.stderr or '').strip()[:200]}"], 1
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return [f"{crate}: the CI jobs of {commit[:12]} could not be read: {e!r}"[:300]], 1
     problems: list[str] = []
     compared = 0
-    for name in wanted:
-        mine = [r for r in runs if r.get("name") == name or str(r.get("name", "")).startswith(name + " (")]
+    for w in wanted:
+        workflow, job, legs = w["workflow"], w["job"], w.get("legs", 1)
         compared += 1
-        if not mine:
-            problems.append(f"{crate}: required CI job {name!r} has no run on {commit[:12]}")
+        where = f"{crate}: required CI job {job!r} of workflow {workflow!r} on {commit[:12]}"
+        if workflow not in by_workflow:
+            problems.append(f"{where}: the workflow has no run")
             continue
-        bad = sorted({f"{r.get('name')}: {r.get('status')}/{r.get('conclusion')}" for r in mine
-                      if r.get("status") != "completed" or r.get("conclusion") != "success"})
+        mine = [j for j in by_workflow[workflow]
+                if j.get("name") == job or str(j.get("name", "")).startswith(job + " (")]
+        names = sorted({str(j.get("name")) for j in mine})
+        if isinstance(legs, int):
+            if len(names) != legs:
+                problems.append(f"{where}: {len(names)} legs ran, the roster expects {legs}: {names}")
+        else:
+            missing = sorted(set(legs) - set(names))
+            extra = sorted(set(names) - set(legs))
+            if missing or extra:
+                problems.append(f"{where}: legs missing {missing}, not in the roster {extra}")
+        bad = sorted({f"{j.get('name')}: {j.get('status')}/{j.get('conclusion')}" for j in mine
+                      if j.get("status") != "completed" or j.get("conclusion") != "success"})
         if bad:
-            problems.append(f"{crate}: required CI job {name!r} is not green on {commit[:12]}: {'; '.join(bad)}")
+            problems.append(f"{where}: not green: {'; '.join(bad)}")
     return problems, compared
 
 
@@ -406,7 +475,7 @@ def lock_tracked(repo: Path, manifest_path: str) -> bool:
     """a Cargo.lock is committed next to the manifest or at the repository root"""
     here = Path(manifest_path).parent
     for p in {str(here / "Cargo.lock"), "Cargo.lock"}:
-        r = subprocess.run(["git", "-C", str(repo), "ls-files", "--error-unmatch", p], capture_output=True)
+        r = subprocess.run(["git", "-C", str(repo), "ls-files", "--error-unmatch", p], capture_output=True, env=GIT_ENV)
         if r.returncode == 0:
             return True
     return False
@@ -608,7 +677,7 @@ def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) ->
 
 def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
-         docs=docs_rs_status, tags=remote_tag_commit, checks=github_check_runs) -> int:
+         docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -687,7 +756,7 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
                     print(f"error: {a.roster}: required-ci needs [train] github (the owner) and the crate's repo",
                           file=sys.stderr)
                     return 2
-                ci, n = ci_problems(a.crate, roster[a.crate], f"{github}/{roster[a.crate]['repo']}", commit, checks)
+                ci, n = ci_problems(a.crate, roster[a.crate], f"{github}/{roster[a.crate]['repo']}", commit, actions)
                 problems += ci
                 compared += n
             problems += package_problems(a.crate, lister(a.repo, a.manifest_path))

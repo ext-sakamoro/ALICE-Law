@@ -110,12 +110,15 @@ TOKEN_RE = re.compile(r"[A-Za-z0-9_\-\u3040-\u30ff\u4e00-\u9fff]+")
 # another word ("<name>の", "<name>編"); the second tokenisation splits at every
 # change of script (Latin / katakana / hiragana / kanji) so such a name is still a token
 SCRIPT_TOKEN_RE = re.compile(r"[A-Za-z0-9_\-]+|[\u30a0-\u30ff]+|[\u3040-\u309f]+|[\u4e00-\u9fff]+")
+# a name glued to another word with "-", "_" or "." ("<name>-notes", "<name>_x") is one
+# token above; the third tokenisation splits at those too, so each part is looked up
+PART_TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[\u30a0-\u30ff]+|[\u3040-\u309f]+|[\u4e00-\u9fff]+")
 
 
 def private_names(line: str) -> list[str]:
     """Tokens / phrases of the line whose hash is a private-project name."""
     found: list[str] = []
-    for toks in (TOKEN_RE.findall(line), SCRIPT_TOKEN_RE.findall(line)):
+    for toks in (TOKEN_RE.findall(line), SCRIPT_TOKEN_RE.findall(line), PART_TOKEN_RE.findall(line)):
         for n in (1, 2, 3):
             for i in range(len(toks) - n + 1):
                 phrase = " ".join(toks[i:i + n])

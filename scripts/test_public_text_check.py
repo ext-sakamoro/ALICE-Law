@@ -83,6 +83,26 @@ class Tree(Base):
         self.assertIn("a.md:1: private name", out)
         self.assertNotIn("orblat", out.lower())
 
+    def test_a_private_name_glued_to_another_word_is_found(self):
+        ptc.PRIVATE_NAME_HASHES = self.saved | {hashlib.sha256(b"zorblat").hexdigest()}
+        for text in ("see zorblat-notes\n", "see zorblat_notes\n", "see notes.zorblat\n", "see Zorblat-Quux-x\n",
+                     "path/to/.zorblat/x\n"):
+            git(self.repo, "reset", "-q", "--hard", self.base)
+            commit(self.repo, {"a.md": text})
+            code, out = run(self.repo, "--tree")
+            self.assertEqual(code, 1, text)
+            self.assertNotIn("orblat", out.lower())
+        git(self.repo, "reset", "-q", "--hard", self.base)
+        commit(self.repo, {"a.md": "zorblatx and xzorblat are other words\n"})
+        self.assertEqual(run(self.repo, "--tree")[0], 0)
+
+    def test_a_glued_private_name_in_a_path_is_found(self):
+        ptc.PRIVATE_NAME_HASHES = self.saved | {hashlib.sha256(b"zorblat").hexdigest()}
+        commit(self.repo, {"docs/zorblat-notes.md": "ok\n"})
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1)
+        self.assertIn("path docs/", out)
+
     def test_ordinary_words_and_commands_pass(self):
         commit(self.repo, {"ci.yml": "run: git worktree add /tmp/base main\n", "b.md": "the memory footprint\n"})
         self.assertEqual(run(self.repo, "--tree")[0], 0)

@@ -72,12 +72,25 @@ order = 6
 repo = "ALICE-Physics"
 # 3.0.0 は等しいゼロの max / min を全 target で揃える変更を含めて公開する (x86_64 の
 # 保存値が変わるが PHYSICS_SEMANTICS_ID は 3.0.0 の値のまま、公開後なら識別子の更新が要る)
-# 取り込み前の commit を指す 取り込まれたら main 上の commit に置き換える
-must-contain = ["22b65e0bb45803b9d4f863cc3c219a84d42e84a0"]
+# 変更の 2 commit (det_math の max / min と、lib の f32 / f64 max・min を禁じる clippy の gate) を
+# patch id (git patch-id --stable) で持つ: rebase された写しでも当たる
+must-contain-patch = [
+    "713407beaf620dcc766632eab58d414d13146230",  # fix: 等しいゼロを max / min にかけた時の符号を全 target で揃える
+    "d2983433973ce3fbe888ad755cde211043706eeb",  # ci: library の code で f32 / f64 の max と min を使えなくする
+]
 changelog-has = ["**Behavior change:**"]
-# CI jobs (every matrix leg) that must be green on the published commit: the tests on
-# every OS, clippy with the library gate (no f32 / f64 max and min), the wheel
-required-ci = ["Test", "Clippy", "Build, install and test the wheel"]
+# CI jobs that must be green on the published commit, with every leg named: the tests
+# on every OS and target (x86_64 and aarch64, wasm), clippy with the library gate (no
+# f32 / f64 max and min), the wheel
+required-ci = [
+    { workflow = "CI", job = "Test", legs = [
+        "Test (ubuntu-latest)", "Test (ubuntu-24.04-arm)", "Test (macos-latest)", "Test (macos-15-intel)",
+        "Test (windows-latest)", "Test (WebAssembly binding from JavaScript)", "Test (wasm32-wasip1 via wasmtime)",
+        "Test (neural / replay / analytics via crates.io siblings)",
+    ] },
+    { workflow = "CI", job = "Clippy" },
+    { workflow = "Python binding", job = "Build, install and test the wheel" },
+]
 
 [crate.alice-sdf]
 version = "6.0.0"
@@ -98,8 +111,14 @@ state = "planned"
 order = 9
 repo = "ALICE-LOL"
 tag = "alice-lol-v{version}"
-# the geometry digests on every OS and profile
-required-ci = ["Geometry digests"]
+# the geometry digests on every OS, debug and release
+required-ci = [
+    { workflow = "CI", job = "Geometry digests", legs = [
+        "Geometry digests (ubuntu-latest)", "Geometry digests (ubuntu-latest --release)",
+        "Geometry digests (windows-latest)", "Geometry digests (windows-latest --release)",
+        "Geometry digests (macos-latest)", "Geometry digests (macos-latest --release)",
+    ] },
+]
 
 [crate.alice-edge]
 version = "0.2.0"

@@ -7,6 +7,7 @@ read, so a malformed edit to it fails here.
 from __future__ import annotations
 
 import contextlib
+import gzip
 import hashlib
 import importlib.util
 import io
@@ -75,13 +76,14 @@ def fixture(present: dict[tuple[str, str], bool], latest: dict[str, str] | None 
 
 def crate_bytes(name: str, version: str, files: dict[str, bytes]) -> bytes:
     """a .crate (a gzipped tar under <name>-<version>/) holding files"""
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+    raw = io.BytesIO()
+    with tarfile.open(fileobj=raw, mode="w") as tar:
         for rel, data in files.items():
             info = tarfile.TarInfo(f"{name}-{version}/{rel}")
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
-    return buf.getvalue()
+    # a fixed gzip timestamp, so the same files give the same bytes in every second
+    return gzip.compress(raw.getvalue(), mtime=0)
 
 
 def fake_packager(repo: Path, manifest_path: str, name: str, version: str, target_dir: Path) -> Path:
@@ -114,6 +116,9 @@ def make_repo(d: str, files: dict[str, str]) -> tuple[Path, str]:
     repo = Path(d, "repo")
     repo.mkdir()
     git(repo, "init", "-q")
+    # no background gc / maintenance writing into .git while the test removes it
+    git(repo, "config", "gc.auto", "0")
+    git(repo, "config", "maintenance.auto", "false")
     for rel, text in files.items():
         f = repo / rel
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -508,8 +513,50 @@ class History(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("no [0.10.0] section", out)
 
+    def patch_gate(self, cherry_pick: bool):
+        """a change made on a side branch; the publish commit has a rebased copy of it, or not"""
+        with tempfile.TemporaryDirectory() as d:
+            repo, _ = make_repo(d, {"Cargo.toml": ZIP, "CHANGELOG.md": CHANGES})
+            git(repo, "checkout", "-q", "-b", "side")
+            (repo / "fix.rs").write_text("fn f() {}\n", encoding="utf-8")
+            git(repo, "add", "fix.rs")
+            git(repo, "commit", "-q", "-m", "the change")
+            side = git(repo, "rev-parse", "HEAD").strip()
+            pid = subprocess.run(["git", "-C", str(repo), "patch-id", "--stable"],
+                                 input=subprocess.run(["git", "-C", str(repo), "show", side], capture_output=True).stdout,
+                                 capture_output=True).stdout.decode().split()[0]
+            git(repo, "checkout", "-q", "-")
+            (repo / "other.txt").write_text("x", encoding="utf-8")
+            git(repo, "add", "other.txt")
+            git(repo, "commit", "-q", "-m", "main moved")
+            if cherry_pick:
+                git(repo, "cherry-pick", side)
+            (repo / "later.txt").write_text("x", encoding="utf-8")  # the copy is not the newest commit
+            git(repo, "add", "later.txt")
+            git(repo, "commit", "-q", "-m", "later")
+            ref = git(repo, "rev-parse", "HEAD").strip()
+            self.assertNotEqual(ref, side)
+            roster = ROSTER.replace('state = "prepared"\norder = 1', f'state = "prepared"\norder = 1\nmust-contain-patch = ["{pid}"]')
+            p = Path(d, "r.toml")
+            p.write_text(roster, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager)
+            return code, out.getvalue()
+
+    def test_a_rebased_copy_of_the_change_counts(self):
+        code, out = self.patch_gate(cherry_pick=True)
+        self.assertEqual(code, 0, out)
+
+    def test_without_the_change_the_patch_is_refused(self):
+        code, out = self.patch_gate(cherry_pick=False)
+        self.assertEqual(code, 1)
+        self.assertIn("has the patch", out)
+
     def test_an_empty_or_malformed_list_exits_2(self):
-        for extra in ("must-contain = []", 'must-contain = "x"', 'changelog-has = [""]', "changelog-has = [1]"):
+        for extra in ("must-contain = []", 'must-contain = "x"', 'changelog-has = [""]', "changelog-has = [1]",
+                      "must-contain-patch = []"):
             self.assertEqual(self.gate(extra)[0], 2, extra)
 
 
@@ -717,16 +764,22 @@ class Followups(unittest.TestCase):
 
 
 class RequiredCi(unittest.TestCase):
-    """the jobs the roster names must be green on the commit, every matrix leg of them"""
+    """the jobs the roster names, in the workflow it names, with the legs it expects, all green"""
 
-    def gate(self, runs, extra='required-ci = ["geometry-digest", "clippy-lib"]', train='\n[train]\ngithub = "owner"\n',
-             repo='repo = "R"\n'):
+    REQ = ('required-ci = [{ workflow = "CI", job = "Geometry digests", legs = ["Geometry digests (ubuntu)", '
+           '"Geometry digests (windows)"] }, { workflow = "CI", job = "Clippy" }, '
+           '{ workflow = "Wheel", job = "Build", legs = 2 }]')
+
+    def gate(self, by_workflow, extra=None, train='\n[train]\ngithub = "owner"\n', repo='repo = "R"\n'):
+        extra = self.REQ if extra is None else extra
         roster = ROSTER.replace('state = "prepared"\norder = 1', 'state = "prepared"\norder = 1\n' + repo + extra) + train
         seen = []
 
-        def checks(owner_repo, sha):
+        def actions(owner_repo, sha):
             seen.append((owner_repo, sha))
-            return runs
+            if isinstance(by_workflow, Exception):
+                raise by_workflow
+            return by_workflow
         with tempfile.TemporaryDirectory() as d:
             repo_dir, ref = make_repo(d, {"Cargo.toml": ZIP})
             p = Path(d, "r.toml")
@@ -735,48 +788,91 @@ class RequiredCi(unittest.TestCase):
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo_dir), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"],
-                               packager=fake_packager, checks=checks)
+                               packager=fake_packager, actions=actions)
         return code, out.getvalue(), seen, ref
 
-    GREEN = [{"name": "geometry-digest (ubuntu, debug)", "status": "completed", "conclusion": "success"},
-             {"name": "geometry-digest (windows, release)", "status": "completed", "conclusion": "success"},
-             {"name": "clippy-lib", "status": "completed", "conclusion": "success"},
-             {"name": "other", "status": "completed", "conclusion": "failure"}]
+    @staticmethod
+    def ok(name):
+        return {"name": name, "status": "completed", "conclusion": "success"}
+
+    def green(self):
+        return {"CI": [self.ok("Geometry digests (ubuntu)"), self.ok("Geometry digests (windows)"), self.ok("Clippy"),
+                       {"name": "Other", "status": "completed", "conclusion": "failure"}],
+                "Wheel": [self.ok("Build (3.11)"), self.ok("Build (3.12)")],
+                "Lint": [{"name": "Clippy", "status": "completed", "conclusion": "failure"}]}
 
     def test_green_jobs_go_and_the_commit_is_asked_for(self):
-        code, out, seen, ref = self.gate(self.GREEN)
+        code, out, seen, ref = self.gate(self.green())
         self.assertEqual(code, 0, out)
         self.assertEqual(seen, [("owner/R", ref)])
 
-    def test_a_missing_job_is_refused(self):
-        code, out, _, _ = self.gate([r for r in self.GREEN if r["name"] != "clippy-lib"])
+    def test_a_missing_leg_or_an_unexpected_one_is_refused(self):
+        w = self.green()
+        w["CI"] = [j for j in w["CI"] if j["name"] != "Geometry digests (windows)"]
+        code, out, _, _ = self.gate(w)
         self.assertEqual(code, 1)
-        self.assertIn("'clippy-lib' has no run", out)
+        self.assertIn("legs missing ['Geometry digests (windows)']", out)
+        w = self.green()
+        w["CI"].append(self.ok("Geometry digests (macos)"))
+        code, out, _, _ = self.gate(w)
+        self.assertEqual(code, 1)
+        self.assertIn("not in the roster ['Geometry digests (macos)']", out)
+
+    def test_the_leg_count_must_match(self):
+        w = self.green()
+        w["Wheel"] = w["Wheel"][:1]
+        code, out, _, _ = self.gate(w)
+        self.assertEqual(code, 1)
+        self.assertIn("1 legs ran, the roster expects 2", out)
+
+    def test_a_job_of_another_workflow_does_not_count(self):
+        w = self.green()
+        w["CI"] = [j for j in w["CI"] if j["name"] != "Clippy"]  # only the failing Clippy of "Lint" is left
+        code, out, _, _ = self.gate(w)
+        self.assertEqual(code, 1)
+        self.assertIn("0 legs ran, the roster expects 1", out)
+        w = self.green()
+        del w["Wheel"]
+        code, out, _, _ = self.gate(w)
+        self.assertEqual(code, 1)
+        self.assertIn("the workflow has no run", out)
 
     def test_one_red_skipped_or_running_leg_is_refused(self):
         for status, conclusion in (("completed", "failure"), ("completed", "skipped"), ("in_progress", None),
                                    ("completed", "cancelled")):
-            runs = self.GREEN + [{"name": "geometry-digest (macos, release)", "status": status, "conclusion": conclusion}]
-            code, out, _, _ = self.gate(runs)
+            w = self.green()
+            w["CI"][1] = {"name": "Geometry digests (windows)", "status": status, "conclusion": conclusion}
+            code, out, _, _ = self.gate(w)
             self.assertEqual(code, 1, (status, conclusion))
-            self.assertIn("geometry-digest (macos, release)", out)
+            self.assertIn("not green: Geometry digests (windows)", out)
 
     def test_a_name_that_only_starts_like_the_job_does_not_count(self):
-        runs = [r for r in self.GREEN if r["name"] != "clippy-lib"] + [
-            {"name": "clippy-library", "status": "completed", "conclusion": "success"}]
-        self.assertEqual(self.gate(runs)[0], 1)
+        w = self.green()
+        w["CI"] = [j for j in w["CI"] if j["name"] != "Clippy"] + [self.ok("Clippy-lib")]
+        self.assertEqual(self.gate(w)[0], 1)
+
+    def test_an_api_error_is_a_refusal_not_a_traceback(self):
+        for err in (subprocess.CalledProcessError(1, ["gh"], stderr="HTTP 404"), OSError("no gh"),
+                    KeyError("workflow_runs")):
+            code, out, _, _ = self.gate(err)
+            self.assertEqual(code, 1, err)
+            self.assertIn("could not be read", out)
+            self.assertNotIn("Traceback", out)
 
     def test_without_the_owner_or_the_repo_exits_2(self):
-        self.assertEqual(self.gate(self.GREEN, train="")[0], 2)
-        self.assertEqual(self.gate(self.GREEN, repo="")[0], 2)
+        self.assertEqual(self.gate(self.green(), train="")[0], 2)
+        self.assertEqual(self.gate(self.green(), repo="")[0], 2)
 
-    def test_an_empty_list_is_malformed(self):
-        self.assertEqual(self.gate(self.GREEN, extra="required-ci = []")[0], 2)
+    def test_malformed_entries_exit_2(self):
+        for extra in ("required-ci = []", 'required-ci = ["Clippy"]', 'required-ci = [{ workflow = "CI" }]',
+                      'required-ci = [{ workflow = "CI", job = "C", legs = 0 }]',
+                      'required-ci = [{ workflow = "CI", job = "C", legs = [] }]',
+                      'required-ci = [{ workflow = "CI", job = "C", leg = 1 }]'):
+            self.assertEqual(self.gate(self.green(), extra=extra)[0], 2, extra)
 
     def test_no_required_ci_asks_nothing(self):
-        code, _, seen, _ = self.gate(self.GREEN, extra="")
+        code, _, seen, _ = self.gate(self.green(), extra="")
         self.assertEqual((code, seen), (0, []))
-
 
 if __name__ == "__main__":
     unittest.main()
