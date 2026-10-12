@@ -14,9 +14,13 @@ python3 scripts/test_expected_failure.py
 python3 scripts/expected_failure.py --check
 python3 scripts/test_public_text_check.py
 python3 scripts/test_readme_roster_check.py
+python3 scripts/test_conformance_docs_schema_check.py
 
 echo "== README names every release-train repository"
 python3 scripts/readme_roster_check.py
+
+echo "== conformance docs and schema agree"
+python3 scripts/conformance_docs_schema_check.py
 
 echo "== public text: the tree"
 python3 scripts/public_text_check.py --tree HEAD

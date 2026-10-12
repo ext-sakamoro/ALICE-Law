@@ -217,7 +217,7 @@ order-preserving collection or an explicitly associative, order-independent
 reduction, not an incidental order that today's standard library or runtime
 happens to produce.
 
-### G14 — float-environment invariants
+### G14 — float-environment-invariants
 
 A Law-bearing crate's shipped artifacts are not built with flags that change
 floating-point semantics from the ones the gates above assume: no

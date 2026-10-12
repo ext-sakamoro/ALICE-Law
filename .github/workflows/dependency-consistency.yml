@@ -22,6 +22,8 @@ on:
       - "Cargo.lock"
       - "release-train.toml"
       - "README.md"
+      - "docs/CONFORMANCE.md"
+      - "conformance/gates.toml"
       - "scripts/**"
       - ".github/workflows/**"
       - "tools/**"
@@ -50,6 +52,12 @@ jobs:
 
       - name: README names every release-train repository
         run: python3 scripts/readme_roster_check.py
+
+      - name: Test the conformance docs/schema consistency checker
+        run: python3 scripts/test_conformance_docs_schema_check.py
+
+      - name: Conformance docs and schema agree
+        run: python3 scripts/conformance_docs_schema_check.py
 
       # the release train (release-train.toml): its tests, and what the roster says
       # is next (informational here; the publisher runs `publish-gate <crate>` right

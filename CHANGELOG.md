@@ -18,7 +18,8 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/public_text_check.py`: file contents, paths and commit messages checked for internal vocabulary (private names held as SHA-256 hashes, parts split at `-` `_` `.` too); run by `scripts/preflight.sh` before a push and by `.github/workflows/public-text.yml` on every push
 - `e2e/`: read a law, compute, save, restore and compare every value bit for bit, against the published releases and against the main branches (`scripts/main_mode.py`), with mutations the test must catch (`scripts/e2e_teeth.py`)
 - `docs/CONFORMANCE.md` and `conformance/gates.toml`: the 14 gates a Law-bearing crate's arithmetic must meet (G1 banning a direct platform transcendental call through G14 banning a build flag that changes floating-point semantics), in human-readable and generator-readable form; each gate's definition, the kinds of evidence a passing crate must cite, and the manifest shape (`status`/`evidence`/`since`/`note`/`reference_repo`) a crate's own `alice-law-conformance.toml` follows
-- `scripts/readme_roster_check.py`: fails when this file's own crate list in README.md falls behind `release-train.toml`'s roster
+- `scripts/readme_roster_check.py`: fails when README.md's intro paragraph (whole-name matched, not substring) falls behind `release-train.toml`'s roster
+- `scripts/conformance_docs_schema_check.py`: fails when a `### G<n> — <name>` heading in `docs/CONFORMANCE.md` and the matching `[[gate]]` entry in `conformance/gates.toml` disagree in id, name, or count
 
 ### Changed
 - This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5 and alice-db 0.4, the latest releases

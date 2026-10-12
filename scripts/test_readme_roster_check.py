@@ -38,29 +38,48 @@ class ReposFromRoster(unittest.TestCase):
 class Check(unittest.TestCase):
     def test_every_repo_named_passes(self):
         text = roster(("alice-lol", "ALICE-LOL"), ("alice-zip", "ALICE-Zip"))
-        self.assertEqual(rrc.check(text, "about ALICE-LOL and ALICE-Zip"), [])
+        self.assertEqual(rrc.check(text, "# X\n\nabout ALICE-LOL and ALICE-Zip\n"), [])
 
     def test_a_missing_repo_is_named(self):
         text = roster(("alice-lol", "ALICE-LOL"), ("alice-zip", "ALICE-Zip"))
-        self.assertEqual(rrc.check(text, "about ALICE-LOL only"), ["ALICE-Zip"])
+        self.assertEqual(rrc.check(text, "# X\n\nabout ALICE-LOL only\n"), ["ALICE-Zip"])
 
     def test_every_repo_missing_is_every_repo_named(self):
         text = roster(("alice-lol", "ALICE-LOL"), ("alice-zip", "ALICE-Zip"))
-        self.assertEqual(sorted(rrc.check(text, "unrelated text")), ["ALICE-LOL", "ALICE-Zip"])
+        self.assertEqual(sorted(rrc.check(text, "# X\n\nunrelated text\n")), ["ALICE-LOL", "ALICE-Zip"])
 
-    def test_a_substring_match_is_not_enough_to_hide_a_miss(self):
-        # "ALICE-LOL" is not a substring of "ALICE-LOL-extra" in the direction
-        # that matters here: the README text must CONTAIN the repo name, so a
-        # repo name that is itself a substring of unrelated README text would
-        # be a false pass -- this fixture is a reminder, not a real risk,
-        # since repo names are checked as members-of-readme-text, not the
-        # reverse; kept as a named case for documentation value.
+    def test_named_only_outside_the_intro_paragraph_is_still_missing(self):
+        # title, blank, intro paragraph (what's checked), blank, a later
+        # section that DOES name the repo -- a later section is not enough
+        text = roster(("alice-lol", "ALICE-LOL"), ("alice-zip", "ALICE-Zip"))
+        readme = "# X\n\nabout ALICE-LOL only\n\n## Status\n\nALICE-Zip is green\n"
+        self.assertEqual(rrc.check(text, readme), ["ALICE-Zip"])
+
+    def test_a_longer_name_does_not_satisfy_a_shorter_one(self):
+        # "ALICE-LOL" must not be considered present just because
+        # "ALICE-LOL-Macro" (a longer, different name) is in the paragraph
         text = roster(("alice-lol", "ALICE-LOL"))
-        self.assertEqual(rrc.check(text, "mentions ALICE-LOL-extra too"), [])
+        readme = "# X\n\nmentions ALICE-LOL-Macro only\n"
+        self.assertEqual(rrc.check(text, readme), ["ALICE-LOL"])
+
+    def test_a_shorter_name_does_not_satisfy_a_longer_one(self):
+        text = roster(("alice-lol-macro", "ALICE-LOL-Macro"))
+        readme = "# X\n\nmentions ALICE-LOL only\n"
+        self.assertEqual(rrc.check(text, readme), ["ALICE-LOL-Macro"])
+
+    def test_the_whole_name_in_the_intro_paragraph_passes(self):
+        text = roster(("alice-lol", "ALICE-LOL"), ("alice-lol-macro", "ALICE-LOL-Macro"))
+        readme = "# X\n\nmentions ALICE-LOL and ALICE-LOL-Macro both\n"
+        self.assertEqual(rrc.check(text, readme), [])
+
+    def test_no_paragraph_after_the_title_raises(self):
+        text = roster(("alice-lol", "ALICE-LOL"))
+        with self.assertRaises(rrc.ReadmeFormatError):
+            rrc.check(text, "# X\n")
 
     def test_no_repositories_in_roster_raises(self):
         with self.assertRaises(rrc.rt.RosterError):
-            rrc.check('[crate.x]\nversion = "1.0.0"\nstate = "planned"\norder = 1\n', "anything")
+            rrc.check('[crate.x]\nversion = "1.0.0"\nstate = "planned"\norder = 1\n', "# X\n\nanything\n")
 
 
 class Main(unittest.TestCase):
@@ -74,14 +93,14 @@ class Main(unittest.TestCase):
     def test_exit_0_when_all_named(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
-            r, d = self.write(Path(t), roster(("alice-lol", "ALICE-LOL")), "ALICE-LOL here")
+            r, d = self.write(Path(t), roster(("alice-lol", "ALICE-LOL")), "# X\n\nALICE-LOL here\n")
             self.assertEqual(rrc.main(["--roster", str(r), "--readme", str(d)]), 0)
 
     def test_exit_1_when_one_missing(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
             r, d = self.write(Path(t), roster(("alice-lol", "ALICE-LOL"), ("alice-zip", "ALICE-Zip")),
-                               "ALICE-LOL only")
+                               "# X\n\nALICE-LOL only\n")
             self.assertEqual(rrc.main(["--roster", str(r), "--readme", str(d)]), 1)
 
     def test_exit_2_when_roster_file_missing(self):

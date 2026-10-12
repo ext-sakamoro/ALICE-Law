@@ -110,7 +110,7 @@ Each crate in the release train carries its own `alice-law-conformance.toml` at 
 5. restore: reopen the directory and read everything back
 6. compare: every value by `to_bits`, the law coefficients, domain, record and identifier, every field of the residual summary, and the alice-crypto digest of the whole run
 
-It also checks that the crates were built with one arithmetic (the `SEMANTICS_ID` of alice-det-math as alice-zip, alice-db, alice-analytics and alice-lol see it), that every `alice-*` crate is locked at one version, and that every crate this repository's own `Cargo.toml` depends on is in the build. Each comparison fails when it compared nothing. A golden digest of the computed run (`e2e/golden/run.digest`) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing.
+It also checks that the crates were built with one arithmetic (the `SEMANTICS_ID` of alice-det-math as alice-zip, alice-db, alice-analytics and alice-lol see it), that every `alice-*` crate is locked at one version, and that the eight core crates it names are in the build (`e2e/tests/law_to_storage_roundtrip.rs`; not derived from the roster, so a repository joining the train does not reach this check on its own). Each comparison fails when it compared nothing. A golden digest of the computed run (`e2e/golden/run.digest`) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing.
 
 ```sh
 cd e2e
