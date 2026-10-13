@@ -366,11 +366,12 @@ UE5_ENGINE_ROOTS = { purpose = "the engine install folders (a JSON list) the Unr
 
 [pending.alice-lol-0-4]
 until = "alice-lol 0.4.0"
-why = "alice-lol 0.3.0 requires alice-sdf 1.x and an alice-physics pre-release, which bring their own dependencies"
+why = "alice-lol 0.3.0 requires alice-sdf 1.x and an alice-physics pre-release, which bring their own dependencies, and alice-lol-macro 0.2"
 linked = ["alice-physics", "alice-sdf"]
 requires = [
     "alice-lol 0.3.0 -> alice-physics ^0.14.0-preview.4",
     "alice-lol 0.3.0 -> alice-sdf ^1.9.0",
+    "alice-lol 0.3.0 -> alice-lol-macro ^0.2.0",
     "alice-sdf 1.13.0 -> alice-physics ^1.1",
     "alice-physics 0.14.0-preview.8 -> alice-analytics ^0.1",
     "alice-physics 0.14.0-preview.8 -> alice-db ^0.2.0-beta.1",
