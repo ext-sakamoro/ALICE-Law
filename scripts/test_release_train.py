@@ -30,6 +30,18 @@ spec.loader.exec_module(rt)
 # tests are not crates, so the gate tests use a consumer that accepts them, and the real
 # one is tested on its own (ConsumerBuild)
 REAL_CONSUMER_BUILD = rt.consumer_build
+# the gate reads the repository's secrets from GitHub; the gate tests use an empty inventory
+# unless they pass their own (SecretInventory tests the real rules)
+EMPTY_INVENTORY = {"repo": [], "environments": {}, "reviewers": {}}
+_REAL_MAIN = rt.main
+
+
+def _main(argv=None, **kw):
+    kw.setdefault("inventory", lambda owner_repo: EMPTY_INVENTORY)
+    return _REAL_MAIN(argv, **kw)
+
+
+rt.main = _main
 rt.consumer_build = lambda body, name, version, target_dir, entry=None: []
 
 ROSTER = """
@@ -1444,6 +1456,92 @@ class WorkflowPublisher(unittest.TestCase):
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager)
         self.assertEqual(code, 1, out.getvalue())
         self.assertIn("can publish to crates.io outside this gate", out.getvalue())
+
+
+TAG = "on:\n  push:\n    tags: ['v*']\n"
+SHAPES = {
+    "script with a renamed secret": "  p:\n    runs-on: x\n    steps:\n      - run: ./scripts/ship.sh\n        env:\n          TOK: ${{ secrets.CRATES }}\n",
+    "local composite action": "  p:\n    runs-on: x\n    steps:\n      - uses: ./.github/actions/ship\n        with:\n          token: ${{ secrets.CRATES }}\n",
+    "login then make": "  p:\n    runs-on: x\n    steps:\n      - run: cargo login ${{ secrets.X }}\n      - run: make release\n",
+    "assembled env name": "  p:\n    runs-on: x\n    steps:\n      - run: echo \"CARGO_REGISTRY_${KIND}=${{ secrets.X }}\" >> $GITHUB_ENV\n      - run: make release\n",
+    "xargs": "  p:\n    runs-on: x\n    steps:\n      - run: echo publish | xargs cargo --token ${{ secrets.X }}\n",
+    "local reusable workflow, inherited": "  p:\n    uses: ./.github/workflows/inner.yml\n    secrets: inherit\n",
+}
+INNER = "on:\n  workflow_call:\njobs:\n  q:\n    runs-on: x\n    steps:\n      - run: ./ship.sh ${{ secrets.CRATES }}\n"
+
+
+class SecretInventory(unittest.TestCase):
+    """a publishing credential must not be reachable by a workflow outside an approved environment"""
+
+    def check(self, job: str, declared: dict, reviewers: dict | None = None, head: str = TAG, env: str | None = None):
+        if env:
+            job = job.replace("    runs-on: x\n", f"    runs-on: x\n    environment: {env}\n", 1) if "runs-on" in job else job
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP, ".github/workflows/release.yml": head + "jobs:\n" + job,
+                                      ".github/workflows/inner.yml": INNER})
+            problems, _ = rt.workflow_publish_problems(repo, ref, "alice-zip", "o/r", lambda o, e: 0, declared, reviewers or {})
+        return problems
+
+    def test_an_undeclared_or_publishing_repository_secret_is_refused(self):
+        inv = {"repo": ["CRATES"], "environments": {"release": ["X"]}, "reviewers": {"release": 0}}
+        problems = rt.secret_problems("alice-zip", "R", {}, inv)
+        self.assertEqual(len(problems), 2, problems)
+        self.assertTrue(all("not declared" in p for p in problems))
+        declared = {"CRATES": {"purpose": "crates.io", "publishing": True}, "release:X": {"purpose": "x", "publishing": True}}
+        problems = rt.secret_problems("alice-zip", "R", declared, inv)
+        self.assertEqual(len(problems), 2, problems)
+        self.assertTrue(all("publishing credential" in p for p in problems))
+        inv["reviewers"]["release"] = 1
+        self.assertEqual(len(rt.secret_problems("alice-zip", "R", declared, inv)), 1)  # the repository one stays
+        harmless = {"CRATES": {"purpose": "coverage", "publishing": False}, "release:X": {"purpose": "x", "publishing": False}}
+        self.assertEqual(rt.secret_problems("alice-zip", "R", harmless, inv), [])
+
+    def test_each_indirect_shape_needs_an_approved_environment_for_a_publishing_secret(self):
+        publishing = {"CRATES": {"purpose": "crates.io", "publishing": True}, "X": {"purpose": "crates.io", "publishing": True}}
+        harmless = {"CRATES": {"purpose": "a licence", "publishing": False}, "X": {"purpose": "a licence", "publishing": False}}
+        for name, job in SHAPES.items():
+            refused = [p for p in self.check(job, publishing) if "receives" in p]
+            self.assertEqual(len(refused), 1, (name, refused))
+            self.assertEqual([p for p in self.check(job, harmless) if "receives" in p], [], name)
+            self.assertEqual([p for p in self.check(job, publishing, head="on:\n  push:\n    branches: [main]\n") if "receives" in p], [], name)
+            if "runs-on" in job:
+                self.assertEqual([p for p in self.check(job, publishing, {"release": 1}, env="release") if "receives" in p], [], name)
+                self.assertEqual(len([p for p in self.check(job, publishing, {"release": 0}, env="release") if "receives" in p]), 1, name)
+
+    def test_inheriting_secrets_into_an_external_workflow_is_refused(self):
+        job = "  p:\n    uses: someorg/tools/.github/workflows/publish.yml@main\n    secrets: inherit\n"
+        for declared in ({}, {"X": {"purpose": "x", "publishing": False}}):
+            problems = self.check(job, declared)
+            self.assertTrue(any("not a local workflow" in p for p in problems), problems)
+
+    def test_an_oidc_token_on_a_release_trigger_needs_an_approved_environment(self):
+        job = "  p:\n    runs-on: x\n    permissions:\n      id-token: write\n    steps:\n      - run: ./upload.sh\n"
+        self.assertTrue(any("OIDC" in p for p in self.check(job, {})))
+        self.assertEqual([p for p in self.check(job, {}, {"release": 1}, env="release") if "receives" in p], [])
+
+    def test_the_roster_declares_secrets_with_a_purpose(self):
+        rt.load_roster(ROSTER + '\n[secrets."R"]\nX = { purpose = "coverage upload", publishing = false }\n')
+        for bad in ('X = "coverage"', 'X = { purpose = "" , publishing = false }', 'X = { purpose = "p" }',
+                    'X = { purpose = "p", publishing = "no" }'):
+            with self.assertRaises(rt.RosterError, msg=bad):
+                rt.load_roster(ROSTER + f'\n[secrets."R"]\n{bad}\n')
+
+    def test_the_gate_refuses_when_the_secrets_cannot_be_read(self):
+        def broken(owner_repo):
+            raise RuntimeError("gh api: 404")
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
+                               inventory=broken)
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertIn("the secrets of the repository could not be read", out.getvalue())
+        with self.assertRaises(RuntimeError):
+            rt.secret_inventory(None)
 
 if __name__ == "__main__":
     unittest.main()

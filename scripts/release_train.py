@@ -103,6 +103,13 @@ class RegistryError(RuntimeError):
 
 def load_roster(text: str) -> dict[str, dict]:
     data = tomllib.loads(text)
+    for repo_name, table in data.get("secrets", {}).items():
+        if not isinstance(table, dict):
+            raise RosterError(f"[secrets.{repo_name}] must be a table of secret names")
+        for key, d in table.items():
+            if (not isinstance(d, dict) or set(d) != {"purpose", "publishing"} or not isinstance(d["purpose"], str)
+                    or not d["purpose"].strip() or not isinstance(d["publishing"], bool)):
+                raise RosterError(f"[secrets.{repo_name}] {key} must be {{ purpose = \"...\", publishing = true|false }}")
     crates = data.get("crate", {})
     if not crates:
         raise RosterError("the roster lists no crate (compared nothing)")
@@ -401,7 +408,8 @@ def environment_reviewers(owner_repo: str, name: str) -> int:
 
 
 def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str | None = None,
-                              reviewers=environment_reviewers) -> tuple[list[str], int]:
+                              reviewers=environment_reviewers, declared: dict | None = None,
+                              env_reviewers: dict | None = None) -> tuple[list[str], int]:
     """a workflow of the repository at ref that can publish outside this gate: a crates.io signal
     anywhere, or another registry's signal in a job whose environment has no required reviewers
     (a tag push would publish without the gate); (problems, workflow files read)"""
@@ -411,15 +419,23 @@ def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str 
     except subprocess.CalledProcessError:
         names = []
     problems = []
+    texts = {n: git(repo, "show", f"{ref}:.github/workflows/{n}") for n in names}
+    local = {n: workflow_text(t.splitlines()) for n, t in texts.items()}
     for n in names:
-        lines = git(repo, "show", f"{ref}:.github/workflows/{n}").splitlines()
+        lines = texts[n].splitlines()
         jobs_at = next((k for k, l in enumerate(lines) if l.rstrip() == "jobs:"), len(lines))
         starts = [k for k in range(jobs_at + 1, len(lines)) if JOB_RE.match(lines[k])]
         blocks = [("(workflow)", lines[:jobs_at + 1])] + [
             (JOB_RE.match(lines[a]).group(1), lines[a:b]) for a, b in zip(starts, starts[1:] + [len(lines)])]
-        workflow_id_token = bool(ID_TOKEN_RE.search(workflow_text(lines[:jobs_at + 1])))
+        preamble = workflow_text(lines[:jobs_at + 1])
+        workflow_id_token = bool(ID_TOKEN_RE.search(preamble))
+        release_trigger = bool(RELEASE_TRIGGER_RE.search(preamble))
         for job, block in blocks:
             text = workflow_text(block)
+            if job != "(workflow)" and declared is not None:
+                problems += job_secret_problems(crate, n, job, text + ("\nid-token: write" if workflow_id_token else ""),
+                                                release_trigger, job_environment(block), declared,
+                                                env_reviewers or {}, local)
             id_token = workflow_id_token or bool(ID_TOKEN_RE.search(text))
             runs_cargo = bool(re.search(r"\bcargo\b", text))
             if CRATES_SIGNAL_RE.search(text) or (job != "(workflow)" and id_token and runs_cargo):
@@ -436,6 +452,83 @@ def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str 
     if not names:
         problems.append(f"{crate}: no workflow read at {ref} (.github/workflows; compared nothing)")
     return problems, len(names)
+
+
+RELEASE_TRIGGER_RE = re.compile(r"\brelease\b|\btags\s*:|workflow_dispatch|\bschedule\b")
+SECRET_REF_RE = re.compile(r"secrets\.([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def secret_inventory(owner_repo: str) -> dict:
+    """the repository's Actions secrets by name: {"repo": [names], "environments": {env: [names]},
+    "reviewers": {env: n}}; raises RuntimeError when GitHub cannot be read (a gate that read
+    nothing must not pass)"""
+    if not owner_repo:
+        raise RuntimeError("no [train] github / repo in the roster, so the secrets cannot be read")
+
+    def api(path):
+        r = subprocess.run(["gh", "api", path], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"gh api {path}: {r.stderr.strip()[:200]}")
+        return json.loads(r.stdout)
+    out = {"repo": [x["name"] for x in api(f"repos/{owner_repo}/actions/secrets").get("secrets", [])],
+           "environments": {}, "reviewers": {}}
+    for env in api(f"repos/{owner_repo}/environments").get("environments", []):
+        name = env["name"]
+        out["environments"][name] = [x["name"] for x in api(f"repos/{owner_repo}/environments/{name}/secrets")
+                                     .get("secrets", [])]
+        out["reviewers"][name] = sum(len(rule.get("reviewers", [])) for rule in env.get("protection_rules", [])
+                                     if rule.get("type") == "required_reviewers")
+    return out
+
+
+def secret_problems(crate: str, repo_name: str, declared: dict, inventory: dict) -> list[str]:
+    """every secret of the repository and its environments is declared in the roster with its
+    purpose; a publishing secret may exist only in an environment with required reviewers"""
+    problems = []
+    for where, names in [("repository", inventory["repo"])] + [(f"environment {e}", n)
+                                                                for e, n in inventory["environments"].items()]:
+        for name in names:
+            key = name if where == "repository" else f"{where.split(' ', 1)[1]}:{name}"
+            d = declared.get(key)
+            if d is None:
+                problems.append(f"{crate}: the {where} secret {name} of {repo_name} is not declared in the roster "
+                                f"([secrets.\"{repo_name}\"] {key} = {{ purpose, publishing }})")
+            elif d["publishing"] and (where == "repository" or inventory["reviewers"].get(key.split(":")[0], 0) < 1):
+                problems.append(f"{crate}: the {where} secret {name} of {repo_name} is a publishing credential outside "
+                                f"an environment with required reviewers: a workflow could publish without this gate")
+    return problems
+
+
+def job_secret_problems(crate: str, n: str, job: str, text: str, release_trigger: bool, env: str | None,
+                        declared: dict, reviewers: dict, local_workflows: dict) -> list[str]:
+    """a job that receives a secret (a `secrets.<name>` other than GITHUB_TOKEN, `secrets: inherit`,
+    an OIDC token) on a release / tag / dispatch / schedule trigger runs under an environment with
+    required reviewers, unless every secret it receives is declared as not publishing"""
+    names = {m for m in SECRET_REF_RE.findall(text) if m != "GITHUB_TOKEN"}
+    inherit = bool(re.search(r"secrets:\s*inherit", text))
+    oidc = bool(ID_TOKEN_RE.search(text))
+    problems = []
+    if inherit:
+        called = re.search(r"uses:\s*(\S+)", text)
+        target = called.group(1) if called else ""
+        if not target.startswith("./.github/workflows/") or target[len("./.github/workflows/"):] not in local_workflows:
+            problems.append(f"{crate}: .github/workflows/{n} job {job} passes `secrets: inherit` to {target or 'a call'}, "
+                            f"which is not a local workflow this gate reads")
+        else:
+            inner = local_workflows[target[len("./.github/workflows/"):]]
+            names |= {m for m in SECRET_REF_RE.findall(inner) if m != "GITHUB_TOKEN"}
+            oidc = oidc or bool(ID_TOKEN_RE.search(inner))
+    if not release_trigger or not (names or inherit or oidc):
+        return problems
+    protected = env is not None and reviewers.get(env, 0) >= 1
+    env_key = lambda nm: f"{env}:{nm}" if env else nm
+    harmless = names and all((declared.get(env_key(nm)) or declared.get(nm) or {}).get("publishing") is False
+                             for nm in names) and not oidc
+    if not protected and not harmless:
+        what = ", ".join(sorted(names)) + (" (an OIDC token)" if oidc else "") + (" (inherited)" if inherit else "")
+        problems.append(f"{crate}: .github/workflows/{n} job {job} receives {what} on a release / tag / dispatch / "
+                        f"schedule trigger outside an environment with required reviewers")
+    return problems
 
 
 def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: str) -> tuple[list[str], int]:
@@ -1144,7 +1237,7 @@ def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) ->
 def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
          docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None,
-         reviewers=environment_reviewers) -> int:
+         reviewers=environment_reviewers, inventory=secret_inventory) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1219,7 +1312,19 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             compared += n
             github = tomllib.loads(roster_text).get("train", {}).get("github")
             owner_repo = f"{github}/{roster[a.crate]['repo']}" if github and roster[a.crate].get("repo") else None
-            wf, n = workflow_publish_problems(a.repo, a.ref, a.crate, owner_repo, reviewers)
+            declared_all = tomllib.loads(roster_text).get("secrets", {})
+            repo_name = roster[a.crate].get("repo")
+            declared = {k: v for k, v in declared_all.get(repo_name, {}).items()} if repo_name else {}
+            try:
+                inv = inventory(owner_repo)
+            except RuntimeError as e:
+                inv = None
+                problems.append(f"{a.crate}: the secrets of the repository could not be read ({e})")
+            if inv is not None:
+                problems += secret_problems(a.crate, repo_name, declared, inv)
+                compared += 1
+            wf, n = workflow_publish_problems(a.repo, a.ref, a.crate, owner_repo, reviewers, declared,
+                                              (inv or {}).get("reviewers", {}))
             problems += wf
             compared += n
             if roster[a.crate].get("required-ci"):

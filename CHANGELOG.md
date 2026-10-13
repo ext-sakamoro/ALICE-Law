@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `release_train.py publish-gate`: the repository's Actions secrets are read from GitHub and must be declared in `release-train.toml` `[secrets."<repository>"]` (`purpose`, `publishing`); a publishing credential outside an environment with required reviewers is refused, and so is a job that receives a publishing secret, an inherited secret or an OIDC token on a release / tag / dispatch / schedule trigger outside such an environment
 - `scripts/public_text_check.py`: device names in any case; a device detail class (an SDK or board support package name with its version, a release string on or next to a device line); a host name class held as SHA-256 (the list is supplied privately)
 - `release_train.py publish-gate`: refuses a repository whose workflows can publish outside the gate: by job, a crates.io credential or publish command anywhere; a PyPI / npm credential or publish command in a job whose environment has no required reviewers
 - `scripts/public_text_check.py`: a user's home directory path (`/Users/<name>/`, `/home/<name>/`) is a finding; `release_train.py publish-gate` also refuses a package carrying `logs/`; `release-train.toml`: alice-llm 2.0.0 (incompatible with 1.6.0)
