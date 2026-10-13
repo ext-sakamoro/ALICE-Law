@@ -87,8 +87,8 @@ MUTATIONS = [
     (
         "dependencies: a second version of alice-zip in the build",
         "e2e/Cargo.toml",
-        'alice-zip = "0.9"\n',
-        'alice-zip = "0.9"\nalice-zip-old = { package = "alice-zip", version = "0.7" }\n',
+        'alice-zip = "0.10"\n',
+        'alice-zip = "0.10"\nalice-zip-old = { package = "alice-zip", version = "0.9" }\n',
         "linked at two or more versions",
     ),
 ]

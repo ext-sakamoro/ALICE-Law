@@ -41,6 +41,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `release-train.toml` `consumer-expected-failure` `expect.label`: the primary span's label, so a new error on the same text elsewhere is refused (alice-db's entry pins it)
 ### Changed
 - `e2e/golden/run.digest` re-recorded for the steps above (the same on aarch64 and x86_64)
+- `release-train.toml`: `expected-failure.e2e-main-lol-physics-3` removed (alice-lol on main requires alice-physics 3, and the main branches patch in together); `scripts/e2e_teeth.py`: the second-version mutation follows `alice-zip = "0.10"`; the e2e test also prints the digest without the alice-edge records
 - The dependency consistency check covers alice-edge (this repository requires alice-edge 0.1 with its sdf, db and dashboard features) and alice-lol-macro; the core crate list is the roster's library crates (`release-train.toml`, every crate not exempt and not marked `law-dependency = false`), held equal by a test
 - This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4 and alice-physics 3, the latest releases
 - `release-train.toml`: alice-physics 3.0.0 is published (its pending entry removed; the problems alice-sdf 5.1.1 still brings through alice-physics 2.2 are listed until alice-sdf 6.0.0)
