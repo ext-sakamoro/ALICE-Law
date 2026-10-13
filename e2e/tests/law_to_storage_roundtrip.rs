@@ -257,6 +257,12 @@ fn world() -> (Vec<f64>, Vec<u8>) {
 }
 
 fn digest(run: &Run, world_raw: &[u8]) -> [u8; 32] {
+    digest_of(run, world_raw, true)
+}
+
+/// The digest of the run; without the alice-edge records (`q`, `e`) it is the digest the run
+/// had before they were added, printed so a re-recording can be split into its parts
+fn digest_of(run: &Run, world_raw: &[u8], with_edge: bool) -> [u8; 32] {
     let mut bytes = Vec::new();
     for (tag, n) in [
         (b'c', run.cooling.len()),
@@ -269,6 +275,9 @@ fn digest(run: &Run, world_raw: &[u8]) -> [u8; 32] {
         (b'l', run.law_record.len()),
         (b's', run.summary.len()),
     ] {
+        if !with_edge && (tag == b'q' || tag == b'e') {
+            continue;
+        }
         bytes.push(tag);
         bytes.extend_from_slice(&(n as u64).to_le_bytes());
     }
@@ -276,8 +285,10 @@ fn digest(run: &Run, world_raw: &[u8]) -> [u8; 32] {
     run.thermal_residuals.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
     run.rod.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
     run.ties.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
-    run.edge_fit.iter().for_each(|v| bytes.extend_from_slice(&v.to_le_bytes()));
-    bytes.extend_from_slice(&run.edge_record);
+    if with_edge {
+        run.edge_fit.iter().for_each(|v| bytes.extend_from_slice(&v.to_le_bytes()));
+        bytes.extend_from_slice(&run.edge_record);
+    }
     run.world.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
     bytes.extend_from_slice(&run.law_record);
     bytes.extend_from_slice(&run.summary);
@@ -545,6 +556,7 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     // golden: what the crates compute, recorded when it was last blessed
     let golden_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("golden/run.digest");
     let got = hex(&computed);
+    println!("e2e: run digest without the alice-edge records {}", hex(&digest_of(&run, &world_raw, false)));
     if let Some(out) = std::env::var_os("ALICE_LAW_E2E_DIGEST_OUT") {
         // for the comparison of two architectures (.github/workflows/e2e-main.yml)
         std::fs::write(out, format!("{got}\n")).unwrap();

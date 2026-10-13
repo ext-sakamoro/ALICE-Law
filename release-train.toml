@@ -387,10 +387,3 @@ until = "alice-lol 0.4.0"
 expect = ["failed to select a version for the requirement `alice-lol = \"^0.4\"`"]
 why = "the end to end crate needs alice-lol 0.4 (its research law reader), which is not on crates.io yet"
 
-[expected-failure.e2e-main-lol-physics-3]
-step = "e2e-main-patch"
-exit = 101
-until = "alice-lol 0.4.0"
-expect = ["failed to select a version for the requirement `alice-physics = \"^2.0\"`"]
-why = "alice-lol on main requires alice-physics ^2.0 while alice-physics on main is 3.0.0; alice-lol 0.4.0 raises it"
-

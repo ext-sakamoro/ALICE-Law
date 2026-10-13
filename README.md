@@ -146,10 +146,10 @@ Linked at two or more versions:
 
 The release that would remove them: alice-lol 0.4.0 (alice-sdf 6, alice-physics 3, alice-lol-macro 0.3); then this repository's alice-lol requirement is raised to it.
 
-End to end, measured on 2026-10-12:
+End to end, measured on 2026-10-13:
 
 - published: **expected failure until alice-lol 0.4.0** (`expected-failure.e2e-published-lol-0-4`): fails to resolve, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 3.0.0, whose sink writes to the exact series of alice-db, is released
-- main: **expected failure until alice-lol 0.4.0** (`expected-failure.e2e-main-lol-physics-3`), fails before the test: alice-lol on main requires `alice-physics ^2.0`, and alice-physics on main is 3.0.0, so the checkouts cannot be patched in together until alice-lol on main raises the requirement (the last passing run compared 3776 values and records, digest `2a0f3d06…`)
+- main: passes, 3897 values and records, the same digest on aarch64 and x86_64 (`966a7878…`, `e2e/golden/run.digest`)
 
 ## License
 
