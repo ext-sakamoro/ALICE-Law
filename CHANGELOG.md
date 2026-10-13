@@ -9,7 +9,7 @@ workflows are the interface, so changes to what they check are recorded here.
 
 ### Added
 - `scripts/public_text_check.py`: device names in any case; a device detail class (an SDK or board support package name with its version, a release string on or next to a device line); a host name class held as SHA-256 (the list is supplied privately)
-- `release_train.py publish-gate`: refuses a repository whose workflows publish outside the gate (crates.io anywhere; PyPI / npm without an approval environment)
+- `release_train.py publish-gate`: refuses a repository whose workflows can publish outside the gate: by job, a crates.io credential or publish command anywhere; a PyPI / npm credential or publish command in a job whose environment has no required reviewers
 - `scripts/public_text_check.py`: a user's home directory path (`/Users/<name>/`, `/home/<name>/`) is a finding; `release_train.py publish-gate` also refuses a package carrying `logs/`; `release-train.toml`: alice-llm 2.0.0 (incompatible with 1.6.0)
 - `release_train.py publish-gate`: every file of the package is read by `scripts/public_text_check.py` (the source repository's settings and allow-list); internal text in the package is refused
 - `scripts/public_text_check.py`: the session name, session id, device and private address classes are allowed only for a single file

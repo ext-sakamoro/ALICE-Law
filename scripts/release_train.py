@@ -347,18 +347,64 @@ def patch_ids(repo: Path, ref: str) -> set[str]:
     return {line.split()[0] for line in out.splitlines() if line.strip()}
 
 
-WORKFLOW_PUBLISH_RE = re.compile(r"\bcargo\s+publish\b(?![^\n]*--dry-run)|uses:\s*katyo/publish-crates|uses:\s*rust-lang/crates-io-auth-action")
-# a package registry other than crates.io: allowed only in a job behind an approval environment
-OTHER_PUBLISH_RE = re.compile(r"uses:\s*pypa/gh-action-pypi-publish|\btwine\s+upload\b|\bmaturin\s+(?:publish|upload)\b"
-                              r"|\bnpm\s+publish\b(?![^\n]*--dry-run)")
+# A job can publish only with a credential, so the credential is the first signal and the
+# command the second. crates.io: a crates.io token (as a secret, in CARGO_REGISTRY_TOKEN or
+# CARGO_REGISTRIES_<name>_TOKEN), the crates.io auth action, an OIDC token in a job that runs
+# cargo, or a publish command (cargo [+toolchain] [workspaces|release] publish without
+# --dry-run, release-plz, publish-crates). Another registry (PyPI, npm): its token, an OIDC
+# token, or its publish command, allowed only in a job whose environment has required reviewers.
+CRATES_SIGNAL_RE = re.compile(r"secrets\.CARGO_REGISTRY_TOKEN|\bCARGO_REGISTRY_TOKEN\b|\bCARGO_REGISTRIES_[A-Z0-9_]+_TOKEN\b"
+                              r"|crates-io-auth-action|release-plz|publish-crates"
+                              r"|\bcargo(?:\s+\+\S+)?\s+(?:workspaces\s+|release\s+)?publish\b(?![^\n]*--dry-run)")
+OTHER_SIGNAL_RE = re.compile(r"\bPYPI_API_TOKEN\b|\bTWINE_PASSWORD\b|\bNODE_AUTH_TOKEN\b|\bNPM_TOKEN\b"
+                             r"|pypa/gh-action-pypi-publish|\btwine\s+upload\b|\bmaturin\s+(?:publish|upload)\b"
+                             r"|\bnpm\s+publish\b(?![^\n]*--dry-run)")
+ID_TOKEN_RE = re.compile(r"id-token\s*:\s*write")
 JOB_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*$")
 
 
-def workflow_publish_problems(repo: Path, ref: str, crate: str) -> tuple[list[str], int]:
-    """a workflow of the repository at ref that publishes outside this gate: a crates.io publish
-    (a `cargo publish` step without --dry-run, or a publish action), or a PyPI / npm publish in a
-    job without an `environment` (approval); a tag push would publish without the gate;
-    (problems, workflow files read)"""
+def workflow_text(lines: list[str]) -> str:
+    """the lines without comments (a `#` that starts a comment) and with `\\` continuations joined"""
+    out = []
+    for line in lines:
+        code = re.sub(r"(^|\s)#.*$", "", line)
+        if out and out[-1].endswith("\\"):
+            out[-1] = out[-1][:-1] + " " + code.strip()
+        else:
+            out.append(code)
+    # a `run: |` block keeps one command per line; join them too so a command split over lines is read
+    return "\n".join(out) + "\n" + " ".join(l.strip() for l in out)
+
+
+def job_environment(block: list[str]) -> str | None:
+    for k, l in enumerate(block):
+        m = re.match(r"^    environment:\s*(\S.*)?$", l)
+        if m:
+            value = (m.group(1) or "").strip().strip("'\"")
+            if value:
+                return value
+            for l2 in block[k + 1:k + 4]:
+                m2 = re.match(r"^      name:\s*(\S+)", l2)
+                if m2:
+                    return m2.group(1).strip("'\"")
+    return None
+
+
+def environment_reviewers(owner_repo: str, name: str) -> int:
+    """the number of required reviewers of a repository's deployment environment (0 when it has none
+    or does not exist)"""
+    r = subprocess.run(["gh", "api", f"repos/{owner_repo}/environments/{name}"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return 0
+    rules = json.loads(r.stdout).get("protection_rules", [])
+    return sum(len(rule.get("reviewers", [])) for rule in rules if rule.get("type") == "required_reviewers")
+
+
+def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str | None = None,
+                              reviewers=environment_reviewers) -> tuple[list[str], int]:
+    """a workflow of the repository at ref that can publish outside this gate: a crates.io signal
+    anywhere, or another registry's signal in a job whose environment has no required reviewers
+    (a tag push would publish without the gate); (problems, workflow files read)"""
     try:
         names = [n for n in git(repo, "ls-tree", "--name-only", f"{ref}:.github/workflows").splitlines()
                  if n.endswith((".yml", ".yaml"))]
@@ -368,21 +414,25 @@ def workflow_publish_problems(repo: Path, ref: str, crate: str) -> tuple[list[st
     for n in names:
         lines = git(repo, "show", f"{ref}:.github/workflows/{n}").splitlines()
         jobs_at = next((k for k, l in enumerate(lines) if l.rstrip() == "jobs:"), len(lines))
-        starts = [k for k in range(jobs_at + 1, len(lines)) if JOB_RE.match(lines[k])] + [len(lines)]
-        env_of = {}
-        for a, b in zip(starts, starts[1:]):
-            has_env = any(re.match(r"^    environment:", l) for l in lines[a:b])
-            for k in range(a, b):
-                env_of[k] = has_env
-        for k, line in enumerate(lines):
-            if re.match(r"\s*(?:#|-?\s*name:)", line):
-                continue  # a comment, or the label of a step
-            if WORKFLOW_PUBLISH_RE.search(line):
-                problems.append(f"{crate}: .github/workflows/{n}:{k + 1} publishes to crates.io outside this gate "
-                                f"(a tag push would publish without it): remove that step")
-            elif OTHER_PUBLISH_RE.search(line) and not env_of.get(k, False):
-                problems.append(f"{crate}: .github/workflows/{n}:{k + 1} publishes to a package registry in a job "
-                                f"without an approval environment")
+        starts = [k for k in range(jobs_at + 1, len(lines)) if JOB_RE.match(lines[k])]
+        blocks = [("(workflow)", lines[:jobs_at + 1])] + [
+            (JOB_RE.match(lines[a]).group(1), lines[a:b]) for a, b in zip(starts, starts[1:] + [len(lines)])]
+        workflow_id_token = bool(ID_TOKEN_RE.search(workflow_text(lines[:jobs_at + 1])))
+        for job, block in blocks:
+            text = workflow_text(block)
+            id_token = workflow_id_token or bool(ID_TOKEN_RE.search(text))
+            runs_cargo = bool(re.search(r"\bcargo\b", text))
+            if CRATES_SIGNAL_RE.search(text) or (job != "(workflow)" and id_token and runs_cargo):
+                problems.append(f"{crate}: .github/workflows/{n} job {job} can publish to crates.io outside this "
+                                f"gate (a crates.io credential or publish command; a tag push would publish "
+                                f"without it): remove it")
+            elif OTHER_SIGNAL_RE.search(text) or (job != "(workflow)" and id_token and not runs_cargo
+                                                    and re.search(r"pypi|npm|twine|maturin", text)):
+                env = job_environment(block)
+                if not env or not owner_repo or reviewers(owner_repo, env) < 1:
+                    problems.append(f"{crate}: .github/workflows/{n} job {job} publishes to a package registry "
+                                    f"without an environment that has required reviewers"
+                                    + (f" ({env})" if env else ""))
     if not names:
         problems.append(f"{crate}: no workflow read at {ref} (.github/workflows; compared nothing)")
     return problems, len(names)
@@ -1093,7 +1143,8 @@ def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) ->
 
 def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
-         docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None) -> int:
+         docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None,
+         reviewers=environment_reviewers) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1166,7 +1217,9 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             hist, n = history_problems(a.repo, a.ref, a.crate, roster[a.crate], a.manifest_path)
             problems += hist
             compared += n
-            wf, n = workflow_publish_problems(a.repo, a.ref, a.crate)
+            github = tomllib.loads(roster_text).get("train", {}).get("github")
+            owner_repo = f"{github}/{roster[a.crate]['repo']}" if github and roster[a.crate].get("repo") else None
+            wf, n = workflow_publish_problems(a.repo, a.ref, a.crate, owner_repo, reviewers)
             problems += wf
             compared += n
             if roster[a.crate].get("required-ci"):

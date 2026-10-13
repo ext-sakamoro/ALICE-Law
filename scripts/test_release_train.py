@@ -1375,24 +1375,56 @@ class PackageText(unittest.TestCase):
 
 
 class WorkflowPublisher(unittest.TestCase):
-    def problems(self, workflow: str):
+    def problems(self, workflow: str, reviewers=lambda o, n: 0, owner_repo="o/r"):
         with tempfile.TemporaryDirectory() as d:
             repo, ref = make_repo(d, {"Cargo.toml": ZIP, ".github/workflows/release.yml": workflow})
-            return rt.workflow_publish_problems(repo, ref, "alice-zip")
+            return rt.workflow_publish_problems(repo, ref, "alice-zip", owner_repo, reviewers)
 
-    def test_a_publishing_step_is_refused(self):
-        for wf in ("jobs:\n  p:\n    steps:\n      - run: cargo publish\n",
-                   "jobs:\n  p:\n    steps:\n      - run: cargo publish --locked -p x\n",
-                   "jobs:\n  p:\n    steps:\n      - uses: katyo/publish-crates@v2\n"):
-            problems, n = self.problems(wf)
-            self.assertEqual((len(problems), n), (1, 1), wf)
-            self.assertIn("release.yml:4", problems[0])
+    def job(self, body: str, head: str = "") -> str:
+        return head + "jobs:\n  p:\n    runs-on: x\n" + body
 
-    def test_a_dry_run_or_a_comment_passes(self):
-        for wf in ("jobs:\n  p:\n    steps:\n      - run: cargo publish --dry-run\n",
-                   "jobs:\n  p:\n    steps:\n      - name: cargo publish\n        run: echo later\n",
-                   "# cargo publish is done by hand\njobs: {}\n"):
-            self.assertEqual(self.problems(wf), ([], 1), wf)
+    def test_crates_io_publishers_are_refused(self):
+        for body in ("    steps:\n      - run: cargo publish\n",
+                     "    steps:\n      - run: cargo +stable publish\n",
+                     "    steps:\n      - run: cargo publish --token $T  # not --dry-run\n",
+                     "    steps:\n      - run: |\n          cargo \\\n            publish\n",
+                     "    steps:\n      - run: |\n          cargo\n          publish --locked\n",
+                     "    steps:\n      - uses: MarcoIeni/release-plz-action@v0.5\n",
+                     "    steps:\n      - run: cargo workspaces publish --yes\n",
+                     "    steps:\n      - run: cargo release publish --execute\n",
+                     "    steps:\n      - run: ./scripts/publish.sh\n        env:\n          CARGO_REGISTRY_TOKEN: ${{ secrets.T }}\n",
+                     "    steps:\n      - run: ./x.sh\n        env:\n          CARGO_REGISTRIES_MINE_TOKEN: ${{ secrets.X }}\n",
+                     "    steps:\n      - uses: rust-lang/crates-io-auth-action@v1\n",
+                     "    permissions:\n      id-token: write\n    steps:\n      - run: cargo build\n",
+                     "    environment: release\n    steps:\n      - run: cargo publish\n"):
+            problems, n = self.problems(self.job(body), reviewers=lambda o, e: 5)
+            self.assertEqual((len(problems), n), (1, 1), body)
+            self.assertIn("crates.io", problems[0])
+        problems, _ = self.problems("env:\n  CARGO_REGISTRY_TOKEN: ${{ secrets.T }}\n" + self.job("    steps: []\n"))
+        self.assertTrue(problems)  # a workflow-level credential
+
+    def test_dry_runs_comments_and_other_commands_pass(self):
+        for body in ("    steps:\n      - run: cargo publish --dry-run\n",
+                     "    steps:\n      - run: echo hello # cargo publish\n",
+                     "    steps:\n      - run: cargo test\n"):
+            self.assertEqual(self.problems(self.job(body))[0], [], body)
+
+    def test_another_registry_needs_an_environment_with_reviewers(self):
+        pypi = "    environment: pypi\n    permissions:\n      id-token: write\n    steps:\n      - uses: pypa/gh-action-pypi-publish@abc\n"
+        self.assertEqual(self.problems(self.job(pypi), reviewers=lambda o, e: 1)[0], [])
+        problems, _ = self.problems(self.job(pypi), reviewers=lambda o, e: 0)
+        self.assertIn("without an environment that has required reviewers (pypi)", problems[0])
+        named = "    environment:\n      name: pypi\n      url: x\n    steps:\n      - run: twine upload d/*\n"
+        seen = []
+        self.assertEqual(self.problems(self.job(named), reviewers=lambda o, e: seen.append(e) or 1)[0], [])
+        self.assertEqual(seen, ["pypi"])
+        bare = "    steps:\n      - run: npm publish\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.N }}\n"
+        self.assertEqual(len(self.problems(self.job(bare), reviewers=lambda o, e: 1)[0]), 1)
+        self.assertEqual(len(self.problems(self.job(pypi), reviewers=lambda o, e: 1, owner_repo=None)[0]), 1)
+
+    def test_the_environment_of_another_job_does_not_count(self):
+        wf = "jobs:\n  a:\n    environment: pypi\n    steps: []\n  b:\n    steps:\n      - run: twine upload x\n"
+        self.assertEqual(len(self.problems(wf, reviewers=lambda o, e: 1)[0]), 1)
 
     def test_no_workflow_directory_compares_nothing(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1400,17 +1432,6 @@ class WorkflowPublisher(unittest.TestCase):
             problems, n = rt.workflow_publish_problems(repo, ref, "alice-zip")
         self.assertEqual(n, 0)
         self.assertIn("compared nothing", problems[0])
-
-    def test_pypi_and_npm_publish_need_an_approval_environment(self):
-        bare = "jobs:\n  wheels:\n    runs-on: x\n    steps:\n      - uses: pypa/gh-action-pypi-publish@abc\n"
-        problems, _ = self.problems(bare)
-        self.assertEqual(len(problems), 1, problems)
-        self.assertIn("without an approval environment", problems[0])
-        gated = "jobs:\n  wheels:\n    runs-on: x\n    environment: pypi\n    steps:\n      - uses: pypa/gh-action-pypi-publish@abc\n"
-        self.assertEqual(self.problems(gated)[0], [])
-        other_job = ("jobs:\n  a:\n    environment: pypi\n    steps: []\n  b:\n    steps:\n      - run: npm publish\n")
-        self.assertEqual(len(self.problems(other_job)[0]), 1)  # the environment of another job does not count
-        self.assertEqual(self.problems("jobs:\n  b:\n    steps:\n      - run: npm publish --dry-run\n")[0], [])
 
     def test_the_gate_refuses_a_repository_with_a_publishing_workflow(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1422,7 +1443,7 @@ class WorkflowPublisher(unittest.TestCase):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager)
         self.assertEqual(code, 1, out.getvalue())
-        self.assertIn("publishes to crates.io outside this gate", out.getvalue())
+        self.assertIn("can publish to crates.io outside this gate", out.getvalue())
 
 if __name__ == "__main__":
     unittest.main()
