@@ -581,6 +581,42 @@ class BinaryBuildPaths(Base):
         self.assertIn("s.zst: zstd, zstd unavailable before Python 3.14: unscanned container", out)
         self.assertIn("has no zstd reader", out)
 
+    def test_compressed_streams_inside_a_binary_are_read(self):
+        import struct, zlib
+        dwarf = b"\0DW_AT_comp_dir\0" + USERS + b"ys/.cargo/registry/src/x/lib.rs\0" + HOME + b"ys/proj/a.rs\0"
+        cases = {
+            "nul-zlib.bin": b"\0" + zlib.compress(dwarf),
+            # a .zdebug_* section: "ZLIB", the size, then the zlib stream
+            "zdebug.so": elf(b".zdebug_info", b"x") + b"ZLIB" + struct.pack(">Q", len(dwarf)) + zlib.compress(dwarf, 9) + b"\0" * 8,
+            # an SHF_COMPRESSED section: the compression header (type 1 = zlib), then the stream
+            "chdr.so": elf(b".debug_str") + struct.pack("<IIQQ", 1, 0, len(dwarf), 1) + zlib.compress(dwarf) + b"\xff" * 4,
+            # two streams in one file: each is read
+            "two.bin": b"\x01\0" + zlib.compress(dwarf) + b"\0\x02" + zlib.compress(dwarf),
+        }
+        if ptc.zstd_available():
+            from compression import zstd
+            cases["zstd-inside.bin"] = elf(b"head") + zstd.compress(dwarf) + b"\0tail"
+        # bytes that look like a zlib header but do not inflate, and a header asking for a preset
+        # dictionary: read as they are, nothing found, no failure
+        cases["noise.bin"] = b"\0" + b"\x78\x9c\xff\xfe\x00" * 50 + b"\x78\xbb" + b"\0" * 20
+        self.add(cases)
+        out = run(self.repo, "--tree")[1]
+        self.assertIn("nul-zlib.bin: 2 build paths: binary home path", out)
+        self.assertIn("zdebug.so: 2 build paths: binary home path", out)
+        self.assertIn("chdr.so: 2 build paths: binary home path", out)
+        self.assertIn("two.bin: 4 build paths: binary home path", out)
+        if ptc.zstd_available():
+            self.assertIn("zstd-inside.bin: 2 build paths: binary home path", out)
+        self.assertNotIn("noise.bin", out)
+
+    def test_a_stream_inside_a_binary_over_the_budget_is_unscanned(self):
+        import zlib
+        saved = ptc.CONTAINER_BUDGET
+        self.addCleanup(lambda: setattr(ptc, "CONTAINER_BUDGET", saved))
+        ptc.CONTAINER_BUDGET = 1 << 20
+        self.add({"big.bin": b"\0\x01" + zlib.compress(b"x" * (2 << 20))})
+        self.assertIn("big.bin: zlib stream, over 1 MiB: unscanned container", run(self.repo, "--tree")[1])
+
     def zipped(self, data: bytes) -> bytes:
         import zipfile
         buf = io.BytesIO()

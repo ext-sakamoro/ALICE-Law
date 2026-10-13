@@ -610,22 +610,68 @@ def _members(data: bytes, kind: str) -> list[tuple[str, bytes]]:
     raise ValueError(kind)
 
 
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
+
+def embedded_streams(data: bytes, budget: list) -> tuple[list[bytes], list[str]]:
+    """the zlib streams (a valid header, inflating to their end) and zstd frames found at any offset
+    of the bytes, inflated within the budget; (streams, what could not be read)"""
+    import zlib
+    view, out, unscanned = memoryview(data), [], []
+    i = data.find(b"\x78")
+    while i != -1 and i + 1 < len(data):
+        nxt = i + 1
+        if (0x78 << 8 | data[i + 1]) % 31 == 0 and not data[i + 1] & 0x20:  # FCHECK, no preset dictionary
+            d = zlib.decompressobj()
+            try:
+                inner = d.decompress(view[i:], max(budget[0], 0) + 1)
+            except zlib.error:
+                inner = None
+            if inner is not None and not d.eof and len(inner) > budget[0]:
+                return out, unscanned + [f"zlib stream, over {CONTAINER_BUDGET >> 20} MiB"]
+            if inner is not None and d.eof:
+                budget[0] -= len(inner)
+                out.append(inner)
+                nxt = len(data) - len(d.unused_data)
+        i = data.find(b"\x78", nxt)
+    i = data.find(ZSTD_MAGIC)
+    while i != -1:
+        nxt = i + 1
+        if not zstd_available():
+            return out, unscanned + ["zstd stream inside, zstd unavailable before Python 3.14"]
+        from compression import zstd
+        d = zstd.ZstdDecompressor()
+        try:
+            inner = d.decompress(view[i:], max(budget[0], 0) + 1)
+        except zstd.ZstdError:
+            inner = None
+        if inner is not None and not d.eof and len(inner) > budget[0]:
+            return out, unscanned + [f"zstd stream, over {CONTAINER_BUDGET >> 20} MiB"]
+        if inner is not None and d.eof:
+            budget[0] -= len(inner)
+            out.append(inner)
+            nxt = len(data) - len(d.unused_data)
+        i = data.find(ZSTD_MAGIC, nxt)
+    return out, unscanned
+
+
 def build_paths(data: bytes, path: str = "", depth: int = 0, budget: list | None = None) -> tuple[int, list[str]]:
     """(build paths, kinds of the containers that could not be read) in a file, its members read
     out of containers and compressed streams"""
     budget = [CONTAINER_BUDGET] if budget is None else budget
     kind = container_kind(data, path)
     if kind is None:
-        if data[:1] == b"\x78" and len(data) > 2 and (data[0] << 8 | data[1]) % 31 == 0 and is_binary(data):
-            import zlib
-            try:  # a zlib stream (a weak signature: bytes that do not inflate are read as they are)
-                inner = zlib.decompress(data)
-            except zlib.error:
-                return raw_build_paths(data), []
-            kind = "zlib"
-            members = [("", inner)]
-        else:
-            return raw_build_paths(data), []
+        n = raw_build_paths(data)
+        if not is_binary(data) or depth >= CONTAINER_DEPTH:
+            return n, []
+        # zlib and zstd streams anywhere in a binary file (a whole compressed file, or a compressed
+        # section such as an ELF debug section, where the build paths of DWARF are)
+        streams, unscanned = embedded_streams(data, budget)
+        for inner in streams:
+            got, more = build_paths(inner, "", depth + 1, budget)
+            n += got
+            unscanned += more
+        return n, unscanned
     else:
         if depth >= CONTAINER_DEPTH:
             return 0, [f"{kind}, nested too deep"]
