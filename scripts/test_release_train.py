@@ -1141,27 +1141,68 @@ class ConsumerBuild(unittest.TestCase):
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("cargo check", problems[0])
 
-    def expected(self, version: str, lib: str, until: str = "gate-probe 0.2.0", expect: str = "py broken"):
+    def expected(self, version: str, lib: str, until: str = "gate-probe 0.2.0", expect=None):
         crate = tiny_crate("gate-probe", version, extra="\n[features]\npy = []\n", lib=lib)
         entry = {"consumer-check-features": [["py"]],
-                 "consumer-expected-failure": [{"features": ["py"], "expect": expect, "until": until, "why": "w"}]}
+                 "consumer-expected-failure": [{"features": ["py"], "until": until, "why": "w",
+                                                "expect": expect or {"code": "E0308", "file": "src/lib.rs"}}]}
         with tempfile.TemporaryDirectory() as d:
             return REAL_CONSUMER_BUILD(crate, "gate-probe", version, Path(d), entry)
 
+    HELD = '#[cfg(feature = "py")]\npub fn held() { let _x: u8 = "known"; }\n'
+
     def test_an_expected_failure_passes_until_its_release(self):
-        broken = '#[cfg(feature = "py")]\ncompile_error!("py broken");\n'
-        self.assertEqual(self.expected("0.1.0", broken), [])
-        stale = self.expected("0.2.0", broken)
+        self.assertEqual(self.expected("0.1.0", self.HELD), [])
+        stale = self.expected("0.2.0", self.HELD)
         self.assertEqual(len(stale), 1, stale)
         self.assertIn("was until", stale[0])
 
-    def test_an_expected_failure_that_passes_or_fails_otherwise_is_refused(self):
+    def test_an_expected_failure_that_builds_is_refused(self):
         fixed = self.expected("0.1.0", "pub fn f() {}\n")
         self.assertEqual(len(fixed), 1, fixed)
         self.assertIn("builds", fixed[0])
-        other = self.expected("0.1.0", '#[cfg(feature = "py")]\ncompile_error!("something else");\n')
-        self.assertEqual(len(other), 1, other)
-        self.assertIn("not with the expected", other[0])
+
+    def test_a_new_error_next_to_the_held_one_is_refused(self):
+        lib = self.HELD + '#[cfg(feature = "py")]\npub fn new() { undefined_thing(); }\n'
+        problems = self.expected("0.1.0", lib)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("E0425", problems[0])
+
+    def test_the_same_code_elsewhere_or_with_another_message_is_refused(self):
+        other_file = self.expected("0.1.0", self.HELD, expect={"code": "E0308", "file": "src/other.rs"})
+        self.assertEqual(len(other_file), 1, other_file)
+        other_message = self.expected("0.1.0", self.HELD,
+                                      expect={"code": "E0308", "file": "src/lib.rs", "message": "expected `bool`"})
+        self.assertEqual(len(other_message), 1, other_message)
+        self.assertEqual(self.expected("0.1.0", self.HELD,
+                                       expect={"code": "E0308", "file": "src/lib.rs", "message": "mismatched types"}), [])
+
+    def test_the_code_in_a_comment_of_another_error_is_not_the_error(self):
+        lib = '#[cfg(feature = "py")]\npub fn other() { undefined_thing(); } // E0308\n'
+        problems = self.expected("0.1.0", lib)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("E0425", problems[0])
+
+    def test_crate_errors_reads_the_crates_own_json_diagnostics(self):
+        mine = {"reason": "compiler-message", "package_id": "path+file:///x#gate-probe@0.1.0",
+                "message": {"level": "error", "code": {"code": "E0308"}, "message": "mismatched types",
+                            "spans": [{"file_name": "/tmp/x/src/lib.rs", "is_primary": True}]}}
+        dep = dict(mine, package_id="registry+https://x#other@1.0.0")
+        abort = {"reason": "compiler-message", "package_id": mine["package_id"],
+                 "message": {"level": "error", "code": None, "message": "aborting due to 1 previous error", "spans": []}}
+        warn = {"reason": "compiler-message", "package_id": mine["package_id"],
+                "message": {"level": "warning", "code": None, "message": "unused", "spans": []}}
+        out = "\n".join(json.dumps(m) for m in (mine, dep, abort, warn)) + "\nnot json\n"
+        errs = rt.crate_errors(out, "gate-probe", "0.1.0")
+        self.assertEqual(errs, [{"code": "E0308", "file": "/tmp/x/src/lib.rs", "message": "mismatched types"}])
+        self.assertTrue(rt.matches_expected(errs[0], {"code": "E0308", "file": "src/lib.rs"}))
+        self.assertFalse(rt.matches_expected(errs[0], {"code": "E0308", "file": "b.rs"}))  # not a suffix of a name
+        self.assertFalse(rt.matches_expected(dict(errs[0], file="/tmp/x/src/xlib.rs"), {"code": "E0308", "file": "lib.rs"}))
+
+    def test_an_entry_for_one_command_does_not_hold_the_other(self):
+        e = {"consumer-expected-failure": [{"features": ["py"], "command": "check", "expect": {}, "until": "x 1.0.0", "why": "w"}]}
+        self.assertIsNotNone(rt.expected_failure(e, "x", "0.1.0", ["py"], "check"))
+        self.assertIsNone(rt.expected_failure(e, "x", "0.1.0", ["py"], "build"))
 
     def test_consumer_features_in_the_roster_are_checked(self):
         why = 'consumer-features-why = "python is built by maturin"\n'
@@ -1173,12 +1214,16 @@ class ConsumerBuild(unittest.TestCase):
             with self.assertRaises(rt.RosterError, msg=bad):
                 rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\n' + bad, 1))
         ok = ('consumer-check-features = [["py"]]\n' + why +
-              'consumer-expected-failure = [{features = ["py"], expect = "E0308", until = "alice-zip 0.10.1", why = "w"}]\n')
+              'consumer-expected-failure = [{features = ["py"], expect = {code = "E0308", file = "src/lib.rs"}, '
+              'until = "alice-zip 0.10.1", why = "w"}]\n')
         rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\n' + ok, 1))
         for old, bad in (('until = "alice-zip 0.10.1"', 'until = "alice-db 0.10.1"'),
                          ('until = "alice-zip 0.10.1"', 'until = "alice-zip"'),
                          ('{features = ["py"]', '{features = ["other"]'),
-                         ('expect = "E0308"', 'expect = ""')):
+                         ('expect = {code = "E0308", file = "src/lib.rs"}', 'expect = "E0308"'),
+                         ('file = "src/lib.rs"}', 'file = ""}'),
+                         ('file = "src/lib.rs"}', 'file = "src/lib.rs", line = 3}'),
+                         ('why = "w"}', 'why = "w", command = "link"}')):
             text = ok.replace(old, bad, 1)
             self.assertNotEqual(text, ok)
             with self.assertRaises(rt.RosterError, msg=bad):

@@ -72,7 +72,7 @@ repo = "ALICE-DB"
 consumer-features = [["analytics", "crypto", "ffi", "fs", "open-file-audit", "sdf"]]
 consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["python"]]
-consumer-expected-failure = [{ features = ["python"], expect = "E0308", until = "alice-db 0.4.1", why = "0.4.0 の python は新規解決で numpy と alice-db が別の版の ndarray を引き src/lib.rs の PyArray2::from_owned_array が型不一致になる" }]
+consumer-expected-failure = [{ features = ["python"], expect = { code = "E0308", file = "src/lib.rs", message = "mismatched types" }, until = "alice-db 0.4.1", why = "0.4.0 の python は新規解決で numpy と alice-db が別の版の ndarray を引き src/lib.rs の PyArray2::from_owned_array が型不一致になる" }]
 
 [crate.alice-physics]
 version = "3.0.0"

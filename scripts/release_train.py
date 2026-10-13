@@ -154,12 +154,19 @@ def load_roster(text: str) -> dict[str, dict]:
             if not isinstance(efs, list) or not efs:
                 raise RosterError(f"{name}: `consumer-expected-failure` must be a non-empty list")
             for e in efs:
-                if (not isinstance(e, dict) or set(e) != {"features", "expect", "until", "why"}
+                ex = e.get("expect") if isinstance(e, dict) else None
+                if (not isinstance(e, dict) or not {"features", "expect", "until", "why"} <= set(e)
+                        or set(e) - {"features", "expect", "until", "why", "command"}
+                        or e.get("command", "build") not in ("build", "check")
                         or not isinstance(e["features"], list) or sorted(e["features"]) not in sets
-                        or not all(isinstance(e[k], str) and e[k].strip() for k in ("expect", "until", "why"))
+                        or not isinstance(ex, dict) or set(ex) - {"code", "file", "message"}
+                        or not all(isinstance(ex.get(k), str) and ex[k].strip() for k in ("code", "file"))
+                        or not isinstance(ex.get("message", ""), str)
+                        or not all(isinstance(e[k], str) and e[k].strip() for k in ("until", "why"))
                         or len(e["until"].split()) != 2 or e["until"].split()[0] != name):
                     raise RosterError(f"{name}: consumer-expected-failure entry {e!r} is not {{features (one of the "
-                                      f"declared sets), expect, until = \"{name} <version>\", why}}")
+                                      f"declared sets), expect = {{code, file, message?}}, until = \"{name} "
+                                      f"<version>\", why, command?}}")
                 dc.Version(e["until"].split()[1])
         if c["state"] not in STATES:
             raise RosterError(f"{name}: state {c['state']!r} is not one of {STATES}")
@@ -623,11 +630,57 @@ def feature_specs(manifest: dict, entry: dict | None) -> list[tuple[str, str, li
 
 def expected_failure(entry: dict | None, name: str, version: str, features: list[str] | None,
                      cmd: str) -> dict | None:
-    """the roster's `consumer-expected-failure` entry for this feature set, if any"""
+    """the roster's `consumer-expected-failure` entry for this feature set (and command, when
+    the entry names one), if any"""
     for e in (entry or {}).get("consumer-expected-failure", []):
-        if features is not None and sorted(e["features"]) == sorted(features):
+        if features is not None and sorted(e["features"]) == sorted(features) and e.get("command", cmd) == cmd:
             return e
     return None
+
+
+def crate_errors(stdout: str, name: str, version: str) -> list[dict]:
+    """the error diagnostics of the crate itself in cargo's JSON messages (`--message-format=json`):
+    {code, file (of the primary span), message}; the closing "aborting due to" count is not one"""
+    out = []
+    for line in stdout.splitlines():
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        pid = msg.get("package_id", "")
+        if msg.get("reason") != "compiler-message" or not (pid.endswith(f"#{name}@{version}")
+                                                          or pid.startswith(f"{name} {version} ")):
+            continue
+        m = msg.get("message", {})
+        if m.get("level") != "error" or (not m.get("spans") and m.get("message", "").startswith("aborting due to")):
+            continue
+        primary = [sp.get("file_name", "") for sp in m.get("spans", []) if sp.get("is_primary")]
+        out.append({"code": (m.get("code") or {}).get("code"), "file": primary[0] if primary else None,
+                    "message": m.get("message", "")})
+    return out
+
+
+def matches_expected(err: dict, expect: dict) -> bool:
+    """the error has the expected code, in the expected file (the path inside the crate), and
+    the expected message fragment when the entry names one"""
+    f = (err["file"] or "").replace("\\", "/")
+    return (err["code"] == expect["code"] and (f == expect["file"] or f.endswith("/" + expect["file"]))
+            and expect.get("message", "") in err["message"])
+
+
+def first_errors(r) -> str:
+    """the first error messages of a failed build, for the report"""
+    msgs = []
+    for line in r.stdout.splitlines():
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        m = msg.get("message", {}) if msg.get("reason") == "compiler-message" else {}
+        if m.get("level") == "error":
+            msgs.append(((m.get("code") or {}).get("code") or "") + " " + m.get("message", ""))
+    tail = [l.strip() for l in r.stderr.strip().splitlines()[-2:]]
+    return "; ".join([x.strip() for x in msgs[:2]] + tail)
 
 
 def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None,
@@ -666,7 +719,7 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
             def build(spec: str, cmd: str):
                 (consumer / "Cargo.toml").write_text(
                     CONSUMER_MANIFEST.format(name=name, version=version, spec=spec), encoding="utf-8")
-                return subprocess.run(["cargo", cmd, "--message-format=json-render-diagnostics", *target],
+                return subprocess.run(["cargo", cmd, "--message-format=json", *target],
                                       cwd=consumer, capture_output=True, text=True, encoding="utf-8",
                                       errors="replace", env=env)
 
@@ -680,7 +733,7 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
             outside = root / "bin"
             outside.mkdir()
             runs = [("its binary", subprocess.run(
-                ["cargo", "build", "--message-format=json-render-diagnostics", "--manifest-path",
+                ["cargo", "build", "--message-format=json", "--manifest-path",
                  str(pkg / "Cargo.toml"), *target], cwd=outside,
                 capture_output=True, text=True, encoding="utf-8", errors="replace", env=env), None, "build")]
         for label, r, fs, cmd in runs:
@@ -693,15 +746,20 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
                 elif r.returncode == 0:
                     problems.append(f"{name} {version}: {label} is listed as an expected failure but builds "
                                     f"(remove the entry)")
-                elif ef["expect"] not in r.stderr:
-                    tail = "; ".join(l.strip() for l in r.stderr.strip().splitlines()[-3:])
-                    problems.append(f"{name} {version}: {label} fails, but not with the expected "
-                                    f"{ef['expect']!r} ({tail})")
                 else:
-                    built += 1  # failed as the roster says, until its release
+                    errors = crate_errors(r.stdout, name, version)
+                    other = [e for e in errors if not matches_expected(e, ef["expect"])]
+                    if not errors or other:
+                        shown = other[0] if other else None
+                        problems.append(f"{name} {version}: {label} fails, but not only with the expected "
+                                        f"{ef['expect']['code']} in {ef['expect']['file']} ("
+                                        + (f"{shown['code']} in {shown['file']}: {shown['message']}" if shown
+                                           else f"no error of the crate itself: {first_errors(r)}") + ")")
+                    else:
+                        built += 1  # failed as the roster says, until its release
                 continue
             if r.returncode != 0:
-                tail = "; ".join(l.strip() for l in r.stderr.strip().splitlines()[-3:])
+                tail = first_errors(r)
                 problems.append(f"{name} {version}: the unpacked .crate does not build ({label}) as a crates.io "
                                 f"consumer builds it, with no Cargo.lock or configuration above it ({tail})")
             elif not compiled_lib(r.stdout, name, version, LIB_KINDS if has_lib else ("bin",)):
