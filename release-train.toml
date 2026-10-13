@@ -346,9 +346,6 @@ law-dependency = false
 [secrets."ALICE-SDF"]
 UNITY_LICENSE = { purpose = "the Unity licence of the Unity package build and tests", publishing = false }
 
-[secrets."ALICE-LLM"]
-CARGO_REGISTRY_TOKEN = { purpose = "a crates.io token used by the tag-push publish job (the job is removed in 2.0.0; the secret is to be deleted)", publishing = true }
-
 # Problems of the dependency consistency check (scripts/dep_consistency.py --roster)
 # that a release still to come removes. Each entry names the release (`until`); once
 # the roster marks it published, the entry is stale and the check fails until the

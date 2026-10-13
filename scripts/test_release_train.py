@@ -1495,6 +1495,10 @@ class SecretInventory(unittest.TestCase):
         self.assertEqual(len(rt.secret_problems("alice-zip", "R", declared, inv)), 1)  # the repository one stays
         harmless = {"CRATES": {"purpose": "coverage", "publishing": False}, "release:X": {"purpose": "x", "publishing": False}}
         self.assertEqual(rt.secret_problems("alice-zip", "R", harmless, inv), [])
+        stale = dict(harmless, GONE={"purpose": "removed", "publishing": True})
+        problems = rt.secret_problems("alice-zip", "R", stale, inv)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("does not have", problems[0])
 
     def test_each_indirect_shape_needs_an_approved_environment_for_a_publishing_secret(self):
         publishing = {"CRATES": {"purpose": "crates.io", "publishing": True}, "X": {"purpose": "crates.io", "publishing": True}}

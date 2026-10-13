@@ -485,6 +485,10 @@ def secret_problems(crate: str, repo_name: str, declared: dict, inventory: dict)
     """every secret of the repository and its environments is declared in the roster with its
     purpose; a publishing secret may exist only in an environment with required reviewers"""
     problems = []
+    present = set(inventory["repo"]) | {f"{e}:{n}" for e, ns in inventory["environments"].items() for n in ns}
+    for key in sorted(set(declared) - present):
+        problems.append(f"{crate}: the roster declares the secret {key} of {repo_name}, which the repository does not "
+                        f"have (remove the declaration)")
     for where, names in [("repository", inventory["repo"])] + [(f"environment {e}", n)
                                                                 for e, n in inventory["environments"].items()]:
         for name in names:
