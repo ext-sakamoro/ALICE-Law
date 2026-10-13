@@ -8,6 +8,8 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `e2e/`: equal zeros meeting a min or a max on public paths of alice-physics and alice-sdf (stored, restored, compared and in the digest); alice-edge's fixed-point fit and its `SignalLaw` stored and restored through the alice-db law store; alice-edge's `SEMANTICS_ID` among the identifiers, and the identifier pinned to its hex; alice-edge among the core crates (`scripts/main_mode.py`, the e2e-main repositories)
+- `.github/workflows/e2e-main.yml`: the run on aarch64 and on x86_64, and a job that requires the two digests to be equal and equal to the golden
 - `scripts/dep_consistency.py`: one version of every `alice-*` crate in `Cargo.lock`, all eight core crates present, and every `alice-*` requirement (this repository's and those of the resolved releases) accepting the latest release
 - `scripts/dep_consistency.py --roster`: problems a coming release removes are listed in `release-train.toml` under `[pending.<name>]` (`until`, `linked`, `requires`) and reported as expected with a count; an unlisted problem, an entry whose release is published, and a listed item that matches nothing fail the check
 - `release-train.toml` and `scripts/release_train.py`: the release plan of the core crates (version, order, state) and `next`
@@ -26,6 +28,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/public_text_check.py`: an id-like token (two hex digits, not glued to a digit, letter, `#`, `_`, `-` or `.`) next to a word naming a review or a session, on either side, and the labels of review findings, in file contents and commit messages; no list of ids is held (two-digit ids are enumerable even hashed)
 - `scripts/public_text_check.py --allow-hash <path> <name>` and `ALLOWED`: a product's mention of a private name allowed per repository (from the origin URL, or `--repo-name`) and file, held as `sha256(path NUL name)`; an entry that allows nothing in `--tree` fails; commit messages are never allowed
 ### Changed
+- `e2e/golden/run.digest` re-recorded for the steps above (the same on aarch64 and x86_64)
 - The dependency consistency check covers alice-edge (this repository requires alice-edge 0.1 with its sdf, db and dashboard features) and alice-lol-macro; the core crate list is the roster's library crates (`release-train.toml`, every crate not exempt and not marked `law-dependency = false`), held equal by a test
 - This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4 and alice-physics 3, the latest releases
 - `release-train.toml`: alice-physics 3.0.0 is published (its pending entry removed; the problems alice-sdf 5.1.1 still brings through alice-physics 2.2 are listed until alice-sdf 6.0.0)

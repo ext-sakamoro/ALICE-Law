@@ -36,7 +36,13 @@ use alice_physics::solver::{PhysicsConfig, PhysicsWorld, RigidBody};
 use alice_physics::transient_thermal::{stable_dt_1d, transient_step_1d, ThermalMaterial};
 use alice_zip::law::{Provenance, SignalLaw, ValidRange};
 
+
 const LAW_NAME: &str = "newton-cooling";
+/// The law alice-edge fits on a sensor window, stored and restored next to the first
+const EDGE_LAW_NAME: &str = "edge-window";
+/// The identifier of the arithmetic every crate here is built with (alice-det-math 0.5):
+/// alice-edge publishes it as its own, and it is recorded with every stored law
+const SEMANTICS_HEX: &str = "135c407d4249c1c200e4d1be79a12e848ce5c355fc3a918da965849e697ef000";
 /// 0 to 600 s every 0.25 s: on about one point in ten, `alice_det_math::exp64` and
 /// a platform's `exp` round differently, so the grid shows which one was used
 const COOLING_POINTS: i64 = 2401;
@@ -51,6 +57,9 @@ struct Run {
     cooling: Vec<f64>,
     thermal_residuals: Vec<f32>,
     rod: Vec<f32>,
+    ties: Vec<f32>,
+    edge_fit: Vec<i32>,
+    edge_record: Vec<u8>,
     world: Vec<f64>,
     law_record: Vec<u8>,
     summary: Vec<u8>,
@@ -115,6 +124,76 @@ fn thermal_residuals() -> Vec<f32> {
         .iter()
         .flat_map(|v| [v.residual, v.point.x, v.point.y, v.point.z])
         .collect()
+}
+
+/// A distance field at a fixed distance (a signed zero here), so two of them meet
+/// with equal zeros in a union
+struct ConstantField(f32);
+
+impl alice_physics::sdf_collider::SdfField for ConstantField {
+    fn distance(&self, _x: f32, _y: f32, _z: f32) -> f32 {
+        std::hint::black_box(self.0)
+    }
+    fn normal(&self, _x: f32, _y: f32, _z: f32) -> (f32, f32, f32) {
+        (0.0, 1.0, 0.0)
+    }
+}
+
+/// Equal zeros (+0 and -0) meeting a max or a min on public paths: `f32::max` /
+/// `f32::min` leave the sign of the result unspecified and x86_64 and aarch64 differ,
+/// so these values are the same bits on both only when the crates resolve the tie
+/// themselves. Each value is kept (stored, restored, compared, and in the digest).
+fn ties() -> Vec<f32> {
+    use alice_physics::sdf_collider::{SdfField, SdfUnion};
+    use alice_physics::sim_field::ScalarField3D;
+    let mut out = Vec::new();
+    // alice-physics: the union of two fields is the min of their distances
+    for (a, b) in [(0.0, -0.0), (-0.0, 0.0), (0.0, 0.0), (-0.0, -0.0)] {
+        out.push(SdfUnion::new(ConstantField(a), ConstantField(b)).distance(1.0, 2.0, 3.0));
+    }
+    // alice-physics: the maximum of a field holding +0 and -0, in both orders
+    let mut field = ScalarField3D::new(2, 2, 2, (0.0, 0.0, 0.0), (1.0, 1.0, 1.0));
+    for order in [[-0.0_f32, 0.0], [0.0, -0.0]] {
+        for (i, v) in field.data.iter_mut().enumerate() {
+            *v = order[i % 2];
+        }
+        out.push(field.max_value());
+    }
+    field.data.fill(-0.0);
+    out.push(field.max_value());
+    // alice-sdf: union / intersection / subtraction of coincident boxes, on and inside
+    // their faces (the tree evaluator)
+    let cube = || SdfNode::box3d(1.0, 1.0, 1.0);
+    let scenes = [
+        cube().union(cube()),
+        cube().intersection(cube()),
+        cube().subtract(cube()),
+        cube().subtract(SdfNode::box3d(1.0, 2.0, 2.0)),
+    ];
+    let c = [-0.5_f32, 0.0, 0.5];
+    for scene in &scenes {
+        for &x in &c {
+            for &y in &c {
+                for &z in &c {
+                    out.push(alice_sdf::eval(scene, Vec3::new(x, y, z)));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A sensor window in integer counts (a ramp with a bounded wobble), as alice-edge reads it
+fn edge_samples() -> Vec<i32> {
+    (0..64_i32).map(|i| 1000 + 37 * i + (i * i * 7) % 23 - 11).collect()
+}
+
+/// alice-edge's fixed-point fit of the window (slope and intercept in Q16.16) and the law it
+/// makes of it, through its public API
+fn edge_law(samples: &[i32]) -> (Vec<i32>, SignalLaw) {
+    let (slope_q, intercept_q) = alice_edge::q16_linear::fit_linear_fixed(samples);
+    let law = alice_edge::law::linear_law(samples, Provenance::new("alice-edge", "Q16.16 linear fit")).unwrap();
+    (vec![slope_q, intercept_q], law)
 }
 
 fn rod() -> Vec<f32> {
@@ -183,6 +262,9 @@ fn digest(run: &Run, world_raw: &[u8]) -> [u8; 32] {
         (b'c', run.cooling.len()),
         (b'h', run.thermal_residuals.len()),
         (b'r', run.rod.len()),
+        (b't', run.ties.len()),
+        (b'q', run.edge_fit.len()),
+        (b'e', run.edge_record.len()),
         (b'w', run.world.len()),
         (b'l', run.law_record.len()),
         (b's', run.summary.len()),
@@ -193,6 +275,9 @@ fn digest(run: &Run, world_raw: &[u8]) -> [u8; 32] {
     run.cooling.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
     run.thermal_residuals.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
     run.rod.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
+    run.ties.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
+    run.edge_fit.iter().for_each(|v| bytes.extend_from_slice(&v.to_le_bytes()));
+    bytes.extend_from_slice(&run.edge_record);
     run.world.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
     bytes.extend_from_slice(&run.law_record);
     bytes.extend_from_slice(&run.summary);
@@ -271,7 +356,7 @@ fn compare_bits<T: Copy + std::fmt::Debug, B: PartialEq + std::fmt::Debug>(
     written.len()
 }
 
-fn save(dir: &Path, run: &Run, law: &SignalLaw) -> u64 {
+fn save(dir: &Path, run: &Run, law: &SignalLaw, edge: &SignalLaw) -> (u64, u64) {
     let db = AliceDB::open(dir).unwrap();
     let cooling = db.series("cooling").unwrap();
     for (i, v) in run.cooling.iter().enumerate() {
@@ -285,14 +370,19 @@ fn save(dir: &Path, run: &Run, law: &SignalLaw) -> u64 {
     for (i, v) in run.rod.iter().enumerate() {
         rod.put_f32(i as i64, *v).unwrap();
     }
+    let ties = db.series("ties").unwrap();
+    for (i, v) in run.ties.iter().enumerate() {
+        ties.put_f32(i as i64, *v).unwrap();
+    }
     let world = db.series("world").unwrap();
     for (i, v) in run.world.iter().enumerate() {
         world.put_f64(i as i64, *v).unwrap();
     }
     let version = db.put_law(LAW_NAME, law, &alice_det_math::SEMANTICS_ID).unwrap();
+    let edge_version = db.put_law(EDGE_LAW_NAME, edge, &alice_edge::SEMANTICS_ID).unwrap();
     db.flush().unwrap();
     db.close().unwrap();
-    version
+    (version, edge_version)
 }
 
 fn values_f64(db: &AliceDB, name: &str) -> Vec<f64> {
@@ -318,7 +408,9 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         ("alice-zip", alice_zip::law::SEMANTICS_ID),
         ("alice-db", alice_db::SEMANTICS_ID),
         ("alice-analytics", alice_analytics::SEMANTICS_ID),
+        ("alice-edge", alice_edge::SEMANTICS_ID),
     ];
+    assert_eq!(hex(&semantics), SEMANTICS_HEX, "the arithmetic identifier changed");
     for (name, id) in identifiers {
         assert_eq!(id, semantics, "{name} was built with a different alice-det-math");
     }
@@ -339,7 +431,7 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     assert!(twice.is_empty(), "linked at two or more versions: {twice:?}");
     for core in [
         "alice-det-math", "alice-crypto", "alice-zip", "alice-analytics",
-        "alice-db", "alice-physics", "alice-sdf", "alice-lol",
+        "alice-db", "alice-physics", "alice-sdf", "alice-lol", "alice-edge",
     ] {
         assert!(locked.iter().any(|(n, _)| n == core), "{core} is not in Cargo.lock");
     }
@@ -354,7 +446,13 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     // 2. compute
     let thermal_residuals = thermal_residuals();
     let rod = rod();
+    let ties = ties();
+    assert!(ties.iter().any(|v| v.to_bits() == 0x8000_0000) && ties.iter().any(|v| v.to_bits() == 0),
+            "the tie step produced no signed zero of one kind");
     let (world, world_raw) = world();
+    let samples = edge_samples();
+    let (edge_fit, edge) = edge_law(&samples);
+    assert_eq!(edge.coefficients().len(), 2, "alice-edge fits a line");
 
     // 3. fit
     let points: Vec<(f64, f64)> = (0..COOLING_POINTS).map(|i| (cooling_time(i), cooling[i as usize])).collect();
@@ -368,21 +466,29 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         cooling,
         thermal_residuals,
         rod,
+        ties,
+        edge_fit,
+        edge_record: Vec::new(),
         world,
         law_record: Vec::new(),
         summary: summary_bytes(&summary),
     };
-    let version = save(&dir, &run, &law);
+    let (version, edge_version) = save(&dir, &run, &law, &edge);
     run.law_record = encode_law_record(LAW_NAME, version, &law.to_parts()).unwrap();
+    run.edge_record = encode_law_record(EDGE_LAW_NAME, edge_version, &edge.to_parts()).unwrap();
     let computed = digest(&run, &world_raw);
 
     // 5. restore
     let db = AliceDB::open(&dir).unwrap();
     let restored_law = db.get_law(LAW_NAME).unwrap().expect("the law was saved");
+    let restored_edge = db.get_law(EDGE_LAW_NAME).unwrap().expect("the alice-edge law was saved");
     let restored = Run {
         cooling: values_f64(&db, "cooling"),
         thermal_residuals: values_f32(&db, "thermal"),
         rod: values_f32(&db, "rod"),
+        ties: values_f32(&db, "ties"),
+        edge_fit: edge_law(&samples).0,
+        edge_record: encode_law_record(EDGE_LAW_NAME, edge_version, &restored_edge.to_parts()).unwrap(),
         world: values_f64(&db, "world"),
         law_record: encode_law_record(LAW_NAME, version, &restored_law.to_parts()).unwrap(),
         summary: Vec::new(),
@@ -403,6 +509,7 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     compared += compare_bits("cooling", &run.cooling, &restored.cooling, f64::to_bits);
     compared += compare_bits("thermal", &run.thermal_residuals, &restored.thermal_residuals, f32::to_bits);
     compared += compare_bits("rod", &run.rod, &restored.rod, f32::to_bits);
+    compared += compare_bits("ties", &run.ties, &restored.ties, f32::to_bits);
     compared += compare_bits("world", &run.world, &restored.world, f64::to_bits);
     compared += compare_bits("law coefficients", law.coefficients(), restored_law.coefficients(), f64::to_bits);
     let domain = |l: &SignalLaw| [l.domain().lo, l.domain().hi];
@@ -410,6 +517,12 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     assert_eq!(run.law_record, restored.law_record, "the law record changed on the way through the store");
     assert!(!run.law_record.is_empty());
     assert_eq!(law.law_id(&semantics), restored_law.law_id(&semantics), "law id");
+    compared += compare_bits("edge law coefficients", edge.coefficients(), restored_edge.coefficients(), f64::to_bits);
+    compared += compare_bits("edge law domain", &domain(&edge), &domain(&restored_edge), f64::to_bits);
+    assert_eq!(run.edge_record, restored.edge_record, "the alice-edge law record changed on the way through the store");
+    assert!(!run.edge_record.is_empty());
+    assert_eq!(edge.law_id(&semantics), restored_edge.law_id(&semantics), "alice-edge law id");
+    compared += 2; // edge law record, edge law id
     assert_eq!(summary, restored_summary, "residual summary");
     assert_eq!(run.summary, restored.summary, "residual summary bits");
     let restored_digest = digest(&restored, &world_raw);
@@ -432,6 +545,10 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     // golden: what the crates compute, recorded when it was last blessed
     let golden_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("golden/run.digest");
     let got = hex(&computed);
+    if let Some(out) = std::env::var_os("ALICE_LAW_E2E_DIGEST_OUT") {
+        // for the comparison of two architectures (.github/workflows/e2e-main.yml)
+        std::fs::write(out, format!("{got}\n")).unwrap();
+    }
     if std::env::var_os("ALICE_LAW_E2E_BLESS").is_some() {
         std::fs::write(&golden_path, format!("{got}\n")).unwrap();
         println!("e2e: wrote {}", golden_path.display());
