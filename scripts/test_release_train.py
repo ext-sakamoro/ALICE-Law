@@ -1595,24 +1595,50 @@ class VariablesAndHosts(unittest.TestCase):
         finally:
             rt.subprocess.run = real
 
-    def hosts(self, runs_on: str, head: str = TAG, hosts=None, env=None, reviewers=None, extra: str = ""):
+    def hosts(self, runs_on: str, head: str = TAG, hosts=None, env=None, reviewers=None, extra: str = "", runners=None):
         job = f"  p:\n    runs-on: {runs_on}\n" + (f"    environment: {env}\n" if env else "") + extra + "    steps:\n      - run: make\n"
         with tempfile.TemporaryDirectory() as d:
             repo, ref = make_repo(d, {"Cargo.toml": ZIP, ".github/workflows/w.yml": head + "jobs:\n" + job})
-            problems, _ = rt.workflow_publish_problems(repo, ref, "c", "o/r", lambda o, e: 0, {}, reviewers or {}, hosts or {})
+            problems, _ = rt.workflow_publish_problems(repo, ref, "c", "o/r", lambda o, e: 0, {}, reviewers or {}, hosts or {},
+                                                       runners or [])
         return [p for p in problems if "self-hosted" in p]
 
     def test_a_self_hosted_job_on_a_release_trigger_needs_an_approved_environment_or_a_declaration(self):
-        for runs_on in ("[self-hosted, windows, ue5]", "self-hosted", "my-box", "${{ vars.RUNNER }}", "[linux, gpu]"):
-            self.assertEqual(len(self.hosts(runs_on)), 1, runs_on)
+        sdf_runner = [{"self-hosted", "Windows", "X64", "unity", "windows-unity", "ue5"}]
+        for runs_on in ("[self-hosted, windows, ue5]", "self-hosted", "my-box", "${{ vars.RUNNER }}", "[linux, gpu]",
+                        "windows-unity", "[windows-unity]", "ubuntu-latest-gpu", "${{ inputs.runner }}",
+                        "${{ github.event.inputs.x }}", "${{ needs.setup.outputs.runner }}",
+                        "${{ fromJSON(needs.x.outputs.matrix) }}", "{ group: big }", "${{ matrix.os }}"):
+            self.assertEqual(len(self.hosts(runs_on, runners=sdf_runner)), 1, runs_on)
         self.assertEqual(len(self.hosts("${{ matrix.os }}", extra="    strategy:\n      matrix:\n        os: [self-hosted]\n")), 1)
-        for runs_on in ("ubuntu-latest", "windows-2022", "macos-15-intel", "${{ matrix.os }}"):
-            self.assertEqual(self.hosts(runs_on), [], runs_on)
+        self.assertEqual(len(self.hosts("${{ matrix.os }}", extra="    strategy:\n      matrix:\n        os: [ubuntu-latest, ${{ inputs.x }}]\n")), 1)
+        self.assertEqual(len(self.hosts("", extra="")), 1)  # no label at all
+        multi = "\n      - self-hosted\n      - linux"
+        self.assertEqual(len(self.hosts(multi)), 1)
+        for runs_on in ("ubuntu-latest", "windows-2022", "macos-15-intel", "[ubuntu-24.04-arm]"):
+            self.assertEqual(self.hosts(runs_on, runners=sdf_runner), [], runs_on)
+        hosted_matrix = "    strategy:\n      matrix:\n        os: [ubuntu-latest, windows-latest, macos-15]\n"
+        self.assertEqual(self.hosts("${{ matrix.os }}", extra=hosted_matrix), [])
+        include = "    strategy:\n      matrix:\n        include:\n          - os: ubuntu-latest\n          - os: macos-14\n"
+        self.assertEqual(self.hosts("${{ matrix.os }}", extra=include), [])
+        flow = "    strategy:\n      matrix:\n        include:\n          - { os: ubuntu-latest, target: x }\n          - { os: macos-14, target: y }\n"
+        self.assertEqual(self.hosts("${{ matrix.os }}", extra=flow), [])
+        flow_custom = flow.replace("macos-14", "windows-unity")
+        self.assertEqual(len(self.hosts("${{ matrix.os }}", extra=flow_custom)), 1)
+        chosen = ("    strategy:\n      matrix:\n        os: ${{ fromJSON(github.event_name == 'schedule' && '[\"macos-15-intel\"]' "
+                  "|| '[\"ubuntu-latest\", \"windows-latest\"]') }}\n")
+        self.assertEqual(self.hosts("${{ matrix.os }}", extra=chosen), [])
+        self.assertEqual(len(self.hosts("${{ matrix.os }}", extra=chosen.replace("macos-15-intel", "my-box"))), 1)
+        self.assertEqual(len(self.hosts("${{ matrix.os }}", extra=chosen.replace("'[\"ubuntu-latest\", \"windows-latest\"]'", "inputs.os"))), 1)
         self.assertEqual(self.hosts("self-hosted", head="on:\n  push:\n    branches: [main]\n"), [])
         self.assertEqual(self.hosts("self-hosted", env="build", reviewers={"build": 1}), [])
         self.assertEqual(len(self.hosts("self-hosted", env="build", reviewers={"build": 0})), 1)
         declared = {"w.yml:p": {"purpose": "the engine build", "registry-credentials-on-host": False}}
         self.assertEqual(self.hosts("self-hosted", hosts=declared), [])
+
+    def test_a_label_of_a_registered_runner_is_self_hosted_even_if_it_looks_hosted(self):
+        # a runner registered with the label "ubuntu-latest" would take the job: the registered labels win
+        self.assertEqual(len(self.hosts("ubuntu-latest", runners=[{"self-hosted", "ubuntu-latest"}])), 1)
 
     def test_the_roster_declares_self_hosted_jobs_without_host_credentials(self):
         rt.load_roster(ROSTER + '\n[self-hosted."R"]\n"w.yml:p" = { purpose = "x", registry-credentials-on-host = false }\n')

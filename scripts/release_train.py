@@ -423,7 +423,8 @@ def environment_reviewers(owner_repo: str, name: str) -> int:
 
 def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str | None = None,
                               reviewers=environment_reviewers, declared: dict | None = None,
-                              env_reviewers: dict | None = None, hosts: dict | None = None) -> tuple[list[str], int]:
+                              env_reviewers: dict | None = None, hosts: dict | None = None,
+                              runner_labels: list[set] | None = None) -> tuple[list[str], int]:
     """a workflow of the repository at ref that can publish outside this gate: a crates.io signal
     anywhere, or another registry's signal in a job whose environment has no required reviewers
     (a tag push would publish without the gate); (problems, workflow files read)"""
@@ -449,7 +450,7 @@ def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str 
             if job != "(workflow)" and declared is not None:
                 problems += job_secret_problems(crate, n, job, text + ("\nid-token: write" if workflow_id_token else ""),
                                                 release_trigger, job_environment(block), declared,
-                                                env_reviewers or {}, local, hosts)
+                                                env_reviewers or {}, local, hosts, runner_labels)
             id_token = workflow_id_token or bool(ID_TOKEN_RE.search(text))
             runs_cargo = bool(re.search(r"\bcargo\b", text))
             if CRATES_SIGNAL_RE.search(text) or (job != "(workflow)" and id_token and runs_cargo):
@@ -504,7 +505,16 @@ def secret_inventory(owner_repo: str) -> dict:
     base = f"repos/{owner_repo}"
     out = {"repo": listed(f"{base}/actions/secrets", "secrets"), "environments": {}, "reviewers": {},
            "dependabot": listed(f"{base}/dependabot/secrets", "secrets"),
-           "variables": listed(f"{base}/actions/variables", "variables"), "env_variables": {}}
+           "variables": listed(f"{base}/actions/variables", "variables"), "env_variables": {}, "runners": []}
+    page = 1
+    while True:
+        data = api(f"{base}/actions/runners?per_page=100&page={page}")
+        out["runners"] += [[lab["name"] for lab in r.get("labels", [])] for r in data.get("runners", [])]
+        if len(out["runners"]) >= data.get("total_count", 0) or not data.get("runners"):
+            break
+        page += 1
+    if len(out["runners"]) != data.get("total_count", len(out["runners"])):
+        raise RuntimeError(f"gh api {base}/actions/runners: read {len(out['runners'])} of {data.get('total_count')}")
     envs = api(f"{base}/environments?per_page=100")
     if len(envs.get("environments", [])) != envs.get("total_count", len(envs.get("environments", []))):
         raise RuntimeError(f"gh api {base}/environments: more environments than one page")
@@ -555,27 +565,120 @@ def secret_problems(crate: str, repo_name: str, declared: dict, inventory: dict)
     return problems
 
 
-GITHUB_HOSTED_RE = re.compile(r"^(?:ubuntu|windows|macos)-[A-Za-z0-9.\-]+$")
+# the GitHub-hosted runner images by their exact labels; any other label (a custom label of a
+# registered runner such as "windows-unity", or an unknown one) is a self-hosted runner
+GITHUB_HOSTED = {
+    "ubuntu-latest", "ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "ubuntu-slim",
+    "windows-latest", "windows-2025", "windows-2022", "windows-11-arm",
+    "macos-latest", "macos-26", "macos-15", "macos-14", "macos-13", "macos-15-intel", "macos-13-intel",
+    "macos-latest-large", "macos-15-large", "macos-14-large", "macos-13-large",
+    "macos-latest-xlarge", "macos-15-xlarge", "macos-14-xlarge", "macos-13-xlarge",
+}
 
 
-def self_hosted(text: str) -> bool:
-    """the job runs on a runner that is not GitHub-hosted: `self-hosted`, a label that is not a
-    GitHub-hosted image, or a runner chosen by a variable"""
-    m = re.search(r"runs-on:\s*(.*)", text)
-    if not m:
+def runs_on_value(text: str) -> list[str] | None:
+    """the labels of the job's runs-on (a label, a list on one line or below it, or a mapping with
+    `labels:`); None for a runner group (`group:`) or nothing found"""
+    lines = text.splitlines()
+    for k, line in enumerate(lines):
+        m = re.match(r"^(\s*)runs-on:\s*(.*)$", line)
+        if not m:
+            continue
+        indent, value = len(m.group(1)), m.group(2).strip()
+        if value:
+            if value.startswith("{"):
+                if "group:" in value:
+                    return None
+                lab = re.search(r"labels:\s*\[?([^\]}]*)", value)
+                value = lab.group(1) if lab else ""
+            return [x.strip(" '\"") for x in value.strip("[]").split(",") if x.strip(" '\"")]
+        labels = []
+        for nxt in lines[k + 1:]:
+            if not nxt.strip():
+                continue
+            if len(nxt) - len(nxt.lstrip()) <= indent:
+                break
+            item = nxt.strip()
+            if item.startswith("group:"):
+                return None
+            if item.startswith("labels:"):
+                rest = item[len("labels:"):].strip()
+                if rest:
+                    labels += [x.strip(" '\"") for x in rest.strip("[]").split(",") if x.strip(" '\"")]
+                continue
+            labels.append(item.lstrip("- ").strip(" '\""))
+        return labels
+    return []
+
+
+def matrix_values(text: str, key: str) -> list[str] | None:
+    """the literal values of matrix.<key> written in the job (a list, a block list, or include
+    entries); None when it cannot be read literally"""
+    values = []
+    lines = text.splitlines()
+    for k, line in enumerate(lines):
+        flow = re.match(r"^\s*-\s*\{(.*)\}\s*$", line)
+        if flow:  # an include entry written as a flow mapping: `- { os: ubuntu-latest, target: x }`
+            fm = re.search(rf"(?:^|,)\s*{re.escape(key)}:\s*([^,]+)", flow.group(1))
+            if fm:
+                values.append(fm.group(1).strip(" '\""))
+            continue
+        m = re.match(rf"^(\s*)(?:-\s*)?{re.escape(key)}:\s*(.*)$", line)
+        if not m:
+            continue
+        value = m.group(2).strip()
+        if value.startswith("${{"):
+            # an expression that only chooses between literal JSON lists (by event or a needs output)
+            # resolves to the labels of those lists; one that can take a value from inputs, vars or
+            # env, or has no literal list, cannot be read
+            if re.search(r"\b(?:inputs|vars|env)\.|github\.event\.inputs", value):
+                return None
+            lists = re.findall(r"'\[([^\]']*)\]'", value)
+            if not lists:
+                return None
+            values += [x.strip(' "') for lst in lists for x in lst.split(",") if x.strip(' "')]
+        elif value.startswith("["):
+            values += [x.strip(" '\"") for x in value.strip("[]").split(",") if x.strip(" '\"")]
+        elif value:
+            values.append(value.strip(" '\""))
+        else:
+            for nxt in lines[k + 1:]:
+                if not nxt.strip().startswith("-"):
+                    break
+                values.append(nxt.strip()[1:].strip(" '\""))
+    if not values or any("${{" in v for v in values):
+        return None
+    return values
+
+
+def self_hosted(text: str, runner_labels: list[set] | None = None) -> bool:
+    """the job may run on a runner that is not GitHub-hosted: a runner group, a label that is not a
+    GitHub-hosted image (a custom label of a registered runner included), or an expression other
+    than a matrix value written literally in the job whose values are all GitHub-hosted images"""
+    if "runs-on:" not in text:
         return False
-    value = m.group(1).strip()
-    if "self-hosted" in text or "vars." in value:
+    labels = runs_on_value(text)
+    if labels is None:
         return True
-    if value.startswith("${{"):
-        return False  # a matrix value: the matrix lists the images; `self-hosted` in it was caught above
-    labels = [x.strip(" '\"") for x in value.strip("[]").split(",") if x.strip(" '\"")]
-    return any(not GITHUB_HOSTED_RE.match(x) for x in labels)
+    resolved = []
+    for label in labels or ["(none)"]:
+        exprs = re.findall(r"\$\{\{\s*([^}]*?)\s*\}\}", label)
+        if not exprs:
+            resolved.append(label)
+            continue
+        m = re.fullmatch(r"matrix\.([A-Za-z0-9_-]+)", exprs[0]) if len(exprs) == 1 and label.strip().startswith("${{") else None
+        values = matrix_values(text, m.group(1)) if m else None
+        if values is None:
+            return True
+        resolved += values
+    if any(set(resolved) <= rl for rl in (runner_labels or []) if resolved):
+        return True
+    return any(x not in GITHUB_HOSTED for x in resolved)
 
 
 def job_secret_problems(crate: str, n: str, job: str, text: str, release_trigger: bool, env: str | None,
                         declared: dict, reviewers: dict, local_workflows: dict,
-                        hosts: dict | None = None) -> list[str]:
+                        hosts: dict | None = None, runner_labels: list[set] | None = None) -> list[str]:
     """a job that receives a secret (a `secrets.<name>` other than GITHUB_TOKEN, `secrets: inherit`,
     an OIDC token) on a release / tag / dispatch / schedule trigger runs under an environment with
     required reviewers, unless every secret it receives is declared as not publishing"""
@@ -594,7 +697,7 @@ def job_secret_problems(crate: str, n: str, job: str, text: str, release_trigger
             names |= {m for m in SECRET_REF_RE.findall(inner) if m != "GITHUB_TOKEN"}
             oidc = oidc or bool(ID_TOKEN_RE.search(inner))
     protected = env is not None and reviewers.get(env, 0) >= 1
-    if release_trigger and self_hosted(text) and not protected and f"{n}:{job}" not in (hosts or {}):
+    if release_trigger and self_hosted(text, runner_labels) and not protected and f"{n}:{job}" not in (hosts or {}):
         problems.append(f"{crate}: .github/workflows/{n} job {job} runs on a self-hosted runner on a release / tag / "
                         f"dispatch / schedule trigger outside an environment with required reviewers (the host can "
                         f"hold credentials; or declare it in [self-hosted.\"<repository>\"] \"{n}:{job}\")")
@@ -1407,7 +1510,8 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
                 problems += variable_problems(a.crate, repo_name, declared_vars, inv)
                 compared += 2
             wf, n = workflow_publish_problems(a.repo, a.ref, a.crate, owner_repo, reviewers, declared,
-                                              (inv or {}).get("reviewers", {}), hosts)
+                                              (inv or {}).get("reviewers", {}), hosts,
+                                              [set(x) for x in (inv or {}).get("runners", [])])
             problems += wf
             compared += n
             if roster[a.crate].get("required-ci"):
