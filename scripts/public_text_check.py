@@ -201,13 +201,19 @@ def scan_text(where: str, text: str, path: str | None = None) -> list[str]:
 
 
 def git(repo: str, *args: str) -> str:
-    return subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True,
+    # paths as they are (no C-style quoting of non-ASCII names)
+    return subprocess.run(["git", "-c", "core.quotePath=false", "-C", repo, *args], check=True, capture_output=True,
                           text=True, encoding="utf-8", errors="replace").stdout
+
+
+def paths_z(out: str) -> list[str]:
+    """the paths of a `-z` listing (NUL-separated: no quoting, spaces and tabs kept)"""
+    return [p for p in out.split("\0") if p]
 
 
 def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
     findings, compared = [], 0
-    for path in git(repo, "ls-tree", "-r", "--name-only", ref).splitlines():
+    for path in paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", ref)):
         if path in EXEMPT:
             continue
         compared += 1
@@ -216,24 +222,36 @@ def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
     return findings, compared
 
 
+def added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
+    """(line number, text) of the lines the commit added to path"""
+    out, n = [], 0
+    diff = git(repo, "show", "--format=", "--no-color", "--no-renames", "--no-ext-diff", "-U0", commit, "--", ":(literal)" + path)
+    for line in diff.splitlines():
+        if line.startswith("@@ "):
+            m = HUNK_RE.match(line)
+            n = int(m.group(1)) if m else 0
+        elif line.startswith("+") and not line.startswith("+++ "):
+            out.append((n, line[1:]))
+            n += 1
+    return out
+
+
 def scan_range(repo: str, rng: str) -> tuple[list[str], int]:
     findings, compared = [], 0
     for commit in git(repo, "rev-list", "--no-merges", rng).splitlines():
         compared += 1
         short = commit[:12]
         findings += scan_text(f"commit {short} message", git(repo, "log", "-1", "--format=%B", commit))
-        path, n = None, 0
-        for line in git(repo, "show", "--format=", "--no-color", "--no-renames", "-U0", commit).splitlines():
-            if line.startswith("+++ "):
-                path = line[6:] if line.startswith("+++ b/") else None
-                if path and path not in EXEMPT:
-                    findings += [f"commit {short} path {f}" for f in scan_text(path, path, path)]
-            elif line.startswith("@@ "):
-                m = HUNK_RE.match(line)
-                n = int(m.group(1)) if m else 0
-            elif line.startswith("+") and path and path not in EXEMPT:
-                findings += [f"commit {short} {path}:{n}: {k}" for k in kinds(line[1:], path)]
-                n += 1
+        # the paths the commit adds or changes, from a NUL-separated listing (not the diff headers,
+        # which quote non-ASCII names and end a name with a space in a tab)
+        changed = paths_z(git(repo, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only",
+                              "--no-renames", "--diff-filter=d", commit))
+        for path in changed:
+            if path in EXEMPT:
+                continue
+            findings += [f"commit {short} path {f}" for f in scan_text(path, path, path)]
+            for n, text in added_lines(repo, commit, path):
+                findings += [f"commit {short} {path}:{n}: {k}" for k in kinds(text, path)]
     return findings, compared
 
 

@@ -24,7 +24,6 @@ workflows are the interface, so changes to what they check are recorded here.
 - `release_train.py publish-gate`: the consumer build runs with an empty `CARGO_HOME` and a minimal environment, refuses a `.cargo/config` above the build directory, and builds the default features, no default features and every feature (or the roster's `consumer-features` sets, with `consumer-features-why`); a crate with no library is built on its own from outside its directory, and a `.crate` carrying `.cargo/` is refused
 - `scripts/public_text_check.py`: an id-like token (two hex digits, not glued to a digit, letter, `#`, `_`, `-` or `.`) next to a word naming a review or a session, on either side, and the labels of review findings, in file contents and commit messages; no list of ids is held (two-digit ids are enumerable even hashed)
 - `scripts/public_text_check.py --allow-hash <path> <name>` and `ALLOWED`: a product's mention of a private name allowed per repository (from the origin URL, or `--repo-name`) and file, held as `sha256(path NUL name)`; an entry that allows nothing in `--tree` fails; commit messages are never allowed
-
 ### Changed
 - The dependency consistency check covers alice-edge (this repository requires alice-edge 0.1 with its sdf, db and dashboard features) and alice-lol-macro; the core crate list is the roster's library crates (`release-train.toml`, every crate not exempt and not marked `law-dependency = false`), held equal by a test
 - This repository requires alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4 and alice-physics 3, the latest releases
@@ -32,3 +31,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - This repository requires alice-sdf 6; `release-train.toml`: alice-sdf 6.0.0 is published (its pending entry removed, 17 expected problems remain until alice-lol 0.4.0 and alice-edge 0.2.0)
 - `release-train.toml`: alice-edge 0.2.0 lists its required commits, CHANGELOG lines and CI jobs; alice-ml is in the roster (not a dependency of this repository) so that its next publish is refused until it requires the published alice-det-math and alice-db (alice-edge's `ml` feature takes the published alice-ml 0.2.0)
 - This repository requires alice-edge 0.2; `release-train.toml`: alice-edge 0.2.0 is published (its pending entry removed, 7 expected problems remain until alice-lol 0.4.0) and alice-ml is held at its published 0.2.0
+
+### Fixed
+- `scripts/public_text_check.py`: file names git quotes (non-ASCII) or ends with a tab in a diff header (a space) were skipped in `--range` and stopped `--tree`; the paths now come from NUL-separated listings (`ls-tree -z`, `diff-tree -z`, the root commit included) and each file's added lines from its own diff with a literal pathspec
+

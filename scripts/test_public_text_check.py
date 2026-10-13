@@ -258,5 +258,47 @@ class AllowList(Base):
         git(self.repo, "remote", "set-url", "origin", "git@host:owner/other.git")
         self.assertEqual(ptc.repo_name(str(self.repo)), "other")
 
+
+class Paths(Base):
+    """names git would quote (non-ASCII), or end in a tab (a space), are read as they are"""
+    NAMES = ("docs/日本.md", "sp ace.md", "tab\tname.md", "star*.md")
+
+    def test_tree_mode_scans_every_name(self):
+        commit(self.repo, {n: "a worker line\n" for n in self.NAMES})
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1, out)
+        for n in self.NAMES:
+            self.assertIn(f"{n}:1: agent process", out)
+
+    def test_range_mode_scans_every_name(self):
+        commit(self.repo, {n: "a worker line\n" for n in self.NAMES})
+        code, out = run(self.repo, "--range", "HEAD~1..HEAD")
+        self.assertEqual(code, 1, out)
+        for n in self.NAMES:
+            self.assertIn(f" {n}:1: agent process", out)
+        self.assertEqual(out.count("agent process"), len(self.NAMES), out)  # star*.md is not a pattern
+
+    def test_an_allowed_mention_in_such_a_file_is_allowed_in_both_modes(self):
+        saved = ptc.ALLOWED
+        self.addCleanup(lambda: setattr(ptc, "ALLOWED", saved))
+        ptc.ALLOWED = {"r": {ptc.allow_hash(n, MADE_UP) for n in self.NAMES}}
+        commit(self.repo, {n: f"the {MADE_UP} plugin\n" for n in self.NAMES})
+        self.assertEqual(run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")[0], 0)
+        self.assertEqual(run(self.repo, "--repo-name", "r", "--tree")[0], 0)
+
+    def test_a_deleted_file_is_not_read(self):
+        commit(self.repo, {"docs/日本.md": "fine\n"})
+        commit(self.repo, {}, delete=("docs/日本.md",))
+        self.assertEqual(run(self.repo, "--range", "HEAD~1..HEAD")[0], 0)
+
+    def test_the_root_commit_is_scanned(self):
+        repo = Path(self.tmp.name, "fresh")
+        repo.mkdir()
+        git(repo, "init", "-q")
+        root = commit(repo, {"docs/日本.md": "a worker line\n"})
+        code, out = run(repo, "--range", root)  # the root commit alone (no parent to diff against)
+        self.assertEqual(code, 1, out)
+        self.assertIn("docs/日本.md:1: agent process", out)
+
 if __name__ == "__main__":
     unittest.main()
