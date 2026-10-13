@@ -590,8 +590,8 @@ class BinaryBuildPaths(Base):
             "zdebug.so": elf(b".zdebug_info", b"x") + b"ZLIB" + struct.pack(">Q", len(dwarf)) + zlib.compress(dwarf, 9) + b"\0" * 8,
             # an SHF_COMPRESSED section: the compression header (type 1 = zlib), then the stream
             "chdr.so": elf(b".debug_str") + struct.pack("<IIQQ", 1, 0, len(dwarf), 1) + zlib.compress(dwarf) + b"\xff" * 4,
-            # two streams in one file: each is read
-            "two.bin": b"\x01\0" + zlib.compress(dwarf) + b"\0\x02" + zlib.compress(dwarf),
+            # two streams in one file: each is read (the same two paths in both are counted once)
+            "two.bin": b"\x01\0" + zlib.compress(dwarf) + b"\0\x02" + zlib.compress(dwarf.replace(b"a.rs", b"b.rs")),
         }
         if ptc.zstd_available():
             from compression import zstd
@@ -604,10 +604,31 @@ class BinaryBuildPaths(Base):
         self.assertIn("nul-zlib.bin: 2 build paths: binary home path", out)
         self.assertIn("zdebug.so: 2 build paths: binary home path", out)
         self.assertIn("chdr.so: 2 build paths: binary home path", out)
-        self.assertIn("two.bin: 4 build paths: binary home path", out)
+        self.assertIn("two.bin: 3 build paths: binary home path", out)
         if ptc.zstd_available():
             self.assertIn("zstd-inside.bin: 2 build paths: binary home path", out)
         self.assertNotIn("noise.bin", out)
+
+    def test_a_path_is_counted_once_however_it_is_stored(self):
+        import gzip, zlib
+        p = USERS + b"ys/.cargo/registry/src/x/lib.rs"
+        # level 0 stores the bytes as they are: the path is seen raw and inflated, and is one path
+        self.add({"stored.bin": b"\0" + zlib.compress(b"\0" + p + b"\0", 0) + b"\0" + p + b"\0",
+                  "repeated.bin": elf(p, p, p, b"C:" + p.replace(b"/", b"\\"))})
+        out = run(self.repo, "--tree")[1]
+        self.assertIn("stored.bin: 1 build paths: binary home path", out)
+        self.assertIn("repeated.bin: 1 build paths: binary home path", out)
+
+    def test_a_broken_stream_and_a_gzip_member_inside_a_binary_are_read(self):
+        import gzip, zlib
+        p = b"\0" + USERS + b"ys/proj/src/lib.rs\0" + b"x" * 200000
+        whole = zlib.compress(p)
+        self.add({"cut.bin": b"\0\x01" + whole[:-40] + b"\0\0",          # breaks off before its end
+                  "badsum.bin": b"\0\x01" + whole[:-4] + b"\xde\xad\xbe\xef",  # wrong checksum
+                  "gz-inside.bin": elf(b"head") + gzip.compress(p) + b"\0tail"})
+        out = run(self.repo, "--tree")[1]
+        for name in ("cut.bin", "badsum.bin", "gz-inside.bin"):
+            self.assertIn(f"{name}: 1 build paths: binary home path", out, name)
 
     def test_a_stream_inside_a_binary_over_the_budget_is_unscanned(self):
         import zlib

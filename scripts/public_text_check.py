@@ -561,20 +561,20 @@ def in_url(text: str, start: int) -> bool:
     return "://" in seg and not seg.endswith("file://")
 
 
-def raw_build_paths(data: bytes) -> int:
-    """the number of build paths in bytes (a path read in two views at overlapping bytes is one)"""
-    spans = []
-    for text, k, step in _views(data):
+# the rest of a path after its home directory: up to a control character, a space, a quote or `<>|`
+PATH_REST_RE = re.compile(r"[^\x00-\x20\"'<>|]{0,512}")
+
+
+def raw_build_paths(data: bytes) -> set[str]:
+    """the build paths in bytes, each whole (to the end of the path) with `\\` read as `/`: a path
+    read in several views, or stored both as it is and compressed, is one"""
+    found = set()
+    for text, _, _ in _views(data):
         for m in BUILD_PATH_RE.finditer(text):
             if not in_url(text, m.start()):
-                spans.append((k + step * m.start(), k + step * m.end()))
-    spans.sort()
-    n, end = 0, -1
-    for a, b in spans:
-        if a >= end:
-            n += 1
-        end = max(end, b)
-    return n
+                rest = PATH_REST_RE.match(text, m.end())
+                found.add(text[m.start():rest.end()].replace("\\", "/"))
+    return found
 
 
 def container_kind(data: bytes, path: str = "") -> str | None:
@@ -613,51 +613,71 @@ def _members(data: bytes, kind: str) -> list[tuple[str, bytes]]:
 ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 
 
+STREAM_CHUNK = 1 << 16
+
+
+def _inflate_at(view: memoryview, i: int, make, error, budget: list) -> tuple[bytes, int | None, bool]:
+    """(the bytes a stream starting at `i` inflates to, the offset after it when it ends well (None
+    otherwise), over the budget) fed in chunks, so a stream that breaks off keeps what it gave"""
+    d, out, size, pos = make(), [], 0, i
+    while pos < len(view):
+        chunk = view[pos:pos + STREAM_CHUNK]
+        saved = d.copy() if hasattr(d, "copy") else None
+        try:
+            got = d.decompress(chunk)
+        except error:
+            if saved is not None:
+                # the chunk again a byte at a time, to keep what it inflated before the error
+                for k in range(len(chunk)):
+                    try:
+                        out.append(saved.decompress(chunk[k:k + 1]))
+                    except error:
+                        break
+            return b"".join(out)[:max(budget[0], 0)], None, False
+        out.append(got)
+        size += len(got)
+        if size > budget[0]:
+            return b"", None, True
+        if d.eof:
+            return b"".join(out), pos + len(chunk) - len(d.unused_data), False
+        pos += len(chunk)
+    return b"".join(out), None, False
+
+
 def embedded_streams(data: bytes, budget: list) -> tuple[list[bytes], list[str]]:
-    """the zlib streams (a valid header, inflating to their end) and zstd frames found at any offset
-    of the bytes, inflated within the budget; (streams, what could not be read)"""
+    """what the zlib streams (a valid header), gzip members and zstd frames found at any offset of
+    the bytes inflate to, within the budget; a stream that breaks off gives what it inflated before
+    (read as well: a damaged stream does not hide a path); (streams, what could not be read)"""
     import zlib
     view, out, unscanned = memoryview(data), [], []
-    i = data.find(b"\x78")
-    while i != -1 and i + 1 < len(data):
-        nxt = i + 1
-        if (0x78 << 8 | data[i + 1]) % 31 == 0 and not data[i + 1] & 0x20:  # FCHECK, no preset dictionary
-            d = zlib.decompressobj()
-            try:
-                inner = d.decompress(view[i:], max(budget[0], 0) + 1)
-            except zlib.error:
-                inner = None
-            if inner is not None and not d.eof and len(inner) > budget[0]:
-                return out, unscanned + [f"zlib stream, over {CONTAINER_BUDGET >> 20} MiB"]
-            if inner is not None and d.eof:
-                budget[0] -= len(inner)
-                out.append(inner)
-                nxt = len(data) - len(d.unused_data)
-        i = data.find(b"\x78", nxt)
-    i = data.find(ZSTD_MAGIC)
-    while i != -1:
-        nxt = i + 1
-        if not zstd_available():
-            return out, unscanned + ["zstd stream inside, zstd unavailable before Python 3.14"]
+    kinds = [("zlib", b"\x78", lambda: zlib.decompressobj(), zlib.error,
+              lambda i: i + 1 < len(data) and (0x78 << 8 | data[i + 1]) % 31 == 0 and not data[i + 1] & 0x20),
+             ("gzip", b"\x1f\x8b\x08", lambda: zlib.decompressobj(31), zlib.error, lambda i: True)]
+    if zstd_available():
         from compression import zstd
-        d = zstd.ZstdDecompressor()
-        try:
-            inner = d.decompress(view[i:], max(budget[0], 0) + 1)
-        except zstd.ZstdError:
-            inner = None
-        if inner is not None and not d.eof and len(inner) > budget[0]:
-            return out, unscanned + [f"zstd stream, over {CONTAINER_BUDGET >> 20} MiB"]
-        if inner is not None and d.eof:
-            budget[0] -= len(inner)
-            out.append(inner)
-            nxt = len(data) - len(d.unused_data)
-        i = data.find(ZSTD_MAGIC, nxt)
+        kinds.append(("zstd", ZSTD_MAGIC, zstd.ZstdDecompressor, zstd.ZstdError, lambda i: True))
+    elif ZSTD_MAGIC in data:
+        unscanned.append("zstd stream inside, zstd unavailable before Python 3.14")
+    for kind, magic, make, error, valid in kinds:
+        i = data.find(magic)
+        while i != -1:
+            nxt = i + 1
+            if valid(i):
+                inner, end, over = _inflate_at(view, i, make, error, budget)
+                if over:
+                    return out, unscanned + [f"{kind} stream, over {CONTAINER_BUDGET >> 20} MiB"]
+                if inner:
+                    budget[0] -= len(inner)
+                    out.append(inner)
+                if end is not None:
+                    nxt = end
+            i = data.find(magic, nxt)
     return out, unscanned
 
 
-def build_paths(data: bytes, path: str = "", depth: int = 0, budget: list | None = None) -> tuple[int, list[str]]:
-    """(build paths, kinds of the containers that could not be read) in a file, its members read
-    out of containers and compressed streams"""
+def build_paths(data: bytes, path: str = "", depth: int = 0, budget: list | None = None) -> tuple[set[str], list[str]]:
+    """(the distinct build paths, kinds of the containers that could not be read) in a file, its
+    members read out of containers and compressed streams"""
     budget = [CONTAINER_BUDGET] if budget is None else budget
     kind = container_kind(data, path)
     if kind is None:
@@ -669,25 +689,25 @@ def build_paths(data: bytes, path: str = "", depth: int = 0, budget: list | None
         streams, unscanned = embedded_streams(data, budget)
         for inner in streams:
             got, more = build_paths(inner, "", depth + 1, budget)
-            n += got
+            n |= got
             unscanned += more
         return n, unscanned
     else:
         if depth >= CONTAINER_DEPTH:
-            return 0, [f"{kind}, nested too deep"]
+            return set(), [f"{kind}, nested too deep"]
         try:
             members = _members(data, kind)
         except LookupError as e:  # a reader this Python does not have
-            return 0, [f"{kind}, {e.args[0]}"]
+            return set(), [f"{kind}, {e.args[0]}"]
         except Exception:  # an unknown, damaged, encrypted or unsupported container: reported, never passed
-            return 0, [kind]
-    n, unscanned = 0, []
+            return set(), [kind]
+    n, unscanned = set(), []
     for name, inner in members:
         budget[0] -= len(inner)
         if budget[0] < 0:
             return n, unscanned + [f"{kind}, over {CONTAINER_BUDGET >> 20} MiB"]
         got, more = build_paths(inner, name, depth + 1, budget)
-        n += got
+        n |= got
         unscanned += more
     return n, unscanned
 
@@ -715,7 +735,8 @@ def file_findings(where: str, data: bytes, path: str | None) -> list[str]:
     if not is_binary(data) and container_kind(data, path or "") is None:
         return []
     out = []
-    n, unscanned = build_paths(data, path or "")
+    paths, unscanned = build_paths(data, path or "")
+    n = len(paths)
     if n and not class_allowed(path, "binary home path", n):
         out.append(f"{where}: {n} build paths: binary home path")
     for kind in unscanned:
@@ -896,7 +917,8 @@ def suggest_allow(repo: str, ref: str, scope: str) -> int:
             label = f.rsplit(": ", 1)[-1]
             counts[label] = counts.get(label, 0) + 1
         if is_binary(data) or container_kind(data, path) or is_lfs_pointer(data):
-            n, unscanned = build_paths(data, path) if not is_lfs_pointer(data) else (0, ["LFS"])
+            paths, unscanned = build_paths(data, path) if not is_lfs_pointer(data) else (set(), ["LFS"])
+            n = len(paths)
             label = "unscanned LFS object" if is_lfs_pointer(data) else "unscanned container"
             if n:
                 counts["binary home path"] = counts.get("binary home path", 0) + n
