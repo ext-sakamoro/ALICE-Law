@@ -346,6 +346,16 @@ law-dependency = false
 [secrets."ALICE-SDF"]
 UNITY_LICENSE = { purpose = "the Unity licence of the Unity package build and tests", publishing = false }
 
+# The Actions variables of each repository, by name, with what they are for (a variable is plain
+# text and never holds a credential); an environment variable is listed as "<environment>:<name>".
+# A job on a self-hosted runner that runs on a release / tag / dispatch / schedule trigger outside
+# an environment with required reviewers is listed under [self-hosted."<repository>"] as
+# "<workflow file>:<job>" with registry-credentials-on-host = false, which says the host holds no
+# registry credential (a claim reviewed with the entry).
+[variables."ALICE-SDF"]
+UE5_RUNNER = { purpose = "turns the Unreal Engine job on (\"true\") when the Windows runner with the engine is online" }
+UE5_ENGINE_ROOTS = { purpose = "the engine install folders (a JSON list) the Unreal Engine job builds against" }
+
 # Problems of the dependency consistency check (scripts/dep_consistency.py --roster)
 # that a release still to come removes. Each entry names the release (`until`); once
 # the roster marks it published, the entry is stale and the check fails until the
