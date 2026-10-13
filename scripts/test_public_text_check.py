@@ -590,7 +590,7 @@ class ClassAllow(Base):
 
 class Devices(Base):
     def test_device_names_in_any_case_and_device_details(self):
-        for line in ("ssh to the jetson board", "a MACBOOK here", "raspberry pi 5"):
+        for line in ("ssh to the jetson board", "a MACBOOK here", "raspberry pi 5", "an Orin Nano 8GB", "orin-nx"):
             self.assertIn("device", ptc.kinds(line), line)
         for line in ("JetPack 6.0", "jetpack R36", "JetPack SDK", "the L4T kernel"):
             self.assertIn("device detail", ptc.kinds(line), line)
@@ -601,6 +601,10 @@ class Devices(Base):
         self.assertIn("f:2: device detail", ptc.scan_text("f", "a jetson board\nrunning R36.4.3\n"))
         self.assertIn("f:1: device detail", ptc.scan_text("f", "R36.4.3\non the jetson\n"))
         self.assertEqual([x for x in ptc.scan_text("f", "release R36.4.3 of the tool\n") if "detail" in x], [])
+
+    def test_the_host_name_list_holds_only_hashes(self):
+        self.assertTrue(ptc.HOST_NAME_HASHES)
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in ptc.HOST_NAME_HASHES))
 
     def test_host_names_by_hash_in_any_case(self):
         saved = ptc.HOST_NAME_HASHES

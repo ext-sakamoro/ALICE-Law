@@ -75,7 +75,8 @@ FORBIDDEN = [
     ("home path", re.compile(r"/(?:Users|home)/(?!(?:runner|user|USER|username|you|me|name|Shared|<[^>/]+>|\$\{?[A-Za-z_]+\}?)/)"
                              r"[A-Za-z0-9._\-]+/")),
     # (any case: a host name is often the device name in lower case)
-    ("device", re.compile(r"(?i:" + words(r"jetson", r"mac\s?mini", r"macbook") + r"|raspberry\s*pi)")),
+    ("device", re.compile(r"(?i:" + words(r"jetson", r"orin[\s-]*(?:nano|nx|agx)", r"mac\s?mini", r"macbook")
+                          + r"|raspberry\s*pi)")),
     # the SDK / firmware of such a device ("JetPack 6", "JetPack R36", "L4T"); Android's
     # "Jetpack Compose" has no version and is not one
     ("device detail", re.compile(r"(?i)(?<![A-Za-z])(?:jetpack\s*(?:r?\d|sdk)|l4t)(?![A-Za-z])")),
@@ -398,7 +399,9 @@ def worker_technical(path: str | None, line: str) -> bool:
 
 
 # host names of private machines: SHA-256 of the lower-case name (a whole token, hyphens kept)
-HOST_NAME_HASHES: set[str] = set()
+HOST_NAME_HASHES: set[str] = {
+    "24efa8189fd0d344dada7815521623595f13469fd03709a9919cf961f963fb24",
+}
 # a release string ("R36.4.3") is a device detail on a line that names a device or next to one
 RELEASE_RE = re.compile(r"(?<![A-Za-z0-9.])R\d{2}\.\d+(?:\.\d+)?(?![0-9.])")
 DEVICE_RE = dict(FORBIDDEN)["device"]
