@@ -139,6 +139,12 @@ def load_roster(text: str) -> dict[str, dict]:
             if (not isinstance(fs, list) or not fs
                     or not all(isinstance(x, list) and all(isinstance(f, str) and f.strip() for f in x) for x in fs)):
                 raise RosterError(f"{name}: `consumer-features` must be a non-empty list of feature lists")
+            why = c.get("consumer-features-why")
+            if not isinstance(why, str) or not why.strip():
+                raise RosterError(f"{name}: `consumer-features` needs `consumer-features-why` (which features are "
+                                  f"left out of the consumer build and why)")
+        elif "consumer-features-why" in c:
+            raise RosterError(f"{name}: `consumer-features-why` without `consumer-features`")
         if c["state"] not in STATES:
             raise RosterError(f"{name}: state {c['state']!r} is not one of {STATES}")
         dc.Version(c["version"])  # raises on a malformed version

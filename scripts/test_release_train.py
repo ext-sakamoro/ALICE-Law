@@ -1083,10 +1083,14 @@ class ConsumerBuild(unittest.TestCase):
         self.assertEqual(len(rt.feature_specs({"features": {"x": []}}, [["x"], []])), 4)
 
     def test_consumer_features_in_the_roster_are_checked(self):
-        rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\nconsumer-features = [["a"], ["a", "b"]]\n', 1))
+        why = 'consumer-features-why = "python is built by maturin"\n'
+        rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\nconsumer-features = [["a"], ["a", "b"]]\n' + why, 1))
         for bad in ('[]', '["a"]', '[[1]]', '[[""]]'):
             with self.assertRaises(rt.RosterError, msg=bad):
-                rt.load_roster(ROSTER.replace('order = 1\n', f'order = 1\nconsumer-features = {bad}\n', 1))
+                rt.load_roster(ROSTER.replace('order = 1\n', f'order = 1\nconsumer-features = {bad}\n' + why, 1))
+        for bad in ('consumer-features = [["a"]]\n', 'consumer-features = [["a"]]\nconsumer-features-why = " "\n', why):
+            with self.assertRaises(rt.RosterError, msg=bad):
+                rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\n' + bad, 1))
 
 
 class GateConsumer(unittest.TestCase):
@@ -1109,7 +1113,7 @@ class GateConsumer(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             repo, ref = make_repo(d, {"Cargo.toml": ZIP})
             p = Path(d, "r.toml")
-            p.write_text(ROSTER.replace('order = 1\n', 'order = 1\nconsumer-features = [["svo"]]\n', 1), encoding="utf-8")
+            p.write_text(ROSTER.replace('order = 1\n', 'order = 1\nconsumer-features = [["svo"]]\nconsumer-features-why = "x"\n', 1), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
