@@ -139,8 +139,8 @@ Measured on 2026-10-13 (the committed `Cargo.lock`): **the check passes with no 
 
 End to end, measured on 2026-10-13:
 
-- published: passes, 3897 values and records, the same digest as main (`966a7878…`, `e2e/golden/run.digest`)
-- main: passes, 3897 values and records, the same digest on aarch64 and x86_64 (`966a7878…`, `e2e/golden/run.digest`)
+- published: passes, 3897 values and records, the same digest as main on aarch64 and x86_64 (`966a7878…`, `e2e/golden/run.digest`; without the alice-edge records `58ad34a7…`)
+- main: passes, 3897 values and records, the same digest on aarch64 and x86_64 (`966a7878…`, `e2e/golden/run.digest`; without the alice-edge records `58ad34a7…`)
 
 ## License
 
