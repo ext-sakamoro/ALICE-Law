@@ -156,7 +156,8 @@ class SessionIds(Base):
 
     def test_an_id_like_token_next_to_a_review_or_session_word_is_found(self):
         for line in ("e9 レビュー対応", "e9 の指摘で直した", "c1 review", "per e9 session", "c1レビュー",
-                     "e9 セッション", "c1 検証", "e9指摘", "session 4d", "セッション 7a", "Session e9"):
+                     "e9 セッション", "c1 検証", "e9指摘", "session 4d", "セッション 7a", "Session e9",
+                     "session: e9", "session=c1", "sessions e9", "(e9/c1) review", "c1、指摘", "[e9] review"):
             self.assertEqual(ptc.kinds(line), ["session id"], line)
 
     def test_numbers_dates_versions_and_other_contexts_pass(self):
@@ -164,6 +165,10 @@ class SessionIds(Base):
                      "oracle 10's", "53 の候補", "ae9 review", "e91 review", "a netcode session", "e9", "c1-c2",
                      "session key", "F1 score and F2 keys"):
             self.assertEqual(ptc.kinds(line), [], line)
+
+    def test_this_session_in_either_script_is_found(self):
+        for line in ("この session で", "このセッションで"):
+            self.assertEqual(ptc.kinds(line), ["agent process"], line)
 
     def test_review_labels_are_found(self):
         for line in ("F1/F2 review", "F3 の指摘", "F4 レビュー"):

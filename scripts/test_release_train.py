@@ -1066,10 +1066,42 @@ class ConsumerBuild(unittest.TestCase):
             self.assertEqual(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), [["a"], ["b"]]), [])
             self.assertEqual(len(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), [["a", "b"]])), 1)
 
-    def test_features_that_conflict_fall_back_to_one_at_a_time(self):
+    def test_features_that_break_together_are_refused_unless_the_roster_names_the_sets(self):
         lib = '#[cfg(all(feature = "a", feature = "b"))]\ncompile_error!("a with b");\n'
-        self.assertEqual(self.build(tiny_crate("gate-probe", "0.1.0", extra="\n[features]\na = []\nb = []\n",
-                                               lib=lib)), [])
+        crate = tiny_crate("gate-probe", "0.1.0", extra="\n[features]\na = []\nb = []\n", lib=lib)
+        problems = self.build(crate)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("all features", problems[0])
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), [["a"], ["b"]]), [])
+
+    def test_a_crate_carrying_cargo_configuration_is_refused(self):
+        body = crate_bytes("gate-probe", "0.1.0", {
+            "Cargo.toml": b'[package]\nname = "gate-probe"\nversion = "0.1.0"\nedition = "2021"\n',
+            "src/lib.rs": b"", ".cargo/config.toml": b"[build]\n"})
+        problems = self.build(body)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn(".cargo/", problems[0])
+
+    def test_a_binary_crate_is_built_from_outside_its_directory(self):
+        # a [patch] in a configuration next to the manifest must not be read (the .crate check
+        # above refuses a packaged .cargo/; here the binary build itself is checked)
+        seen = []
+        real = rt.subprocess.run
+
+        def spy(cmd, *a, **kw):
+            if cmd[0] == "cargo":
+                seen.append((cmd, kw.get("cwd")))
+            return real(cmd, *a, **kw)
+        rt.subprocess.run = spy
+        try:
+            self.assertEqual(self.build(tiny_crate("gate-probe", "0.1.0", main="fn main() {}\n")), [])
+        finally:
+            rt.subprocess.run = real
+        cmd, cwd = seen[-1]
+        self.assertIn("--manifest-path", cmd)
+        pkg = Path(cmd[cmd.index("--manifest-path") + 1]).parent
+        self.assertNotIn(pkg, [Path(cwd), *Path(cwd).parents])
 
     def test_a_binary_crate_is_built_on_its_own(self):
         self.assertEqual(self.build(tiny_crate("gate-probe", "0.1.0", main="fn main() {}\n")), [])

@@ -42,7 +42,7 @@ FORBIDDEN = [
     ("agent process", re.compile(words(r"workers?", r"subagents?", r"multi[- ]?agents?", r"skills?")
                                  # `git worktree add` is a command, not a description of how the work was done
                                  + r"|(?<!git )" + words(r"worktrees?")
-                                 + r"|ワーカー|マルチエージェント|エージェント|調停役|並走\s*session|他\s*session|session\s*名|この\s*session")),
+                                 + r"|ワーカー|マルチエージェント|エージェント|調停役|並走\s*session|他\s*session|session\s*名|この\s*(?:session|セッション)")),
     ("session name", re.compile(r"(?<![A-Za-z0-9])(?:ys|sakamoro)-[0-9a-f]{2}(?![A-Za-z0-9])")),
     ("internal tracker", re.compile(words(r"Backlog") + r"|memory\s*(?:側|化|に|へ|file)|(?<![A-Za-z0-9_])memory/")),
     # names of private notes: `[[snake_case]]` links and the note-file prefixes
@@ -115,8 +115,10 @@ PRIVATE_NAME_HASHES = DEVICE_NAME_HASHES | {
 # "<id>の" and "<id>'s" are left to a check that knows the ids: here they matched counts,
 # dates and "oracle 10's" far more often than ids.
 ID = r"(?<![A-Za-z0-9#_.\-])[0-9a-f]{2}(?![A-Za-z0-9])"
-SESSION_ID_RE = re.compile(ID + r"\s*(?:の\s*)?(?:レビュー|(?i:review)|指摘|検証|セッション|(?i:session))"
-                           r"|(?<![A-Za-z])(?i:session)\s*" + ID + r"|セッション\s*" + ID)
+IDS = r"[(\[]?" + ID + r"(?:\s*/\s*" + ID + r")*[)\]]?"  # "fb", "(6e/fb)"
+REVIEW_WORD = r"(?:レビュー|(?i:review)|指摘|検証|セッション|(?i:session))"
+SESSION_ID_RE = re.compile(IDS + r"\s*[、,]?\s*(?:の\s*)?" + REVIEW_WORD
+                           + r"|(?<![A-Za-z])(?i:sessions?)\s*[:=]?\s*" + ID + r"|セッション\s*[:=：]?\s*" + ID)
 # labels of review findings ("F1", "F2 / F3") named as such
 REVIEW_LABEL_RE = re.compile(r"(?<![A-Za-z0-9])F\d+(?:\s*/\s*F\d+)*\s*(?:の\s*)?(?:レビュー|指摘|(?i:review))")
 

@@ -604,8 +604,8 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
     """build the packaged crate the way a crates.io consumer does: unpacked into a fresh
     directory with no Cargo.lock, Cargo.toml or Cargo configuration above it, with an empty
     CARGO_HOME and a minimal environment, as the path dependency of an empty crate, once per
-    feature set (feature_specs); a crate with no library is built on its own and must
-    produce its binary. The problems: none when every build compiled the crate"""
+    feature set (feature_specs); a crate with no library is built on its own, from a
+    directory outside it, and must produce its binary; a .crate carrying .cargo/ is refused. The problems: none when every build compiled the crate"""
     root = Path(tempfile.mkdtemp(prefix="release-gate-consumer-"))
     try:
         above = manifests_above(root / "consumer")
@@ -616,6 +616,9 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
         pkg = root / "pkg" / f"{name}-{version}"
         if not (pkg / "Cargo.toml").is_file():
             return [f"{name} {version}: the .crate has no {name}-{version}/Cargo.toml"]
+        if (pkg / ".cargo").exists():
+            return [f"{name} {version}: the .crate carries .cargo/ (Cargo configuration of the repository, "
+                    f"which a consumer never reads; set `include` or `exclude`)"]
         manifest = tomllib.loads((pkg / "Cargo.toml").read_text(encoding="utf-8"))
         has_lib = "lib" in manifest or (pkg / "src" / "lib.rs").is_file()
         cache = (target_dir or root) / "consumer-cache"
@@ -634,18 +637,18 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
                                       cwd=consumer, capture_output=True, text=True, encoding="utf-8",
                                       errors="replace", env=env)
 
-            runs = []
-            for label, spec in feature_specs(manifest, feature_sets):
-                r = build(spec)
-                if label == "all features" and r.returncode != 0:
-                    # features that cannot be on together: each one alone instead
-                    for f in sorted(f for f in manifest["features"] if f != "default"):
-                        runs.append((f"feature {f!r}", build(", features = " + json.dumps([f]))))
-                    continue
-                runs.append((label, r))
+            # every feature at once fails when some features cannot be on together: that is
+            # a refusal (a consumer enabling them breaks) unless the roster names the feature
+            # sets to build instead (`consumer-features`, with the reason)
+            runs = [(label, build(spec)) for label, spec in feature_specs(manifest, feature_sets)]
         else:
+            # from a directory outside the package: Cargo reads configuration from the working
+            # directory up, and `cargo install` of a published crate does not start inside it
+            outside = root / "bin"
+            outside.mkdir()
             runs = [("its binary", subprocess.run(
-                ["cargo", "build", "--message-format=json-render-diagnostics", *target], cwd=pkg,
+                ["cargo", "build", "--message-format=json-render-diagnostics", "--manifest-path",
+                 str(pkg / "Cargo.toml"), *target], cwd=outside,
                 capture_output=True, text=True, encoding="utf-8", errors="replace", env=env))]
         for label, r in runs:
             if r.returncode != 0:
