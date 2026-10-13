@@ -159,14 +159,15 @@ def load_roster(text: str) -> dict[str, dict]:
                         or set(e) - {"features", "expect", "until", "why", "command"}
                         or e.get("command", "build") not in ("build", "check")
                         or not isinstance(e["features"], list) or sorted(e["features"]) not in sets
-                        or not isinstance(ex, dict) or set(ex) - {"code", "file", "text", "count", "message"}
+                        or not isinstance(ex, dict) or set(ex) - {"code", "file", "text", "count", "label", "message"}
+                        or not isinstance(ex.get("label", ""), str)
                         or not all(isinstance(ex.get(k), str) and ex[k].strip() for k in ("code", "file", "text"))
                         or not isinstance(ex.get("count"), int) or isinstance(ex.get("count"), bool) or ex["count"] < 1
                         or not isinstance(ex.get("message", ""), str)
                         or not all(isinstance(e[k], str) and e[k].strip() for k in ("until", "why"))
                         or len(e["until"].split()) != 2 or e["until"].split()[0] != name):
                     raise RosterError(f"{name}: consumer-expected-failure entry {e!r} is not {{features (one of the "
-                                      f"declared sets), expect = {{code, file, text, count, message?}}, until = \"{name} "
+                                      f"declared sets), expect = {{code, file, text, count, label?, message?}}, until = \"{name} "
                                       f"<version>\", why, command?}}")
                 dc.Version(e["until"].split()[1])
         if c["state"] not in STATES:
@@ -659,6 +660,7 @@ def crate_errors(stdout: str, name: str, version: str) -> list[dict]:
         out.append({"code": (m.get("code") or {}).get("code"),
                     "file": primary[0].get("file_name", "") if primary else None,
                     "text": span_text(primary[0]) if primary else "",
+                    "label": (primary[0].get("label") or "") if primary else "",
                     "message": m.get("message", "")})
     return out
 
@@ -678,11 +680,12 @@ def span_text(span: dict) -> str:
 
 def matches_expected(err: dict, expect: dict) -> bool:
     """the error has the expected code, in the expected file (the path inside the crate), on the
-    expected source text (what its primary span highlights), and the expected message fragment
-    when the entry names one"""
+    expected source text (what its primary span highlights), with the primary span's label
+    ("expected `…`, found `…`") and the message fragment when the entry names them"""
     f = (err["file"] or "").replace("\\", "/")
     return (err["code"] == expect["code"] and (f == expect["file"] or f.endswith("/" + expect["file"]))
-            and err.get("text") == expect["text"] and expect.get("message", "") in err["message"])
+            and err.get("text") == expect["text"] and expect.get("message", "") in err["message"]
+            and ("label" not in expect or err.get("label") == expect["label"]))
 
 
 def first_errors(r) -> str:

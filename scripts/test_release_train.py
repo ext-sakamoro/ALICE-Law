@@ -1185,6 +1185,15 @@ class ConsumerBuild(unittest.TestCase):
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("E0308", problems[0])
 
+    def test_the_label_pins_the_held_error_where_the_text_alone_does_not(self):
+        # the held error fixed and a new mismatch on the same text in another function
+        lib = '#[cfg(feature = "py")]\npub fn other() { let _q: i64 = "known"; }\n'
+        self.assertEqual(self.expected("0.1.0", lib), [])  # text and count alone accept it
+        held_label = dict(self.EXPECT, label="expected `u8`, found `&str`")
+        self.assertEqual(self.expected("0.1.0", self.HELD, expect=held_label), [])
+        problems = self.expected("0.1.0", lib, expect=held_label)
+        self.assertEqual(len(problems), 1, problems)
+
     def test_one_more_of_the_held_error_is_refused_by_the_count(self):
         lib = self.HELD + '#[cfg(feature = "py")]\npub fn again() { let _x: u8 = "known"; }\n'
         problems = self.expected("0.1.0", lib)
@@ -1211,7 +1220,7 @@ class ConsumerBuild(unittest.TestCase):
                 "message": {"level": "warning", "code": None, "message": "unused", "spans": []}}
         out = "\n".join(json.dumps(m) for m in (mine, dep, abort, warn)) + "\nnot json\n"
         errs = rt.crate_errors(out, "gate-probe", "0.1.0")
-        self.assertEqual(errs, [{"code": "E0308", "file": "/tmp/x/src/lib.rs", "text": '"known"',
+        self.assertEqual(errs, [{"code": "E0308", "file": "/tmp/x/src/lib.rs", "text": '"known"', "label": "",
                                  "message": "mismatched types"}])
         ex = {"code": "E0308", "file": "src/lib.rs", "text": '"known"'}
         self.assertTrue(rt.matches_expected(errs[0], ex))

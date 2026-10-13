@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import importlib.util
 import io
+import re
 import subprocess
 import sys
 import tempfile
@@ -69,8 +70,8 @@ class Tree(Base):
         self.assertIn("0 findings in 1 files", out)
 
     def test_internal_words_in_text_or_path_are_found(self):
-        for files in ({"a.md": "two workers did it\n"}, {"a.md": "see the Backlog\n"}, {"a.md": "ys-3a found it\n"},
-                      {"a.md": "user 指示で直した\n"}, {"a.md": "ssh 192.168.1.20\n"}, {"notes/ys-3a.md": "ok\n"}):
+        for files in ({"a.md": "two workers did it\n"}, {"a.md": "see the Backlog\n"}, {"a.md": "ys-0b found it\n"},
+                      {"a.md": "user 指示で直した\n"}, {"a.md": "ssh 192.168.1.20\n"}, {"notes/ys-0b.md": "ok\n"}):
             commit(self.repo, files)
             code, out = run(self.repo, "--tree")
             self.assertEqual(code, 1, files)
@@ -119,12 +120,12 @@ class Range(Base):
         start = git(self.repo, "rev-parse", "HEAD").strip()
         commit(self.repo, {"a.md": "one\ntwo\nthree\nthe worker said\n"}, message="fix")
         commit(self.repo, {}, message="fix (found in the Backlog)")
-        commit(self.repo, {"x/ys-3a.txt": "ok\n"})
+        commit(self.repo, {"x/ys-0b.txt": "ok\n"})
         code, out = run(self.repo, "--range", f"{start}..HEAD")
         self.assertEqual(code, 1)
         self.assertIn("a.md:4: agent process", out)
         self.assertIn("message:1: internal tracker", out)
-        self.assertIn("path x/ys-3a.txt:1: session name", out)
+        self.assertIn("path x/ys-0b.txt:1: session name", out)
         self.assertIn("3 commits", out)
 
     def test_removed_lines_are_not_findings(self):
@@ -168,7 +169,7 @@ class SessionIds(Base):
 
     def test_this_session_in_either_script_is_found(self):
         for line in ("この session で", "このセッションで"):
-            self.assertEqual(ptc.kinds(line), ["agent process"], line)
+            self.assertIn("agent process", ptc.kinds(line), line)
 
     def test_review_labels_are_found(self):
         for line in ("F1/F2 review", "F3 の指摘", "F4 レビュー"):
@@ -214,7 +215,7 @@ class AllowList(Base):
             self.assertEqual(ptc.main(["--allow-hash", "docs/plugin.md", "ordinary words"]), 2)
 
     def test_an_allowed_mention_passes_only_in_its_file_and_repository(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md")}}
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
         self.assertIn("docs/other.md:1: private name", out)
@@ -224,33 +225,71 @@ class AllowList(Base):
         self.assertIn("docs/plugin.md:1: private name", out)
 
     def test_both_files_allowed_pass(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"), self.entry("docs/other.md")}}
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 0, out)
 
     def test_an_entry_that_allows_nothing_fails(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"), self.entry("docs/other.md"), self.entry("docs/gone.md")}}
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1, self.entry("docs/gone.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
-        self.assertIn("allows nothing", out)
+        self.assertIn("it allows nothing", out)
         self.assertNotIn(MADE_UP, out)
 
     def test_another_repositorys_entries_are_not_stale_here(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"), self.entry("docs/other.md")}, "elsewhere": {"0" * 64}}
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}, "elsewhere": {"0" * 64: 1}}
         self.assertEqual(run(self.repo, "--repo-name", "r", "--tree")[0], 0)
 
     def test_added_lines_of_a_range_are_allowed_too(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/new.md")}}
+        ptc.ALLOWED = {"r": {self.entry("docs/new.md"): 1}}
         commit(self.repo, {"docs/new.md": f"the {MADE_UP} manifest\n"})
         code, out = run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")
         self.assertEqual(code, 0, out)
 
     def test_commit_messages_are_never_allowed(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md")}}
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1}}
         commit(self.repo, {"a.txt": "y\n"}, message=f"add {MADE_UP}")
         code, out = run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")
         self.assertEqual(code, 1, out)
         self.assertIn("message:1: private name", out)
+
+    def test_a_prefix_entry_allows_every_file_under_it_by_whole_components(self):
+        commit(self.repo, {"kits/cad/a.md": f"{MADE_UP} one\n", "kits/cad/sub/b.md": f"{MADE_UP} two\n",
+                           "kits/cadx/c.md": f"{MADE_UP} three\n"})
+        ptc.ALLOWED = {"r": {self.entry("kits/cad/"): 2, self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("kits/cadx/c.md:1: private name", out)
+        self.assertNotIn("kits/cad/a.md", out)
+
+    def test_the_count_is_pinned(self):
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 2, self.entry("docs/other.md"): 1}}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("allows 1 lines", out)
+
+    def test_an_agent_word_or_a_note_link_can_be_allowed_too(self):
+        commit(self.repo, {"skills/x/SKILL.md": "the skills entry [[kv_namespaces]]\n"})
+        # (the path names the word too: the path line is one of the entry's lines)
+        ptc.ALLOWED = {"r": {self.entry("skills/x/SKILL.md", "skills"): 2, self.entry("skills/x/SKILL.md", "[[kv_namespaces]]"): 1,
+                             self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 0, out)
+
+    def test_a_literal_pathspec_keeps_a_glob_name_to_itself(self):
+        # "a*.md" next to "a.md": without a literal pathspec, a.md's added lines are read under a*.md
+        ptc.ALLOWED = {"r": {self.entry("a*.md"): 1}}
+        commit(self.repo, {"a*.md": f"{MADE_UP} here\n", "a.md": f"{MADE_UP} there\n"})
+        code, out = run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn(" a.md:1: private name", out)
+        self.assertNotIn("a*.md:", out)
+        self.assertIn("(1 allowed mentions)", out)  # a.md's line was not read (and allowed) under a*.md
+
+    def test_range_reports_the_files_it_read(self):
+        commit(self.repo, {"x.md": "fine\n", "y.md": "fine\n"})
+        code, out = run(self.repo, "--range", "HEAD~1..HEAD")
+        self.assertIn("1 commits (2 files)", out)
 
     def test_the_repository_name_comes_from_the_origin_url(self):
         git(self.repo, "remote", "add", "origin", "https://example.invalid/owner/some-repo.git")
@@ -281,7 +320,7 @@ class Paths(Base):
     def test_an_allowed_mention_in_such_a_file_is_allowed_in_both_modes(self):
         saved = ptc.ALLOWED
         self.addCleanup(lambda: setattr(ptc, "ALLOWED", saved))
-        ptc.ALLOWED = {"r": {ptc.allow_hash(n, MADE_UP) for n in self.NAMES}}
+        ptc.ALLOWED = {"r": {ptc.allow_hash(n, MADE_UP): 1 for n in self.NAMES}}
         commit(self.repo, {n: f"the {MADE_UP} plugin\n" for n in self.NAMES})
         self.assertEqual(run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")[0], 0)
         self.assertEqual(run(self.repo, "--repo-name", "r", "--tree")[0], 0)
@@ -299,6 +338,124 @@ class Paths(Base):
         code, out = run(repo, "--range", root)  # the root commit alone (no parent to diff against)
         self.assertEqual(code, 1, out)
         self.assertIn("docs/日本.md:1: agent process", out)
+
+
+class Shapes(unittest.TestCase):
+    """the shapes found in the trees (planted lines), and the technical text that must stay clean"""
+
+    def test_work_session_shapes_are_found(self):
+        for line in ("| 2026-08-07 | S3 (production deploy) は次 session |", "本 session で", "次々 session",
+                     "単一 session", "multi-session", "Session 分割案", "## Session 分割案", "Session A (~1h)",
+                     "集中 session で"):
+            self.assertIn("work session", ptc.kinds(line), line)
+        self.assertEqual(ptc.scan_text("f", "/// Phase A2 (next\n/// session) work\n"), ["f:1: work session"])
+
+    def test_technical_sessions_pass(self):
+        for line in ("checkout.session.completed", "Stripe Checkout Session", "a later session can resume",
+                     "OpenXR Session 管理", "checkout session 作成", "HTTP session の管理", "a netcode session",
+                     "内で session.locate_view() 等", "session key"):
+            self.assertNotIn("work session", ptc.kinds(line), line)
+        self.assertEqual(ptc.scan_text("f", "next steps\nsession key\n"), [])
+
+    def test_note_links_and_note_names_are_found(self):
+        for line in ("see [[reference-text-to-cad-absorption]]", "see [[HEGEMONY_THESIS]]", "[[feedback_x_y]]",
+                     "docs [[kv_namespaces]] binding"):
+            self.assertIn("note link", ptc.kinds(line, "docs/a.md"), line)
+        for line in ("/// 詳細: memory `project_text_to_print_archetype.md`", "memo は `reference_kimi_k3_dspark.md`",
+                     "node_type: memory", "originSessionId: x"):
+            self.assertIn("internal note", ptc.kinds(line, "a.rs"), line)
+        self.assertIn("internal tracker", ptc.kinds("`memory/text-to-print.md`", "a.rs"))
+
+    def test_link_like_code_and_toml_headers_pass(self):
+        for line, path in (("[[package]]", "Cargo.lock"), ("[[kv_namespaces]]", "wrangler.toml"),
+                           ("  [[bin]]  # main", "Cargo.toml"), ("[[gate]] entry", "docs/a.md"),
+                           ("fn f(a: &[[f64; 3]])", "a.rs"), ("if [[ $x -eq 1 ]]; then", "a.sh"),
+                           ("in-memory `WeightRef`", "a.rs"), ("memory footprint", "a.md"), ("unified memory", "a.md"),
+                           ("`reference_repo`", "C.md"), ("`project_pressure_red_black_gs`", "src/g.rs")):
+            self.assertEqual(ptc.kinds(line, path), [], (line, path))
+        self.assertIn("note link", ptc.kinds("x = 1  [[kv_namespaces]]", "wrangler.toml"))  # not line-leading
+
+    def test_worker_is_technical_only_in_its_paths(self):
+        for path, line in (("crates/worker/src/lib.rs", "the worker handler"), ("wrangler.toml", "name = \"worker\""),
+                           ("migrations/0001.sql", "-- worker table"), ("Cargo.lock", 'name = "worker"'),
+                           ("Cargo.lock", ' "worker-macros 0.4.2",')):
+            self.assertNotIn("agent process", ptc.kinds(line, path), (path, line))
+        for path, line in (("docs/ROADMAP.md", "the worker landed it"), ("crates/worker-notes/a.md", "a worker"),
+                           ("xcrates/worker/a.rs", "a worker"), ("Cargo.lock", "# a worker wrote this"),
+                           ("crates/worker/src/lib.rs", "the worker and a subagent")):
+            self.assertIn("agent process", ptc.kinds(line, path), (path, line))
+
+    def test_private_home_paths_are_found_and_public_ones_pass(self):
+        saved = ptc.PRIVATE_REPO_HASHES
+        self.addCleanup(lambda: setattr(ptc, "PRIVATE_REPO_HASHES", saved))
+        ptc.PRIVATE_REPO_HASHES = {hashlib.sha256(b"zorblat-notes").hexdigest()}
+        for line in ("see ~/zorblat-notes/plan.md", "/Users/someone/Zorblat-Notes/x", "/home/u/zorblat-notes/"):
+            self.assertIn("private path", ptc.kinds(line), line)
+        for line in ("see ~/ALICE-LOL/README.md", "/Users/runner/work/x", "zorblat-notes alone", "~/zorblat-notes2/x"):
+            self.assertNotIn("private path", ptc.kinds(line), line)
+
+    def test_the_private_repository_list_is_loaded_and_holds_only_hashes(self):
+        self.assertGreater(len(ptc.PRIVATE_REPO_HASHES), 0)
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in ptc.PRIVATE_REPO_HASHES))
+
+
+class Binary(Base):
+    def test_a_word_in_a_binary_file_is_found_in_both_modes(self):
+        data = b"\x89PNG\0\0\x01" + b"tEXt comment: a worker wrote this\0" + b"\xff" * 8
+        (self.repo / "img.png").write_bytes(data)
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "x")
+        code, out = run(self.repo, "--tree")
+        self.assertIn("img.png:", out)
+        self.assertIn("agent process", out)
+        code, out = run(self.repo, "--range", "HEAD~1..HEAD")
+        self.assertIn("img.png", out)
+        self.assertIn("agent process", out)
+
+    def test_short_runs_are_not_read(self):
+        # 5 printable bytes between NULs would read as a session name if the bytes were decoded as text
+        (self.repo / "b.bin").write_bytes(b"\x89\0ys-6e\0\xff\0" * 4)
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "x")
+        self.assertEqual(run(self.repo, "--tree")[0], 0)
+
+
+class Fork(Base):
+    def config(self, text: str):
+        commit(self.repo, {".public-text.toml": text})
+
+    def test_a_fork_without_an_owner_commit_skips_the_tree(self):
+        self.config('[public-text]\nupstream-fork = true\nupstream-fork-why = "upstream project"\n')
+        commit(self.repo, {"up.md": "a worker\n"})
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 0, out)
+        self.assertIn("not scanned", out)
+
+    def test_an_owner_commit_makes_the_fork_tree_scanned_and_range_reads_only_owner_commits(self):
+        saved = ptc.OWN_AUTHOR_HASHES
+        self.addCleanup(lambda: setattr(ptc, "OWN_AUTHOR_HASHES", saved))
+        ptc.OWN_AUTHOR_HASHES = {hashlib.sha256(b"t@t").hexdigest()}  # the test repository's author
+        self.config('[public-text]\nupstream-fork = true\nupstream-fork-why = "upstream project"\n')
+        commit(self.repo, {"up.md": "a worker\n"})
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1, out)
+        ptc.OWN_AUTHOR_HASHES = {hashlib.sha256(b"someone@else").hexdigest()}
+        code, out = run(self.repo, "--range", "HEAD~1..HEAD")
+        self.assertEqual(code, 2, out)  # no commit of the owner: nothing compared
+
+    def test_a_fork_needs_a_reason_and_unknown_keys_are_refused(self):
+        self.config("[public-text]\nupstream-fork = true\n")
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(run(self.repo, "--tree")[0], 2)
+        self.config('[public-text]\nupstream-fork = false\nworkers = ["x/"]\n')
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(run(self.repo, "--tree")[0], 2)
+
+    def test_worker_paths_from_the_repository_settings(self):
+        commit(self.repo, {"svc/a.rs": "spawn a worker\n"})
+        self.assertEqual(run(self.repo, "--tree")[0], 1)
+        self.config('[public-text]\ntechnical-paths = ["svc/"]\n')
+        self.assertEqual(run(self.repo, "--tree")[0], 0)
 
 if __name__ == "__main__":
     unittest.main()

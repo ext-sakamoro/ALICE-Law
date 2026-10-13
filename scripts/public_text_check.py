@@ -28,7 +28,7 @@ import re
 import subprocess
 import sys
 
-EXEMPT = {"scripts/public_text_check.py", "scripts/test_public_text_check.py"}
+EXEMPT = {"scripts/public_text_check.py", "scripts/test_public_text_check.py", "scripts/public_text_private_repos.txt"}
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
 
 # ---------------------------------------------------------------- vocabulary (from docs_lint.py)
@@ -46,12 +46,27 @@ FORBIDDEN = [
                                  # `git worktree add` is a command, not a description of how the work was done
                                  + r"|(?<!git )" + words(r"worktrees?")
                                  + r"|ワーカー|マルチエージェント|エージェント|調停役|並走\s*session|他\s*session|session\s*名|この\s*(?:session|セッション)")),
+    # "session" as a unit of the work: glued after Japanese ("次 session", "別 session" in a
+    # table cell), at the start of a line or heading followed by Japanese ("Session 分割案"),
+    # "multi-session", and a lettered session ("Session A (~1h)"); "checkout session 作成" or
+    # "OpenXR Session 管理" (a word of the product before it) is not one
+    ("work session", re.compile(r"[\u3005\u3040-\u30ff\u4e00-\u9fff]\s*(?i:sessions?)(?![A-Za-z0-9_.(:])"
+                                r"|^[\s#*>|/\-]*(?i:sessions?)\s*[\u3005\u3040-\u30ff\u4e00-\u9fff]"
+                                r"|(?<![A-Za-z])(?i:multi-sessions?)(?![A-Za-z])"
+                                r"|(?<![A-Za-z])(?i:session)\s+[A-Z]\s*\(")),
     ("session name", re.compile(r"(?<![A-Za-z0-9])(?:ys|sakamoro)-[0-9a-f]{2}(?![A-Za-z0-9])")),
+    # the frontmatter of a private note
+    ("internal note", re.compile(r"^\s*node_type\s*:\s*memory\b|(?<![A-Za-z])originSessionId(?![A-Za-z])")),
     ("internal tracker", re.compile(words(r"Backlog") + r"|memory\s*(?:側|化|に|へ|file)|(?<![A-Za-z0-9_])memory/")),
-    # names of private notes: `[[snake_case]]` links and the note-file prefixes
-    ("internal note", re.compile(r"\[\[[a-z0-9]+_[a-z0-9_]+\]\]"
-                                 r"|(?<![A-Za-z0-9_])(?:feedback|discipline|success|handoff)_[a-z0-9_]{4,}"
+    # a link to a private note: any `[[name]]` with an underscore or a hyphen, in any case
+    # (a single word such as `[[gate]]` names a TOML table in prose); a TOML
+    # array-of-tables header at the start of a line in a .toml file is not one (kinds())
+    ("note link", re.compile(r"\[\[[A-Za-z][A-Za-z0-9.]*[_\-][A-Za-z0-9_.\-]*\]\]")),
+    # names of private notes in prose: the note-file prefixes, "memory `<name>`", `<name>.md`
+    ("internal note", re.compile(r"(?<![A-Za-z0-9_])(?:feedback|discipline|success|handoff)_[a-z0-9_]{4,}"
                                  r"|(?<![A-Za-z0-9_])(?:project|reference)_alice_[a-z0-9_]+"
+                                 r"|(?<![A-Za-z0-9_])(?:project|reference)_[a-z0-9_]{4,}\.md"
+                                 r"|(?<![A-Za-z\-])(?i:memory|memo)\s*`[A-Za-z0-9_\-]+(?:\.md)?`"
                                  # numbered entries of an internal pitfall catalogue / CI template
                                  r"|罠\s*#\s*\d+|canonical\s+(?:CI\s+)?template")),
     ("instruction source", re.compile(r"user\s*(?:指示|裁定|指摘|判断)")),
@@ -157,45 +172,188 @@ def private_names(line: str) -> list[str]:
 # A product may name another company's product as a feature (a fixed agent-instruction
 # file name, a plugin manifest name, an extension's entry point); development-process
 # mentions are never allowed. Each allowed mention is held per repository as
-# sha256(<repo-relative path> NUL <name as private_names() returns it, lower case>), so the
-# entry neither names the product nor allows it outside that file. Build an entry with
-# `--allow-hash <path> <name>`. In `--tree`, an entry of this repository that allows
-# nothing fails the check (it is stale or mistyped).
-ALLOWED: dict[str, set[str]] = {
+# sha256(<scope> NUL <name as private_names() returns it, lower case>) -> the number of lines
+# it allows, where the scope is a repository-relative file path or a directory prefix ending
+# in "/" (every file under it), so the entry neither names the product nor allows it outside
+# that scope. Build an entry with `--allow-hash <path or dir/> <name>`. In `--tree`, an
+# entry of this repository that allows another number of lines than its count fails the
+# check (a new mention under a prefix, a removed one, or a mistyped entry).
+ALLOWED: dict[str, dict[str, int]] = {
+    "ALICE-SDF": {
+        "659c5bd1c20fad2d50a9b52724b150d9ff941865275154a9c463afd40d66e7c3": 2,
+        "8b580e67b172f24cf9b96fae3fa28b61c797d845d7b6a361c99f910307261a69": 2,
+        "2315a2794fe699f753409a368e78d5cb110e6bca06075307e9450adff7a35475": 7,
+        "4b5762de09b9db6f9d43cf54cbc6fd08d0c6d330eeae0540fb0c2865a0d7268d": 7,
+        "865a3e24f0f7791cde0e953082115370e4da270336ce5511874e9b9a8d5aa982": 3,
+        "a4622a60be38f8a45ab31d0020cd2a3c10fe791a8e8d24a3460ab354243e3e46": 3,
+        "7491e84ba07ab24d4e2aa02dc0683f34f12a8aa3d7bdab4a6b31bcee5af66447": 3,
+        "e01f408722226af8e97c873dd04fdaa90bc7a16190d976791cbe1bd1660454f7": 29,
+        "c9bcfb4989c30783679258347fd0b88a3671780d1d3ef2e045042d3352a59d3a": 1,
+        "a2ca05f4d55ca8dde59e831dcdf400e2785a129dbac2f89ec54dc28ee4bf9e47": 1,
+        "04f5e1ffb8f5f13d28b764f887e3e99bfacbf07c0e425796a46711b3ac09fdd9": 1,
+    },
+    "text-to-print": {
+        "8e3dd0d012a2b0488d6e314c823c6db1fc86881986cf3597f9cd9f3365108bb7": 2,
+        "525b28df28e719b319178d0fcd956e3932174b4719f6c659081fa554415d633a": 2,
+        "938fe3b8cdc685f71f04da5f9a7e225edfddd6e89137a73eee378842cfaf329b": 2,
+        "2fce1206037fe05fb65ee69462a31f0021e4d0f4cfe89f2325b6c00a72beed1f": 2,
+        "607e6bc8421c315268ff7b882358b1b0554070af4c59f9850e6f70cdc710d30e": 1,
+        "5e9759a32eeb52bfadaed64f1f2475cdef4c47bffa624a5e694593308c66d062": 6,
+        "c4e9802423d3ef13964b175c670bad3a11daa8bd6874c18d4d1c4edc048d1393": 3,
+        "d47bbfaf39f76243602a5e88dfc65279df2b05cfa4c562ff4dba04ac0f15e73a": 3,
+        "971a9ffc87554fbe3293e6ca79ca2ec3be9f6e9fecc4138fece5c35a75900ef7": 3,
+        "a5048c9fd6603806b175feb184239bfada1ace37eebf811c75fc400b14b58a05": 2,
+        "40f8027e044e8aa3e2783d55bd9628c9b073f4e82458878f6bbdc8fcb3f791ed": 1,
+    },
+    "voicebox": {
+        "b1b065b5f49f4b5fa7b6c07d114bc8398be43a8635a8753ecd4155c2f3af524b": 4,
+    },
 }
 
 
-def allow_hash(path: str, phrase: str) -> str:
-    return hashlib.sha256((path + "\0" + " ".join(phrase.split()).lower()).encode("utf-8")).hexdigest()
+def allow_hash(scope: str, phrase: str) -> str:
+    return hashlib.sha256((scope + "\0" + " ".join(phrase.split()).lower()).encode("utf-8")).hexdigest()
 
 
-ALLOW_STATE = {"allowed": set(), "used": set()}
+def scopes(path: str) -> list[str]:
+    """the file path and each directory prefix of it ("a/", "a/b/"), whole components only"""
+    parts = path.split("/")
+    return [path] + ["/".join(parts[:i]) + "/" for i in range(1, len(parts))]
+
+
+ALLOW_STATE: dict = {"allowed": {}, "used": {}}
 
 
 # ---------------------------------------------------------------- scan
 
+# "worker" is also the name of a technical part: the Cloudflare Workers crate and its runtime
+# files. Only there, by path (whole components, so "crates/worker-notes/" is not one), and in
+# a Cargo.lock only on its package lines, is the word not a finding; anywhere else (docs,
+# ROADMAP, CHANGELOG, comments) it still is.
+WORKER_DIRS = ("crates/worker/", "migrations/")
+WORKER_FILES = ("wrangler.toml",)
+CARGO_LOCK_WORKER_RE = re.compile(r'^(?:name = "worker(?:-[a-z0-9_-]+)?"|\s*"worker(?:-[a-z0-9_-]+)?(?: [0-9][^"]*)?",?)\s*$')
+TOML_TABLE_RE = re.compile(r"^\s*\[\[[A-Za-z0-9_.\-]+\]\]\s*(?:#.*)?$")
+# a home directory path into a private repository (`~/<repo>/`, `/Users/<user>/<repo>/`,
+# `/home/<user>/<repo>/`): the repository names are held as SHA-256 of the lower-case name
+HOME_PATH_RE = re.compile(r"(?:~|/Users/[^/\s]+|/home/[^/\s]+)/([A-Za-z0-9._\-]+)")
+# (one SHA-256 per line in scripts/public_text_private_repos.txt, kept next to this file)
+_REPO_FILE = __import__("pathlib").Path(__file__).with_name("public_text_private_repos.txt")
+PRIVATE_REPO_HASHES: set[str] = set(_REPO_FILE.read_text(encoding="utf-8").split()) if _REPO_FILE.exists() else set()
+
+
+# A repository's own settings, in `.public-text.toml` at the scanned commit:
+#   [public-text]
+#   upstream-fork = true          # a fork of another project's repository
+#   upstream-fork-why = "..."     # required with upstream-fork
+#   technical-paths = ["dir/", "file.ext"]   # more places where "worker" is the technical part
+# In a fork, `--range` reads only the commits whose author is the owner (by SHA-256 of the
+# author e-mail, so the address is not written here) and `--tree` is skipped while no commit
+# of the owner is in the history (the tree is the upstream project's text).
+REPO_CONFIG = ".public-text.toml"
+OWN_AUTHOR_HASHES = {"f69d071222009f578276482605d59f63c44c0462cd0f6fa50f7b9f36d3e38ceb"}
+CONFIG: dict = {"technical-paths": [], "upstream-fork": False}
+
+
+def load_config(repo: str, rev: str) -> dict:
+    r = subprocess.run(["git", "-C", repo, "show", f"{rev}:{REPO_CONFIG}"], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        return {"technical-paths": [], "upstream-fork": False}
+    import tomllib
+    data = tomllib.loads(r.stdout).get("public-text", {})
+    unknown = set(data) - {"upstream-fork", "upstream-fork-why", "technical-paths"}
+    if unknown:
+        raise ValueError(f"{REPO_CONFIG}: unknown keys {sorted(unknown)}")
+    fork = data.get("upstream-fork", False)
+    paths = data.get("technical-paths", [])
+    if not isinstance(fork, bool) or (fork and not str(data.get("upstream-fork-why", "")).strip()):
+        raise ValueError(f"{REPO_CONFIG}: upstream-fork must be true or false, and true needs upstream-fork-why")
+    if not isinstance(paths, list) or not all(isinstance(x, str) and x.strip() for x in paths):
+        raise ValueError(f"{REPO_CONFIG}: technical-paths must be a list of paths")
+    return {"technical-paths": paths, "upstream-fork": fork}
+
+
+def own_commit(repo: str, commit: str) -> bool:
+    email = git(repo, "log", "-1", "--format=%ae", commit).strip().lower()
+    return hashlib.sha256(email.encode("utf-8")).hexdigest() in OWN_AUTHOR_HASHES
+
+
+def worker_technical(path: str | None, line: str) -> bool:
+    if path is None:
+        return False
+    base = path.rsplit("/", 1)[-1]
+    extra = CONFIG["technical-paths"]
+    if path.startswith(WORKER_DIRS + tuple(p for p in extra if p.endswith("/"))) \
+            or base in WORKER_FILES or path in [p for p in extra if not p.endswith("/")]:
+        return True
+    return base == "Cargo.lock" and bool(CARGO_LOCK_WORKER_RE.match(line))
+
+
+def private_paths(line: str) -> bool:
+    return any(hashlib.sha256(m.group(1).lower().encode("utf-8")).hexdigest() in PRIVATE_REPO_HASHES
+               for m in HOME_PATH_RE.finditer(line))
+
+
+ALLOWABLE = ("private name", "agent process", "note link")
+
+
+def allowed_entry(path: str, token: str) -> str | None:
+    """the allow-list entry of this repository that allows the token in the path, if any"""
+    return next((h for h in (allow_hash(sc, token) for sc in scopes(path)) if h in ALLOW_STATE["allowed"]), None)
+
+
 def kinds(line: str, path: str | None = None) -> list[str]:
-    """the kinds of internal word in a line (labels, not the words); a private name that this
-    repository's allow-list allows in `path` is not a finding"""
-    found = [label for label, pattern in FORBIDDEN if pattern.search(line)]
+    """the kinds of internal word in a line (labels, not the words); a private name, an agent
+    word or a note link that this repository's allow-list allows in `path` is not a finding"""
+    tokens: dict[str, list[str]] = {}
+    for label, pattern in FORBIDDEN:
+        hits = [m.group(0) for m in pattern.finditer(line)]
+        if not hits:
+            continue
+        if label == "agent process" and all(h.lower() in ("worker", "workers") for h in hits) \
+                and worker_technical(path, line):
+            continue
+        if label == "note link" and path is not None and (path.endswith(".toml") or path.rsplit("/", 1)[-1] == "Cargo.lock") \
+                and TOML_TABLE_RE.match(line):
+            continue  # a TOML array-of-tables header ("[[bin]]", "[[kv_namespaces]]")
+        tokens.setdefault(label, []).extend(hits)
     names = private_names(line)
-    if path is not None and names:
-        hashes = {allow_hash(path, n) for n in names}
-        allowed = hashes & ALLOW_STATE["allowed"]
-        ALLOW_STATE["used"] |= allowed
-        if len(allowed) == len(hashes):
-            names = []
     if names:
-        found.append("private name")
+        tokens["private name"] = names
+    if path is not None and ALLOW_STATE["allowed"]:
+        for label in ALLOWABLE:
+            if label in tokens:
+                entries = [allowed_entry(path, t) for t in tokens[label]]
+                if all(entries):
+                    for h in set(entries):
+                        ALLOW_STATE["used"][h] = ALLOW_STATE["used"].get(h, 0) + 1
+                    del tokens[label]
+    found = list(tokens)
+    if private_paths(line):
+        found.append("private path")
     if session_ids(line) or REVIEW_LABEL_RE.search(line):
         found.append("session id")
     return found
 
 
+# "next session" split over two comment lines ("/// Phase A2 (next" + "/// session) work"):
+# each line is also read joined with the next one, the comment marker of the second removed
+NEXT_SESSION_RE = re.compile(r"(?<![A-Za-z])(?i:next)\s+(?i:sessions?)(?![A-Za-z])")
+COMMENT_LEAD_RE = re.compile(r"^\s*(?://[/!]?|#+|\*+|--|;+|>+)?\s*")
+
+
 def scan_text(where: str, text: str, path: str | None = None) -> list[str]:
     out = []
-    for n, line in enumerate(text.splitlines(), 1):
-        for k in kinds(line, path):
+    lines = text.splitlines()
+    for n, line in enumerate(lines, 1):
+        found = kinds(line, path)
+        if NEXT_SESSION_RE.search(line):
+            found.append("work session")
+        elif n < len(lines) and NEXT_SESSION_RE.search(line + " " + COMMENT_LEAD_RE.sub("", lines[n], count=1)) \
+                and not NEXT_SESSION_RE.search(lines[n]):
+            found.append("work session")
+        for k in dict.fromkeys(found):
             out.append(f"{where}:{n}: {k}")
     return out
 
@@ -211,6 +369,19 @@ def paths_z(out: str) -> list[str]:
     return [p for p in out.split("\0") if p]
 
 
+PRINTABLE_RUN_RE = re.compile(rb"[\x20-\x7e]{6,}")
+
+
+def blob_text(repo: str, rev: str, path: str) -> str:
+    """the file's text; for a binary file (a NUL byte), its printable ASCII runs of 6 or more
+    characters, one per line, so a word stored in a binary file is still read"""
+    data = subprocess.run(["git", "-c", "core.quotePath=false", "-C", repo, "show", f"{rev}:{path}"],
+                          check=True, capture_output=True).stdout
+    if b"\0" in data:
+        return "\n".join(m.group(0).decode("ascii") for m in PRINTABLE_RUN_RE.finditer(data))
+    return data.decode("utf-8", errors="replace")
+
+
 def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
     findings, compared = [], 0
     for path in paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", ref)):
@@ -218,7 +389,7 @@ def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
             continue
         compared += 1
         findings += [f"path {f}" for f in scan_text(path, path, path)]
-        findings += scan_text(path, git(repo, "show", f"{ref}:{path}"), path)
+        findings += scan_text(path, blob_text(repo, ref, path), path)
     return findings, compared
 
 
@@ -236,9 +407,11 @@ def added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
     return out
 
 
-def scan_range(repo: str, rng: str) -> tuple[list[str], int]:
-    findings, compared = [], 0
+def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
+    findings, compared, files = [], 0, 0
     for commit in git(repo, "rev-list", "--no-merges", rng).splitlines():
+        if CONFIG["upstream-fork"] and not own_commit(repo, commit):
+            continue  # the upstream project's commit in a fork
         compared += 1
         short = commit[:12]
         findings += scan_text(f"commit {short} message", git(repo, "log", "-1", "--format=%B", commit))
@@ -249,10 +422,16 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int]:
         for path in changed:
             if path in EXEMPT:
                 continue
+            files += 1
             findings += [f"commit {short} path {f}" for f in scan_text(path, path, path)]
-            for n, text in added_lines(repo, commit, path):
+            added = added_lines(repo, commit, path)
+            if not added and git(repo, "diff-tree", "--root", "--no-commit-id", "--numstat", "-r", commit,
+                                 "--", ":(literal)" + path).startswith("-\t-\t"):
+                # a binary file: its printable runs at this commit
+                findings += [f"commit {short} {f}" for f in scan_text(path, blob_text(repo, commit, path), path)]
+            for n, text in added:
                 findings += [f"commit {short} {path}:{n}: {k}" for k in kinds(text, path)]
-    return findings, compared
+    return findings, compared, files
 
 
 def repo_name(repo: str) -> str | None:
@@ -272,38 +451,53 @@ def main(argv: list[str] | None = None) -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--tree", nargs="?", const="HEAD", metavar="REF")
     g.add_argument("--range", metavar="BASE..HEAD")
-    g.add_argument("--allow-hash", nargs=2, metavar=("PATH", "NAME"),
-                   help="print the allow-list entry for NAME in the repository-relative PATH")
+    g.add_argument("--allow-hash", nargs=2, metavar=("SCOPE", "NAME"),
+                   help="print the allow-list entry for NAME in SCOPE (a repository-relative file, or a "
+                        "directory prefix ending in /)")
     a = ap.parse_args(argv)
     if a.allow_hash is not None:
         path, name = a.allow_hash
-        if hashlib.sha256(" ".join(name.split()).lower().encode("utf-8")).hexdigest() not in PRIVATE_NAME_HASHES:
-            print("error: NAME is not a name this check finds (give it as one word, or the words of the phrase)",
-                  file=sys.stderr)
+        allowable = (hashlib.sha256(" ".join(name.split()).lower().encode("utf-8")).hexdigest() in PRIVATE_NAME_HASHES
+                     or any(p.fullmatch(name) for label, p in FORBIDDEN if label in ("agent process", "note link")))
+        if not allowable:
+            print("error: NAME is not a name, agent word or note link this check finds (give it as one word, the "
+                  "words of the phrase, or the [[link]])", file=sys.stderr)
             return 2
         print(allow_hash(path, name))
         return 0
     name = a.repo_name or repo_name(a.repo)
-    ALLOW_STATE["allowed"] = set(ALLOWED.get(name, set())) if name else set()
-    ALLOW_STATE["used"] = set()
+    ALLOW_STATE["allowed"] = dict(ALLOWED.get(name, {})) if name else {}
+    ALLOW_STATE["used"] = {}
     try:
+        CONFIG.update(load_config(a.repo, a.tree if a.tree is not None else a.range.split("..")[-1] or "HEAD"))
+        if a.tree is not None and CONFIG["upstream-fork"] and \
+                not any(own_commit(a.repo, c) for c in git(a.repo, "rev-list", a.tree).splitlines()):
+            print(f"public text: {a.tree} is an upstream fork with no commit of the owner yet; the tree is not "
+                  f"scanned ({REPO_CONFIG})")
+            return 0
         if a.tree is not None:
             findings, compared = scan_tree(a.repo, a.tree)
             what = f"{compared} files at {a.tree}"
-            stale = ALLOW_STATE["allowed"] - ALLOW_STATE["used"]
-            findings += [f"allow-list entry {h[:12]} of {name} allows nothing at {a.tree}" for h in sorted(stale)]
+            for h, want in sorted(ALLOW_STATE["allowed"].items()):
+                got = ALLOW_STATE["used"].get(h, 0)
+                if got != want:
+                    findings.append(f"allow-list entry {h[:12]} of {name} allows {got} lines at {a.tree}, "
+                                    f"its count is {want}" + (" (it allows nothing)" if got == 0 else ""))
         else:
-            findings, compared = scan_range(a.repo, a.range)
-            what = f"{compared} commits in {a.range}"
+            findings, compared, files = scan_range(a.repo, a.range)
+            what = f"{compared} commits ({files} files) in {a.range}"
     except subprocess.CalledProcessError as e:
-        print(f"error: git: {(e.stderr or '').strip()}", file=sys.stderr)
+        print(f"error: git: {(e.stderr or '').strip() if isinstance(e.stderr, str) else e}", file=sys.stderr)
+        return 2
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
         return 2
     for f in findings:
         print(f"found: {f}")
     if compared == 0:
         print(f"error: nothing was compared ({what})", file=sys.stderr)
         return 2
-    allowed = len(ALLOW_STATE["used"])
+    allowed = sum(ALLOW_STATE["used"].values())
     print(f"public text: {len(findings)} findings in {what}" + (f" ({allowed} allowed mentions)" if allowed else ""))
     return 1 if findings else 0
 
