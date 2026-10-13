@@ -191,6 +191,9 @@ def private_names(line: str) -> list[str]:
 # entry of this repository that allows another number of lines than its count fails the
 # check (a new mention under a prefix, a removed one, or a mistyped entry).
 ALLOWED: dict[str, dict[str, int]] = {
+    "ALICE-LOL": {
+        "fd9a9d9abcdb50151ee94eb1e9e162ca570d43fc68c7a6c23ea42f57436871ab": 2,
+    },
     "ALICE-SDF": {
         "659c5bd1c20fad2d50a9b52724b150d9ff941865275154a9c463afd40d66e7c3": 2,
         "8b580e67b172f24cf9b96fae3fa28b61c797d845d7b6a361c99f910307261a69": 2,
