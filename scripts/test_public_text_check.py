@@ -553,13 +553,14 @@ class ClassAllow(Base):
         self.assertNotIn("scripts/lint.py:", out)
         self.settings([("scripts/lint.py", "device", 2), ("scripts/lint.py", "agent process", 1),
                        ("scripts/lint.py", "session name", 1), ("scripts/lint.py", "private address", 1),
-                       ("docs/", "device", 1)])
+                       ("docs/a.md", "device", 1)])
         code, out = run(self.repo, "--tree")
         self.assertEqual(code, 1, out)
         self.assertIn("allow scripts/lint.py / device allows 1 lines", out)
 
     def test_a_private_name_cannot_be_allowed_by_class_and_entries_are_checked(self):
         for entries in ([("scripts/lint.py", "private name", 1)], [("scripts/lint.py", "device", 0)],
+                        [("scripts/", "device", 1)], [("docs/", "session id", 1)],
                         [("/abs.py", "device", 1)], [("scripts/lint.py", "device", 1), ("scripts/lint.py", "device", 1)]):
             self.settings(entries)
             with contextlib.redirect_stderr(io.StringIO()):

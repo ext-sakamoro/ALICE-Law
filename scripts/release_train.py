@@ -822,6 +822,48 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
         shutil.rmtree(root, ignore_errors=True)
 
 
+def load_public_text():
+    spec = importlib.util.spec_from_file_location("public_text_check", HERE / "public_text_check.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def package_text_problems(body: bytes, name: str, version: str, repo: Path, ref: str, repo_name: str | None,
+                          manifest_dir: str) -> tuple[list[str], int]:
+    """the published text of the package read by scripts/public_text_check.py (each file's path
+    and text, binary files by their printable runs), with the source repository's settings and
+    allow-list (paths taken back to the repository: <manifest dir>/<path in the crate>);
+    (problems, files read)"""
+    ptc = load_public_text()
+    ptc.CONFIG.update(ptc.load_config(str(repo), ref))
+    ptc.ALLOW_STATE["allowed"] = dict(ptc.ALLOWED.get(repo_name, {})) if repo_name else {}
+    ptc.ALLOW_STATE["used"] = {}
+    ptc.CLASS_USED.clear()
+    problems, files = [], 0
+    prefix = f"{name}-{version}/"
+    with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as t:
+        for m in t.getmembers():
+            if not m.isfile() or not m.name.startswith(prefix):
+                continue
+            inner = m.name[len(prefix):]
+            if inner == ".cargo_vcs_info.json":
+                continue
+            files += 1
+            path = f"{manifest_dir}/{inner}" if manifest_dir else inner
+            data = t.extractfile(m).read()
+            if b"\0" in data:
+                text = "\n".join(" ".join(tok for tok in ptc.TOKEN_RE.findall(r.decode("ascii")) if len(tok) >= 4)
+                                 for r in ptc.PRINTABLE_RUN_RE.findall(data))
+            else:
+                text = data.decode("utf-8", errors="replace")
+            for f in ptc.scan_text(path, inner, path) + ptc.scan_text(path, text, path):
+                problems.append(f"{name} {version}: the package carries internal text: {f}")
+    if files == 0:
+        problems.append(f"{name} {version}: the package text check read no file (compared nothing)")
+    return problems, files
+
+
 def publish_command(repo: Path, manifest_path: str, locked: bool) -> str:
     return (f"(cd {repo} && cargo publish{' --locked' if locked else ''} --manifest-path {manifest_path})")
 
@@ -1107,6 +1149,13 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
                 for p in after:
                     print(f"refused: after cargo package: {p}")
                 return 1
+            text_problems, _ = package_text_problems(body, a.crate, version, a.repo, a.ref,
+                                                     roster[a.crate].get("repo"), manifest_dir)
+            if text_problems:
+                for p in text_problems:
+                    print(f"refused: {p}")
+                return 1
+            compared += 1
             consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir, roster[a.crate])
             for p in consumer_problems:
                 print(f"refused: {p}")
@@ -1117,6 +1166,7 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             print(f"publish-gate: go for {a.crate} {version} ({compared} checks)")
             print(f"  commit:        {commit}")
             print(f"  .crate sha256: {digest} ({len(crate_files(body))} files, built by cargo package)")
+            print("  text:          every file of the package read by scripts/public_text_check.py")
             print("  consumer:      the unpacked .crate built as a crates.io consumer builds it (empty CARGO_HOME, "
                   "minimal environment, no Cargo.lock or configuration above it, each feature set)")
             print(f"  publish:       {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")

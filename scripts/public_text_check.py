@@ -274,6 +274,9 @@ CONFIG: dict = {"technical-paths": [], "upstream-fork": False, "upstream-base": 
 # a kind of finding a repository may allow for a scope, at a pinned number of lines, with a
 # reason (a vocabulary linter's own word list and fixtures); a private name or a private path
 # is never allowed by class (only by its hash in ALLOWED, or not at all)
+# these name a person, a device or a network: allowed only for a single file (a linter's own
+# word list and its tests), never for a directory
+FILE_ONLY_CLASSES = {"session name", "session id", "device", "private address"}
 CLASS_ALLOWABLE = {"agent process", "work session", "session name", "session id", "internal tracker",
                    "note link", "internal note", "instruction source", "device", "private address"}
 SHA_RE = re.compile(r"[0-9a-f]{40}")
@@ -328,6 +331,9 @@ def load_config(repo: str, rev: str) -> dict:
                 or not isinstance(e["why"], str) or not e["why"].strip()):
             raise ValueError(f"{REPO_CONFIG}: allow entry {e!r} is not {{path (a file, or a directory ending in /), "
                              f"class (one of {sorted(CLASS_ALLOWABLE)}), count (1 or more lines), why}}")
+        if e["class"] in FILE_ONLY_CLASSES and e["path"].endswith("/"):
+            raise ValueError(f"{REPO_CONFIG}: allow entry {e['path']} / {e['class']}: this class is allowed only "
+                             f"for a file (the linter that defines it), not for a directory")
         if (e["path"], e["class"]) in seen:
             raise ValueError(f"{REPO_CONFIG}: allow entry for {e['path']} / {e['class']} is listed twice")
         seen.add((e["path"], e["class"]))

@@ -1334,5 +1334,42 @@ class PackagingLeavesTheTree(unittest.TestCase):
         self.assertIn("after cargo package", out.getvalue())
         self.assertNotIn("go for", out.getvalue())
 
+
+class PackageText(unittest.TestCase):
+    def gate(self, files: dict):
+        def packager(repo, manifest_path, name, version, target_dir):
+            out = target_dir / "package" / f"{name}-{version}.crate"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(crate_bytes(name, version, files))
+            return out
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=packager)
+        return code, out.getvalue()
+
+    def test_internal_text_in_the_package_is_refused(self):
+        # (the fixture words are joined at run time: this file is public text too)
+        code, out = self.gate({"Cargo.toml": b"x", "src/lib.rs": b"// a " + b"wor" + b"ker wrote this\n"})
+        self.assertEqual(code, 1, out)
+        self.assertIn("the package carries internal text: src/lib.rs:1: agent process", out)
+        code, out = self.gate({"Cargo.toml": b"x", "README.md": b"see [" + b"[feedback_x_y]" + b"]\n"})
+        self.assertIn("note link", out)
+
+    def test_a_clean_package_goes_and_the_check_is_named(self):
+        code, out = self.gate({"Cargo.toml": b"x", "src/lib.rs": b"pub fn f() {}\n"})
+        self.assertEqual(code, 0, out)
+        self.assertIn("text:          every file of the package", out)
+
+    def test_a_package_with_no_file_compares_nothing(self):
+        problems, n = rt.package_text_problems(crate_bytes("alice-zip", "0.10.0", {}), "alice-zip", "0.10.0",
+                                               Path("."), "HEAD", None, "")
+        self.assertEqual(n, 0)
+        self.assertTrue(any("compared nothing" in p for p in problems))
+
 if __name__ == "__main__":
     unittest.main()
