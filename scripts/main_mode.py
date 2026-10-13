@@ -41,6 +41,7 @@ CRATES = {
     "alice-sdf": ("ALICE-SDF", "."),
     "alice-lol": ("ALICE-LOL", "alice-lol"),
     "alice-lol-macro": ("ALICE-LOL", "alice-lol-macro"),
+    "alice-edge": ("ALICE-Edge", "."),
 }
 
 # checked out next to the core repositories because alice-lol names them by path
