@@ -605,7 +605,8 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
     directory with no Cargo.lock, Cargo.toml or Cargo configuration above it, with an empty
     CARGO_HOME and a minimal environment, as the path dependency of an empty crate, once per
     feature set (feature_specs); a crate with no library is built on its own, from a
-    directory outside it, and must produce its binary; a .crate carrying .cargo/ is refused. The problems: none when every build compiled the crate"""
+    directory outside it, and must produce its binary; a .crate carrying a Cargo configuration
+    (.cargo/config, .cargo/config.toml) is refused. The problems: none when every build compiled the crate"""
     root = Path(tempfile.mkdtemp(prefix="release-gate-consumer-"))
     try:
         above = manifests_above(root / "consumer")
@@ -616,8 +617,9 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
         pkg = root / "pkg" / f"{name}-{version}"
         if not (pkg / "Cargo.toml").is_file():
             return [f"{name} {version}: the .crate has no {name}-{version}/Cargo.toml"]
-        if (pkg / ".cargo").exists():
-            return [f"{name} {version}: the .crate carries .cargo/ (Cargo configuration of the repository, "
+        shipped = [c for c in (".cargo/config", ".cargo/config.toml") if (pkg / c).exists()]
+        if shipped:
+            return [f"{name} {version}: the .crate carries {shipped[0]} (Cargo configuration of the repository, "
                     f"which a consumer never reads; set `include` or `exclude`)"]
         manifest = tomllib.loads((pkg / "Cargo.toml").read_text(encoding="utf-8"))
         has_lib = "lib" in manifest or (pkg / "src" / "lib.rs").is_file()

@@ -1082,6 +1082,11 @@ class ConsumerBuild(unittest.TestCase):
         problems = self.build(body)
         self.assertEqual(len(problems), 1, problems)
         self.assertIn(".cargo/", problems[0])
+        # another tool's file under .cargo/ is not Cargo configuration
+        other = crate_bytes("gate-probe", "0.1.0", {
+            "Cargo.toml": b'[package]\nname = "gate-probe"\nversion = "0.1.0"\nedition = "2021"\n',
+            "src/lib.rs": b"", ".cargo/mutants.toml": b"timeout_multiplier = 2\n"})
+        self.assertEqual(self.build(other), [])
 
     def test_a_binary_crate_is_built_from_outside_its_directory(self):
         # a [patch] in a configuration next to the manifest must not be read (the .crate check
