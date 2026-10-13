@@ -159,13 +159,14 @@ def load_roster(text: str) -> dict[str, dict]:
                         or set(e) - {"features", "expect", "until", "why", "command"}
                         or e.get("command", "build") not in ("build", "check")
                         or not isinstance(e["features"], list) or sorted(e["features"]) not in sets
-                        or not isinstance(ex, dict) or set(ex) - {"code", "file", "message"}
-                        or not all(isinstance(ex.get(k), str) and ex[k].strip() for k in ("code", "file"))
+                        or not isinstance(ex, dict) or set(ex) - {"code", "file", "text", "count", "message"}
+                        or not all(isinstance(ex.get(k), str) and ex[k].strip() for k in ("code", "file", "text"))
+                        or not isinstance(ex.get("count"), int) or isinstance(ex.get("count"), bool) or ex["count"] < 1
                         or not isinstance(ex.get("message", ""), str)
                         or not all(isinstance(e[k], str) and e[k].strip() for k in ("until", "why"))
                         or len(e["until"].split()) != 2 or e["until"].split()[0] != name):
                     raise RosterError(f"{name}: consumer-expected-failure entry {e!r} is not {{features (one of the "
-                                      f"declared sets), expect = {{code, file, message?}}, until = \"{name} "
+                                      f"declared sets), expect = {{code, file, text, count, message?}}, until = \"{name} "
                                       f"<version>\", why, command?}}")
                 dc.Version(e["until"].split()[1])
         if c["state"] not in STATES:
@@ -654,18 +655,34 @@ def crate_errors(stdout: str, name: str, version: str) -> list[dict]:
         m = msg.get("message", {})
         if m.get("level") != "error" or (not m.get("spans") and m.get("message", "").startswith("aborting due to")):
             continue
-        primary = [sp.get("file_name", "") for sp in m.get("spans", []) if sp.get("is_primary")]
-        out.append({"code": (m.get("code") or {}).get("code"), "file": primary[0] if primary else None,
+        primary = [sp for sp in m.get("spans", []) if sp.get("is_primary")]
+        out.append({"code": (m.get("code") or {}).get("code"),
+                    "file": primary[0].get("file_name", "") if primary else None,
+                    "text": span_text(primary[0]) if primary else "",
                     "message": m.get("message", "")})
     return out
 
 
+def span_text(span: dict) -> str:
+    """the source text a span highlights (its lines joined by newlines), not its line number"""
+    lines = span.get("text") or []
+    parts = []
+    for i, t in enumerate(lines):
+        start = t.get("highlight_start", 1) - 1
+        end = t.get("highlight_end", len(t.get("text", "")) + 1) - 1
+        parts.append(t.get("text", "")[start:end] if len(lines) == 1 else
+                     t.get("text", "")[start:] if i == 0 else t.get("text", "")[:end] if i == len(lines) - 1
+                     else t.get("text", ""))
+    return "\n".join(parts)
+
+
 def matches_expected(err: dict, expect: dict) -> bool:
-    """the error has the expected code, in the expected file (the path inside the crate), and
-    the expected message fragment when the entry names one"""
+    """the error has the expected code, in the expected file (the path inside the crate), on the
+    expected source text (what its primary span highlights), and the expected message fragment
+    when the entry names one"""
     f = (err["file"] or "").replace("\\", "/")
     return (err["code"] == expect["code"] and (f == expect["file"] or f.endswith("/" + expect["file"]))
-            and expect.get("message", "") in err["message"])
+            and err.get("text") == expect["text"] and expect.get("message", "") in err["message"])
 
 
 def first_errors(r) -> str:
@@ -749,7 +766,12 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
                 else:
                     errors = crate_errors(r.stdout, name, version)
                     other = [e for e in errors if not matches_expected(e, ef["expect"])]
-                    if not errors or other:
+                    held = len(errors) - len(other)
+                    if not other and held != ef["expect"]["count"]:
+                        problems.append(f"{name} {version}: {label} fails with {held} of the expected "
+                                        f"{ef['expect']['code']} in {ef['expect']['file']}, the entry's count is "
+                                        f"{ef['expect']['count']}")
+                    elif not errors or other:
                         shown = other[0] if other else None
                         problems.append(f"{name} {version}: {label} fails, but not only with the expected "
                                         f"{ef['expect']['code']} in {ef['expect']['file']} ("

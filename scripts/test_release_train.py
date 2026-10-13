@@ -1123,7 +1123,9 @@ class ConsumerBuild(unittest.TestCase):
 
     def test_a_check_set_is_compiled_but_not_linked(self):
         # a cdylib whose symbol only another tool provides at link time: build fails, check passes
-        lib = '#[cfg(feature = "py")]\nextern "C" { fn provided_by_the_host(); }\n' \
+        # (a native library that does not exist: linking fails on every platform, while a cdylib with
+        # an undefined symbol links on Linux, which allows those in shared libraries)
+        lib = '#[cfg(feature = "py")]\n#[link(name = "gate_probe_host_provided")]\nextern "C" { fn provided_by_the_host(); }\n' \
               '#[cfg(feature = "py")]\n#[no_mangle]\npub extern "C" fn entry() { unsafe { provided_by_the_host() } }\n'
         extra = '\n[lib]\ncrate-type = ["rlib", "cdylib"]\n[features]\npy = []\n'
         crate = tiny_crate("gate-probe", "0.1.0", extra=extra, lib=lib)
@@ -1145,11 +1147,12 @@ class ConsumerBuild(unittest.TestCase):
         crate = tiny_crate("gate-probe", version, extra="\n[features]\npy = []\n", lib=lib)
         entry = {"consumer-check-features": [["py"]],
                  "consumer-expected-failure": [{"features": ["py"], "until": until, "why": "w",
-                                                "expect": expect or {"code": "E0308", "file": "src/lib.rs"}}]}
+                                                "expect": expect or dict(self.EXPECT)}]}
         with tempfile.TemporaryDirectory() as d:
             return REAL_CONSUMER_BUILD(crate, "gate-probe", version, Path(d), entry)
 
     HELD = '#[cfg(feature = "py")]\npub fn held() { let _x: u8 = "known"; }\n'
+    EXPECT = {"code": "E0308", "file": "src/lib.rs", "text": '"known"', "count": 1}
 
     def test_an_expected_failure_passes_until_its_release(self):
         self.assertEqual(self.expected("0.1.0", self.HELD), [])
@@ -1169,13 +1172,25 @@ class ConsumerBuild(unittest.TestCase):
         self.assertIn("E0425", problems[0])
 
     def test_the_same_code_elsewhere_or_with_another_message_is_refused(self):
-        other_file = self.expected("0.1.0", self.HELD, expect={"code": "E0308", "file": "src/other.rs"})
+        other_file = self.expected("0.1.0", self.HELD, expect=dict(self.EXPECT, file="src/other.rs"))
         self.assertEqual(len(other_file), 1, other_file)
-        other_message = self.expected("0.1.0", self.HELD,
-                                      expect={"code": "E0308", "file": "src/lib.rs", "message": "expected `bool`"})
+        other_message = self.expected("0.1.0", self.HELD, expect=dict(self.EXPECT, message="expected `bool`"))
         self.assertEqual(len(other_message), 1, other_message)
-        self.assertEqual(self.expected("0.1.0", self.HELD,
-                                       expect={"code": "E0308", "file": "src/lib.rs", "message": "mismatched types"}), [])
+        self.assertEqual(self.expected("0.1.0", self.HELD, expect=dict(self.EXPECT, message="mismatched types")), [])
+
+    def test_another_error_with_the_same_code_in_the_same_file_is_refused(self):
+        # the held error fixed and a new type mismatch in the same file: same code and file, other text
+        lib = '#[cfg(feature = "py")]\npub fn other() { let _y: bool = 3; }\n'
+        problems = self.expected("0.1.0", lib)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("E0308", problems[0])
+
+    def test_one_more_of_the_held_error_is_refused_by_the_count(self):
+        lib = self.HELD + '#[cfg(feature = "py")]\npub fn again() { let _x: u8 = "known"; }\n'
+        problems = self.expected("0.1.0", lib)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("count is 1", problems[0])
+        self.assertEqual(self.expected("0.1.0", lib, expect=dict(self.EXPECT, count=2)), [])
 
     def test_the_code_in_a_comment_of_another_error_is_not_the_error(self):
         lib = '#[cfg(feature = "py")]\npub fn other() { undefined_thing(); } // E0308\n'
@@ -1186,7 +1201,9 @@ class ConsumerBuild(unittest.TestCase):
     def test_crate_errors_reads_the_crates_own_json_diagnostics(self):
         mine = {"reason": "compiler-message", "package_id": "path+file:///x#gate-probe@0.1.0",
                 "message": {"level": "error", "code": {"code": "E0308"}, "message": "mismatched types",
-                            "spans": [{"file_name": "/tmp/x/src/lib.rs", "is_primary": True}]}}
+                            "spans": [{"file_name": "/tmp/x/src/lib.rs", "is_primary": True,
+                                       "text": [{"text": 'let _x: u8 = "known";', "highlight_start": 14,
+                                                 "highlight_end": 21}]}]}}
         dep = dict(mine, package_id="registry+https://x#other@1.0.0")
         abort = {"reason": "compiler-message", "package_id": mine["package_id"],
                  "message": {"level": "error", "code": None, "message": "aborting due to 1 previous error", "spans": []}}
@@ -1194,10 +1211,13 @@ class ConsumerBuild(unittest.TestCase):
                 "message": {"level": "warning", "code": None, "message": "unused", "spans": []}}
         out = "\n".join(json.dumps(m) for m in (mine, dep, abort, warn)) + "\nnot json\n"
         errs = rt.crate_errors(out, "gate-probe", "0.1.0")
-        self.assertEqual(errs, [{"code": "E0308", "file": "/tmp/x/src/lib.rs", "message": "mismatched types"}])
-        self.assertTrue(rt.matches_expected(errs[0], {"code": "E0308", "file": "src/lib.rs"}))
-        self.assertFalse(rt.matches_expected(errs[0], {"code": "E0308", "file": "b.rs"}))  # not a suffix of a name
-        self.assertFalse(rt.matches_expected(dict(errs[0], file="/tmp/x/src/xlib.rs"), {"code": "E0308", "file": "lib.rs"}))
+        self.assertEqual(errs, [{"code": "E0308", "file": "/tmp/x/src/lib.rs", "text": '"known"',
+                                 "message": "mismatched types"}])
+        ex = {"code": "E0308", "file": "src/lib.rs", "text": '"known"'}
+        self.assertTrue(rt.matches_expected(errs[0], ex))
+        self.assertFalse(rt.matches_expected(errs[0], dict(ex, file="b.rs")))  # not a suffix of a name
+        self.assertFalse(rt.matches_expected(dict(errs[0], file="/tmp/x/src/xlib.rs"), dict(ex, file="lib.rs")))
+        self.assertFalse(rt.matches_expected(errs[0], dict(ex, text="3")))
 
     def test_an_entry_for_one_command_does_not_hold_the_other(self):
         e = {"consumer-expected-failure": [{"features": ["py"], "command": "check", "expect": {}, "until": "x 1.0.0", "why": "w"}]}
@@ -1214,15 +1234,17 @@ class ConsumerBuild(unittest.TestCase):
             with self.assertRaises(rt.RosterError, msg=bad):
                 rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\n' + bad, 1))
         ok = ('consumer-check-features = [["py"]]\n' + why +
-              'consumer-expected-failure = [{features = ["py"], expect = {code = "E0308", file = "src/lib.rs"}, '
+              'consumer-expected-failure = [{features = ["py"], expect = {code = "E0308", file = "src/lib.rs", text = "arr", count = 1}, '
               'until = "alice-zip 0.10.1", why = "w"}]\n')
         rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\n' + ok, 1))
         for old, bad in (('until = "alice-zip 0.10.1"', 'until = "alice-db 0.10.1"'),
                          ('until = "alice-zip 0.10.1"', 'until = "alice-zip"'),
                          ('{features = ["py"]', '{features = ["other"]'),
-                         ('expect = {code = "E0308", file = "src/lib.rs"}', 'expect = "E0308"'),
-                         ('file = "src/lib.rs"}', 'file = ""}'),
-                         ('file = "src/lib.rs"}', 'file = "src/lib.rs", line = 3}'),
+                         ('expect = {code = "E0308", file = "src/lib.rs", text = "arr", count = 1}', 'expect = "E0308"'),
+                         ('file = "src/lib.rs",', 'file = "",'),
+                         ('count = 1}', 'count = 1, line = 3}'),
+                         ('count = 1}', 'count = 0}'),
+                         (', text = "arr"', ''),
                          ('why = "w"}', 'why = "w", command = "link"}')):
             text = ok.replace(old, bad, 1)
             self.assertNotEqual(text, ok)
