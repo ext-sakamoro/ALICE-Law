@@ -194,6 +194,8 @@ ALLOWED: dict[str, dict[str, int]] = {
         "ab6f260bbe48e591409dcd53d07c2044e0a4da028ef1d51bc2ae01ff4009ba58": 9,
         "2d5c1dc549cf7601676a0cb7f5452d20be3fa5f1d0f55140305152ca6be22625": 1,
         "e7fc9e6005c1c2d4cad2be2070cced19d2ce2874f93d046f0cabe7194671d81c": 2,
+        "43e6578d81a78bd7891d1c713ab9d4dacae113f6ca20b2c38db6ed8133c68f1a": 1,
+        "f41eaca7cb84ee285cdb120649aeab70224ff4da7efde8f691abf381744bbc4e": 1,
     },
     "text-to-print": {
         "8e3dd0d012a2b0488d6e314c823c6db1fc86881986cf3597f9cd9f3365108bb7": 2,
@@ -427,15 +429,17 @@ UTF16BE_RUN_RE = re.compile(rb"(?:\x00[\x20-\x7e]){6,}")
 def blob_text(repo: str, rev: str, path: str) -> str:
     """the file's text; for a binary file (a NUL byte), its printable ASCII runs of 6 or more
     characters, one per line, and the same runs in UTF-16 (little and big endian), so a word
-    stored in a binary file is still read (compressed text, such as a PNG zTXt chunk or a PDF
-    stream, is not decompressed)"""
+    stored in a binary file is still read; within a run only tokens of 4 or more characters are
+    kept (compressed text, such as a PNG zTXt chunk or a PDF stream, is not decompressed)"""
     data = subprocess.run(["git", "-c", "core.quotePath=false", "-C", repo, "show", f"{rev}:{path}"],
                           check=True, capture_output=True).stdout
     if b"\0" in data:
         runs = [m.group(0).decode("ascii") for m in PRINTABLE_RUN_RE.finditer(data)]
         runs += [m.group(0).decode("utf-16-le") for m in UTF16LE_RUN_RE.finditer(data)]
         runs += [m.group(0).decode("utf-16-be") for m in UTF16BE_RUN_RE.finditer(data)]
-        return "\n".join(runs)
+        # tokens of fewer than 4 characters are dropped: in image or compiled bytes a short
+        # printable run is usually noise that happens to spell a short word
+        return "\n".join(" ".join(t for t in TOKEN_RE.findall(r) if len(t) >= 4) for r in runs)
     return data.decode("utf-8", errors="replace")
 
 

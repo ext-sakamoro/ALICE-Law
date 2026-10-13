@@ -418,6 +418,20 @@ class Binary(Base):
         self.assertIn("img.png", out)
         self.assertIn("agent process", out)
 
+    def test_short_tokens_in_a_binary_run_are_dropped(self):
+        saved = ptc.PRIVATE_NAME_HASHES
+        self.addCleanup(lambda: setattr(ptc, "PRIVATE_NAME_HASHES", saved))
+        ptc.PRIVATE_NAME_HASHES = saved | {hashlib.sha256(b"zqx").hexdigest(), hashlib.sha256(b"zqxw").hexdigest()}
+        (self.repo / "noise.bin").write_bytes(b"\x89\0\x01ab.zqx!\0\xff")  # a 6-byte run, a 3-letter name
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "x")
+        self.assertEqual(run(self.repo, "--tree")[0], 0)
+        (self.repo / "name.bin").write_bytes(b"\x89\0\x01ab zqxw!\0\xff")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "x")
+        code, out = run(self.repo, "--tree")
+        self.assertIn("name.bin:1: private name", out)
+
     def test_utf16_text_in_a_binary_file_is_read(self):
         for enc in ("utf-16-le", "utf-16-be"):
             (self.repo / f"t-{enc}.bin").write_bytes(b"\0\xff" + "notes: a worker log".encode(enc) + b"\0\0")
