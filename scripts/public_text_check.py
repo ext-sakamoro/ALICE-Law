@@ -74,7 +74,11 @@ FORBIDDEN = [
     # and the CI runner's home are not a name
     ("home path", re.compile(r"/(?:Users|home)/(?!(?:runner|user|USER|username|you|me|name|Shared|<[^>/]+>|\$\{?[A-Za-z_]+\}?)/)"
                              r"[A-Za-z0-9._\-]+/")),
-    ("device", re.compile(words(r"Jetson", r"Mac\s?mini", r"MacBook") + r"|Raspberry\s*Pi")),
+    # (any case: a host name is often the device name in lower case)
+    ("device", re.compile(r"(?i:" + words(r"jetson", r"mac\s?mini", r"macbook") + r"|raspberry\s*pi)")),
+    # the SDK / firmware of such a device ("JetPack 6", "JetPack R36", "L4T"); Android's
+    # "Jetpack Compose" has no version and is not one
+    ("device detail", re.compile(r"(?i)(?<![A-Za-z])(?:jetpack\s*(?:r?\d|sdk)|l4t)(?![A-Za-z])")),
     ("private address", re.compile(r"\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b|\b192\.168\.\d{1,3}\.\d{1,3}\b|\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b")),
 ]
 
@@ -393,6 +397,18 @@ def worker_technical(path: str | None, line: str) -> bool:
     return base == "Cargo.lock" and bool(CARGO_LOCK_WORKER_RE.match(line))
 
 
+# host names of private machines: SHA-256 of the lower-case name (a whole token, hyphens kept)
+HOST_NAME_HASHES: set[str] = set()
+# a release string ("R36.4.3") is a device detail on a line that names a device or next to one
+RELEASE_RE = re.compile(r"(?<![A-Za-z0-9.])R\d{2}\.\d+(?:\.\d+)?(?![0-9.])")
+DEVICE_RE = dict(FORBIDDEN)["device"]
+
+
+def host_names(line: str) -> bool:
+    return any(hashlib.sha256(t.lower().encode("utf-8")).hexdigest() in HOST_NAME_HASHES
+               for t in TOKEN_RE.findall(line))
+
+
 def private_paths(line: str) -> bool:
     return any(hashlib.sha256(m.group(1).lower().encode("utf-8")).hexdigest() in PRIVATE_REPO_HASHES
                for m in HOME_PATH_RE.finditer(line))
@@ -435,6 +451,8 @@ def kinds(line: str, path: str | None = None) -> list[str]:
     found = list(tokens)
     if private_paths(line):
         found.append("private path")
+    if HOST_NAME_HASHES and host_names(line):
+        found.append("host name")
     if session_ids(line) or REVIEW_LABEL_RE.search(line):
         found.append("session id")
     return found
@@ -451,6 +469,8 @@ def scan_text(where: str, text: str, path: str | None = None) -> list[str]:
     lines = text.splitlines()
     for n, line in enumerate(lines, 1):
         found = kinds(line, path)
+        if RELEASE_RE.search(line) and any(DEVICE_RE.search(lines[k]) for k in range(max(0, n - 2), min(len(lines), n + 1))):
+            found.append("device detail")
         if NEXT_SESSION_RE.search(line):
             found.append("work session")
         elif n < len(lines) and NEXT_SESSION_RE.search(line + " " + COMMENT_LEAD_RE.sub("", lines[n], count=1)) \

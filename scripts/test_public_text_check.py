@@ -587,5 +587,29 @@ class ClassAllow(Base):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(ptc.main(["--repo", str(self.repo), "--suggest-allow", "HEAD", "nowhere/"]), 2)
 
+
+class Devices(Base):
+    def test_device_names_in_any_case_and_device_details(self):
+        for line in ("ssh to the jetson board", "a MACBOOK here", "raspberry pi 5"):
+            self.assertIn("device", ptc.kinds(line), line)
+        for line in ("JetPack 6.0", "jetpack R36", "JetPack SDK", "the L4T kernel"):
+            self.assertIn("device detail", ptc.kinds(line), line)
+        for line in ("Android Jetpack Compose", "a jetpacks game", "ALT4T"):
+            self.assertNotIn("device detail", ptc.kinds(line), line)
+
+    def test_a_release_string_next_to_a_device_line(self):
+        self.assertIn("f:2: device detail", ptc.scan_text("f", "a jetson board\nrunning R36.4.3\n"))
+        self.assertIn("f:1: device detail", ptc.scan_text("f", "R36.4.3\non the jetson\n"))
+        self.assertEqual([x for x in ptc.scan_text("f", "release R36.4.3 of the tool\n") if "detail" in x], [])
+
+    def test_host_names_by_hash_in_any_case(self):
+        saved = ptc.HOST_NAME_HASHES
+        self.addCleanup(lambda: setattr(ptc, "HOST_NAME_HASHES", saved))
+        ptc.HOST_NAME_HASHES = {hashlib.sha256(b"zorb-box").hexdigest()}
+        for line in ("ssh zorb-box", "on ZORB-BOX.local", "(zorb-box)"):
+            self.assertIn("host name", ptc.kinds(line), line)
+        for line in ("zorb box", "zorb-boxes", "a zorb-box2 run"):
+            self.assertNotIn("host name", ptc.kinds(line), line)
+
 if __name__ == "__main__":
     unittest.main()
