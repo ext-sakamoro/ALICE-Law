@@ -131,24 +131,15 @@ Two modes run the same test:
 
 ## Steps that fail until a release
 
-A CI step that cannot pass before a release (the end to end crate resolving alice-lol 0.4 from crates.io before it is published, or the main branches patched in together while alice-lol on main still requires the previous alice-physics) is wrapped in `scripts/expected_failure.py <step> -- <command>` and listed in `release-train.toml` under `[expected-failure.<name>]` with the release it waits for (`until`), the text of the error lines its failure has (`expect`) and why (`why`). The failure is read from its own error lines (after terminal colour codes are removed, a line starting with `error` in any case followed by `:`, `[...]`, a space or the end of the line, `fatal:`, or a Rust panic; an entry can also name the exit status with `exit`): every one must contain an `expect` text and every `expect` text must be in one, so a second, unrelated error or a log line that only quotes the text does not pass. It is then reported as expected and the steps that need it are skipped; every run lists the active entries (step, until, why) in the job summary, and `expected_failure.py --check` fails on an entry no workflow runs and on an entry wrapping a `cargo` command without `exit = 101`. The step is red when it fails another way, when it still fails after its release is `published` in the roster, and when it passes while it is still listed (remove the entry). So a red run is a problem to fix.
+A CI step that cannot pass before a release (for example the end to end crate resolving a crate version from crates.io before it is published, or the main branches patched in together while one of them still requires the previous major of another) is wrapped in `scripts/expected_failure.py <step> -- <command>` and listed in `release-train.toml` under `[expected-failure.<name>]` with the release it waits for (`until`), the text of the error lines its failure has (`expect`) and why (`why`). The failure is read from its own error lines (after terminal colour codes are removed, a line starting with `error` in any case followed by `:`, `[...]`, a space or the end of the line, `fatal:`, or a Rust panic; an entry can also name the exit status with `exit`): every one must contain an `expect` text and every `expect` text must be in one, so a second, unrelated error or a log line that only quotes the text does not pass. It is then reported as expected and the steps that need it are skipped; every run lists the active entries (step, until, why) in the job summary, and `expected_failure.py --check` fails on an entry no workflow runs and on an entry wrapping a `cargo` command without `exit = 101`. The step is red when it fails another way, when it still fails after its release is `published` in the roster, and when it passes while it is still listed (remove the entry). So a red run is a problem to fix.
 
 ## Status
 
-Measured on 2026-10-13 (the committed `Cargo.lock`): **the check passes with 7 expected problems**, in one pending entry (alice-lol 0.4.0: 7). alice-physics 3.0.0, alice-sdf 6.0.0 and alice-edge 0.2.0 are published, and this repository's own requirements accept every latest release (alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4, alice-crypto 0.4, alice-physics 3, alice-sdf 6, alice-edge 0.2 with its sdf, db and dashboard features); what remains comes from the published alice-lol 0.3.0. The end to end test does not exercise alice-edge yet.
-
-Linked at two or more versions:
-
-| crate | versions | brought in by |
-|---|---|---|
-| alice-physics | 0.14.0-preview.8, 3.0.0 | alice-lol 0.3.0 (`^0.14.0-preview.4`, optional) |
-| alice-sdf | 1.13.0, 6.0.0 | alice-lol 0.3.0 (`^1.9.0`) |
-
-The release that would remove them: alice-lol 0.4.0 (alice-sdf 6, alice-physics 3, alice-lol-macro 0.3); then this repository's alice-lol requirement is raised to it.
+Measured on 2026-10-13 (the committed `Cargo.lock`): **the check passes with no expected problems**. alice-lol 0.4.0, alice-lol-macro 0.3.0, alice-physics 3.0.0, alice-sdf 6.0.0 and alice-edge 0.2.0 are published, every `alice-*` crate is linked at one version, and this repository's own requirements accept every latest release (alice-det-math 0.5, alice-zip 0.10, alice-analytics 0.5, alice-db 0.4, alice-crypto 0.4, alice-physics 3, alice-sdf 6, alice-lol 0.4, alice-edge 0.2 with its sdf, db and dashboard features).
 
 End to end, measured on 2026-10-13:
 
-- published: **expected failure until alice-lol 0.4.0** (`expected-failure.e2e-published-lol-0-4`): fails to resolve, alice-lol 0.4 (the first release with the research law reader the test uses) is not on crates.io yet. A green after alice-lol 0.4 is released covers less than the planned check: alice-physics stays at 2.2.0, used with `std` only (the thermal step and the rigid body world), and its metrics sink into alice-db is not part of the test until alice-physics 3.0.0, whose sink writes to the exact series of alice-db, is released
+- published: passes, 3897 values and records, the same digest as main (`966a7878…`, `e2e/golden/run.digest`)
 - main: passes, 3897 values and records, the same digest on aarch64 and x86_64 (`966a7878…`, `e2e/golden/run.digest`)
 
 ## License

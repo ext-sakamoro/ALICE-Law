@@ -98,7 +98,7 @@ dependencies = [
  "alice-analytics",
  "alice-db",
  "alice-det-math",
- "alice-sdf 6.0.0",
+ "alice-sdf",
 ]
 
 [[package]]
@@ -111,39 +111,37 @@ dependencies = [
  "alice-det-math",
  "alice-edge",
  "alice-lol",
- "alice-physics 3.0.0",
- "alice-sdf 6.0.0",
+ "alice-physics",
+ "alice-sdf",
  "alice-zip",
 ]
 
 [[package]]
 name = "alice-lol"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af77f562b7e7ccd892a30941d9cc15ce23ab16e7057a1b5a07f85c45a62c85dd"
+checksum = "a0aa048877c061b5dd7846f293d404909fbb074f4bed7899f1854ab811508b9f"
 dependencies = [
+ "alice-det-math",
  "alice-lol-macro",
- "alice-physics 0.14.0-preview.8",
- "alice-sdf 1.13.0",
+ "alice-physics",
+ "alice-sdf",
+ "alice-zip",
  "glam",
+ "sha2",
+ "stacker",
 ]
 
 [[package]]
 name = "alice-lol-macro"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d023160e6978a5fbb606c22e6c8abb79d5c5b6dd6e0d6998df6a9669a73d30d"
+checksum = "f07d00c81366d1fd0469d8e04486acf5c076aafb4df01eb23184664f8b71716f"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
 ]
-
-[[package]]
-name = "alice-physics"
-version = "0.14.0-preview.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e07e6c90afd861d791aac123ea746e1d0c2c1290136f120406b673b0e1b13dcb"
 
 [[package]]
 name = "alice-physics"
@@ -159,29 +157,12 @@ dependencies = [
 
 [[package]]
 name = "alice-sdf"
-version = "1.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aff64aaa8d6484e77b2510d82bf99243e680b823673be6e84f7694b5c435b35f"
-dependencies = [
- "bincode 2.0.1",
- "crc32fast",
- "glam",
- "log",
- "rayon",
- "serde",
- "serde_json",
- "thiserror",
- "wide",
-]
-
-[[package]]
-name = "alice-sdf"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4402c207a59446e6ce3569558ab6f57e8c4f0275a8a7e5afb53338635d17424b"
 dependencies = [
  "alice-det-math",
- "alice-physics 3.0.0",
+ "alice-physics",
  "bincode 2.0.1",
  "clap",
  "crc32fast",
@@ -256,6 +237,15 @@ dependencies = [
  "anstyle",
  "once_cell_polyfill",
  "windows-sys",
+]
+
+[[package]]
+name = "ar_archive_writer"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73cd58deff2140a0a8eae87e417bd01db68a33e148aa93d1e8cd837e55e312b6"
+dependencies = [
+ "object",
 ]
 
 [[package]]
@@ -837,6 +827,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "object"
+version = "0.39.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -910,6 +909,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "psm"
+version = "0.1.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dcd034599e63b970727f70d79e02d62390a4a84f7c6b827c27c46d5ac3fa622"
+dependencies = [
+ "ar_archive_writer",
+ "cc",
 ]
 
 [[package]]
@@ -1154,6 +1163,19 @@ name = "smallvec"
 version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+
+[[package]]
+name = "stacker"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "707f49d46706bacf8a2b00d51dace3f9de527c13eec3778f570c411f89e69967"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "windows-sys",
+]
 
 [[package]]
 name = "strsim"

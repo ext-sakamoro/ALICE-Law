@@ -154,8 +154,9 @@ class ExpectedFailure(unittest.TestCase):
         self.assertEqual(self.check(ROSTER + ENTRY, other)[0], 0)
 
     def test_the_repository_entries_name_cargo_exit_101(self):
+        # the repository may have no entry (every release one waited for is out); the rule itself
+        # is tested on fixtures above, and `--check` enforces it on whatever entries there are
         entries = ef.load_entries((HERE.parent / "release-train.toml").read_text(encoding="utf-8"))
-        self.assertTrue(entries)
         for step, e in entries.items():
             self.assertEqual(e["exit"], 101, step)
 
