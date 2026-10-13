@@ -288,11 +288,13 @@ CONFIG: dict = {"technical-paths": [], "upstream-fork": False, "upstream-base": 
 # is never allowed by class (only by its hash in ALLOWED, or not at all)
 # these name a person, a device or a network: allowed only for a single file (a linter's own
 # word list and its tests), never for a directory
-# a binary file's build paths: allowed only for a single file (a deliberate fixture), counted in printable runs
-FILE_ONLY_CLASSES = {"session name", "session id", "device", "private address", "binary home path"}
+# a binary file's build paths (counted in paths) and a file that could not be read (a container or
+# a Git LFS pointer): allowed only for a single file (a deliberate fixture)
+FILE_ONLY_CLASSES = {"session name", "session id", "device", "private address", "binary home path",
+                     "unscanned container", "unscanned LFS object"}
 CLASS_ALLOWABLE = {"agent process", "work session", "session name", "session id", "internal tracker",
                    "note link", "internal note", "instruction source", "device", "private address",
-                   "binary home path"}
+                   "binary home path", "unscanned container", "unscanned LFS object"}
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 
 
@@ -507,13 +509,156 @@ UTF16BE_RUN_RE = re.compile(rb"(?:\x00[\x20-\x7e]){6,}")
 
 
 # a build path compiled into a binary file (a compiler records source paths, such as the
-# dependency sources under ~/.cargo/registry/src/, in debug info and panic messages): bytes have
-# no token boundary, so a home path counts anywhere in a printable run that is not inside a URL
-# or a longer path (or right after `file://`), and cargo's registry or git checkout under any
-# home but the CI runner's counts wherever it is
-BINARY_HOME_RE = re.compile(r"(?:(?<![A-Za-z0-9._~%/\-])|(?<=file://))/(?:Users|home)/"
-                            r"(?!(?:runner|user|USER|username|you|me|name|Shared)/)[A-Za-z0-9._\-]+/")
-BINARY_REGISTRY_RE = re.compile(r"/(?:Users|home)/(?!runner/)[^/\s]+/\.cargo/(?:registry|git)/")
+# dependency sources under ~/.cargo/registry/src/, in debug info and panic messages): the bytes are
+# read as they are (one byte a character) and as UTF-16 (both byte orders, both alignments); a
+# path has either separator, may be glued to the text before it (strings are stored without a
+# boundary) and its user name may hold any character but a separator or a control character; a
+# home directory but a placeholder's or the CI runner's counts, and so does cargo's registry or git
+# checkout under any home but the runner's or under /root; a path inside a URL does not count
+_SEP = r"[/\\]"
+_NAME = r"[^/\\\x00-\x1f\x7f]{1,64}"
+_PLACEHOLDER = r"(?:runner|user|USER|username|you|me|name|Shared)"
+BUILD_PATH_RE = re.compile(
+    rf"{_SEP}(?:Users|home){_SEP}(?!runner{_SEP}){_NAME}{_SEP}\.cargo{_SEP}(?:registry|git){_SEP}"
+    rf"|{_SEP}root{_SEP}\.cargo{_SEP}(?:registry|git){_SEP}"
+    rf"|{_SEP}(?:Users|home){_SEP}(?!{_PLACEHOLDER}{_SEP}){_NAME}{_SEP}")
+URL_STOP_RE = re.compile(r"[\s\x00-\x1f\"'<>]")
+# containers and compressed streams: their members are read (up to a depth and a size); one that
+# cannot be read is reported as unscanned, never passed
+CONTAINER_MAGIC = ((b"PK\x03\x04", "zip"), (b"PK\x05\x06", "zip"), (b"\x1f\x8b", "gzip"), (b"BZh", "bzip2"),
+                   (b"\xfd7zXZ\x00", "xz"), (b"\x28\xb5\x2f\xfd", "zstd"), (b"7z\xbc\xaf\x27\x1c", "7z"),
+                   (b"Rar!\x1a\x07", "rar"))
+CONTAINER_EXTS = (".zip", ".apk", ".aar", ".jar", ".war", ".whl", ".nupkg", ".crate", ".gz", ".tgz", ".bz2",
+                  ".xz", ".zst", ".7z", ".rar", ".tar", ".ipa", ".xcframework.zip")
+CONTAINER_DEPTH = 4
+CONTAINER_BUDGET = 512 << 20  # bytes read out of one tracked file
+LFS_POINTER = b"version https://git-lfs.github.com/spec/v1\n"
+
+
+def _views(data: bytes):
+    """(text, byte offset of character 0, bytes per character): the bytes as they are, and as
+    UTF-16 code units in both byte orders at both alignments"""
+    import array
+    yield data.decode("latin-1"), 0, 1
+    for k in (0, 1):
+        b = data[k:len(data) - (len(data) - k) % 2]
+        for order in ("little", "big"):
+            units = array.array("H", b)
+            if order != sys.byteorder:
+                units.byteswap()
+            yield "".join(map(chr, units)), k, 2
+
+
+def in_url(text: str, start: int) -> bool:
+    """the path at `start` is part of a URL (`scheme://host/...` with no break before it), not a
+    local file URL ending right before it"""
+    lo = max(0, start - 4096)
+    stops = [m.end() for m in URL_STOP_RE.finditer(text, lo, start)]
+    seg = text[stops[-1] if stops else lo:start]
+    return "://" in seg and not seg.endswith("file://")
+
+
+def raw_build_paths(data: bytes) -> int:
+    """the number of build paths in bytes (a path read in two views at overlapping bytes is one)"""
+    spans = []
+    for text, k, step in _views(data):
+        for m in BUILD_PATH_RE.finditer(text):
+            if not in_url(text, m.start()):
+                spans.append((k + step * m.start(), k + step * m.end()))
+    spans.sort()
+    n, end = 0, -1
+    for a, b in spans:
+        if a >= end:
+            n += 1
+        end = max(end, b)
+    return n
+
+
+def container_kind(data: bytes, path: str = "") -> str | None:
+    for magic, kind in CONTAINER_MAGIC:
+        if data.startswith(magic):
+            return kind
+    if len(data) > 262 and data[257:262] == b"ustar":
+        return "tar"
+    if path.lower().endswith(CONTAINER_EXTS) and data:
+        return "unknown container"
+    return None
+
+
+def _members(data: bytes, kind: str) -> list[tuple[str, bytes]]:
+    import bz2, gzip, io, lzma, tarfile, zipfile
+    if kind == "zip":
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            return [(i.filename, z.read(i)) for i in z.infolist() if not i.is_dir()]
+    if kind == "tar":
+        with tarfile.open(fileobj=io.BytesIO(data)) as t:
+            return [(m.name, t.extractfile(m).read()) for m in t.getmembers() if m.isfile()]
+    if kind == "gzip":
+        return [("", gzip.decompress(data))]
+    if kind == "bzip2":
+        return [("", bz2.decompress(data))]
+    if kind == "xz":
+        return [("", lzma.decompress(data))]
+    if kind == "zstd":
+        from compression import zstd  # Python 3.14 or later; before that an ImportError: unscanned
+        return [("", zstd.decompress(data))]
+    raise ValueError(kind)
+
+
+def build_paths(data: bytes, path: str = "", depth: int = 0, budget: list | None = None) -> tuple[int, list[str]]:
+    """(build paths, kinds of the containers that could not be read) in a file, its members read
+    out of containers and compressed streams"""
+    budget = [CONTAINER_BUDGET] if budget is None else budget
+    kind = container_kind(data, path)
+    if kind is None:
+        if data[:1] == b"\x78" and len(data) > 2 and (data[0] << 8 | data[1]) % 31 == 0 and is_binary(data):
+            import zlib
+            try:  # a zlib stream (a weak signature: bytes that do not inflate are read as they are)
+                inner = zlib.decompress(data)
+            except zlib.error:
+                return raw_build_paths(data), []
+            kind = "zlib"
+            members = [("", inner)]
+        else:
+            return raw_build_paths(data), []
+    else:
+        if depth >= CONTAINER_DEPTH:
+            return 0, [f"{kind}, nested too deep"]
+        try:
+            members = _members(data, kind)
+        except Exception:  # an unknown, damaged, encrypted or unsupported container: reported, never passed
+            return 0, [kind]
+    n, unscanned = 0, []
+    for name, inner in members:
+        budget[0] -= len(inner)
+        if budget[0] < 0:
+            return n, unscanned + [f"{kind}, over {CONTAINER_BUDGET >> 20} MiB"]
+        got, more = build_paths(inner, name, depth + 1, budget)
+        n += got
+        unscanned += more
+    return n, unscanned
+
+
+def is_lfs_pointer(data: bytes) -> bool:
+    return data.startswith(LFS_POINTER) and b"\noid sha256:" in data[:200]
+
+
+def file_findings(where: str, data: bytes, path: str | None) -> list[str]:
+    """a file's build paths (binary files, containers and compressed streams), as the path and a
+    count (never the text), and what could not be read: a container, or a Git LFS pointer (the
+    object is not in the repository)"""
+    if is_lfs_pointer(data):
+        return [] if class_allowed(path, "unscanned LFS object") else [f"{where}: Git LFS pointer: unscanned LFS object"]
+    if not is_binary(data) and container_kind(data, path or "") is None:
+        return []
+    out = []
+    n, unscanned = build_paths(data, path or "")
+    if n and not class_allowed(path, "binary home path", n):
+        out.append(f"{where}: {n} build paths: binary home path")
+    for kind in unscanned:
+        if not class_allowed(path, "unscanned container"):
+            out.append(f"{where}: {kind}: unscanned container")
+    return out
 
 
 def blob_bytes(repo: str, rev: str, path: str) -> bytes:
@@ -541,19 +686,6 @@ def binary_text(data: bytes) -> str:
     return "\n".join(" ".join(t for t in TOKEN_RE.findall(r) if len(t) >= 4) for r in binary_runs(data))
 
 
-def binary_build_paths(data: bytes) -> int:
-    """the number of a binary file's printable runs that hold a home directory path"""
-    return sum(1 for r in binary_runs(data) if BINARY_HOME_RE.search(r) or BINARY_REGISTRY_RE.search(r))
-
-
-def binary_findings(where: str, data: bytes, path: str | None) -> list[str]:
-    """the build paths in a binary file, as the path and a count (never the text)"""
-    n = binary_build_paths(data)
-    if n and not class_allowed(path, "binary home path", n):
-        return [f"{where}: {n} printable runs: binary home path"]
-    return []
-
-
 def blob_text(repo: str, rev: str, path: str) -> str:
     """the file's text; for a binary file (a NUL byte), its printable ASCII runs of 6 or more
     characters, one per line, and the same runs in UTF-16 (little and big endian), so a word
@@ -570,19 +702,30 @@ def text_of(data: bytes) -> str:
     return binary_text(data) if is_binary(data) else data.decode("utf-8", errors="replace")
 
 
-def git_binaries(repo: str, ref: str, paths: list[str]) -> set[str]:
-    """the paths git itself takes as binary at ref (not empty, and no line `git grep -I` reads)"""
-    sizes = {}
+def tree_entries(repo: str, ref: str) -> dict[str, tuple[str, int]]:
+    """path: (mode, size) of every entry at ref (a submodule has no size)"""
+    out = {}
     for entry in paths_z(git(repo, "ls-tree", "-r", "-z", "-l", ref)):
         meta, _, p = entry.partition("\t")
-        size = meta.split()[-1]
-        sizes[p] = int(size) if size.isdigit() else 0
+        mode, _, _, size = meta.split()
+        out[p] = (mode, int(size) if size.isdigit() else 0)
+    return out
+
+
+def git_binaries(repo: str, ref: str, paths: list[str]) -> set[str]:
+    """the regular files git itself takes as binary at ref (not empty, and no line `git grep -I`
+    reads); a symbolic link (its blob is the target's name) and a submodule are not files here"""
+    entries = tree_entries(repo, ref)
+    sizes = {p: size for p, (mode, size) in entries.items() if mode in ("100644", "100755")}
     r = subprocess.run(["git", "-c", "core.quotePath=false", "-C", repo, "grep", "-I", "-z", "--name-only",
                         "-e", "", ref], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode not in (0, 1):
         raise subprocess.CalledProcessError(r.returncode, "git grep", stderr=r.stderr)
     text = {p.split(":", 1)[1] for p in paths_z(r.stdout) if ":" in p}
     return {p for p in paths if sizes.get(p, 0) > 0 and p not in text}
+
+
+SKIPPED: list[str] = []
 
 
 def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
@@ -594,16 +737,24 @@ def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
         ours = set(paths_z(git(repo, "diff", "-z", "--name-only", "--no-renames", f"{CONFIG['upstream-base']}..{ref}")))
         paths = [p for p in paths if p in ours]
     scanned_binaries = set()
+    modes = {p: mode for p, (mode, _) in tree_entries(repo, ref).items()}
     for path in paths:
         if path in EXEMPT:
+            continue
+        if modes.get(path) == "160000":
+            # a submodule: another repository's commit, not a file of this one (its name is read)
+            SKIPPED.append(f"{path} (submodule)")
+            findings += [f"path {f}" for f in scan_text(path, path, path)]
             continue
         compared += 1
         findings += [f"path {f}" for f in scan_text(path, path, path)]
         data = blob_bytes(repo, ref, path)
         findings += scan_text(path, text_of(data), path)
-        if is_binary(data):
+        if modes.get(path) == "120000":
+            continue  # a symbolic link: its blob is the target's name, read above as text
+        if is_binary(data) or container_kind(data, path):
             scanned_binaries.add(path)
-            findings += binary_findings(path, data, path)
+        findings += file_findings(path, data, path)
     # every file git takes as binary went through the binary scan (a repository with no binary
     # file compares nothing here, and that is not a failure)
     missed = sorted(git_binaries(repo, ref, [p for p in paths if p not in EXEMPT]) - scanned_binaries)
@@ -641,9 +792,15 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
         if REPO_CONFIG in changed:
             keys = config_changes(repo, commit)
             findings.append(f"commit {short} {REPO_CONFIG}: policy config changed ({', '.join(keys) or 'file'})")
+        gitlinks = {l.split("\t", 1)[1] for l in git(repo, "diff-tree", "--root", "--no-commit-id", "-r",
+                                                      "--no-renames", "--diff-filter=d", commit).splitlines()
+                    if l.split(" ", 2)[1:2] == ["160000"]}
         for path in changed:
             if path in EXEMPT:
                 continue
+            if path in gitlinks:
+                findings += [f"commit {short} path {f}" for f in scan_text(path, path, path)]
+                continue  # a submodule's commit, not a file of this repository
             files += 1
             findings += [f"commit {short} path {f}" for f in scan_text(path, path, path)]
             added = added_lines(repo, commit, path)
@@ -652,7 +809,9 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                 # a binary file: its printable runs at this commit, and the build paths in them
                 data = blob_bytes(repo, commit, path)
                 findings += [f"commit {short} {f}" for f in scan_text(path, text_of(data), path)]
-                findings += [f"commit {short} {f}" for f in binary_findings(path, data, path)]
+                findings += [f"commit {short} {f}" for f in file_findings(path, data, path)]
+            elif added and added[0][0] == 1 and added[0][1] + "\n" == LFS_POINTER.decode():
+                findings += [f"commit {short} {f}" for f in file_findings(path, blob_bytes(repo, commit, path), path)]
             for n, text in added:
                 findings += [f"commit {short} {path}:{n}: {k}" for k in kinds(text, path)]
     return findings, compared, files
@@ -664,16 +823,22 @@ def suggest_allow(repo: str, ref: str, scope: str) -> int:
     CONFIG["allow"] = []
     counts: dict[str, int] = {}
     files = 0
+    entries = tree_entries(repo, ref)
     for path in paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", ref)):
-        if path in EXEMPT or scope not in scopes(path):
+        if path in EXEMPT or scope not in scopes(path) or entries.get(path, ("",))[0] == "160000":
             continue
         files += 1
         data = blob_bytes(repo, ref, path)
         for f in scan_text(path, path, path) + scan_text(path, text_of(data), path):
             label = f.rsplit(": ", 1)[-1]
             counts[label] = counts.get(label, 0) + 1
-        if is_binary(data) and binary_build_paths(data):
-            counts["binary home path"] = counts.get("binary home path", 0) + binary_build_paths(data)
+        if is_binary(data) or container_kind(data, path) or is_lfs_pointer(data):
+            n, unscanned = build_paths(data, path) if not is_lfs_pointer(data) else (0, ["LFS"])
+            label = "unscanned LFS object" if is_lfs_pointer(data) else "unscanned container"
+            if n:
+                counts["binary home path"] = counts.get("binary home path", 0) + n
+            if unscanned:
+                counts[label] = counts.get(label, 0) + len(unscanned)
     if files == 0:
         print(f"error: no file under {scope} at {ref}", file=sys.stderr)
         return 2
@@ -711,6 +876,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="print the allow-list entry for NAME in SCOPE (a repository-relative file, or a "
                         "directory prefix ending in /)")
     a = ap.parse_args(argv)
+    if sys.version_info < (3, 14):
+        # the same files read the same way everywhere: zstd streams need compression.zstd (3.14)
+        print("error: Python 3.14 or later is needed", file=sys.stderr)
+        return 2
     if a.allow_hash is not None:
         path, name = a.allow_hash
         allowable = (hashlib.sha256(" ".join(name.split()).lower().encode("utf-8")).hexdigest() in PRIVATE_NAME_HASHES
@@ -722,6 +891,7 @@ def main(argv: list[str] | None = None) -> int:
         print(allow_hash(path, name))
         return 0
     CLASS_USED.clear()
+    SKIPPED.clear()
     if a.suggest_allow is not None:
         return suggest_allow(a.repo, a.suggest_allow[0], a.suggest_allow[1])
     name = a.repo_name or repo_name(a.repo)
@@ -764,6 +934,8 @@ def main(argv: list[str] | None = None) -> int:
         settings.append(f"upstream fork at {CONFIG['upstream-base'][:12]}")
     if settings:
         print(f"public text: {REPO_CONFIG}: " + "; ".join(settings))
+    if SKIPPED:
+        print(f"public text: not read: {len(SKIPPED)} entries (first: {SKIPPED[0]})")
     print(f"public text: {len(findings)} findings in {what}" + (f" ({allowed} allowed mentions)" if allowed else ""))
     return 1 if findings else 0
 

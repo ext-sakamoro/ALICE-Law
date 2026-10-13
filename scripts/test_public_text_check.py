@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import importlib.util
 import io
+import os
 import re
 import subprocess
 import sys
@@ -473,7 +474,8 @@ def elf(*strings: bytes) -> bytes:
 
 class BinaryBuildPaths(Base):
     """a home directory compiled into a tracked binary file (a build path in debug info or a
-    panic message) is a finding, given as the path and a count"""
+    panic message) is a finding, given as the path and a count; a container is read, and what
+    cannot be read is reported"""
 
     def add(self, files: dict[str, bytes]):
         for name, data in files.items():
@@ -487,40 +489,104 @@ class BinaryBuildPaths(Base):
         self.add({"libs/libfoo.so": elf(b"panicked at", reg, b"index out of bounds")})
         code, out = run(self.repo, "--tree")
         self.assertEqual(code, 1, out)
-        self.assertIn("libs/libfoo.so: 1 printable runs: binary home path", out)
+        self.assertIn("libs/libfoo.so: 1 build paths: binary home path", out)
         self.assertNotIn("someuser", out)
         code, out = run(self.repo, "--range", "HEAD~1..HEAD")
         self.assertEqual(code, 1, out)
-        self.assertIn("libs/libfoo.so: 1 printable runs: binary home path", out)
+        self.assertIn("libs/libfoo.so: 1 build paths: binary home path", out)
 
-    def test_a_home_path_counts_inside_a_run_but_not_in_a_url_or_for_the_ci_runner(self):
-        self.add({"a.dylib": elf(b"xx:" + USERS + b"someone/src/main.rs", b"\x01" + USERS + b"other/b.rs"),
-                  "ok.dylib": elf(b"https://example.org" + HOME + b"world/abc", HOME + b"runner/.cargo/registry/src/y",
-                                  USERS + b"runner/work/a/b.rs")})
-        code, out = run(self.repo, "--tree")
-        self.assertIn("a.dylib: 2 printable runs: binary home path", out)
-        self.assertNotIn("ok.dylib", out)
-        self.add({"f.so": elf(b"see file://" + USERS + b"bob/x.rs")})  # a local file URL is a path
-        self.assertIn("f.so: 1 printable runs: binary home path", run(self.repo, "--tree")[1])
-        # cargo's checkout under a placeholder home, inside a longer run: only the registry shape takes it
-        self.add({"reg.so": elf(b"build" + USERS + b"user/.cargo/git/checkouts/q/src/a.rs")})
-        self.assertIn("reg.so: 1 printable runs: binary home path", run(self.repo, "--tree")[1])
-        self.add({"u.dll": b"MZ\0\0" + "build C:".encode("utf-16-le") + (USERS + b"wide/proj/").decode().encode("utf-16-le") + b"\0\0"})
-        self.assertIn("u.dll: 1 printable runs: binary home path", run(self.repo, "--tree")[1])
+    def test_path_forms(self):
+        bs = lambda b: b.replace(b"/", b"\\")
+        cases = {
+            "glued": elf(b"assertion failed" + USERS + b"ys/proj/src/lib.rs"),
+            "glued-2": elf(b"src/main.rs" + USERS + b"ys/a.rs" + b"unwrap()x" + HOME + b"ys/work/b.rs"),
+            "windows": elf(b"C:" + bs(USERS + b"ys/.cargo/registry/src/x/lib.rs")),
+            "windows-fwd": elf(b"C:" + USERS + b"ys/proj/a.rs"),
+            "utf8-name": elf(USERS + "山田".encode() + b"/proj/a.rs"),
+            "space-name": elf(USERS + b"John Doe/proj/a.rs"),
+            "plus-name": elf(HOME + b"a+b/proj/a.rs"),
+            "root": elf(b"/root/.cargo/registry/src/x/lib.rs"),
+            "placeholder-registry": elf(b"build" + USERS + b"user/.cargo/git/checkouts/q/src/a.rs"),
+            "file-url": elf(b"see file://" + USERS + b"bob/x.rs"),
+            "long-run": elf(b"A" * 100000 + USERS + b"ys/proj/a.rs"),
+            "utf16-le": b"MZ\0\0" + "build C:\\Users\\wide\\proj\\".encode("utf-16-le") + b"\0\0",
+            # UTF-16 at an odd byte offset after a byte that is not NUL: only the odd alignment reads it
+            "utf16-odd": b"MZ\x01" + "/Users/wide/proj/".encode("utf-16-le") + b"\0\0",
+            "utf16-be": b"MZ\0\0\0" + "build /Users/wide/proj/".encode("utf-16-be") + b"\0\0",
+        }
+        self.add({f"{k}.bin": v for k, v in cases.items()})
+        out = run(self.repo, "--tree")[1]
+        for k in cases:
+            want = 2 if k == "glued-2" else 1
+            self.assertIn(f"{k}.bin: {want} build paths: binary home path", out, k)
+
+    def test_urls_placeholders_and_the_ci_runner_do_not_count(self):
+        self.add({"ok.dylib": elf(b"https://example.org" + HOME + b"world/abc", b"x https://e.org/a" + USERS + b"b/c",
+                                  HOME + b"runner/.cargo/registry/src/y", USERS + b"runner/work/a/b.rs",
+                                  HOME + b"user/project/a.rs", b"symbol_table_entry")})
+        self.assertEqual(run(self.repo, "--tree")[0], 0)
 
     def test_a_named_allowance_takes_the_binary_at_its_count_and_only_for_a_file(self):
         self.add({"fixtures/sample.so": elf(HOME + b"someuser/.cargo/registry/src/x", HOME + b"someuser/b/c.rs")})
-        commit(self.repo, {".public-text.toml": '[public-text]\n[[public-text.allow]]\npath = "fixtures/sample.so"\n'
-                                                 'class = "binary home path"\ncount = 2\nwhy = "a fixture of the build path check"\n'})
+        allow = '[public-text]\n[[public-text.allow]]\npath = "{p}"\nclass = "binary home path"\ncount = {n}\nwhy = "a fixture"\n'
+        commit(self.repo, {".public-text.toml": allow.format(p="fixtures/sample.so", n=2)})
         self.assertEqual(run(self.repo, "--tree")[0], 0)
-        commit(self.repo, {".public-text.toml": '[public-text]\n[[public-text.allow]]\npath = "fixtures/sample.so"\n'
-                                                 'class = "binary home path"\ncount = 1\nwhy = "a fixture of the build path check"\n'})
-        code, out = run(self.repo, "--tree")
-        self.assertIn("allow fixtures/sample.so / binary home path allows 2 lines", out)
-        commit(self.repo, {".public-text.toml": '[public-text]\n[[public-text.allow]]\npath = "fixtures/"\n'
-                                                 'class = "binary home path"\ncount = 2\nwhy = "a fixture"\n'})
+        commit(self.repo, {".public-text.toml": allow.format(p="fixtures/sample.so", n=1)})
+        self.assertIn("allow fixtures/sample.so / binary home path allows 2 lines", run(self.repo, "--tree")[1])
+        commit(self.repo, {".public-text.toml": allow.format(p="fixtures/", n=2)})
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(run(self.repo, "--tree")[0], 2)
+
+    def test_containers_are_read_and_what_cannot_be_read_is_reported(self):
+        import bz2, gzip, lzma, tarfile, zipfile, zlib
+        so = elf(USERS + b"ys/.cargo/registry/src/x/lib.rs")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("lib/arm64-v8a/libx.so", so)
+        apk = buf.getvalue()
+        outer = io.BytesIO()
+        with zipfile.ZipFile(outer, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("inner.apk", apk)
+        tbuf = io.BytesIO()
+        with tarfile.open(fileobj=tbuf, mode="w:gz") as t:
+            info = tarfile.TarInfo("pkg/libx.so")
+            info.size = len(so)
+            t.addfile(info, io.BytesIO(so))
+        self.add({"app.apk": apk, "nested.zip": outer.getvalue(), "x.crate": tbuf.getvalue(), "s.gz": gzip.compress(so),
+                  "s.bz2": bz2.compress(so), "s.xz": lzma.compress(so), "s.zlib": zlib.compress(so), "s.zst": __import__("compression.zstd").zstd.compress(so),
+                  "bad.zip": b"PK\x03\x04garbage\0\0", "a.7z": b"7z\xbc\xaf\x27\x1c\0\0rest",
+                  "clean.zip": self.zipped(b"symbol_table_entry\0")})
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1, out)
+        for name in ("app.apk", "nested.zip", "x.crate", "s.gz", "s.bz2", "s.xz", "s.zlib", "s.zst"):
+            self.assertIn(f"{name}: 1 build paths: binary home path", out, name)
+        self.assertIn("bad.zip: zip: unscanned container", out)
+        self.assertIn("a.7z: 7z: unscanned container", out)
+        self.assertNotIn("clean.zip", out)
+
+    def zipped(self, data: bytes) -> bytes:
+        import zipfile
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("a.bin", data)
+        return buf.getvalue()
+
+    def test_an_lfs_pointer_is_reported_in_both_modes(self):
+        self.add({"big.so": b"version https://git-lfs.github.com/spec/v1\noid sha256:" + b"0" * 64 + b"\nsize 123\n"})
+        self.assertIn("big.so: Git LFS pointer: unscanned LFS object", run(self.repo, "--tree")[1])
+        self.assertIn("big.so: Git LFS pointer: unscanned LFS object", run(self.repo, "--range", "HEAD~1..HEAD")[1])
+
+    def test_a_symlink_and_a_submodule_are_not_binary_findings(self):
+        self.add({"a.bin": elf(b"symbol_table_entry")})
+        os.symlink("a.bin", self.repo / "link.bin")
+        sha = git(self.repo, "rev-parse", "HEAD").strip()
+        git(self.repo, "add", "-A")
+        git(self.repo, "update-index", "--add", "--cacheinfo", f"160000,{sha},sub")
+        git(self.repo, "commit", "-q", "-m", "x")
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 0, out)
+        self.assertIn("not read: 1 entries (first: sub (submodule))", out)
+        self.assertEqual(run(self.repo, "--range", "HEAD~1..HEAD")[0], 0)
 
     def test_a_clean_binary_and_a_repository_without_binaries_pass(self):
         self.assertEqual(run(self.repo, "--tree")[0], 0)  # no binary: nothing to compare here, not a failure
@@ -536,7 +602,6 @@ class BinaryBuildPaths(Base):
         code, out = run(self.repo, "--tree")
         self.assertEqual(code, 1, out)
         self.assertIn("2 binary files were not read as binary (first: b.wasm)", out)
-
 
 class Fork(Base):
     def config(self, text: str, **kw):

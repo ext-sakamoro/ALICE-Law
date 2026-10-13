@@ -1384,7 +1384,7 @@ class PackageText(unittest.TestCase):
         blob = b"\x7fELF\0\0" + b"/ho" + b"me/someuser/.cargo/registry/src/x/lib.rs" + b"\0\xff"
         code, out = self.gate({"Cargo.toml": b"x", "jni/libfoo.so": blob})
         self.assertEqual(code, 1, out)
-        self.assertIn("the package carries internal text: jni/libfoo.so: 1 printable runs: binary home path", out)
+        self.assertIn("the package carries internal text: jni/libfoo.so: 1 build paths: binary home path", out)
         self.assertNotIn("someuser", out)
         code, out = self.gate({"Cargo.toml": b"x", "jni/libfoo.so": b"\x7fELF\0\0symbol_table\0\xff"})
         self.assertEqual(code, 0, out)

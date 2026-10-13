@@ -1221,9 +1221,8 @@ def package_text_problems(body: bytes, name: str, version: str, repo: Path, ref:
             path = f"{manifest_dir}/{inner}" if manifest_dir else inner
             data = t.extractfile(m).read()
             found = ptc.scan_text(path, inner, path) + ptc.scan_text(path, ptc.text_of(data), path)
-            if b"\0" in data:
-                # a compiled file in the package: the build paths in its printable runs
-                found += ptc.binary_findings(path, data, path)
+            # a compiled file, a container or an LFS pointer in the package: its build paths, or unscanned
+            found += ptc.file_findings(path, data, path)
             for f in found:
                 problems.append(f"{name} {version}: the package carries internal text: {f}")
     if files == 0:
