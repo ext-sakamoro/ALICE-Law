@@ -1547,5 +1547,79 @@ class SecretInventory(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             rt.secret_inventory(None)
 
+
+class VariablesAndHosts(unittest.TestCase):
+    def test_variables_are_declared_with_a_purpose_and_never_as_credentials(self):
+        inv = {"repo": [], "environments": {"pypi": []}, "reviewers": {}, "variables": ["A"], "env_variables": {"pypi": ["B"]}}
+        self.assertEqual(len(rt.variable_problems("c", "R", {}, inv)), 2)
+        ok = {"A": {"purpose": "a flag"}, "pypi:B": {"purpose": "x"}}
+        self.assertEqual(rt.variable_problems("c", "R", ok, inv), [])
+        stale = dict(ok, GONE={"purpose": "y"})
+        self.assertIn("does not have", rt.variable_problems("c", "R", stale, inv)[0])
+        rt.load_roster(ROSTER + '\n[variables."R"]\nA = { purpose = "a flag" }\n')
+        for bad in ('A = { purpose = "t", publishing = true }', 'A = "x"', 'A = { purpose = "" }'):
+            with self.assertRaises(rt.RosterError, msg=bad):
+                rt.load_roster(ROSTER + f'\n[variables."R"]\n{bad}\n')
+
+    def test_dependabot_secrets_are_inventoried(self):
+        inv = {"repo": [], "environments": {}, "reviewers": {}, "dependabot": ["D"]}
+        self.assertIn("not declared", rt.secret_problems("c", "R", {}, inv)[0])
+        self.assertIn("publishing credential", rt.secret_problems("c", "R", {"dependabot:D": {"purpose": "x", "publishing": True}}, inv)[0])
+        self.assertEqual(rt.secret_problems("c", "R", {"dependabot:D": {"purpose": "x", "publishing": False}}, inv), [])
+
+    def test_every_list_is_read_page_by_page_and_counted(self):
+        pages = {}
+
+        def fake_run(cmd, *a, **kw):
+            path = cmd[2]
+            base, _, query = path.partition("?")
+            page = int(dict(x.split("=") for x in query.split("&")).get("page", "1")) if query else 1
+            key = "variables" if "variables" in base else "environments" if base.endswith("environments") else "secrets"
+            if base.endswith("actions/secrets"):
+                total, names = 150, [f"S{i}" for i in range(150)]
+            elif base.endswith("actions/variables") and pages.get("short"):
+                total, names = 3, ["V0", "V1"]  # GitHub counts 3, lists 2
+            else:
+                total, names = 0, []
+            chunk = names[(page - 1) * 100: page * 100]
+            body = {"total_count": total, key: [{"name": n} for n in chunk]}
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(body), "")
+        real = rt.subprocess.run
+        rt.subprocess.run = fake_run
+        try:
+            inv = rt.secret_inventory("o/r")
+            self.assertEqual(len(inv["repo"]), 150)
+            pages["short"] = True
+            with self.assertRaises(RuntimeError):
+                rt.secret_inventory("o/r")
+        finally:
+            rt.subprocess.run = real
+
+    def hosts(self, runs_on: str, head: str = TAG, hosts=None, env=None, reviewers=None, extra: str = ""):
+        job = f"  p:\n    runs-on: {runs_on}\n" + (f"    environment: {env}\n" if env else "") + extra + "    steps:\n      - run: make\n"
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP, ".github/workflows/w.yml": head + "jobs:\n" + job})
+            problems, _ = rt.workflow_publish_problems(repo, ref, "c", "o/r", lambda o, e: 0, {}, reviewers or {}, hosts or {})
+        return [p for p in problems if "self-hosted" in p]
+
+    def test_a_self_hosted_job_on_a_release_trigger_needs_an_approved_environment_or_a_declaration(self):
+        for runs_on in ("[self-hosted, windows, ue5]", "self-hosted", "my-box", "${{ vars.RUNNER }}", "[linux, gpu]"):
+            self.assertEqual(len(self.hosts(runs_on)), 1, runs_on)
+        self.assertEqual(len(self.hosts("${{ matrix.os }}", extra="    strategy:\n      matrix:\n        os: [self-hosted]\n")), 1)
+        for runs_on in ("ubuntu-latest", "windows-2022", "macos-15-intel", "${{ matrix.os }}"):
+            self.assertEqual(self.hosts(runs_on), [], runs_on)
+        self.assertEqual(self.hosts("self-hosted", head="on:\n  push:\n    branches: [main]\n"), [])
+        self.assertEqual(self.hosts("self-hosted", env="build", reviewers={"build": 1}), [])
+        self.assertEqual(len(self.hosts("self-hosted", env="build", reviewers={"build": 0})), 1)
+        declared = {"w.yml:p": {"purpose": "the engine build", "registry-credentials-on-host": False}}
+        self.assertEqual(self.hosts("self-hosted", hosts=declared), [])
+
+    def test_the_roster_declares_self_hosted_jobs_without_host_credentials(self):
+        rt.load_roster(ROSTER + '\n[self-hosted."R"]\n"w.yml:p" = { purpose = "x", registry-credentials-on-host = false }\n')
+        for bad in ('"w.yml:p" = { purpose = "x", registry-credentials-on-host = true }', '"w.yml:p" = { purpose = "x" }',
+                    '"p" = { purpose = "x", registry-credentials-on-host = false }'):
+            with self.assertRaises(rt.RosterError, msg=bad):
+                rt.load_roster(ROSTER + f'\n[self-hosted."R"]\n{bad}\n')
+
 if __name__ == "__main__":
     unittest.main()
