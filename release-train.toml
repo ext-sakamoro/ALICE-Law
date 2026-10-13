@@ -194,7 +194,7 @@ required-ci = [
 
 [crate.alice-lol-macro]
 version = "0.3.0"
-state = "planned"
+state = "prepared"
 order = 9
 repo = "ALICE-LOL"
 tag = "alice-lol-macro-v{version}"
