@@ -1379,6 +1379,16 @@ class PackageText(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("text:          every file of the package", out)
 
+    def test_a_build_path_compiled_into_a_packaged_binary_is_refused(self):
+        # (the home directory is spelled in pieces: this file is public text too)
+        blob = b"\x7fELF\0\0" + b"/ho" + b"me/someuser/.cargo/registry/src/x/lib.rs" + b"\0\xff"
+        code, out = self.gate({"Cargo.toml": b"x", "jni/libfoo.so": blob})
+        self.assertEqual(code, 1, out)
+        self.assertIn("the package carries internal text: jni/libfoo.so: 1 printable runs: binary home path", out)
+        self.assertNotIn("someuser", out)
+        code, out = self.gate({"Cargo.toml": b"x", "jni/libfoo.so": b"\x7fELF\0\0symbol_table\0\xff"})
+        self.assertEqual(code, 0, out)
+
     def test_a_package_with_no_file_compares_nothing(self):
         problems, n = rt.package_text_problems(crate_bytes("alice-zip", "0.10.0", {}), "alice-zip", "0.10.0",
                                                Path("."), "HEAD", None, "")

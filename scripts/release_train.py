@@ -1200,9 +1200,9 @@ def load_public_text():
 def package_text_problems(body: bytes, name: str, version: str, repo: Path, ref: str, repo_name: str | None,
                           manifest_dir: str) -> tuple[list[str], int]:
     """the published text of the package read by scripts/public_text_check.py (each file's path
-    and text, binary files by their printable runs), with the source repository's settings and
-    allow-list (paths taken back to the repository: <manifest dir>/<path in the crate>);
-    (problems, files read)"""
+    and text, binary files by their printable runs and the build paths in them), with the source
+    repository's settings and allow-list (paths taken back to the repository: <manifest dir>/<path
+    in the crate>); (problems, files read)"""
     ptc = load_public_text()
     ptc.CONFIG.update(ptc.load_config(str(repo), ref))
     ptc.ALLOW_STATE["allowed"] = dict(ptc.ALLOWED.get(repo_name, {})) if repo_name else {}
@@ -1220,12 +1220,11 @@ def package_text_problems(body: bytes, name: str, version: str, repo: Path, ref:
             files += 1
             path = f"{manifest_dir}/{inner}" if manifest_dir else inner
             data = t.extractfile(m).read()
+            found = ptc.scan_text(path, inner, path) + ptc.scan_text(path, ptc.text_of(data), path)
             if b"\0" in data:
-                text = "\n".join(" ".join(tok for tok in ptc.TOKEN_RE.findall(r.decode("ascii")) if len(tok) >= 4)
-                                 for r in ptc.PRINTABLE_RUN_RE.findall(data))
-            else:
-                text = data.decode("utf-8", errors="replace")
-            for f in ptc.scan_text(path, inner, path) + ptc.scan_text(path, text, path):
+                # a compiled file in the package: the build paths in its printable runs
+                found += ptc.binary_findings(path, data, path)
+            for f in found:
                 problems.append(f"{name} {version}: the package carries internal text: {f}")
     if files == 0:
         problems.append(f"{name} {version}: the package text check read no file (compared nothing)")

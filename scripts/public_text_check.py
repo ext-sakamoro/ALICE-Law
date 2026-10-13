@@ -288,9 +288,11 @@ CONFIG: dict = {"technical-paths": [], "upstream-fork": False, "upstream-base": 
 # is never allowed by class (only by its hash in ALLOWED, or not at all)
 # these name a person, a device or a network: allowed only for a single file (a linter's own
 # word list and its tests), never for a directory
-FILE_ONLY_CLASSES = {"session name", "session id", "device", "private address"}
+# a binary file's build paths: allowed only for a single file (a deliberate fixture), counted in printable runs
+FILE_ONLY_CLASSES = {"session name", "session id", "device", "private address", "binary home path"}
 CLASS_ALLOWABLE = {"agent process", "work session", "session name", "session id", "internal tracker",
-                   "note link", "internal note", "instruction source", "device", "private address"}
+                   "note link", "internal note", "instruction source", "device", "private address",
+                   "binary home path"}
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 
 
@@ -356,14 +358,14 @@ def load_config(repo: str, rev: str) -> dict:
 CLASS_USED: dict = {}
 
 
-def class_allowed(path: str | None, label: str) -> bool:
-    """the repository's settings allow this kind of finding in the path (counted)"""
+def class_allowed(path: str | None, label: str, n: int = 1) -> bool:
+    """the repository's settings allow this kind of finding in the path (counted: n lines or runs)"""
     if path is None:
         return False
     for e in CONFIG["allow"]:
         if e["class"] == label and e["path"] in scopes(path):
             key = (e["path"], e["class"])
-            CLASS_USED[key] = CLASS_USED.get(key, 0) + 1
+            CLASS_USED[key] = CLASS_USED.get(key, 0) + n
             return True
     return False
 
@@ -504,21 +506,83 @@ UTF16LE_RUN_RE = re.compile(rb"(?:[\x20-\x7e]\x00){6,}")
 UTF16BE_RUN_RE = re.compile(rb"(?:\x00[\x20-\x7e]){6,}")
 
 
+# a build path compiled into a binary file (a compiler records source paths, such as the
+# dependency sources under ~/.cargo/registry/src/, in debug info and panic messages): bytes have
+# no token boundary, so a home path counts anywhere in a printable run that is not inside a URL
+# or a longer path (or right after `file://`), and cargo's registry or git checkout under any
+# home but the CI runner's counts wherever it is
+BINARY_HOME_RE = re.compile(r"(?:(?<![A-Za-z0-9._~%/\-])|(?<=file://))/(?:Users|home)/"
+                            r"(?!(?:runner|user|USER|username|you|me|name|Shared)/)[A-Za-z0-9._\-]+/")
+BINARY_REGISTRY_RE = re.compile(r"/(?:Users|home)/(?!runner/)[^/\s]+/\.cargo/(?:registry|git)/")
+
+
+def blob_bytes(repo: str, rev: str, path: str) -> bytes:
+    return subprocess.run(["git", "-c", "core.quotePath=false", "-C", repo, "show", f"{rev}:{path}"],
+                          check=True, capture_output=True).stdout
+
+
+def binary_runs(data: bytes) -> list[str]:
+    """a binary file's printable ASCII runs of 6 or more characters, and the same runs in UTF-16
+    (little and big endian)"""
+    runs = [m.group(0).decode("ascii") for m in PRINTABLE_RUN_RE.finditer(data)]
+    le = list(UTF16LE_RUN_RE.finditer(data))
+    runs += [m.group(0).decode("utf-16-le") for m in le]
+    # a little-endian run read one byte off is the same text as a big-endian run: a big-endian
+    # run that overlaps a little-endian one is not counted twice
+    spans = [(m.start(), m.end()) for m in le]
+    runs += [m.group(0).decode("utf-16-be") for m in UTF16BE_RUN_RE.finditer(data)
+             if not any(m.start() < b and a < m.end() for a, b in spans)]
+    return runs
+
+
+def binary_text(data: bytes) -> str:
+    # tokens of fewer than 4 characters are dropped: in image or compiled bytes a short
+    # printable run is usually noise that happens to spell a short word
+    return "\n".join(" ".join(t for t in TOKEN_RE.findall(r) if len(t) >= 4) for r in binary_runs(data))
+
+
+def binary_build_paths(data: bytes) -> int:
+    """the number of a binary file's printable runs that hold a home directory path"""
+    return sum(1 for r in binary_runs(data) if BINARY_HOME_RE.search(r) or BINARY_REGISTRY_RE.search(r))
+
+
+def binary_findings(where: str, data: bytes, path: str | None) -> list[str]:
+    """the build paths in a binary file, as the path and a count (never the text)"""
+    n = binary_build_paths(data)
+    if n and not class_allowed(path, "binary home path", n):
+        return [f"{where}: {n} printable runs: binary home path"]
+    return []
+
+
 def blob_text(repo: str, rev: str, path: str) -> str:
     """the file's text; for a binary file (a NUL byte), its printable ASCII runs of 6 or more
     characters, one per line, and the same runs in UTF-16 (little and big endian), so a word
     stored in a binary file is still read; within a run only tokens of 4 or more characters are
     kept (compressed text, such as a PNG zTXt chunk or a PDF stream, is not decompressed)"""
-    data = subprocess.run(["git", "-c", "core.quotePath=false", "-C", repo, "show", f"{rev}:{path}"],
-                          check=True, capture_output=True).stdout
-    if b"\0" in data:
-        runs = [m.group(0).decode("ascii") for m in PRINTABLE_RUN_RE.finditer(data)]
-        runs += [m.group(0).decode("utf-16-le") for m in UTF16LE_RUN_RE.finditer(data)]
-        runs += [m.group(0).decode("utf-16-be") for m in UTF16BE_RUN_RE.finditer(data)]
-        # tokens of fewer than 4 characters are dropped: in image or compiled bytes a short
-        # printable run is usually noise that happens to spell a short word
-        return "\n".join(" ".join(t for t in TOKEN_RE.findall(r) if len(t) >= 4) for r in runs)
-    return data.decode("utf-8", errors="replace")
+    return text_of(blob_bytes(repo, rev, path))
+
+
+def is_binary(data: bytes) -> bool:
+    return b"\0" in data
+
+
+def text_of(data: bytes) -> str:
+    return binary_text(data) if is_binary(data) else data.decode("utf-8", errors="replace")
+
+
+def git_binaries(repo: str, ref: str, paths: list[str]) -> set[str]:
+    """the paths git itself takes as binary at ref (not empty, and no line `git grep -I` reads)"""
+    sizes = {}
+    for entry in paths_z(git(repo, "ls-tree", "-r", "-z", "-l", ref)):
+        meta, _, p = entry.partition("\t")
+        size = meta.split()[-1]
+        sizes[p] = int(size) if size.isdigit() else 0
+    r = subprocess.run(["git", "-c", "core.quotePath=false", "-C", repo, "grep", "-I", "-z", "--name-only",
+                        "-e", "", ref], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode not in (0, 1):
+        raise subprocess.CalledProcessError(r.returncode, "git grep", stderr=r.stderr)
+    text = {p.split(":", 1)[1] for p in paths_z(r.stdout) if ":" in p}
+    return {p for p in paths if sizes.get(p, 0) > 0 and p not in text}
 
 
 def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
@@ -529,12 +593,22 @@ def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
         # upstream project's text as it was forked)
         ours = set(paths_z(git(repo, "diff", "-z", "--name-only", "--no-renames", f"{CONFIG['upstream-base']}..{ref}")))
         paths = [p for p in paths if p in ours]
+    scanned_binaries = set()
     for path in paths:
         if path in EXEMPT:
             continue
         compared += 1
         findings += [f"path {f}" for f in scan_text(path, path, path)]
-        findings += scan_text(path, blob_text(repo, ref, path), path)
+        data = blob_bytes(repo, ref, path)
+        findings += scan_text(path, text_of(data), path)
+        if is_binary(data):
+            scanned_binaries.add(path)
+            findings += binary_findings(path, data, path)
+    # every file git takes as binary went through the binary scan (a repository with no binary
+    # file compares nothing here, and that is not a failure)
+    missed = sorted(git_binaries(repo, ref, [p for p in paths if p not in EXEMPT]) - scanned_binaries)
+    if missed:
+        findings.append(f"{len(missed)} binary files were not read as binary (first: {missed[0]})")
     return findings, compared
 
 
@@ -575,8 +649,10 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
             added = added_lines(repo, commit, path)
             if not added and git(repo, "diff-tree", "--root", "--no-commit-id", "--numstat", "-r", commit,
                                  "--", ":(literal)" + path).startswith("-\t-\t"):
-                # a binary file: its printable runs at this commit
-                findings += [f"commit {short} {f}" for f in scan_text(path, blob_text(repo, commit, path), path)]
+                # a binary file: its printable runs at this commit, and the build paths in them
+                data = blob_bytes(repo, commit, path)
+                findings += [f"commit {short} {f}" for f in scan_text(path, text_of(data), path)]
+                findings += [f"commit {short} {f}" for f in binary_findings(path, data, path)]
             for n, text in added:
                 findings += [f"commit {short} {path}:{n}: {k}" for k in kinds(text, path)]
     return findings, compared, files
@@ -592,9 +668,12 @@ def suggest_allow(repo: str, ref: str, scope: str) -> int:
         if path in EXEMPT or scope not in scopes(path):
             continue
         files += 1
-        for f in scan_text(path, path, path) + scan_text(path, blob_text(repo, ref, path), path):
+        data = blob_bytes(repo, ref, path)
+        for f in scan_text(path, path, path) + scan_text(path, text_of(data), path):
             label = f.rsplit(": ", 1)[-1]
             counts[label] = counts.get(label, 0) + 1
+        if is_binary(data) and binary_build_paths(data):
+            counts["binary home path"] = counts.get("binary home path", 0) + binary_build_paths(data)
     if files == 0:
         print(f"error: no file under {scope} at {ref}", file=sys.stderr)
         return 2

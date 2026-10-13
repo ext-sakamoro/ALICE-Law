@@ -461,6 +461,83 @@ class Binary(Base):
         self.assertEqual(run(self.repo, "--tree")[0], 0)
 
 
+# home directories spelled in pieces so this file's own text holds no home path
+HOME = b"/ho" + b"me/"
+USERS = b"/Use" + b"rs/"
+
+
+def elf(*strings: bytes) -> bytes:
+    """a small ELF-like blob: a header, NUL-separated strings, padding"""
+    return b"\x7fELF\x02\x01\x01\0" + b"\0" * 8 + b"\0".join(strings) + b"\0" + b"\xff" * 16
+
+
+class BinaryBuildPaths(Base):
+    """a home directory compiled into a tracked binary file (a build path in debug info or a
+    panic message) is a finding, given as the path and a count"""
+
+    def add(self, files: dict[str, bytes]):
+        for name, data in files.items():
+            (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.repo / name).write_bytes(data)
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "x")
+
+    def test_a_registry_path_in_a_binary_is_found_in_both_modes_without_its_text(self):
+        reg = HOME + b"someuser/.cargo/registry/src/x/lib.rs"
+        self.add({"libs/libfoo.so": elf(b"panicked at", reg, b"index out of bounds")})
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("libs/libfoo.so: 1 printable runs: binary home path", out)
+        self.assertNotIn("someuser", out)
+        code, out = run(self.repo, "--range", "HEAD~1..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("libs/libfoo.so: 1 printable runs: binary home path", out)
+
+    def test_a_home_path_counts_inside_a_run_but_not_in_a_url_or_for_the_ci_runner(self):
+        self.add({"a.dylib": elf(b"xx:" + USERS + b"someone/src/main.rs", b"\x01" + USERS + b"other/b.rs"),
+                  "ok.dylib": elf(b"https://example.org" + HOME + b"world/abc", HOME + b"runner/.cargo/registry/src/y",
+                                  USERS + b"runner/work/a/b.rs")})
+        code, out = run(self.repo, "--tree")
+        self.assertIn("a.dylib: 2 printable runs: binary home path", out)
+        self.assertNotIn("ok.dylib", out)
+        self.add({"f.so": elf(b"see file://" + USERS + b"bob/x.rs")})  # a local file URL is a path
+        self.assertIn("f.so: 1 printable runs: binary home path", run(self.repo, "--tree")[1])
+        # cargo's checkout under a placeholder home, inside a longer run: only the registry shape takes it
+        self.add({"reg.so": elf(b"build" + USERS + b"user/.cargo/git/checkouts/q/src/a.rs")})
+        self.assertIn("reg.so: 1 printable runs: binary home path", run(self.repo, "--tree")[1])
+        self.add({"u.dll": b"MZ\0\0" + "build C:".encode("utf-16-le") + (USERS + b"wide/proj/").decode().encode("utf-16-le") + b"\0\0"})
+        self.assertIn("u.dll: 1 printable runs: binary home path", run(self.repo, "--tree")[1])
+
+    def test_a_named_allowance_takes_the_binary_at_its_count_and_only_for_a_file(self):
+        self.add({"fixtures/sample.so": elf(HOME + b"someuser/.cargo/registry/src/x", HOME + b"someuser/b/c.rs")})
+        commit(self.repo, {".public-text.toml": '[public-text]\n[[public-text.allow]]\npath = "fixtures/sample.so"\n'
+                                                 'class = "binary home path"\ncount = 2\nwhy = "a fixture of the build path check"\n'})
+        self.assertEqual(run(self.repo, "--tree")[0], 0)
+        commit(self.repo, {".public-text.toml": '[public-text]\n[[public-text.allow]]\npath = "fixtures/sample.so"\n'
+                                                 'class = "binary home path"\ncount = 1\nwhy = "a fixture of the build path check"\n'})
+        code, out = run(self.repo, "--tree")
+        self.assertIn("allow fixtures/sample.so / binary home path allows 2 lines", out)
+        commit(self.repo, {".public-text.toml": '[public-text]\n[[public-text.allow]]\npath = "fixtures/"\n'
+                                                 'class = "binary home path"\ncount = 2\nwhy = "a fixture"\n'})
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(run(self.repo, "--tree")[0], 2)
+
+    def test_a_clean_binary_and_a_repository_without_binaries_pass(self):
+        self.assertEqual(run(self.repo, "--tree")[0], 0)  # no binary: nothing to compare here, not a failure
+        self.add({"lib.a": elf(b"symbol_table_entry", b"rustc version 1.90")})
+        self.assertEqual(run(self.repo, "--tree")[0], 0)
+
+    def test_skipping_binaries_is_caught(self):
+        # mutant: no file is taken as binary; the files git takes as binary are then reported unread
+        self.add({"libs/libfoo.so": elf(b"symbol_table_entry"), "b.wasm": b"\0asm\x01\0\0\0" + b"\0" * 9000 + b"tail"})
+        saved = ptc.is_binary
+        self.addCleanup(lambda: setattr(ptc, "is_binary", saved))
+        ptc.is_binary = lambda data: False
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("2 binary files were not read as binary (first: b.wasm)", out)
+
+
 class Fork(Base):
     def config(self, text: str, **kw):
         return commit(self.repo, {".public-text.toml": text}, **kw)
