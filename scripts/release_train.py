@@ -36,6 +36,8 @@
         the latest GitHub Actions run of that workflow on SHA, the job does not have
         exactly the expected legs (a count of "<job>" / "<job> (...)" names, or the exact
         names), or one leg is not completed with success (skipped is not success)
+      - a workflow of the repository at SHA publishes to crates.io (a `cargo publish` step
+        without --dry-run, or a publish action): a tag push would publish outside this gate
       - the package (`cargo package --list` of the manifest) carries a file under
         .github/, scripts/, docs/ or logs/, or a file or directory of private notes (named by
         hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
@@ -343,6 +345,47 @@ def patch_ids(repo: Path, ref: str) -> set[str]:
     out = subprocess.run(["git", "-C", str(repo), "patch-id", "--stable"], input=log, check=True,
                          capture_output=True, env=GIT_ENV).stdout.decode()
     return {line.split()[0] for line in out.splitlines() if line.strip()}
+
+
+WORKFLOW_PUBLISH_RE = re.compile(r"\bcargo\s+publish\b(?![^\n]*--dry-run)|uses:\s*katyo/publish-crates|uses:\s*rust-lang/crates-io-auth-action")
+# a package registry other than crates.io: allowed only in a job behind an approval environment
+OTHER_PUBLISH_RE = re.compile(r"uses:\s*pypa/gh-action-pypi-publish|\btwine\s+upload\b|\bmaturin\s+(?:publish|upload)\b"
+                              r"|\bnpm\s+publish\b(?![^\n]*--dry-run)")
+JOB_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*$")
+
+
+def workflow_publish_problems(repo: Path, ref: str, crate: str) -> tuple[list[str], int]:
+    """a workflow of the repository at ref that publishes outside this gate: a crates.io publish
+    (a `cargo publish` step without --dry-run, or a publish action), or a PyPI / npm publish in a
+    job without an `environment` (approval); a tag push would publish without the gate;
+    (problems, workflow files read)"""
+    try:
+        names = [n for n in git(repo, "ls-tree", "--name-only", f"{ref}:.github/workflows").splitlines()
+                 if n.endswith((".yml", ".yaml"))]
+    except subprocess.CalledProcessError:
+        names = []
+    problems = []
+    for n in names:
+        lines = git(repo, "show", f"{ref}:.github/workflows/{n}").splitlines()
+        jobs_at = next((k for k, l in enumerate(lines) if l.rstrip() == "jobs:"), len(lines))
+        starts = [k for k in range(jobs_at + 1, len(lines)) if JOB_RE.match(lines[k])] + [len(lines)]
+        env_of = {}
+        for a, b in zip(starts, starts[1:]):
+            has_env = any(re.match(r"^    environment:", l) for l in lines[a:b])
+            for k in range(a, b):
+                env_of[k] = has_env
+        for k, line in enumerate(lines):
+            if re.match(r"\s*(?:#|-?\s*name:)", line):
+                continue  # a comment, or the label of a step
+            if WORKFLOW_PUBLISH_RE.search(line):
+                problems.append(f"{crate}: .github/workflows/{n}:{k + 1} publishes to crates.io outside this gate "
+                                f"(a tag push would publish without it): remove that step")
+            elif OTHER_PUBLISH_RE.search(line) and not env_of.get(k, False):
+                problems.append(f"{crate}: .github/workflows/{n}:{k + 1} publishes to a package registry in a job "
+                                f"without an approval environment")
+    if not names:
+        problems.append(f"{crate}: no workflow read at {ref} (.github/workflows; compared nothing)")
+    return problems, len(names)
 
 
 def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: str) -> tuple[list[str], int]:
@@ -1122,6 +1165,9 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             problems += gate_problems
             hist, n = history_problems(a.repo, a.ref, a.crate, roster[a.crate], a.manifest_path)
             problems += hist
+            compared += n
+            wf, n = workflow_publish_problems(a.repo, a.ref, a.crate)
+            problems += wf
             compared += n
             if roster[a.crate].get("required-ci"):
                 github = tomllib.loads(roster_text).get("train", {}).get("github")

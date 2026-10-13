@@ -125,6 +125,8 @@ def make_repo(d: str, files: dict[str, str]) -> tuple[Path, str]:
     # no background gc / maintenance writing into .git while the test removes it
     git(repo, "config", "gc.auto", "0")
     git(repo, "config", "maintenance.auto", "false")
+    if not any(rel.startswith(".github/workflows/") for rel in files):
+        files = {**files, ".github/workflows/ci.yml": "jobs:\n  test:\n    steps:\n      - run: cargo test\n"}
     if "CHANGELOG.md" not in files:
         # a release heading for every version a manifest of the fixture names (the gate requires one)
         versions = sorted({v for rel, text in files.items() if rel.endswith("Cargo.toml")
@@ -1370,6 +1372,57 @@ class PackageText(unittest.TestCase):
                                                Path("."), "HEAD", None, "")
         self.assertEqual(n, 0)
         self.assertTrue(any("compared nothing" in p for p in problems))
+
+
+class WorkflowPublisher(unittest.TestCase):
+    def problems(self, workflow: str):
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP, ".github/workflows/release.yml": workflow})
+            return rt.workflow_publish_problems(repo, ref, "alice-zip")
+
+    def test_a_publishing_step_is_refused(self):
+        for wf in ("jobs:\n  p:\n    steps:\n      - run: cargo publish\n",
+                   "jobs:\n  p:\n    steps:\n      - run: cargo publish --locked -p x\n",
+                   "jobs:\n  p:\n    steps:\n      - uses: katyo/publish-crates@v2\n"):
+            problems, n = self.problems(wf)
+            self.assertEqual((len(problems), n), (1, 1), wf)
+            self.assertIn("release.yml:4", problems[0])
+
+    def test_a_dry_run_or_a_comment_passes(self):
+        for wf in ("jobs:\n  p:\n    steps:\n      - run: cargo publish --dry-run\n",
+                   "jobs:\n  p:\n    steps:\n      - name: cargo publish\n        run: echo later\n",
+                   "# cargo publish is done by hand\njobs: {}\n"):
+            self.assertEqual(self.problems(wf), ([], 1), wf)
+
+    def test_no_workflow_directory_compares_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP, ".github/workflows/": ""})
+            problems, n = rt.workflow_publish_problems(repo, ref, "alice-zip")
+        self.assertEqual(n, 0)
+        self.assertIn("compared nothing", problems[0])
+
+    def test_pypi_and_npm_publish_need_an_approval_environment(self):
+        bare = "jobs:\n  wheels:\n    runs-on: x\n    steps:\n      - uses: pypa/gh-action-pypi-publish@abc\n"
+        problems, _ = self.problems(bare)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("without an approval environment", problems[0])
+        gated = "jobs:\n  wheels:\n    runs-on: x\n    environment: pypi\n    steps:\n      - uses: pypa/gh-action-pypi-publish@abc\n"
+        self.assertEqual(self.problems(gated)[0], [])
+        other_job = ("jobs:\n  a:\n    environment: pypi\n    steps: []\n  b:\n    steps:\n      - run: npm publish\n")
+        self.assertEqual(len(self.problems(other_job)[0]), 1)  # the environment of another job does not count
+        self.assertEqual(self.problems("jobs:\n  b:\n    steps:\n      - run: npm publish --dry-run\n")[0], [])
+
+    def test_the_gate_refuses_a_repository_with_a_publishing_workflow(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP, ".github/workflows/r.yml": "jobs:\n  p:\n    steps:\n      - run: cargo publish\n"})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager)
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertIn("publishes to crates.io outside this gate", out.getvalue())
 
 if __name__ == "__main__":
     unittest.main()
