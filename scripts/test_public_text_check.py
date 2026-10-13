@@ -553,16 +553,33 @@ class BinaryBuildPaths(Base):
             info.size = len(so)
             t.addfile(info, io.BytesIO(so))
         self.add({"app.apk": apk, "nested.zip": outer.getvalue(), "x.crate": tbuf.getvalue(), "s.gz": gzip.compress(so),
-                  "s.bz2": bz2.compress(so), "s.xz": lzma.compress(so), "s.zlib": zlib.compress(so), "s.zst": __import__("compression.zstd").zstd.compress(so),
+                  "s.bz2": bz2.compress(so), "s.xz": lzma.compress(so), "s.zlib": zlib.compress(so),
                   "bad.zip": b"PK\x03\x04garbage\0\0", "a.7z": b"7z\xbc\xaf\x27\x1c\0\0rest",
                   "clean.zip": self.zipped(b"symbol_table_entry\0")})
         code, out = run(self.repo, "--tree")
         self.assertEqual(code, 1, out)
-        for name in ("app.apk", "nested.zip", "x.crate", "s.gz", "s.bz2", "s.xz", "s.zlib", "s.zst"):
+        for name in ("app.apk", "nested.zip", "x.crate", "s.gz", "s.bz2", "s.xz", "s.zlib"):
             self.assertIn(f"{name}: 1 build paths: binary home path", out, name)
         self.assertIn("bad.zip: zip: unscanned container", out)
         self.assertIn("a.7z: 7z: unscanned container", out)
         self.assertNotIn("clean.zip", out)
+
+    def test_a_zstd_stream_is_read_or_reported_by_the_python_at_hand(self):
+        so = elf(USERS + b"ys/.cargo/registry/src/x/lib.rs")
+        if ptc.zstd_available():
+            from compression import zstd
+            self.add({"s.zst": zstd.compress(so)})
+            self.assertIn("s.zst: 1 build paths: binary home path", run(self.repo, "--tree")[1])
+        else:
+            self.add({"s.zst": b"\x28\xb5\x2f\xfd" + b"\0" * 16})
+        # a Python without the reader: the stream is reported, the run goes on and says so
+        saved = ptc.zstd_available
+        self.addCleanup(lambda: setattr(ptc, "zstd_available", saved))
+        ptc.zstd_available = lambda: False
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("s.zst: zstd, zstd unavailable before Python 3.14: unscanned container", out)
+        self.assertIn("has no zstd reader", out)
 
     def zipped(self, data: bytes) -> bytes:
         import zipfile

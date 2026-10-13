@@ -603,7 +603,9 @@ def _members(data: bytes, kind: str) -> list[tuple[str, bytes]]:
     if kind == "xz":
         return [("", lzma.decompress(data))]
     if kind == "zstd":
-        from compression import zstd  # Python 3.14 or later; before that an ImportError: unscanned
+        if not zstd_available():
+            raise LookupError("zstd unavailable before Python 3.14")
+        from compression import zstd
         return [("", zstd.decompress(data))]
     raise ValueError(kind)
 
@@ -629,6 +631,8 @@ def build_paths(data: bytes, path: str = "", depth: int = 0, budget: list | None
             return 0, [f"{kind}, nested too deep"]
         try:
             members = _members(data, kind)
+        except LookupError as e:  # a reader this Python does not have
+            return 0, [f"{kind}, {e.args[0]}"]
         except Exception:  # an unknown, damaged, encrypted or unsupported container: reported, never passed
             return 0, [kind]
     n, unscanned = 0, []
@@ -640,6 +644,16 @@ def build_paths(data: bytes, path: str = "", depth: int = 0, budget: list | None
         n += got
         unscanned += more
     return n, unscanned
+
+
+def zstd_available() -> bool:
+    """the standard library reads zstd (Python 3.14 or later); before that a zstd stream is reported
+    as an unscanned container"""
+    try:
+        import compression.zstd  # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 def is_lfs_pointer(data: bytes) -> bool:
@@ -879,10 +893,6 @@ def main(argv: list[str] | None = None) -> int:
                    help="print the allow-list entry for NAME in SCOPE (a repository-relative file, or a "
                         "directory prefix ending in /)")
     a = ap.parse_args(argv)
-    if sys.version_info < (3, 14):
-        # the same files read the same way everywhere: zstd streams need compression.zstd (3.14)
-        print("error: Python 3.14 or later is needed", file=sys.stderr)
-        return 2
     if a.allow_hash is not None:
         path, name = a.allow_hash
         allowable = (hashlib.sha256(" ".join(name.split()).lower().encode("utf-8")).hexdigest() in PRIVATE_NAME_HASHES
@@ -939,6 +949,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"public text: {REPO_CONFIG}: " + "; ".join(settings))
     if SKIPPED:
         print(f"public text: not read: {len(SKIPPED)} entries (first: {SKIPPED[0]})")
+    if not zstd_available():
+        print(f"public text: Python {sys.version_info.major}.{sys.version_info.minor} has no zstd reader: "
+              f"a zstd stream is an unscanned container (Python 3.14 reads it)")
     print(f"public text: {len(findings)} findings in {what}" + (f" ({allowed} allowed mentions)" if allowed else ""))
     return 1 if findings else 0
 
