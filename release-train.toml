@@ -199,11 +199,12 @@ order = 9
 repo = "ALICE-LOL"
 tag = "alice-lol-macro-v{version}"
 manifest-path = "alice-lol-macro/Cargo.toml"
-# 0.3.0 は ALICE-LOL の geometry 識別子と G2 の raw max / min の版 (1f6c4ee まで) と一緒に公開する
+# 0.3.0 は ALICE-LOL の geometry 識別子と G2 の raw max / min の版、alice-llm の要求を "2" に
+# 上げた版 (64a904b) と、CHANGELOG に日付を入れた版 (4c86842 まで) と一緒に公開する
 # ALICE-LOL の workspace は sibling repository を path で引くので、gate と公開は sibling を
 # ALICE-LOL の Cargo.lock の版に合わせた checkout の隣で行う (SDF v6.0.0、Zip v0.10.0、Physics v3.0.0、
-# Kinematics 0.2.0、LLM 1.6.0)
-must-contain = ["1f6c4ee80a52b8935b67fc1c853e14cffaf254fe"]
+# Kinematics 0.2.0、LLM v2.0.0)
+must-contain = ["4c8684237d764272a4e11cd8384a3f60a9adf6a5"]
 changelog-has = [
     "`SdfNode::taper(child, factor)` を呼ぶ",
     "`::alice_lol::Vec2` を生成する",
@@ -243,11 +244,12 @@ order = 10
 repo = "ALICE-LOL"
 tag = "alice-lol-v{version}"
 manifest-path = "alice-lol/Cargo.toml"
-# 0.4.0 は macro 0.3.0 の公開の後 llm-bridge は ALICE-LLM main の API (llama3::GrammarPrefix 等) を使うので、
-# それを含む alice-llm 2.0.0 の公開と要求の "2" への引き上げが先 (crates.io の alice-llm 1.6.0 には無く、consumer build が
-# 全 feature で refuse する) 公開済みの 0.3.0 の llm-bridge は crate の外の lol.gbnf を include_str! で読み、
+# 0.4.0 は macro 0.3.0 の公開の後 llm-bridge は alice-llm 2.0.0 の API (llama3::GrammarPrefix 等) を使い、
+# 要求を "2" に上げた版 (64a904b) と CHANGELOG に日付を入れた版 (4c86842) を含める (consumer build の
+# 全 feature は crates.io の alice-llm 2.0.0 で build する)
+# 公開済みの 0.3.0 の llm-bridge は crate の外の lol.gbnf を include_str! で読み、
 # package に無いので build できない (yank するかは 0.4.0 の公開後に判断する)
-must-contain = ["1f6c4ee80a52b8935b67fc1c853e14cffaf254fe"]
+must-contain = ["4c8684237d764272a4e11cd8384a3f60a9adf6a5"]
 changelog-has = [
     "**破壊的変更:** `gridfinity_bin` / `gridfinity_bin_ex`",
     "**識別子の変更:** `AuditLaw::law_id` は `x-metric` の式",
