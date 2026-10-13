@@ -59,3 +59,62 @@ jobs:
       - name: Test
         if: steps.resolve.outputs.expected != 'true'
         run: cargo test --release --locked -- --nocapture
+
+  digest:
+    # f32::max / f32::min leave the sign of an equal-zero result to the target, and
+    # x86_64 and aarch64 differ: the released crates must give the same digest on both
+    name: Digest on ${{ matrix.arch }}
+    needs: roundtrip
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Resolve against crates.io as it is today
+        id: resolve
+        run: python3 ../scripts/expected_failure.py e2e-published-resolve -- cargo generate-lockfile
+      - name: Test and record the digest
+        if: steps.resolve.outputs.expected != 'true'
+        run: |
+          test "$(uname -m)" = "${{ matrix.arch }}"
+          ALICE_LAW_E2E_DIGEST_OUT="$RUNNER_TEMP/digest-${{ matrix.arch }}" cargo test --release --locked -- --nocapture
+          cat "$RUNNER_TEMP/digest-${{ matrix.arch }}"
+      - if: steps.resolve.outputs.expected != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digest-${{ matrix.arch }}
+          if-no-files-found: error
+
+  digest-compare:
+    name: The same digest on both architectures
+    needs: digest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+      - name: Compare
+        run: |
+          n=$(ls digests | wc -l)
+          test "$n" -eq 2 || { echo "expected 2 digests, found $n"; exit 1; }
+          cat digests/*
+          a=$(cat digests/digest-arm64); b=$(cat digests/digest-x86_64); g=$(cat e2e/golden/run.digest)
+          test -n "$a" && test "$a" = "$b" || { echo "aarch64 and x86_64 differ"; exit 1; }
+          test "$a" = "$g" || { echo "both differ from e2e/golden/run.digest"; exit 1; }
+          echo "aarch64 = x86_64 = golden: $a" >> "$GITHUB_STEP_SUMMARY"

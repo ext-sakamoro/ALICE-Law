@@ -154,11 +154,21 @@ class ExpectedFailure(unittest.TestCase):
         self.assertEqual(self.check(ROSTER + ENTRY, other)[0], 0)
 
     def test_the_repository_entries_name_cargo_exit_101(self):
-        # the repository may have no entry (every release one waited for is out); the rule itself
-        # is tested on fixtures above, and `--check` enforces it on whatever entries there are
-        entries = ef.load_entries((HERE.parent / "release-train.toml").read_text(encoding="utf-8"))
+        # the rule: 0 entries is valid (every release one waited for is out), and a wrapped step
+        # that fails with no entry is red; with entries, each wrapping cargo names exit 101
+        roster = (HERE.parent / "release-train.toml").read_text(encoding="utf-8")
+        entries = ef.load_entries(roster)
         for step, e in entries.items():
             self.assertEqual(e["exit"], 101, step)
+        steps = {step for f in sorted((HERE.parent / ".github" / "workflows").glob("*.yml"))
+                 for step, _ in ef.WRAPPED_STEP.findall(f.read_text(encoding="utf-8"))}
+        self.assertTrue(steps, "no workflow step is wrapped in expected_failure.py")
+        for step in sorted(steps - set(entries)):
+            rc, _, gout, _ = self.run_step(roster, 101, FAILS, step=step)
+            self.assertEqual(rc, 101, f"{step}: a failure with no entry keeps its status")
+            self.assertNotIn("expected=true", gout, step)
+            rc, _, gout, _ = self.run_step(roster, 0, "ok\n", step=step)
+            self.assertEqual((rc, "expected=false" in gout), (0, True), step)
 
     def test_an_expected_line_then_a_crash_is_red(self):
         rc, out, _, _ = self.run_step(ROSTER + ENTRY + "exit = 101\n", 139, FAILS)
