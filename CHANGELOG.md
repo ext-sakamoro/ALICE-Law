@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/public_text_check.py`: a user's home directory path (`/Users/<name>/`, `/home/<name>/`) is a finding; `release_train.py publish-gate` also refuses a package carrying `logs/`; `release-train.toml`: alice-llm 2.0.0 (incompatible with 1.6.0)
 - `release_train.py publish-gate`: every file of the package is read by `scripts/public_text_check.py` (the source repository's settings and allow-list); internal text in the package is refused
 - `scripts/public_text_check.py`: the session name, session id, device and private address classes are allowed only for a single file
 - `scripts/public_text_check.py`: an `allow` array of tables under `[public-text]` in a repository's `.public-text.toml` (`path`, `class`, `count`, `why`: a kind of finding allowed in a file or directory at a pinned number of lines; never a private name or path) and `--suggest-allow <ref> <scope>`, which prints those entries with the counts found

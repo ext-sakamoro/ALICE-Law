@@ -70,6 +70,10 @@ FORBIDDEN = [
                                  # numbered entries of an internal pitfall catalogue / CI template
                                  r"|罠\s*#\s*\d+|canonical\s+(?:CI\s+)?template")),
     ("instruction source", re.compile(r"user\s*(?:指示|裁定|指摘|判断)")),
+    # a user's home directory names the user ("/Users/<name>/", "/home/<name>/"); placeholders
+    # and the CI runner's home are not a name
+    ("home path", re.compile(r"/(?:Users|home)/(?!(?:runner|user|USER|username|you|me|name|Shared|<[^>/]+>|\$\{?[A-Za-z_]+\}?)/)"
+                             r"[A-Za-z0-9._\-]+/")),
     ("device", re.compile(words(r"Jetson", r"Mac\s?mini", r"MacBook") + r"|Raspberry\s*Pi")),
     ("private address", re.compile(r"\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b|\b192\.168\.\d{1,3}\.\d{1,3}\b|\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b")),
 ]

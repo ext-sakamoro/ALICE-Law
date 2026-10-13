@@ -160,8 +160,9 @@ required-ci = [
 [crate.alice-llm]
 # alice-lol 0.4.0 の llm-bridge が使う API (llama3::GrammarGenResult / GrammarPrefix /
 # Llama3Model::generate_grammar_prefixed) を含めて公開する crates.io の 1.6.0 までには無い
-# (1.3.0 から 1.6.0 は 1.7.0 の公開後に yank する) この repository は alice-llm を引かない
-version = "1.7.0"
+# 1.6.0 との間に互換でない変更があるので 2.0.0 (1.3.0 から 1.6.0 は 2.0.0 の公開後に yank する)
+# この repository は alice-llm を引かない
+version = "2.0.0"
 state = "planned"
 order = 8
 repo = "ALICE-LLM"
@@ -219,7 +220,7 @@ repo = "ALICE-LOL"
 tag = "alice-lol-v{version}"
 manifest-path = "alice-lol/Cargo.toml"
 # 0.4.0 は macro 0.3.0 の公開の後 llm-bridge は ALICE-LLM main の API (llama3::GrammarPrefix 等) を使うので、
-# それを含む alice-llm の公開と要求の引き上げが先 (crates.io の alice-llm 1.6.0 には無く、consumer build が
+# それを含む alice-llm 2.0.0 の公開と要求の "2" への引き上げが先 (crates.io の alice-llm 1.6.0 には無く、consumer build が
 # 全 feature で refuse する) 公開済みの 0.3.0 の llm-bridge は crate の外の lol.gbnf を include_str! で読み、
 # package に無いので build できない (yank するかは 0.4.0 の公開後に判断する)
 must-contain = ["1f6c4ee80a52b8935b67fc1c853e14cffaf254fe"]

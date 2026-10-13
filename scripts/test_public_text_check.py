@@ -391,6 +391,13 @@ class Shapes(unittest.TestCase):
                            ("crates/worker/src/lib.rs", "the worker and a subagent")):
             self.assertIn("agent process", ptc.kinds(line, path), (path, line))
 
+    def test_a_user_home_path_is_found_and_placeholders_pass(self):
+        for line in ("at /Users/someone/ALICE-X/src", "/home/alice/work/x", "sdk.dir=/Users/someone/Library/x"):
+            self.assertIn("home path", ptc.kinds(line), line)
+        for line in ("/Users/runner/work/x", "/home/runner/x", "/Users/Shared/Epic Games/x", "/Users/<you>/x",
+                     "/home/$USER/x", "/home/${USER}/x", "/Users/user/x", "~/ALICE-LOL/x", "/Users"):
+            self.assertNotIn("home path", ptc.kinds(line), line)
+
     def test_private_home_paths_are_found_and_public_ones_pass(self):
         saved = ptc.PRIVATE_REPO_HASHES
         self.addCleanup(lambda: setattr(ptc, "PRIVATE_REPO_HASHES", saved))

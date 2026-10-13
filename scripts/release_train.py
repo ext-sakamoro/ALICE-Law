@@ -37,7 +37,7 @@
         exactly the expected legs (a count of "<job>" / "<job> (...)" names, or the exact
         names), or one leg is not completed with success (skipped is not success)
       - the package (`cargo package --list` of the manifest) carries a file under
-        .github/, scripts/ or docs/, or a file or directory of private notes (named by
+        .github/, scripts/, docs/ or logs/, or a file or directory of private notes (named by
         hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
         crate; a package that lists no file exits 2
       - after those pass, the crate `cargo package` built is unpacked into a fresh
@@ -79,7 +79,7 @@ sys.modules["dep_consistency"] = dc
 _spec.loader.exec_module(dc)
 
 # what the published package must not carry: the repository's CI, tools and notes
-PACKAGE_EXCLUDED_DIRS = (".github/", "scripts/", "docs/")
+PACKAGE_EXCLUDED_DIRS = (".github/", "scripts/", "docs/", "logs/")
 # file / directory names of private notes, anywhere in the package: the sha256 of the
 # lower-case name (the names themselves are not written in this public repository)
 PRIVATE_NAME_SHA256 = frozenset({
