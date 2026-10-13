@@ -191,6 +191,9 @@ ALLOWED: dict[str, dict[str, int]] = {
         "c9bcfb4989c30783679258347fd0b88a3671780d1d3ef2e045042d3352a59d3a": 1,
         "a2ca05f4d55ca8dde59e831dcdf400e2785a129dbac2f89ec54dc28ee4bf9e47": 1,
         "04f5e1ffb8f5f13d28b764f887e3e99bfacbf07c0e425796a46711b3ac09fdd9": 1,
+        "ab6f260bbe48e591409dcd53d07c2044e0a4da028ef1d51bc2ae01ff4009ba58": 9,
+        "2d5c1dc549cf7601676a0cb7f5452d20be3fa5f1d0f55140305152ca6be22625": 1,
+        "e7fc9e6005c1c2d4cad2be2070cced19d2ce2874f93d046f0cabe7194671d81c": 2,
     },
     "text-to-print": {
         "8e3dd0d012a2b0488d6e314c823c6db1fc86881986cf3597f9cd9f3365108bb7": 2,
@@ -204,6 +207,10 @@ ALLOWED: dict[str, dict[str, int]] = {
         "971a9ffc87554fbe3293e6ca79ca2ec3be9f6e9fecc4138fece5c35a75900ef7": 3,
         "a5048c9fd6603806b175feb184239bfada1ace37eebf811c75fc400b14b58a05": 2,
         "40f8027e044e8aa3e2783d55bd9628c9b073f4e82458878f6bbdc8fcb3f791ed": 1,
+        "2929782d0900b7181a937f0dbd61ed44120d917cc882969b9453bdaaff0a4f95": 3,
+        "1a6aa0d6a24df8ac5f6ff7c0f6b30c35e552c12433f09c88e349ac63c3694c69": 4,
+        "ffb612c1d576098613b338fc531a3e5defa9fa781e646cbe11d0c55536a753aa": 1,
+        "e0ad96a94c13edafde51753681e9e1e936ec647f6df219c5ee6eb70c6da67bea": 1,
     },
     "voicebox": {
         "b1b065b5f49f4b5fa7b6c07d114bc8398be43a8635a8753ecd4155c2f3af524b": 4,
@@ -246,37 +253,80 @@ PRIVATE_REPO_HASHES: set[str] = set(_REPO_FILE.read_text(encoding="utf-8").split
 #   [public-text]
 #   upstream-fork = true          # a fork of another project's repository
 #   upstream-fork-why = "..."     # required with upstream-fork
-#   technical-paths = ["dir/", "file.ext"]   # more places where "worker" is the technical part
-# In a fork, `--range` reads only the commits whose author is the owner (by SHA-256 of the
-# author e-mail, so the address is not written here) and `--tree` is skipped while no commit
-# of the owner is in the history (the tree is the upstream project's text).
+#   upstream-base = "<sha>"       # required with upstream-fork: the upstream commit it was forked at
+#   technical-paths = ["dir/", "file.ext"]   # more places where the agent word is the technical part
+# In a fork, the commits up to the fork point are the upstream project's: `--range` reads
+# every commit after it (whoever wrote it) and `--tree` reads the files added or changed
+# after it (the settings file is one, so a fork always reads at least that). The
+# base must be an ancestor of the scanned commit. In `--range`, a commit that changes this file
+# is a finding ("policy config changed", with the keys that changed), so every change of an
+# exemption is in front of the reviewer.
 REPO_CONFIG = ".public-text.toml"
-OWN_AUTHOR_HASHES = {"f69d071222009f578276482605d59f63c44c0462cd0f6fa50f7b9f36d3e38ceb"}
-CONFIG: dict = {"technical-paths": [], "upstream-fork": False}
+CONFIG_KEYS = {"upstream-fork", "upstream-fork-why", "upstream-base", "technical-paths"}
+CONFIG: dict = {"technical-paths": [], "upstream-fork": False, "upstream-base": None}
+SHA_RE = re.compile(r"[0-9a-f]{40}")
 
 
-def load_config(repo: str, rev: str) -> dict:
+def read_config(repo: str, rev: str) -> dict | None:
+    """the [public-text] table of the settings file at rev, or None when there is no file"""
     r = subprocess.run(["git", "-C", repo, "show", f"{rev}:{REPO_CONFIG}"], capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
     if r.returncode != 0:
-        return {"technical-paths": [], "upstream-fork": False}
+        return None
     import tomllib
-    data = tomllib.loads(r.stdout).get("public-text", {})
-    unknown = set(data) - {"upstream-fork", "upstream-fork-why", "technical-paths"}
+    try:
+        return tomllib.loads(r.stdout).get("public-text", {})
+    except tomllib.TOMLDecodeError as e:
+        raise ValueError(f"{REPO_CONFIG} at {rev}: {e}") from e
+
+
+def load_config(repo: str, rev: str) -> dict:
+    data = read_config(repo, rev)
+    if data is None:
+        return {"technical-paths": [], "upstream-fork": False, "upstream-base": None}
+    unknown = set(data) - CONFIG_KEYS
     if unknown:
         raise ValueError(f"{REPO_CONFIG}: unknown keys {sorted(unknown)}")
     fork = data.get("upstream-fork", False)
     paths = data.get("technical-paths", [])
-    if not isinstance(fork, bool) or (fork and not str(data.get("upstream-fork-why", "")).strip()):
-        raise ValueError(f"{REPO_CONFIG}: upstream-fork must be true or false, and true needs upstream-fork-why")
+    base = data.get("upstream-base")
+    if not isinstance(fork, bool):
+        raise ValueError(f"{REPO_CONFIG}: upstream-fork must be true or false")
+    if fork:
+        if not str(data.get("upstream-fork-why", "")).strip():
+            raise ValueError(f"{REPO_CONFIG}: upstream-fork needs upstream-fork-why")
+        if not isinstance(base, str) or not SHA_RE.fullmatch(base):
+            raise ValueError(f"{REPO_CONFIG}: upstream-fork needs upstream-base, the full SHA of the fork point")
+        r = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", base, rev], capture_output=True)
+        if r.returncode != 0:
+            raise ValueError(f"{REPO_CONFIG}: upstream-base {base[:12]} is not an ancestor of {rev}")
+    elif base is not None or "upstream-fork-why" in data:
+        raise ValueError(f"{REPO_CONFIG}: upstream-base / upstream-fork-why without upstream-fork = true")
     if not isinstance(paths, list) or not all(isinstance(x, str) and x.strip() for x in paths):
         raise ValueError(f"{REPO_CONFIG}: technical-paths must be a list of paths")
-    return {"technical-paths": paths, "upstream-fork": fork}
+    return {"technical-paths": paths, "upstream-fork": fork, "upstream-base": base if fork else None}
 
 
-def own_commit(repo: str, commit: str) -> bool:
-    email = git(repo, "log", "-1", "--format=%ae", commit).strip().lower()
-    return hashlib.sha256(email.encode("utf-8")).hexdigest() in OWN_AUTHOR_HASHES
+def upstream_commit(repo: str, commit: str) -> bool:
+    """the commit is the fork point or before it (the upstream project's)"""
+    base = CONFIG["upstream-base"]
+    return bool(CONFIG["upstream-fork"] and base) and subprocess.run(
+        ["git", "-C", repo, "merge-base", "--is-ancestor", commit, base], capture_output=True).returncode == 0
+
+
+def config_changes(repo: str, commit: str) -> list[str]:
+    """the keys of the settings file this commit adds, removes or changes (sorted)"""
+    parent = git(repo, "rev-list", "--parents", "-n", "1", commit).split()[1:2]
+    try:
+        before = read_config(repo, parent[0]) if parent else None
+    except ValueError:
+        before = {"(unreadable)": True}
+    try:
+        after = read_config(repo, commit)
+    except ValueError:
+        after = {"(unreadable)": True}
+    before, after = before or {}, after or {}
+    return sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
 
 
 def worker_technical(path: str | None, line: str) -> bool:
@@ -370,21 +420,34 @@ def paths_z(out: str) -> list[str]:
 
 
 PRINTABLE_RUN_RE = re.compile(rb"[\x20-\x7e]{6,}")
+UTF16LE_RUN_RE = re.compile(rb"(?:[\x20-\x7e]\x00){6,}")
+UTF16BE_RUN_RE = re.compile(rb"(?:\x00[\x20-\x7e]){6,}")
 
 
 def blob_text(repo: str, rev: str, path: str) -> str:
     """the file's text; for a binary file (a NUL byte), its printable ASCII runs of 6 or more
-    characters, one per line, so a word stored in a binary file is still read"""
+    characters, one per line, and the same runs in UTF-16 (little and big endian), so a word
+    stored in a binary file is still read (compressed text, such as a PNG zTXt chunk or a PDF
+    stream, is not decompressed)"""
     data = subprocess.run(["git", "-c", "core.quotePath=false", "-C", repo, "show", f"{rev}:{path}"],
                           check=True, capture_output=True).stdout
     if b"\0" in data:
-        return "\n".join(m.group(0).decode("ascii") for m in PRINTABLE_RUN_RE.finditer(data))
+        runs = [m.group(0).decode("ascii") for m in PRINTABLE_RUN_RE.finditer(data)]
+        runs += [m.group(0).decode("utf-16-le") for m in UTF16LE_RUN_RE.finditer(data)]
+        runs += [m.group(0).decode("utf-16-be") for m in UTF16BE_RUN_RE.finditer(data)]
+        return "\n".join(runs)
     return data.decode("utf-8", errors="replace")
 
 
 def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
     findings, compared = [], 0
-    for path in paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", ref)):
+    paths = paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", ref))
+    if CONFIG["upstream-fork"]:
+        # a fork: the files the fork added or changed after the fork point (the others are the
+        # upstream project's text as it was forked)
+        ours = set(paths_z(git(repo, "diff", "-z", "--name-only", "--no-renames", f"{CONFIG['upstream-base']}..{ref}")))
+        paths = [p for p in paths if p in ours]
+    for path in paths:
         if path in EXEMPT:
             continue
         compared += 1
@@ -410,8 +473,8 @@ def added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
 def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
     findings, compared, files = [], 0, 0
     for commit in git(repo, "rev-list", "--no-merges", rng).splitlines():
-        if CONFIG["upstream-fork"] and not own_commit(repo, commit):
-            continue  # the upstream project's commit in a fork
+        if upstream_commit(repo, commit):
+            continue  # the upstream project's commit in a fork (up to the fork point)
         compared += 1
         short = commit[:12]
         findings += scan_text(f"commit {short} message", git(repo, "log", "-1", "--format=%B", commit))
@@ -419,6 +482,9 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
         # which quote non-ASCII names and end a name with a space in a tab)
         changed = paths_z(git(repo, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only",
                               "--no-renames", "--diff-filter=d", commit))
+        if REPO_CONFIG in changed:
+            keys = config_changes(repo, commit)
+            findings.append(f"commit {short} {REPO_CONFIG}: policy config changed ({', '.join(keys) or 'file'})")
         for path in changed:
             if path in EXEMPT:
                 continue
@@ -470,17 +536,14 @@ def main(argv: list[str] | None = None) -> int:
     ALLOW_STATE["used"] = {}
     try:
         CONFIG.update(load_config(a.repo, a.tree if a.tree is not None else a.range.split("..")[-1] or "HEAD"))
-        if a.tree is not None and CONFIG["upstream-fork"] and \
-                not any(own_commit(a.repo, c) for c in git(a.repo, "rev-list", a.tree).splitlines()):
-            print(f"public text: {a.tree} is an upstream fork with no commit of the owner yet; the tree is not "
-                  f"scanned ({REPO_CONFIG})")
-            return 0
         if a.tree is not None:
             findings, compared = scan_tree(a.repo, a.tree)
             what = f"{compared} files at {a.tree}"
             for h, want in sorted(ALLOW_STATE["allowed"].items()):
                 got = ALLOW_STATE["used"].get(h, 0)
-                if got != want:
+                if not isinstance(want, int) or isinstance(want, bool) or want < 1:
+                    findings.append(f"allow-list entry {h[:12]} of {name} has count {want!r}; an entry allows 1 line or more")
+                elif got != want:
                     findings.append(f"allow-list entry {h[:12]} of {name} allows {got} lines at {a.tree}, "
                                     f"its count is {want}" + (" (it allows nothing)" if got == 0 else ""))
         else:
@@ -498,6 +561,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: nothing was compared ({what})", file=sys.stderr)
         return 2
     allowed = sum(ALLOW_STATE["used"].values())
+    settings = [f"technical-paths {CONFIG['technical-paths']}"] if CONFIG["technical-paths"] else []
+    if CONFIG["upstream-fork"]:
+        settings.append(f"upstream fork at {CONFIG['upstream-base'][:12]}")
+    if settings:
+        print(f"public text: {REPO_CONFIG}: " + "; ".join(settings))
     print(f"public text: {len(findings)} findings in {what}" + (f" ({allowed} allowed mentions)" if allowed else ""))
     return 1 if findings else 0
 

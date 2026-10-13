@@ -268,6 +268,12 @@ class AllowList(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("allows 1 lines", out)
 
+    def test_a_count_below_one_is_refused(self):
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1, self.entry("docs/gone.md"): 0}}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("has count 0", out)
+
     def test_an_agent_word_or_a_note_link_can_be_allowed_too(self):
         commit(self.repo, {"skills/x/SKILL.md": "the skills entry [[kv_namespaces]]\n"})
         # (the path names the word too: the path line is one of the entry's lines)
@@ -412,6 +418,15 @@ class Binary(Base):
         self.assertIn("img.png", out)
         self.assertIn("agent process", out)
 
+    def test_utf16_text_in_a_binary_file_is_read(self):
+        for enc in ("utf-16-le", "utf-16-be"):
+            (self.repo / f"t-{enc}.bin").write_bytes(b"\0\xff" + "notes: a worker log".encode(enc) + b"\0\0")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "x")
+        code, out = run(self.repo, "--tree")
+        self.assertIn("t-utf-16-le.bin:", out)
+        self.assertIn("t-utf-16-be.bin:", out)
+
     def test_short_runs_are_not_read(self):
         # 5 printable bytes between NULs would read as a session name if the bytes were decoded as text
         (self.repo / "b.bin").write_bytes(b"\x89\0ys-6e\0\xff\0" * 4)
@@ -421,41 +436,84 @@ class Binary(Base):
 
 
 class Fork(Base):
-    def config(self, text: str):
-        commit(self.repo, {".public-text.toml": text})
+    def config(self, text: str, **kw):
+        return commit(self.repo, {".public-text.toml": text}, **kw)
 
-    def test_a_fork_without_an_owner_commit_skips_the_tree(self):
-        self.config('[public-text]\nupstream-fork = true\nupstream-fork-why = "upstream project"\n')
-        commit(self.repo, {"up.md": "a worker\n"})
+    def fork_config(self, base: str) -> str:
+        return f'[public-text]\nupstream-fork = true\nupstream-fork-why = "upstream project"\nupstream-base = "{base}"\n'
+
+    def commit_as(self, email: str, files: dict, message: str) -> str:
+        for rel, text in files.items():
+            (self.repo / rel).write_text(text, encoding="utf-8")
+        git(self.repo, "add", "-A")
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", message], check=True, capture_output=True,
+                       env={**ENV, "HOME": str(self.repo), "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_EMAIL": email})
+        return git(self.repo, "rev-parse", "HEAD").strip()
+
+    def test_the_tree_of_a_fork_reads_only_what_changed_after_the_fork_point(self):
+        commit(self.repo, {"up.md": "a worker\n", "up2.md": "fine\n"})
+        base = git(self.repo, "rev-parse", "HEAD").strip()
+        self.config(self.fork_config(base))
         code, out = run(self.repo, "--tree")
-        self.assertEqual(code, 0, out)
-        self.assertIn("not scanned", out)
-
-    def test_an_owner_commit_makes_the_fork_tree_scanned_and_range_reads_only_owner_commits(self):
-        saved = ptc.OWN_AUTHOR_HASHES
-        self.addCleanup(lambda: setattr(ptc, "OWN_AUTHOR_HASHES", saved))
-        ptc.OWN_AUTHOR_HASHES = {hashlib.sha256(b"t@t").hexdigest()}  # the test repository's author
-        self.config('[public-text]\nupstream-fork = true\nupstream-fork-why = "upstream project"\n')
-        commit(self.repo, {"up.md": "a worker\n"})
+        self.assertEqual(code, 0, out)  # the upstream text as forked is not read
+        self.assertIn("in 1 files", out)  # the settings file
+        commit(self.repo, {"up2.md": "now a worker edit\n", "ours.md": "a subagent\n"})
         code, out = run(self.repo, "--tree")
         self.assertEqual(code, 1, out)
-        ptc.OWN_AUTHOR_HASHES = {hashlib.sha256(b"someone@else").hexdigest()}
+        self.assertIn("up2.md:1: agent process", out)
+        self.assertIn("ours.md:1: agent process", out)
+        self.assertNotIn("up.md:", out)
+
+    def test_every_commit_after_the_fork_point_is_read_whoever_wrote_it(self):
+        self.commit_as("up@example.org", {"up.md": "a worker upstream\n"}, "upstream work")
+        base = git(self.repo, "rev-parse", "HEAD").strip()
+        self.config(self.fork_config(base))
+        self.commit_as("alias@example.net", {"leak.md": "notes: a worker log\n"}, "worker change")
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("leak.md:1: agent process", out)
+        self.assertIn("message:1: agent process", out)
+        self.assertNotIn("up.md", out)  # the upstream commit (up to the fork point) is not read
+        self.assertIn("upstream fork at", out)
+
+    def test_a_change_of_the_settings_is_a_finding_with_its_keys(self):
+        self.config('[public-text]\ntechnical-paths = ["svc/"]\n')
         code, out = run(self.repo, "--range", "HEAD~1..HEAD")
-        self.assertEqual(code, 2, out)  # no commit of the owner: nothing compared
+        self.assertEqual(code, 1, out)
+        self.assertIn(".public-text.toml: policy config changed (technical-paths)", out)
+        base = git(self.repo, "rev-parse", "HEAD~1").strip()
+        self.config(self.fork_config(base))
+        later = git(self.repo, "rev-parse", "HEAD").strip()
+        self.config(self.fork_config(later))  # the fork point moved forward
+        code, out = run(self.repo, "--range", "HEAD~1..HEAD")
+        self.assertIn("policy config changed (upstream-base)", out)
 
-    def test_a_fork_needs_a_reason_and_unknown_keys_are_refused(self):
-        self.config("[public-text]\nupstream-fork = true\n")
-        with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(run(self.repo, "--tree")[0], 2)
-        self.config('[public-text]\nupstream-fork = false\nworkers = ["x/"]\n')
-        with contextlib.redirect_stderr(io.StringIO()):
+    def test_a_fork_needs_a_reason_and_a_base_that_is_an_ancestor(self):
+        base = git(self.repo, "rev-parse", "HEAD").strip()
+        for text in ("[public-text]\nupstream-fork = true\n",
+                     '[public-text]\nupstream-fork = true\nupstream-fork-why = "x"\n',
+                     '[public-text]\nupstream-fork = true\nupstream-fork-why = "x"\nupstream-base = "abc"\n',
+                     self.fork_config("0" * 40),
+                     f'[public-text]\nupstream-base = "{base}"\n',
+                     '[public-text]\nupstream-fork = false\nworkers = ["x/"]\n'):
+            self.config(text)
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(run(self.repo, "--tree")[0], 2, text)
+
+    def test_a_base_that_is_not_an_ancestor_is_refused(self):
+        side = git(self.repo, "commit-tree", "HEAD^{tree}", "-m", "side").strip()  # a real commit, not an ancestor
+        self.config(self.fork_config(side))
+        with contextlib.redirect_stderr(io.StringIO()) as err:
             self.assertEqual(run(self.repo, "--tree")[0], 2)
 
-    def test_worker_paths_from_the_repository_settings(self):
+    def test_technical_paths_from_the_repository_settings(self):
         commit(self.repo, {"svc/a.rs": "spawn a worker\n"})
         self.assertEqual(run(self.repo, "--tree")[0], 1)
         self.config('[public-text]\ntechnical-paths = ["svc/"]\n')
-        self.assertEqual(run(self.repo, "--tree")[0], 0)
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 0, out)
+        self.assertIn("technical-paths ['svc/']", out)
+
 
 if __name__ == "__main__":
     unittest.main()
