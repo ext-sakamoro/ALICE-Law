@@ -314,6 +314,25 @@ def changelog_section(text: str, version: str) -> str | None:
     return None
 
 
+def release_heading_problem(text: str, version: str) -> str | None:
+    """why the `## [version]` heading is not a release heading (`## [version] - YYYY-MM-DD`
+    with a real date, not after tomorrow in UTC), or None"""
+    import datetime
+    for line in text.splitlines():
+        if line.startswith(f"## [{version}]"):
+            m = re.fullmatch(rf"## \[{re.escape(version)}\] - (\d{{4}}-\d{{2}}-\d{{2}})\s*", line)
+            if not m:
+                return f"the CHANGELOG.md heading {line!r} is not `## [{version}] - YYYY-MM-DD`"
+            try:
+                day = datetime.date.fromisoformat(m.group(1))
+            except ValueError:
+                return f"the CHANGELOG.md heading {line!r} has no real date"
+            if day > datetime.datetime.now(datetime.timezone.utc).date() + datetime.timedelta(days=1):
+                return f"the CHANGELOG.md heading {line!r} is dated in the future"
+            return None
+    return f"CHANGELOG.md has no [{version}] heading"
+
+
 PATCH_DEPTH = 2000
 
 
@@ -351,7 +370,7 @@ def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: s
             if pid not in have:
                 problems.append(f"{crate}: no commit in the last {PATCH_DEPTH} of {ref} has the patch {pid}")
     wanted = c.get("changelog-has", [])
-    if wanted:
+    if True:  # the release heading is checked for every crate; `changelog-has` adds lines
         here = str(Path(manifest_path).parent).replace("\\", "/")
         candidates = ([f"{here}/CHANGELOG.md"] if here not in ("", ".") else []) + ["CHANGELOG.md"]
         text = None
@@ -366,6 +385,10 @@ def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: s
         section = changelog_section(text, c["version"])
         if section is None:
             return problems + [f"{crate}: CHANGELOG.md has no [{c['version']}] section"], compared + 1
+        compared += 1
+        heading = release_heading_problem(text, c["version"])
+        if heading:
+            problems.append(f"{crate}: {heading}")
         for line in wanted:
             compared += 1
             if line not in section:
@@ -1077,6 +1100,13 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             with tempfile.TemporaryDirectory() as tmp:
                 crate_path = packager(a.repo, a.manifest_path, a.crate, version, a.target_dir or Path(tmp))
                 body = crate_path.read_bytes()
+            # `cargo publish` packages the working tree: packaging must leave it as it was (a lock
+            # rewritten because a sibling checkout has another version would not be what was gated)
+            after = checkout_problems(a.repo, a.ref)
+            if after:
+                for p in after:
+                    print(f"refused: after cargo package: {p}")
+                return 1
             consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir, roster[a.crate])
             for p in consumer_problems:
                 print(f"refused: {p}")

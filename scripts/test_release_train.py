@@ -12,6 +12,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 import subprocess
 import sys
 import tarfile
@@ -124,6 +125,11 @@ def make_repo(d: str, files: dict[str, str]) -> tuple[Path, str]:
     # no background gc / maintenance writing into .git while the test removes it
     git(repo, "config", "gc.auto", "0")
     git(repo, "config", "maintenance.auto", "false")
+    if "CHANGELOG.md" not in files:
+        # a release heading for every version a manifest of the fixture names (the gate requires one)
+        versions = sorted({v for rel, text in files.items() if rel.endswith("Cargo.toml")
+                           for v in re.findall(r'(?m)^version = "([^"]+)"', text)})
+        files = {**files, "CHANGELOG.md": "# Changelog\n\n" + "".join(f"## [{v}] - 2026-01-02\n\n- x\n\n" for v in versions)}
     for rel, text in files.items():
         f = repo / rel
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -1288,6 +1294,45 @@ class GateConsumer(unittest.TestCase):
                                consumer=lambda body, name, version, t, entry=None: seen.append(entry["consumer-features"]) or [])
         self.assertEqual((code, seen), (0, [[["svo"]]]))
 
+
+
+class ReleaseHeading(unittest.TestCase):
+    def test_a_dated_heading_passes_and_others_are_refused(self):
+        ok = "# C\n\n## [Unreleased]\n\n## [0.3.0] - 2026-10-13\n\n- x\n"
+        self.assertIsNone(rt.release_heading_problem(ok, "0.3.0"))
+        for text in ("## [0.3.0] - 未公開 (公開日を入れる)\n", "## [0.3.0]\n", "## [0.3.0] - 2026-13-01\n",
+                     "## [0.3.0] - 2999-01-01\n", "## [0.3.0] - 2026-10-13 (yanked)\n", "## [0.2.0] - 2026-01-01\n"):
+            self.assertIsNotNone(rt.release_heading_problem(text, "0.3.0"), text)
+
+    def test_the_gate_refuses_an_undated_heading_without_changelog_has(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP, "CHANGELOG.md": "## [0.10.0] - 未公開 (公開日を入れる)\n\n- x\n"})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager)
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertIn("is not `## [0.10.0] - YYYY-MM-DD`", out.getvalue())
+
+
+class PackagingLeavesTheTree(unittest.TestCase):
+    def test_a_packager_that_changes_a_tracked_file_is_refused(self):
+        def rewriting(repo, manifest_path, name, version, target_dir):
+            (repo / "Cargo.lock").write_text("# rewritten\n", encoding="utf-8")
+            return fake_packager(repo, manifest_path, name, version, target_dir)
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP, "Cargo.lock": "# lock\n"})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=rewriting)
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertIn("after cargo package", out.getvalue())
+        self.assertNotIn("go for", out.getvalue())
 
 if __name__ == "__main__":
     unittest.main()
