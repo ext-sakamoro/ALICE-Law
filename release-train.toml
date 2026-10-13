@@ -163,7 +163,7 @@ required-ci = [
 # 1.6.0 との間に互換でない変更があるので 2.0.0 (1.3.0 から 1.6.0 は 2.0.0 の公開後に yank する)
 # この repository は alice-llm を引かない
 version = "2.0.0"
-state = "prepared"
+state = "published"
 order = 8
 repo = "ALICE-LLM"
 law-dependency = false
