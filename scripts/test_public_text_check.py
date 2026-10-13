@@ -394,6 +394,11 @@ class Shapes(unittest.TestCase):
     def test_a_user_home_path_is_found_and_placeholders_pass(self):
         for line in ("at /Users/someone/ALICE-X/src", "/home/alice/work/x", "sdk.dir=/Users/someone/Library/x"):
             self.assertIn("home path", ptc.kinds(line), line)
+        for line in ("cd /home/someuser/x", '"/Users/someuser/x"', "file:///Users/someuser/x", "dir=(/home/someuser/a)"):
+            self.assertIn("home path", ptc.kinds(line), line)
+        for line in ("https://vrchat.com/home/world/wrld_x", "see github.com/x/home/y/z", "https://h/Users/someuser/x",
+                     "a/b/home/someuser/c"):
+            self.assertNotIn("home path", ptc.kinds(line), line)
         for line in ("/Users/runner/work/x", "/home/runner/x", "/Users/Shared/Epic Games/x", "/Users/<you>/x",
                      "/home/$USER/x", "/home/${USER}/x", "/Users/user/x", "~/ALICE-LOL/x", "/Users"):
             self.assertNotIn("home path", ptc.kinds(line), line)

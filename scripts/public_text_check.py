@@ -72,7 +72,10 @@ FORBIDDEN = [
     ("instruction source", re.compile(r"user\s*(?:指示|裁定|指摘|判断)")),
     # a user's home directory names the user ("/Users/<name>/", "/home/<name>/"); placeholders
     # and the CI runner's home are not a name
-    ("home path", re.compile(r"/(?:Users|home)/(?!(?:runner|user|USER|username|you|me|name|Shared|<[^>/]+>|\$\{?[A-Za-z_]+\}?)/)"
+    # a path token only: at the start of a line or after whitespace, a quote, `=`, a bracket, `:`,
+    # `,`, `;` or a backquote, or right after `file://` (a local file URL); not inside a URL
+    # (`https://vrchat.com/home/world/...`)
+    ("home path", re.compile(r"(?:^|(?<=[\s\"'=(\[`<,;:])|(?<=file://))/(?:Users|home)/(?!(?:runner|user|USER|username|you|me|name|Shared|<[^>/]+>|\$\{?[A-Za-z_]+\}?)/)"
                              r"[A-Za-z0-9._\-]+/")),
     # (any case: a host name is often the device name in lower case)
     ("device", re.compile(r"(?i:" + words(r"jetson", r"orin[\s-]*(?:nano|nx|agx)", r"mac\s?mini", r"macbook")
