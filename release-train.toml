@@ -167,6 +167,30 @@ state = "planned"
 order = 8
 repo = "ALICE-LLM"
 law-dependency = false
+must-contain = ["b3e94726d69effe1b5e0c1a3e1b39e76e7e4cf3c"]
+changelog-has = [
+    "**Breaking:** code built against 1.x needs a change in these places",
+    "`Llama3Model::generate_grammar_prefixed(",
+]
+required-ci = [
+    { workflow = "CI", job = "Test", legs = ["Test (ubuntu-latest / default)", "Test (ubuntu-latest / simd)", "Test (macos-latest / default)", "Test (macos-latest / simd)"] },
+    { workflow = "CI", job = "Clippy", legs = ["Clippy (-D warnings, default)", "Clippy (-D warnings, simd)", "Clippy (-D warnings, full)"] },
+    { workflow = "CI", job = "Format" },
+    { workflow = "CI", job = "rustdoc (-D warnings, docs.rs feature set)" },
+    { workflow = "CI", job = "Build (release)" },
+    { workflow = "CI", job = "Examples & server compile" },
+    { workflow = "CI", job = "GPU pipeline creation smoke test", legs = ["GPU pipeline creation smoke test (ubuntu-latest)", "GPU pipeline creation smoke test (macos-latest)"] },
+    { workflow = "CI", job = "Docs lint", legs = ["Docs lint (ubuntu-latest)", "Docs lint (macos-latest)", "Docs lint (windows-latest)"] },
+    { workflow = "CI", job = "actionlint (workflow YAML validation)" },
+    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
+    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
+    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
+    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
+    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_gbnf_parse" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_gguf_parse" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_sampling" },
+]
 
 [crate.alice-lol-macro]
 version = "0.3.0"
@@ -313,6 +337,17 @@ order = 13
 repo = "ALICE-ML"
 # この repository は alice-ml を引かない (scripts/dep_consistency.py CORE の外)
 law-dependency = false
+
+# The Actions secrets of each repository in the train, by name, with what they are for:
+# publish-gate reads the repository's secrets and refuses a secret that is not listed here, a
+# publishing credential outside an environment with required reviewers, and a job that receives
+# a publishing secret on a release / tag / dispatch / schedule trigger outside such an
+# environment. An environment secret is listed as "<environment>:<name>".
+[secrets."ALICE-SDF"]
+UNITY_LICENSE = { purpose = "the Unity licence of the Unity package build and tests", publishing = false }
+
+[secrets."ALICE-LLM"]
+CARGO_REGISTRY_TOKEN = { purpose = "a crates.io token used by the tag-push publish job (the job is removed in 2.0.0; the secret is to be deleted)", publishing = true }
 
 # Problems of the dependency consistency check (scripts/dep_consistency.py --roster)
 # that a release still to come removes. Each entry names the release (`until`); once
