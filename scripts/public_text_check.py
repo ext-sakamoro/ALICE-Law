@@ -257,6 +257,11 @@ PRIVATE_REPO_HASHES: set[str] = set(_REPO_FILE.read_text(encoding="utf-8").split
 #   upstream-fork-why = "..."     # required with upstream-fork
 #   upstream-base = "<sha>"       # required with upstream-fork: the upstream commit it was forked at
 #   technical-paths = ["dir/", "file.ext"]   # more places where the agent word is the technical part
+#   [[public-text.allow]]          # a kind of finding allowed in a scope, at a pinned count
+#   path = "scripts/lint.py"       # a file, or a directory ending in "/"
+#   class = "device"               # one of CLASS_ALLOWABLE
+#   count = 3                      # the number of lines it allows (in --tree, another number fails)
+#   why = "the linter's own word list"
 # In a fork, the commits up to the fork point are the upstream project's: `--range` reads
 # every commit after it (whoever wrote it) and `--tree` reads the files added or changed
 # after it (the settings file is one, so a fork always reads at least that). The
@@ -264,8 +269,13 @@ PRIVATE_REPO_HASHES: set[str] = set(_REPO_FILE.read_text(encoding="utf-8").split
 # is a finding ("policy config changed", with the keys that changed), so every change of an
 # exemption is in front of the reviewer.
 REPO_CONFIG = ".public-text.toml"
-CONFIG_KEYS = {"upstream-fork", "upstream-fork-why", "upstream-base", "technical-paths"}
-CONFIG: dict = {"technical-paths": [], "upstream-fork": False, "upstream-base": None}
+CONFIG_KEYS = {"upstream-fork", "upstream-fork-why", "upstream-base", "technical-paths", "allow"}
+CONFIG: dict = {"technical-paths": [], "upstream-fork": False, "upstream-base": None, "allow": []}
+# a kind of finding a repository may allow for a scope, at a pinned number of lines, with a
+# reason (a vocabulary linter's own word list and fixtures); a private name or a private path
+# is never allowed by class (only by its hash in ALLOWED, or not at all)
+CLASS_ALLOWABLE = {"agent process", "work session", "session name", "session id", "internal tracker",
+                   "note link", "internal note", "instruction source", "device", "private address"}
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 
 
@@ -285,7 +295,7 @@ def read_config(repo: str, rev: str) -> dict | None:
 def load_config(repo: str, rev: str) -> dict:
     data = read_config(repo, rev)
     if data is None:
-        return {"technical-paths": [], "upstream-fork": False, "upstream-base": None}
+        return {"technical-paths": [], "upstream-fork": False, "upstream-base": None, "allow": []}
     unknown = set(data) - CONFIG_KEYS
     if unknown:
         raise ValueError(f"{REPO_CONFIG}: unknown keys {sorted(unknown)}")
@@ -306,7 +316,38 @@ def load_config(repo: str, rev: str) -> dict:
         raise ValueError(f"{REPO_CONFIG}: upstream-base / upstream-fork-why without upstream-fork = true")
     if not isinstance(paths, list) or not all(isinstance(x, str) and x.strip() for x in paths):
         raise ValueError(f"{REPO_CONFIG}: technical-paths must be a list of paths")
-    return {"technical-paths": paths, "upstream-fork": fork, "upstream-base": base if fork else None}
+    allow = data.get("allow", [])
+    if not isinstance(allow, list):
+        raise ValueError(f"{REPO_CONFIG}: allow must be a list of [[public-text.allow]] tables")
+    seen = set()
+    for e in allow:
+        if (not isinstance(e, dict) or set(e) != {"path", "class", "count", "why"}
+                or not isinstance(e["path"], str) or not e["path"].strip() or e["path"].startswith("/")
+                or e["class"] not in CLASS_ALLOWABLE
+                or not isinstance(e["count"], int) or isinstance(e["count"], bool) or e["count"] < 1
+                or not isinstance(e["why"], str) or not e["why"].strip()):
+            raise ValueError(f"{REPO_CONFIG}: allow entry {e!r} is not {{path (a file, or a directory ending in /), "
+                             f"class (one of {sorted(CLASS_ALLOWABLE)}), count (1 or more lines), why}}")
+        if (e["path"], e["class"]) in seen:
+            raise ValueError(f"{REPO_CONFIG}: allow entry for {e['path']} / {e['class']} is listed twice")
+        seen.add((e["path"], e["class"]))
+    return {"technical-paths": paths, "upstream-fork": fork, "upstream-base": base if fork else None,
+            "allow": allow}
+
+
+CLASS_USED: dict = {}
+
+
+def class_allowed(path: str | None, label: str) -> bool:
+    """the repository's settings allow this kind of finding in the path (counted)"""
+    if path is None:
+        return False
+    for e in CONFIG["allow"]:
+        if e["class"] == label and e["path"] in scopes(path):
+            key = (e["path"], e["class"])
+            CLASS_USED[key] = CLASS_USED.get(key, 0) + 1
+            return True
+    return False
 
 
 def upstream_commit(repo: str, commit: str) -> bool:
@@ -406,7 +447,8 @@ def scan_text(where: str, text: str, path: str | None = None) -> list[str]:
                 and not NEXT_SESSION_RE.search(lines[n]):
             found.append("work session")
         for k in dict.fromkeys(found):
-            out.append(f"{where}:{n}: {k}")
+            if not class_allowed(path, k):
+                out.append(f"{where}:{n}: {k}")
     return out
 
 
@@ -504,6 +546,32 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
     return findings, compared, files
 
 
+def suggest_allow(repo: str, ref: str, scope: str) -> int:
+    """print the allow entries (TOML) for the classes found in the scope at ref, with counts"""
+    CONFIG.update(load_config(repo, ref))
+    CONFIG["allow"] = []
+    counts: dict[str, int] = {}
+    files = 0
+    for path in paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", ref)):
+        if path in EXEMPT or scope not in scopes(path):
+            continue
+        files += 1
+        for f in scan_text(path, path, path) + scan_text(path, blob_text(repo, ref, path), path):
+            label = f.rsplit(": ", 1)[-1]
+            counts[label] = counts.get(label, 0) + 1
+    if files == 0:
+        print(f"error: no file under {scope} at {ref}", file=sys.stderr)
+        return 2
+    for label in sorted(counts):
+        if label in CLASS_ALLOWABLE:
+            print(f'[[public-text.allow]]\npath = "{scope}"\nclass = "{label}"\ncount = {counts[label]}\n'
+                  f'why = ""  # fill in\n')
+        else:
+            print(f"# {counts[label]} lines of {label}: not allowed by class (a hash in ALLOWED, or fix the text)")
+    print(f"# {files} files under {scope} at {ref}")
+    return 0
+
+
 def repo_name(repo: str) -> str | None:
     """the repository's name from its origin URL (".../<name>.git"), or None"""
     r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"], capture_output=True, text=True)
@@ -521,6 +589,9 @@ def main(argv: list[str] | None = None) -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--tree", nargs="?", const="HEAD", metavar="REF")
     g.add_argument("--range", metavar="BASE..HEAD")
+    g.add_argument("--suggest-allow", nargs=2, metavar=("REF", "SCOPE"),
+                   help="print the [[public-text.allow]] entries that would allow, by class, what is found "
+                        "in SCOPE (a file, or a directory ending in /) at REF, with their counts")
     g.add_argument("--allow-hash", nargs=2, metavar=("SCOPE", "NAME"),
                    help="print the allow-list entry for NAME in SCOPE (a repository-relative file, or a "
                         "directory prefix ending in /)")
@@ -535,6 +606,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(allow_hash(path, name))
         return 0
+    CLASS_USED.clear()
+    if a.suggest_allow is not None:
+        return suggest_allow(a.repo, a.suggest_allow[0], a.suggest_allow[1])
     name = a.repo_name or repo_name(a.repo)
     ALLOW_STATE["allowed"] = dict(ALLOWED.get(name, {})) if name else {}
     ALLOW_STATE["used"] = {}
@@ -543,6 +617,11 @@ def main(argv: list[str] | None = None) -> int:
         if a.tree is not None:
             findings, compared = scan_tree(a.repo, a.tree)
             what = f"{compared} files at {a.tree}"
+            for e in CONFIG["allow"]:
+                got = CLASS_USED.get((e["path"], e["class"]), 0)
+                if got != e["count"]:
+                    findings.append(f"{REPO_CONFIG}: allow {e['path']} / {e['class']} allows {got} lines at {a.tree}, "
+                                    f"its count is {e['count']}")
             for h, want in sorted(ALLOW_STATE["allowed"].items()):
                 got = ALLOW_STATE["used"].get(h, 0)
                 if not isinstance(want, int) or isinstance(want, bool) or want < 1:

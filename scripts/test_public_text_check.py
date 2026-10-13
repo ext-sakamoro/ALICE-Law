@@ -529,5 +529,55 @@ class Fork(Base):
         self.assertIn("technical-paths ['svc/']", out)
 
 
+
+class ClassAllow(Base):
+    """a kind of finding allowed in a scope by the repository's settings, at a pinned count"""
+
+    def setUp(self):
+        super().setUp()
+        commit(self.repo, {"scripts/lint.py": 'DENY = [r"Jetson", r"workers?"]\nSAMPLE = "ys-0b"\nIP = "192.168.1.20"\n',
+                           "docs/a.md": "a Jetson board\n"})
+
+    def settings(self, entries):
+        text = "[public-text]\n" + "".join(
+            f'[[public-text.allow]]\npath = "{p}"\nclass = "{c}"\ncount = {n}\nwhy = "the linter\'s own word list"\n'
+            for p, c, n in entries)
+        commit(self.repo, {".public-text.toml": text})
+
+    def test_allowed_classes_pass_only_in_their_scope_and_at_their_count(self):
+        self.settings([("scripts/lint.py", "device", 1), ("scripts/lint.py", "agent process", 1),
+                       ("scripts/lint.py", "session name", 1), ("scripts/lint.py", "private address", 1)])
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("docs/a.md:1: device", out)  # another file is not in the scope
+        self.assertNotIn("scripts/lint.py:", out)
+        self.settings([("scripts/lint.py", "device", 2), ("scripts/lint.py", "agent process", 1),
+                       ("scripts/lint.py", "session name", 1), ("scripts/lint.py", "private address", 1),
+                       ("docs/", "device", 1)])
+        code, out = run(self.repo, "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("allow scripts/lint.py / device allows 1 lines", out)
+
+    def test_a_private_name_cannot_be_allowed_by_class_and_entries_are_checked(self):
+        for entries in ([("scripts/lint.py", "private name", 1)], [("scripts/lint.py", "device", 0)],
+                        [("/abs.py", "device", 1)], [("scripts/lint.py", "device", 1), ("scripts/lint.py", "device", 1)]):
+            self.settings(entries)
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(run(self.repo, "--tree")[0], 2, entries)
+        commit(self.repo, {".public-text.toml": '[public-text]\n[[public-text.allow]]\npath = "x"\nclass = "device"\ncount = 1\n'})
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(run(self.repo, "--tree")[0], 2)  # no reason
+
+    def test_suggest_allow_prints_the_entries_with_their_counts(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(ptc.main(["--repo", str(self.repo), "--suggest-allow", "HEAD", "scripts/lint.py"]), 0)
+        text = out.getvalue()
+        for cls in ("device", "agent process", "session name", "private address"):
+            self.assertIn(f'class = "{cls}"\ncount = 1', text)
+        self.assertIn("# 1 files under scripts/lint.py", text)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(ptc.main(["--repo", str(self.repo), "--suggest-allow", "HEAD", "nowhere/"]), 2)
+
 if __name__ == "__main__":
     unittest.main()

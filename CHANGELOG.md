@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/public_text_check.py`: an `allow` array of tables under `[public-text]` in a repository's `.public-text.toml` (`path`, `class`, `count`, `why`: a kind of finding allowed in a file or directory at a pinned number of lines; never a private name or path) and `--suggest-allow <ref> <scope>`, which prints those entries with the counts found
 - `release_train.py publish-gate`: every crate needs a `## [<version>] - YYYY-MM-DD` release heading in its CHANGELOG (an undated or placeholder heading, a date that does not exist or one after tomorrow is refused), and the checkout must still be clean after `cargo package`
 - `scripts/dep_consistency.py`: one version of every `alice-*` crate in `Cargo.lock`, all eight core crates present, and every `alice-*` requirement (this repository's and those of the resolved releases) accepting the latest release
 - `scripts/dep_consistency.py --roster`: problems a coming release removes are listed in `release-train.toml` under `[pending.<name>]` (`until`, `linked`, `requires`) and reported as expected with a count; an unlisted problem, an entry whose release is published, and a listed item that matches nothing fail the check
