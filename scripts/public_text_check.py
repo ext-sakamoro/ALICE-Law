@@ -11,6 +11,9 @@ next to a word naming a review or a session, and review labels.
                                              its path and its text
     public_text_check.py --range BASE..HEAD  the commits in the range: each message,
                                              each added line and each added path
+    public_text_check.py --allow-hash PATH NAME
+                                             the allow-list entry for a product's mention
+                                             of NAME in PATH (see ALLOWED)
 
 A finding prints the place and the kind of word, never the word itself (the output of
 CI is public too). This file and its tests hold the patterns and are not scanned.
@@ -151,22 +154,48 @@ def private_names(line: str) -> list[str]:
     return found
 
 
+# A product may name another company's product as a feature (a fixed agent-instruction
+# file name, a plugin manifest name, an extension's entry point); development-process
+# mentions are never allowed. Each allowed mention is held per repository as
+# sha256(<repo-relative path> NUL <name as private_names() returns it, lower case>), so the
+# entry neither names the product nor allows it outside that file. Build an entry with
+# `--allow-hash <path> <name>`. In `--tree`, an entry of this repository that allows
+# nothing fails the check (it is stale or mistyped).
+ALLOWED: dict[str, set[str]] = {
+}
+
+
+def allow_hash(path: str, phrase: str) -> str:
+    return hashlib.sha256((path + "\0" + " ".join(phrase.split()).lower()).encode("utf-8")).hexdigest()
+
+
+ALLOW_STATE = {"allowed": set(), "used": set()}
+
+
 # ---------------------------------------------------------------- scan
 
-def kinds(line: str) -> list[str]:
-    """the kinds of internal word in a line (labels, not the words)"""
+def kinds(line: str, path: str | None = None) -> list[str]:
+    """the kinds of internal word in a line (labels, not the words); a private name that this
+    repository's allow-list allows in `path` is not a finding"""
     found = [label for label, pattern in FORBIDDEN if pattern.search(line)]
-    if private_names(line):
+    names = private_names(line)
+    if path is not None and names:
+        hashes = {allow_hash(path, n) for n in names}
+        allowed = hashes & ALLOW_STATE["allowed"]
+        ALLOW_STATE["used"] |= allowed
+        if len(allowed) == len(hashes):
+            names = []
+    if names:
         found.append("private name")
     if session_ids(line) or REVIEW_LABEL_RE.search(line):
         found.append("session id")
     return found
 
 
-def scan_text(where: str, text: str) -> list[str]:
+def scan_text(where: str, text: str, path: str | None = None) -> list[str]:
     out = []
     for n, line in enumerate(text.splitlines(), 1):
-        for k in kinds(line):
+        for k in kinds(line, path):
             out.append(f"{where}:{n}: {k}")
     return out
 
@@ -182,8 +211,8 @@ def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
         if path in EXEMPT:
             continue
         compared += 1
-        findings += [f"path {f}" for f in scan_text(path, path)]
-        findings += scan_text(path, git(repo, "show", f"{ref}:{path}"))
+        findings += [f"path {f}" for f in scan_text(path, path, path)]
+        findings += scan_text(path, git(repo, "show", f"{ref}:{path}"), path)
     return findings, compared
 
 
@@ -198,27 +227,53 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int]:
             if line.startswith("+++ "):
                 path = line[6:] if line.startswith("+++ b/") else None
                 if path and path not in EXEMPT:
-                    findings += [f"commit {short} path {f}" for f in scan_text(path, path)]
+                    findings += [f"commit {short} path {f}" for f in scan_text(path, path, path)]
             elif line.startswith("@@ "):
                 m = HUNK_RE.match(line)
                 n = int(m.group(1)) if m else 0
             elif line.startswith("+") and path and path not in EXEMPT:
-                findings += [f"commit {short} {path}:{n}: {k}" for k in kinds(line[1:])]
+                findings += [f"commit {short} {path}:{n}: {k}" for k in kinds(line[1:], path)]
                 n += 1
     return findings, compared
+
+
+def repo_name(repo: str) -> str | None:
+    """the repository's name from its origin URL (".../<name>.git"), or None"""
+    r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"], capture_output=True, text=True)
+    url = r.stdout.strip().rstrip("/")
+    if r.returncode != 0 or not url:
+        return None
+    name = url.rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+    return name[:-4] if name.endswith(".git") else name
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--repo", default=".")
+    ap.add_argument("--repo-name", help="the repository the allow-list is read for (default: from the origin URL)")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--tree", nargs="?", const="HEAD", metavar="REF")
     g.add_argument("--range", metavar="BASE..HEAD")
+    g.add_argument("--allow-hash", nargs=2, metavar=("PATH", "NAME"),
+                   help="print the allow-list entry for NAME in the repository-relative PATH")
     a = ap.parse_args(argv)
+    if a.allow_hash is not None:
+        path, name = a.allow_hash
+        if hashlib.sha256(" ".join(name.split()).lower().encode("utf-8")).hexdigest() not in PRIVATE_NAME_HASHES:
+            print("error: NAME is not a name this check finds (give it as one word, or the words of the phrase)",
+                  file=sys.stderr)
+            return 2
+        print(allow_hash(path, name))
+        return 0
+    name = a.repo_name or repo_name(a.repo)
+    ALLOW_STATE["allowed"] = set(ALLOWED.get(name, set())) if name else set()
+    ALLOW_STATE["used"] = set()
     try:
         if a.tree is not None:
             findings, compared = scan_tree(a.repo, a.tree)
             what = f"{compared} files at {a.tree}"
+            stale = ALLOW_STATE["allowed"] - ALLOW_STATE["used"]
+            findings += [f"allow-list entry {h[:12]} of {name} allows nothing at {a.tree}" for h in sorted(stale)]
         else:
             findings, compared = scan_range(a.repo, a.range)
             what = f"{compared} commits in {a.range}"
@@ -230,7 +285,8 @@ def main(argv: list[str] | None = None) -> int:
     if compared == 0:
         print(f"error: nothing was compared ({what})", file=sys.stderr)
         return 2
-    print(f"public text: {len(findings)} findings in {what}")
+    allowed = len(ALLOW_STATE["used"])
+    print(f"public text: {len(findings)} findings in {what}" + (f" ({allowed} allowed mentions)" if allowed else ""))
     return 1 if findings else 0
 
 

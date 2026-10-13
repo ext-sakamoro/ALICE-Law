@@ -187,5 +187,76 @@ class SessionIds(Base):
         self.assertFalse(hasattr(ptc, "SESSION_ID_HASHES"))
 
 
+
+class AllowList(Base):
+    """a product's mention of a name, allowed per repository, file and name"""
+
+    def setUp(self):
+        super().setUp()
+        self.saved_allowed = ptc.ALLOWED
+        self.addCleanup(lambda: setattr(ptc, "ALLOWED", self.saved_allowed))
+        commit(self.repo, {"docs/plugin.md": f"install the {MADE_UP} plugin\n",
+                           "docs/other.md": f"see {MADE_UP}\n"})
+
+    def entry(self, path: str, name: str = MADE_UP) -> str:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(ptc.main(["--allow-hash", path, name]), 0)
+        return out.getvalue().strip()
+
+    def test_the_helper_builds_the_hash_the_matcher_uses(self):
+        self.assertEqual(self.entry("docs/plugin.md"), ptc.allow_hash("docs/plugin.md", MADE_UP))
+        self.assertEqual(self.entry("docs/plugin.md", "  ZORBLAT   Quux "), self.entry("docs/plugin.md"))
+        self.assertRegex(self.entry("docs/plugin.md"), r"^[0-9a-f]{64}$")
+
+    def test_the_helper_refuses_a_word_the_check_does_not_find(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(ptc.main(["--allow-hash", "docs/plugin.md", "ordinary words"]), 2)
+
+    def test_an_allowed_mention_passes_only_in_its_file_and_repository(self):
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md")}}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("docs/other.md:1: private name", out)
+        self.assertNotIn("docs/plugin.md", out)
+        self.assertIn("(1 allowed mentions)", out)
+        code, out = run(self.repo, "--repo-name", "another", "--tree")
+        self.assertIn("docs/plugin.md:1: private name", out)
+
+    def test_both_files_allowed_pass(self):
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"), self.entry("docs/other.md")}}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 0, out)
+
+    def test_an_entry_that_allows_nothing_fails(self):
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"), self.entry("docs/other.md"), self.entry("docs/gone.md")}}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("allows nothing", out)
+        self.assertNotIn(MADE_UP, out)
+
+    def test_another_repositorys_entries_are_not_stale_here(self):
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"), self.entry("docs/other.md")}, "elsewhere": {"0" * 64}}
+        self.assertEqual(run(self.repo, "--repo-name", "r", "--tree")[0], 0)
+
+    def test_added_lines_of_a_range_are_allowed_too(self):
+        ptc.ALLOWED = {"r": {self.entry("docs/new.md")}}
+        commit(self.repo, {"docs/new.md": f"the {MADE_UP} manifest\n"})
+        code, out = run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")
+        self.assertEqual(code, 0, out)
+
+    def test_commit_messages_are_never_allowed(self):
+        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md")}}
+        commit(self.repo, {"a.txt": "y\n"}, message=f"add {MADE_UP}")
+        code, out = run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("message:1: private name", out)
+
+    def test_the_repository_name_comes_from_the_origin_url(self):
+        git(self.repo, "remote", "add", "origin", "https://example.invalid/owner/some-repo.git")
+        self.assertEqual(ptc.repo_name(str(self.repo)), "some-repo")
+        git(self.repo, "remote", "set-url", "origin", "git@host:owner/other.git")
+        self.assertEqual(ptc.repo_name(str(self.repo)), "other")
+
 if __name__ == "__main__":
     unittest.main()
