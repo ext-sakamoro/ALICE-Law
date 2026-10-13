@@ -29,7 +29,7 @@ spec.loader.exec_module(rt)
 # tests are not crates, so the gate tests use a consumer that accepts them, and the real
 # one is tested on its own (ConsumerBuild)
 REAL_CONSUMER_BUILD = rt.consumer_build
-rt.consumer_build = lambda body, name, version, target_dir, feature_sets=None: []
+rt.consumer_build = lambda body, name, version, target_dir, entry=None: []
 
 ROSTER = """
 [crate.alice-det-math]
@@ -1063,8 +1063,8 @@ class ConsumerBuild(unittest.TestCase):
         lib = '#[cfg(all(feature = "a", feature = "b"))]\ncompile_error!("a with b");\n'
         crate = tiny_crate("gate-probe", "0.1.0", extra="\n[features]\na = []\nb = []\n", lib=lib)
         with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), [["a"], ["b"]]), [])
-            self.assertEqual(len(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), [["a", "b"]])), 1)
+            self.assertEqual(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), {"consumer-features": [["a"], ["b"]]}), [])
+            self.assertEqual(len(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), {"consumer-features": [["a", "b"]]})), 1)
 
     def test_features_that_break_together_are_refused_unless_the_roster_names_the_sets(self):
         lib = '#[cfg(all(feature = "a", feature = "b"))]\ncompile_error!("a with b");\n'
@@ -1073,7 +1073,7 @@ class ConsumerBuild(unittest.TestCase):
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("all features", problems[0])
         with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), [["a"], ["b"]]), [])
+            self.assertEqual(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), {"consumer-features": [["a"], ["b"]]}), [])
 
     def test_a_crate_carrying_cargo_configuration_is_refused(self):
         body = crate_bytes("gate-probe", "0.1.0", {
@@ -1114,10 +1114,54 @@ class ConsumerBuild(unittest.TestCase):
         self.assertEqual(len(broken), 1, broken)
 
     def test_feature_specs(self):
-        self.assertEqual([l for l, _ in rt.feature_specs({}, None)], ["default features", "no default features"])
-        self.assertEqual([l for l, _ in rt.feature_specs({"features": {"default": [], "x": []}}, None)][-1],
+        self.assertEqual([l for l, *_ in rt.feature_specs({}, None)], ["default features", "no default features"])
+        self.assertEqual([l for l, *_ in rt.feature_specs({"features": {"default": [], "x": []}}, None)][-1],
                          "all features")
-        self.assertEqual(len(rt.feature_specs({"features": {"x": []}}, [["x"], []])), 4)
+        specs = rt.feature_specs({"features": {"x": []}}, {"consumer-features": [["x"], []],
+                                                           "consumer-check-features": [["py"]]})
+        self.assertEqual([(fs, cmd) for _, _, fs, cmd in specs][2:], [(["x"], "build"), ([], "build"), (["py"], "check")])
+
+    def test_a_check_set_is_compiled_but_not_linked(self):
+        # a cdylib whose symbol only another tool provides at link time: build fails, check passes
+        lib = '#[cfg(feature = "py")]\nextern "C" { fn provided_by_the_host(); }\n' \
+              '#[cfg(feature = "py")]\n#[no_mangle]\npub extern "C" fn entry() { unsafe { provided_by_the_host() } }\n'
+        extra = '\n[lib]\ncrate-type = ["rlib", "cdylib"]\n[features]\npy = []\n'
+        crate = tiny_crate("gate-probe", "0.1.0", extra=extra, lib=lib)
+        with tempfile.TemporaryDirectory() as d:
+            linked = REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), {"consumer-features": [["py"]]})
+            checked = REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), {"consumer-check-features": [["py"]]})
+        self.assertEqual(len(linked), 1, linked)
+        self.assertEqual(checked, [])
+
+    def test_a_check_set_with_a_compile_error_is_refused(self):
+        lib = '#[cfg(feature = "py")]\ncompile_error!("py broken");\n'
+        crate = tiny_crate("gate-probe", "0.1.0", extra="\n[features]\npy = []\n", lib=lib)
+        with tempfile.TemporaryDirectory() as d:
+            problems = REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), {"consumer-check-features": [["py"]]})
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("cargo check", problems[0])
+
+    def expected(self, version: str, lib: str, until: str = "gate-probe 0.2.0", expect: str = "py broken"):
+        crate = tiny_crate("gate-probe", version, extra="\n[features]\npy = []\n", lib=lib)
+        entry = {"consumer-check-features": [["py"]],
+                 "consumer-expected-failure": [{"features": ["py"], "expect": expect, "until": until, "why": "w"}]}
+        with tempfile.TemporaryDirectory() as d:
+            return REAL_CONSUMER_BUILD(crate, "gate-probe", version, Path(d), entry)
+
+    def test_an_expected_failure_passes_until_its_release(self):
+        broken = '#[cfg(feature = "py")]\ncompile_error!("py broken");\n'
+        self.assertEqual(self.expected("0.1.0", broken), [])
+        stale = self.expected("0.2.0", broken)
+        self.assertEqual(len(stale), 1, stale)
+        self.assertIn("was until", stale[0])
+
+    def test_an_expected_failure_that_passes_or_fails_otherwise_is_refused(self):
+        fixed = self.expected("0.1.0", "pub fn f() {}\n")
+        self.assertEqual(len(fixed), 1, fixed)
+        self.assertIn("builds", fixed[0])
+        other = self.expected("0.1.0", '#[cfg(feature = "py")]\ncompile_error!("something else");\n')
+        self.assertEqual(len(other), 1, other)
+        self.assertIn("not with the expected", other[0])
 
     def test_consumer_features_in_the_roster_are_checked(self):
         why = 'consumer-features-why = "python is built by maturin"\n'
@@ -1128,6 +1172,17 @@ class ConsumerBuild(unittest.TestCase):
         for bad in ('consumer-features = [["a"]]\n', 'consumer-features = [["a"]]\nconsumer-features-why = " "\n', why):
             with self.assertRaises(rt.RosterError, msg=bad):
                 rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\n' + bad, 1))
+        ok = ('consumer-check-features = [["py"]]\n' + why +
+              'consumer-expected-failure = [{features = ["py"], expect = "E0308", until = "alice-zip 0.10.1", why = "w"}]\n')
+        rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\n' + ok, 1))
+        for old, bad in (('until = "alice-zip 0.10.1"', 'until = "alice-db 0.10.1"'),
+                         ('until = "alice-zip 0.10.1"', 'until = "alice-zip"'),
+                         ('{features = ["py"]', '{features = ["other"]'),
+                         ('expect = "E0308"', 'expect = ""')):
+            text = ok.replace(old, bad, 1)
+            self.assertNotEqual(text, ok)
+            with self.assertRaises(rt.RosterError, msg=bad):
+                rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\n' + text, 1))
 
 
 class GateConsumer(unittest.TestCase):
@@ -1140,7 +1195,7 @@ class GateConsumer(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
-                               consumer=lambda body, name, version, t, fs=None: [f"{name} {version}: does not build"])
+                               consumer=lambda body, name, version, t, entry=None: [f"{name} {version}: does not build"])
         self.assertEqual(code, 1)
         self.assertIn("refused: alice-zip 0.10.0: does not build", out.getvalue())
         self.assertNotIn("go for", out.getvalue())
@@ -1154,7 +1209,7 @@ class GateConsumer(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
-                               consumer=lambda body, name, version, t, fs=None: seen.append(fs) or [])
+                               consumer=lambda body, name, version, t, entry=None: seen.append(entry["consumer-features"]) or [])
         self.assertEqual((code, seen), (0, [[["svo"]]]))
 
 

@@ -51,7 +51,8 @@ state = "published"
 order = 3
 repo = "ALICE-Zip"
 consumer-features = [["cli", "codec"]]
-consumer-features-why = "外す feature: python (PyO3 の extension module で maturin が build する、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
+consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
+consumer-check-features = [["python"]]
 manifest-path = "libalice/Cargo.toml"
 tag = "alice-zip-cli-v{version}"
 # a CLI / FFI crate: not a library this repository links (scripts/dep_consistency.py CORE)
@@ -69,7 +70,9 @@ state = "published"
 order = 5
 repo = "ALICE-DB"
 consumer-features = [["analytics", "crypto", "ffi", "fs", "open-file-audit", "sdf"]]
-consumer-features-why = "外す feature: python (PyO3 の extension module で maturin が build する、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する) ⚠️ 0.4.0 の python は新規解決で ndarray が 2 版になる compile error もあり、ここで外すと見えなくなるので別に追う"
+consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
+consumer-check-features = [["python"]]
+consumer-expected-failure = [{ features = ["python"], expect = "E0308", until = "alice-db 0.4.1", why = "0.4.0 の python は新規解決で numpy と alice-db が別の版の ndarray を引き src/lib.rs の PyArray2::from_owned_array が型不一致になる" }]
 
 [crate.alice-physics]
 version = "3.0.0"
@@ -77,7 +80,8 @@ state = "published"
 order = 6
 repo = "ALICE-Physics"
 consumer-features = [["analytics", "ffi", "gpu-solver-bridge", "neural", "parallel", "privacy-crypto", "replay", "simd", "std"], ["std", "wasm"]]
-consumer-features-why = "wasm と ffi は互いに排他 (src/lib.rs の compile_error) なので別の組にする 外す feature: python (PyO3 の extension module で maturin が build する、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
+consumer-features-why = "python は std を有効にしない (3.0.0、no_std では compile できない) ので std と組にする wasm と ffi は互いに排他 (src/lib.rs の compile_error) なので別の組にする python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
+consumer-check-features = [["std", "python"]]
 # 3.0.0 は等しいゼロの max / min を全 target で揃える変更を含めて公開する (x86_64 の
 # 保存値が変わるが PHYSICS_SEMANTICS_ID は 3.0.0 の値のまま、公開後なら識別子の更新が要る)
 # 変更の 2 commit (det_math の max / min と、lib の f32 / f64 max・min を禁じる clippy の gate) を
@@ -109,7 +113,8 @@ state = "published"
 order = 7
 repo = "ALICE-SDF"
 consumer-features = [["aaa", "all-shaders", "asp", "blinkscript", "cli", "codec", "destruction", "ffi", "font", "gi", "glsl", "godot", "gpu", "gpu-mesh", "hlsl", "image", "jit", "msl", "openvdb", "physics", "rust", "sdf-cache", "svo", "svo-gpu", "terrain", "texture-fit", "unity", "unreal", "volume", "wasm"]]
-consumer-features-why = "外す feature: python (PyO3 の extension module で maturin が build する、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
+consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
+consumer-check-features = [["python"]]
 # 6.0.0 は main の min / max の Law (77bcbaf まで) と、その上の det-math 0.5・physics 3・max / min の
 # 2 周目の変更を含めて公開する (後者は patch id で持つ: rebase された写しでも当たる)
 must-contain = ["77bcbaf1d3a318d660b93b9f32468f7d78b1bead"]

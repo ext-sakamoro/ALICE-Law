@@ -134,17 +134,33 @@ def load_roster(text: str) -> dict[str, dict]:
                                 or (isinstance(legs, list) and legs and all(isinstance(x, str) and x for x in legs)))):
                     raise RosterError(f"{name}: required-ci entry {j!r} is not {{workflow, job, legs (a count > 0 "
                                       f"or the exact leg names)}}")
-        if "consumer-features" in c:
-            fs = c["consumer-features"]
-            if (not isinstance(fs, list) or not fs
-                    or not all(isinstance(x, list) and all(isinstance(f, str) and f.strip() for f in x) for x in fs)):
-                raise RosterError(f"{name}: `consumer-features` must be a non-empty list of feature lists")
+        for key in ("consumer-features", "consumer-check-features"):
+            if key in c:
+                fs = c[key]
+                if (not isinstance(fs, list) or not fs
+                        or not all(isinstance(x, list) and all(isinstance(f, str) and f.strip() for f in x) for x in fs)):
+                    raise RosterError(f"{name}: `{key}` must be a non-empty list of feature lists")
+        declared = "consumer-features" in c or "consumer-check-features" in c
+        if declared:
             why = c.get("consumer-features-why")
             if not isinstance(why, str) or not why.strip():
-                raise RosterError(f"{name}: `consumer-features` needs `consumer-features-why` (which features are "
-                                  f"left out of the consumer build and why)")
+                raise RosterError(f"{name}: `consumer-features` needs `consumer-features-why` (how the features are "
+                                  f"built and why)")
         elif "consumer-features-why" in c:
             raise RosterError(f"{name}: `consumer-features-why` without `consumer-features`")
+        if "consumer-expected-failure" in c:
+            sets = [sorted(x) for x in c.get("consumer-features", []) + c.get("consumer-check-features", [])]
+            efs = c["consumer-expected-failure"]
+            if not isinstance(efs, list) or not efs:
+                raise RosterError(f"{name}: `consumer-expected-failure` must be a non-empty list")
+            for e in efs:
+                if (not isinstance(e, dict) or set(e) != {"features", "expect", "until", "why"}
+                        or not isinstance(e["features"], list) or sorted(e["features"]) not in sets
+                        or not all(isinstance(e[k], str) and e[k].strip() for k in ("expect", "until", "why"))
+                        or len(e["until"].split()) != 2 or e["until"].split()[0] != name):
+                    raise RosterError(f"{name}: consumer-expected-failure entry {e!r} is not {{features (one of the "
+                                      f"declared sets), expect, until = \"{name} <version>\", why}}")
+                dc.Version(e["until"].split()[1])
         if c["state"] not in STATES:
             raise RosterError(f"{name}: state {c['state']!r} is not one of {STATES}")
         dc.Version(c["version"])  # raises on a malformed version
@@ -586,21 +602,36 @@ def consumer_env(home: Path, registry: Path) -> dict[str, str]:
     return env
 
 
-def feature_specs(manifest: dict, declared: list[list[str]] | None) -> list[tuple[str, str]]:
-    """(label, dependency spec) of each build: the default features, none, and either the
-    roster's declared feature sets or every feature at once"""
-    specs = [("default features", ""), ("no default features", ", default-features = false")]
-    if declared is not None:
-        for fs in declared:
-            specs.append((f"features {fs}", ", default-features = false, features = " + json.dumps(fs)))
+def feature_specs(manifest: dict, entry: dict | None) -> list[tuple[str, str, list[str] | None, str]]:
+    """(label, dependency spec, features, cargo command) of each build: the default features,
+    none, and either the roster's `consumer-features` sets (`cargo build`) and
+    `consumer-check-features` sets (`cargo check`: compiled but not linked, for a feature whose
+    library another tool links, such as a Python extension) or every feature at once"""
+    entry = entry or {}
+    specs = [("default features", "", None, "build"), ("no default features", ", default-features = false", [], "build")]
+    declared = [(fs, "build") for fs in entry.get("consumer-features", [])] + \
+               [(fs, "check") for fs in entry.get("consumer-check-features", [])]
+    if declared:
+        for fs, cmd in declared:
+            specs.append((f"features {fs}" + (" (cargo check)" if cmd == "check" else ""),
+                          ", default-features = false, features = " + json.dumps(fs), fs, cmd))
     elif [f for f in manifest.get("features", {}) if f != "default"]:
-        specs.append(("all features", ", features = " +
-                      json.dumps(sorted(f for f in manifest["features"] if f != "default"))))
+        every = sorted(f for f in manifest["features"] if f != "default")
+        specs.append(("all features", ", features = " + json.dumps(every), every, "build"))
     return specs
 
 
+def expected_failure(entry: dict | None, name: str, version: str, features: list[str] | None,
+                     cmd: str) -> dict | None:
+    """the roster's `consumer-expected-failure` entry for this feature set, if any"""
+    for e in (entry or {}).get("consumer-expected-failure", []):
+        if features is not None and sorted(e["features"]) == sorted(features):
+            return e
+    return None
+
+
 def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None,
-                   feature_sets: list[list[str]] | None = None) -> list[str]:
+                   entry: dict | None = None) -> list[str]:
     """build the packaged crate the way a crates.io consumer does: unpacked into a fresh
     directory with no Cargo.lock, Cargo.toml or Cargo configuration above it, with an empty
     CARGO_HOME and a minimal environment, as the path dependency of an empty crate, once per
@@ -632,17 +663,17 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
             (consumer / "src").mkdir(parents=True)
             (consumer / "src" / "lib.rs").write_text("", encoding="utf-8")
 
-            def build(spec: str):
+            def build(spec: str, cmd: str):
                 (consumer / "Cargo.toml").write_text(
                     CONSUMER_MANIFEST.format(name=name, version=version, spec=spec), encoding="utf-8")
-                return subprocess.run(["cargo", "build", "--message-format=json-render-diagnostics", *target],
+                return subprocess.run(["cargo", cmd, "--message-format=json-render-diagnostics", *target],
                                       cwd=consumer, capture_output=True, text=True, encoding="utf-8",
                                       errors="replace", env=env)
 
             # every feature at once fails when some features cannot be on together: that is
             # a refusal (a consumer enabling them breaks) unless the roster names the feature
             # sets to build instead (`consumer-features`, with the reason)
-            runs = [(label, build(spec)) for label, spec in feature_specs(manifest, feature_sets)]
+            runs = [(label, build(spec, cmd), fs, cmd) for label, spec, fs, cmd in feature_specs(manifest, entry)]
         else:
             # from a directory outside the package: Cargo reads configuration from the working
             # directory up, and `cargo install` of a published crate does not start inside it
@@ -651,8 +682,24 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
             runs = [("its binary", subprocess.run(
                 ["cargo", "build", "--message-format=json-render-diagnostics", "--manifest-path",
                  str(pkg / "Cargo.toml"), *target], cwd=outside,
-                capture_output=True, text=True, encoding="utf-8", errors="replace", env=env))]
-        for label, r in runs:
+                capture_output=True, text=True, encoding="utf-8", errors="replace", env=env), None, "build")]
+        for label, r, fs, cmd in runs:
+            ef = expected_failure(entry, name, version, fs, cmd)
+            if ef is not None:
+                until_crate, until_version = ef["until"].split()
+                if until_crate == name and dc.Version(version) >= dc.Version(until_version):
+                    problems.append(f"{name} {version}: the expected failure of {label} was until {ef['until']} "
+                                    f"(remove the entry; the build must pass)")
+                elif r.returncode == 0:
+                    problems.append(f"{name} {version}: {label} is listed as an expected failure but builds "
+                                    f"(remove the entry)")
+                elif ef["expect"] not in r.stderr:
+                    tail = "; ".join(l.strip() for l in r.stderr.strip().splitlines()[-3:])
+                    problems.append(f"{name} {version}: {label} fails, but not with the expected "
+                                    f"{ef['expect']!r} ({tail})")
+                else:
+                    built += 1  # failed as the roster says, until its release
+                continue
             if r.returncode != 0:
                 tail = "; ".join(l.strip() for l in r.stderr.strip().splitlines()[-3:])
                 problems.append(f"{name} {version}: the unpacked .crate does not build ({label}) as a crates.io "
@@ -947,8 +994,7 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             with tempfile.TemporaryDirectory() as tmp:
                 crate_path = packager(a.repo, a.manifest_path, a.crate, version, a.target_dir or Path(tmp))
                 body = crate_path.read_bytes()
-            consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir,
-                                                             roster[a.crate].get("consumer-features"))
+            consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir, roster[a.crate])
             for p in consumer_problems:
                 print(f"refused: {p}")
             if consumer_problems:
