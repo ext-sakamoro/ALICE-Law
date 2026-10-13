@@ -134,6 +134,11 @@ def load_roster(text: str) -> dict[str, dict]:
                                 or (isinstance(legs, list) and legs and all(isinstance(x, str) and x for x in legs)))):
                     raise RosterError(f"{name}: required-ci entry {j!r} is not {{workflow, job, legs (a count > 0 "
                                       f"or the exact leg names)}}")
+        if "consumer-features" in c:
+            fs = c["consumer-features"]
+            if (not isinstance(fs, list) or not fs
+                    or not all(isinstance(x, list) and all(isinstance(f, str) and f.strip() for f in x) for x in fs)):
+                raise RosterError(f"{name}: `consumer-features` must be a non-empty list of feature lists")
         if c["state"] not in STATES:
             raise RosterError(f"{name}: state {c['state']!r} is not one of {STATES}")
         dc.Version(c["version"])  # raises on a malformed version
@@ -520,20 +525,29 @@ edition = "2021"
 publish = false
 
 [dependencies]
-{name} = {{ path = "../pkg/{name}-{version}" }}
+{name} = {{ path = "../pkg/{name}-{version}"{spec} }}
 
 [workspace]
 """
+LIB_KINDS = ("lib", "rlib", "proc-macro", "dylib", "cdylib", "staticlib")
+# the only variables the consumer build inherits: where the toolchain is, and how the
+# system finds programs and temporary files; no RUSTFLAGS, RUSTC_WRAPPER, CARGO_* or
+# configuration of the machine the gate runs on reaches it
+CONSUMER_ENV_KEEP = ("PATH", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "TMPDIR", "TEMP", "TMP",
+                     "SYSTEMROOT", "LANG", "LC_ALL")
 
 
 def manifests_above(path: Path) -> list[Path]:
-    """Cargo.lock / Cargo.toml files in the ancestors of path (which Cargo or a build
-    script reading a lock above the crate would find)"""
-    return [d / f for d in path.resolve().parents for f in ("Cargo.lock", "Cargo.toml") if (d / f).exists()]
+    """files in the ancestors of path that Cargo or a build script would read from outside
+    the crate: Cargo.lock / Cargo.toml (a lock above the crate, a workspace) and Cargo
+    configuration (.cargo/config, .cargo/config.toml)"""
+    names = ("Cargo.lock", "Cargo.toml", ".cargo/config", ".cargo/config.toml")
+    return [d / f for d in path.resolve().parents for f in names if (d / f).exists()]
 
 
-def compiled_lib(stdout: str, name: str, version: str) -> bool:
-    """the JSON messages of a cargo build carry a compiler artifact of the crate's library"""
+def compiled_lib(stdout: str, name: str, version: str, kinds=LIB_KINDS) -> bool:
+    """the JSON messages of a cargo build carry a compiler artifact of the crate's library
+    (or, with kinds=("bin",), of its binary)"""
     for line in stdout.splitlines():
         try:
             msg = json.loads(line)
@@ -542,17 +556,50 @@ def compiled_lib(stdout: str, name: str, version: str) -> bool:
         if msg.get("reason") != "compiler-artifact":
             continue
         pid = msg.get("package_id", "")
-        kinds = msg.get("target", {}).get("kind", [])
+        got = msg.get("target", {}).get("kind", [])
         if (pid.endswith(f"#{name}@{version}") or pid.startswith(f"{name} {version} ")) and \
-                any(k in ("lib", "rlib", "proc-macro", "dylib", "cdylib", "staticlib") for k in kinds):
+                any(k in kinds for k in got):
             return True
     return False
 
 
-def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None) -> list[str]:
+def consumer_env(home: Path, registry: Path) -> dict[str, str]:
+    """a minimal environment with an empty CARGO_HOME (its registry cache is the gate's own
+    directory, which holds no configuration) and HOME in the build directory"""
+    cargo_home = home / "cargo-home"
+    cargo_home.mkdir(parents=True, exist_ok=True)
+    registry.mkdir(parents=True, exist_ok=True)
+    (cargo_home / "registry").symlink_to(registry, target_is_directory=True)
+    env = {k: os.environ[k] for k in CONSUMER_ENV_KEEP if k in os.environ}
+    if "RUSTUP_HOME" not in env:  # rustup finds its toolchains under the real HOME
+        real = Path(os.environ.get("HOME", str(Path.home()))) / ".rustup"
+        if real.is_dir():
+            env["RUSTUP_HOME"] = str(real)
+    env["HOME"] = str(home)
+    env["CARGO_HOME"] = str(cargo_home)
+    return env
+
+
+def feature_specs(manifest: dict, declared: list[list[str]] | None) -> list[tuple[str, str]]:
+    """(label, dependency spec) of each build: the default features, none, and either the
+    roster's declared feature sets or every feature at once"""
+    specs = [("default features", ""), ("no default features", ", default-features = false")]
+    if declared is not None:
+        for fs in declared:
+            specs.append((f"features {fs}", ", default-features = false, features = " + json.dumps(fs)))
+    elif [f for f in manifest.get("features", {}) if f != "default"]:
+        specs.append(("all features", ", features = " +
+                      json.dumps(sorted(f for f in manifest["features"] if f != "default"))))
+    return specs
+
+
+def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None,
+                   feature_sets: list[list[str]] | None = None) -> list[str]:
     """build the packaged crate the way a crates.io consumer does: unpacked into a fresh
-    directory with no Cargo.lock or Cargo.toml above it, as the path dependency of an
-    empty crate; the problems (none when it built and compiled the crate's library)"""
+    directory with no Cargo.lock, Cargo.toml or Cargo configuration above it, with an empty
+    CARGO_HOME and a minimal environment, as the path dependency of an empty crate, once per
+    feature set (feature_specs); a crate with no library is built on its own and must
+    produce its binary. The problems: none when every build compiled the crate"""
     root = Path(tempfile.mkdtemp(prefix="release-gate-consumer-"))
     try:
         above = manifests_above(root / "consumer")
@@ -560,23 +607,53 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
             return [f"{name} {version}: the consumer build directory {root} has {above[0]} above it"]
         with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as t:
             t.extractall(root / "pkg", filter="data")
-        if not (root / "pkg" / f"{name}-{version}" / "Cargo.toml").is_file():
+        pkg = root / "pkg" / f"{name}-{version}"
+        if not (pkg / "Cargo.toml").is_file():
             return [f"{name} {version}: the .crate has no {name}-{version}/Cargo.toml"]
-        consumer = root / "consumer"
-        (consumer / "src").mkdir(parents=True)
-        (consumer / "Cargo.toml").write_text(CONSUMER_MANIFEST.format(name=name, version=version), encoding="utf-8")
-        (consumer / "src" / "lib.rs").write_text("", encoding="utf-8")
-        env = {k: v for k, v in os.environ.items() if not k.startswith("CARGO_TARGET_DIR")}
-        r = subprocess.run(["cargo", "build", "--message-format=json-render-diagnostics",
-                            "--target-dir", str((target_dir or root) / "consumer-target")],
-                           cwd=consumer, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
-        if r.returncode != 0:
-            tail = "; ".join(l.strip() for l in r.stderr.strip().splitlines()[-3:])
-            return [f"{name} {version}: the unpacked .crate does not build as a dependency of an empty crate "
-                    f"with no Cargo.lock above it ({tail})"]
-        if not compiled_lib(r.stdout, name, version):
-            return [f"{name} {version}: the consumer build compiled no library of {name} {version}"]
-        return []
+        manifest = tomllib.loads((pkg / "Cargo.toml").read_text(encoding="utf-8"))
+        has_lib = "lib" in manifest or (pkg / "src" / "lib.rs").is_file()
+        cache = (target_dir or root) / "consumer-cache"
+        env = consumer_env(root / "home", cache / "registry")
+        target = ["--target-dir", str(cache / "target")]
+        problems, built = [], 0
+        if has_lib:
+            consumer = root / "consumer"
+            (consumer / "src").mkdir(parents=True)
+            (consumer / "src" / "lib.rs").write_text("", encoding="utf-8")
+
+            def build(spec: str):
+                (consumer / "Cargo.toml").write_text(
+                    CONSUMER_MANIFEST.format(name=name, version=version, spec=spec), encoding="utf-8")
+                return subprocess.run(["cargo", "build", "--message-format=json-render-diagnostics", *target],
+                                      cwd=consumer, capture_output=True, text=True, encoding="utf-8",
+                                      errors="replace", env=env)
+
+            runs = []
+            for label, spec in feature_specs(manifest, feature_sets):
+                r = build(spec)
+                if label == "all features" and r.returncode != 0:
+                    # features that cannot be on together: each one alone instead
+                    for f in sorted(f for f in manifest["features"] if f != "default"):
+                        runs.append((f"feature {f!r}", build(", features = " + json.dumps([f]))))
+                    continue
+                runs.append((label, r))
+        else:
+            runs = [("its binary", subprocess.run(
+                ["cargo", "build", "--message-format=json-render-diagnostics", *target], cwd=pkg,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", env=env))]
+        for label, r in runs:
+            if r.returncode != 0:
+                tail = "; ".join(l.strip() for l in r.stderr.strip().splitlines()[-3:])
+                problems.append(f"{name} {version}: the unpacked .crate does not build ({label}) as a crates.io "
+                                f"consumer builds it, with no Cargo.lock or configuration above it ({tail})")
+            elif not compiled_lib(r.stdout, name, version, LIB_KINDS if has_lib else ("bin",)):
+                problems.append(f"{name} {version}: the consumer build ({label}) compiled no "
+                                f"{'library' if has_lib else 'binary'} of {name} {version}")
+            else:
+                built += 1
+        if built == 0 and not problems:
+            problems.append(f"{name} {version}: the consumer build ran no build (compared nothing)")
+        return problems
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -859,7 +936,8 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             with tempfile.TemporaryDirectory() as tmp:
                 crate_path = packager(a.repo, a.manifest_path, a.crate, version, a.target_dir or Path(tmp))
                 body = crate_path.read_bytes()
-            consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir)
+            consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir,
+                                                             roster[a.crate].get("consumer-features"))
             for p in consumer_problems:
                 print(f"refused: {p}")
             if consumer_problems:
@@ -869,7 +947,8 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             print(f"publish-gate: go for {a.crate} {version} ({compared} checks)")
             print(f"  commit:        {commit}")
             print(f"  .crate sha256: {digest} ({len(crate_files(body))} files, built by cargo package)")
-            print("  consumer:      the unpacked .crate built as a dependency, no Cargo.lock above it")
+            print("  consumer:      the unpacked .crate built as a crates.io consumer builds it (empty CARGO_HOME, "
+                  "minimal environment, no Cargo.lock or configuration above it, each feature set)")
             print(f"  publish:       {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")
             print(f"  then:          python3 scripts/release_train.py roster-mark published {a.crate} "
                   f"--repo {a.repo} --ref {commit} --expect-sha256 {digest}"

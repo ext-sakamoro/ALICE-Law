@@ -29,7 +29,7 @@ spec.loader.exec_module(rt)
 # tests are not crates, so the gate tests use a consumer that accepts them, and the real
 # one is tested on its own (ConsumerBuild)
 REAL_CONSUMER_BUILD = rt.consumer_build
-rt.consumer_build = lambda body, name, version, target_dir: []
+rt.consumer_build = lambda body, name, version, target_dir, feature_sets=None: []
 
 ROSTER = """
 [crate.alice-det-math]
@@ -935,13 +935,21 @@ class RequiredCi(unittest.TestCase):
         self.assertEqual((code, seen), (0, []))
 
 
-def tiny_crate(name: str, version: str, build_rs: str | None = None) -> bytes:
-    """a real, dependency-free .crate (optionally with a build script)"""
-    manifest = f'[package]\nname = "{name}"\nversion = "{version}"\nedition = "2021"\n'
-    files = {"Cargo.toml": manifest.encode(), "src/lib.rs": b"pub fn f() -> u32 { 1 }\n"}
+def tiny_crate(name: str, version: str, build_rs: str | None = None, extra: str = "",
+               lib: str = "pub fn f() -> u32 { 1 }\n", main: str | None = None) -> bytes:
+    """a real .crate (optionally with a build script, more manifest text, or only a binary)"""
+    manifest = f'[package]\nname = "{name}"\nversion = "{version}"\nedition = "2021"\n' + extra
+    files = {"Cargo.toml": manifest.encode()}
+    if main is None:
+        files["src/lib.rs"] = lib.encode()
+    else:
+        files["src/main.rs"] = main.encode()
     if build_rs is not None:
         files["build.rs"] = build_rs.encode()
     return crate_bytes(name, version, files)
+
+
+UNPUBLISHED_DEP = '\n[dependencies]\ngate-probe-not-published-9f3c = "9.9"\n'
 
 
 # a build script that, like one reading the consumer's lock, needs a Cargo.lock above the crate
@@ -968,8 +976,8 @@ class ConsumerBuild(unittest.TestCase):
 
     def test_a_build_script_that_needs_a_lock_above_the_crate_is_refused(self):
         problems = self.build(tiny_crate("gate-probe", "0.1.0", NEEDS_LOCK_ABOVE))
-        self.assertEqual(len(problems), 1, problems)
-        self.assertIn("does not build as a dependency", problems[0])
+        self.assertEqual(len(problems), 2, problems)  # default and no default features
+        self.assertTrue(all("does not build" in p for p in problems), problems)
 
     def test_the_same_build_script_passes_inside_a_tree_with_a_lock(self):
         # the teeth of the check: inside the repository (where `cargo package` verifies)
@@ -1003,10 +1011,82 @@ class ConsumerBuild(unittest.TestCase):
         build_script = ours.replace('"lib"', '"custom-build"')
         self.assertFalse(rt.compiled_lib(build_script, "gate-probe", "0.1.0"))
 
-    def test_a_lock_above_the_build_directory_is_found(self):
+    def test_a_lock_or_configuration_above_the_build_directory_is_found(self):
+        for rel in ("Cargo.lock", "Cargo.toml", ".cargo/config.toml", ".cargo/config"):
+            with tempfile.TemporaryDirectory() as d:
+                Path(d, rel).parent.mkdir(parents=True, exist_ok=True)
+                Path(d, rel).write_text("", encoding="utf-8")
+                self.assertTrue(rt.manifests_above(Path(d, "a", "b")), rel)
+
+    def with_env(self, **env):
+        saved = {k: rt.os.environ.get(k) for k in env}
+        rt.os.environ.update(env)
+        self.addCleanup(lambda: [rt.os.environ.pop(k, None) if v is None else rt.os.environ.__setitem__(k, v)
+                                 for k, v in saved.items()])
+
+    def test_an_unpublished_dependency_is_refused_even_with_an_ambient_patch(self):
+        self.assertEqual(len(self.build(tiny_crate("gate-probe", "0.1.0", extra=UNPUBLISHED_DEP))), 2)
         with tempfile.TemporaryDirectory() as d:
-            Path(d, "Cargo.lock").write_text("", encoding="utf-8")
-            self.assertTrue(rt.manifests_above(Path(d, "a", "b")))
+            dep = Path(d, "dep")
+            (dep / "src").mkdir(parents=True)
+            (dep / "Cargo.toml").write_text('[package]\nname = "gate-probe-not-published-9f3c"\nversion = "9.9.0"\n'
+                                            'edition = "2021"\n', encoding="utf-8")
+            (dep / "src" / "lib.rs").write_text("", encoding="utf-8")
+            home = Path(d, "cargo-home")
+            home.mkdir()
+            (home / "config.toml").write_text(f'[patch.crates-io]\ngate-probe-not-published-9f3c = '
+                                              f'{{ path = "{dep.as_posix()}" }}\n', encoding="utf-8")
+            self.with_env(CARGO_HOME=str(home))
+            problems = self.build(tiny_crate("gate-probe", "0.1.0", extra=UNPUBLISHED_DEP))
+        self.assertEqual(len(problems), 2, problems)
+
+    def test_ambient_rustflags_do_not_reach_the_build(self):
+        hidden = '#[cfg(not(gate_hidden))]\ncompile_error!("needs a flag from the environment");\n'
+        self.with_env(RUSTFLAGS="--cfg gate_hidden", CARGO_ENCODED_RUSTFLAGS="--cfg\x1fgate_hidden")
+        problems = self.build(tiny_crate("gate-probe", "0.1.0", lib=hidden))
+        self.assertEqual(len(problems), 2, problems)  # default and no default features
+
+    def test_a_feature_that_does_not_build_is_refused(self):
+        lib = '#[cfg(feature = "x")]\ncompile_error!("feature x is broken");\n'
+        problems = self.build(tiny_crate("gate-probe", "0.1.0", extra="\n[features]\nx = []\n", lib=lib))
+        self.assertTrue(problems)
+        self.assertTrue(any("feature" in p for p in problems), problems)
+
+    def test_a_no_default_build_that_does_not_build_is_refused(self):
+        lib = '#[cfg(not(feature = "std"))]\ncompile_error!("needs std");\n'
+        problems = self.build(tiny_crate("gate-probe", "0.1.0", extra='\n[features]\ndefault = ["std"]\nstd = []\n',
+                                         lib=lib))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("no default features", problems[0])
+
+    def test_declared_feature_sets_are_built(self):
+        lib = '#[cfg(all(feature = "a", feature = "b"))]\ncompile_error!("a with b");\n'
+        crate = tiny_crate("gate-probe", "0.1.0", extra="\n[features]\na = []\nb = []\n", lib=lib)
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), [["a"], ["b"]]), [])
+            self.assertEqual(len(REAL_CONSUMER_BUILD(crate, "gate-probe", "0.1.0", Path(d), [["a", "b"]])), 1)
+
+    def test_features_that_conflict_fall_back_to_one_at_a_time(self):
+        lib = '#[cfg(all(feature = "a", feature = "b"))]\ncompile_error!("a with b");\n'
+        self.assertEqual(self.build(tiny_crate("gate-probe", "0.1.0", extra="\n[features]\na = []\nb = []\n",
+                                               lib=lib)), [])
+
+    def test_a_binary_crate_is_built_on_its_own(self):
+        self.assertEqual(self.build(tiny_crate("gate-probe", "0.1.0", main="fn main() {}\n")), [])
+        broken = self.build(tiny_crate("gate-probe", "0.1.0", main='compile_error!("x");\nfn main() {}\n'))
+        self.assertEqual(len(broken), 1, broken)
+
+    def test_feature_specs(self):
+        self.assertEqual([l for l, _ in rt.feature_specs({}, None)], ["default features", "no default features"])
+        self.assertEqual([l for l, _ in rt.feature_specs({"features": {"default": [], "x": []}}, None)][-1],
+                         "all features")
+        self.assertEqual(len(rt.feature_specs({"features": {"x": []}}, [["x"], []])), 4)
+
+    def test_consumer_features_in_the_roster_are_checked(self):
+        rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\nconsumer-features = [["a"], ["a", "b"]]\n', 1))
+        for bad in ('[]', '["a"]', '[[1]]', '[[""]]'):
+            with self.assertRaises(rt.RosterError, msg=bad):
+                rt.load_roster(ROSTER.replace('order = 1\n', f'order = 1\nconsumer-features = {bad}\n', 1))
 
 
 class GateConsumer(unittest.TestCase):
@@ -1019,10 +1099,22 @@ class GateConsumer(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
-                               consumer=lambda body, name, version, t: [f"{name} {version}: does not build"])
+                               consumer=lambda body, name, version, t, fs=None: [f"{name} {version}: does not build"])
         self.assertEqual(code, 1)
         self.assertIn("refused: alice-zip 0.10.0: does not build", out.getvalue())
         self.assertNotIn("go for", out.getvalue())
+
+    def test_the_roster_feature_sets_reach_the_consumer_build(self):
+        seen = []
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER.replace('order = 1\n', 'order = 1\nconsumer-features = [["svo"]]\n', 1), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
+                               consumer=lambda body, name, version, t, fs=None: seen.append(fs) or [])
+        self.assertEqual((code, seen), (0, [[["svo"]]]))
 
 
 if __name__ == "__main__":

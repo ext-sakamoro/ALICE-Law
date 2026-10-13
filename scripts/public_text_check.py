@@ -4,8 +4,8 @@
 The vocabulary is the one of ALICE-Physics `scripts/docs_lint.py` (copied; keep the
 two lists the same): development-process words, internal tracker and note names,
 instruction sources, device names, private network addresses, and private names
-held only as SHA-256 hashes of lower-case 1-, 2- and 3-word phrases; the short ids of
-the work sessions (hashed too) when they name a person or a review, and review labels.
+held only as SHA-256 hashes of lower-case 1-, 2- and 3-word phrases; id-like tokens
+next to a word naming a review or a session, and review labels.
 
     public_text_check.py --tree [REF]        every tracked file at REF (default HEAD):
                                              its path and its text
@@ -106,33 +106,24 @@ PRIVATE_NAME_HASHES = DEVICE_NAME_HASHES | {
     "9330fafbe2c0a50b50ab63cbc545e79f87b76394b7efa9b6f1dc90f4ce76bfb1",
     "3834bde4d50c16031f0b0c9ff9371cd8aaa10155dbbf964f199a5b965e369925",
 }
-# The short ids the work sessions go by (two hex digits) are held as SHA-256 hashes too:
-# alone they are ordinary numbers and words ("53", "fb"), so one is a finding only in the
-# context that names a person or a review: followed by "の", "'s", "レビュー", "review",
-# "session", "セッション", "指摘" or "検証". Add an id with
-# hashlib.sha256(id.encode()).hexdigest().
-SESSION_ID_HASHES = {
-    "b896847e673d4c22a7c4e2a2b06f2559eaacc530874a7ad3215fbe746a3277b5",
-    "76a8277347f52530e1cf979175a178980b3a180d176165c985d85f7e142f1eed",
-    "cd70bea023f752a0564abb6ed08d42c1440f2e33e29914e55e0be1595e24f45a",
-    "5f3731b52ad0fb2f820b91495eb9961aebcbbc79d5881e5a26a382e694b9ccc0",
-    "2858dcd1057d3eae7f7d5f782167e24b61153c01551450a628cee722509f6529",
-    "79b98f273c175489f40b682a0e43f0b22aa3cc9cf2a578e163f291f13fc9f912",
-    "f4df435df41a53e0ed8d0e16397d0287705803e94328316ef5b5ca97a9820e67",
-    "3e1e967e9b793e908f8eae83c74dba9bcccce6a5535b4b462bd9994537bfe15c",
-    "86e50149658661312a9e0b35558d84f6c6d3da797f552a9657fe0558ca40cdef",
-    "a88a7902cb4ef697ba0b6759c50e8c10297ff58f942243de19b984841bfe1f73",
-}
-SESSION_ID_RE = re.compile(r"(?<![A-Za-z0-9#])([0-9a-f]{2})(?![A-Za-z0-9])"
-                           r"(?=\s*(?:の|['’]s(?![A-Za-z])|レビュー|(?i:review|session)|セッション|指摘|検証))")
+# The short ids the work sessions go by are two hex digits ("6e"-like). Alone they are
+# ordinary numbers and words, and a list of them, even hashed, would be public (256 values
+# are enumerated at once), so this public check holds no id: an id-like token is a finding
+# only next to a word that names a review or a session ("レビュー", "review", "指摘",
+# "検証", "session" / "セッション" before or after it). A token glued to a digit, letter,
+# "#", "_", "-" or "." (a date, a version, a colour, x86_64) is not id-like. The contexts
+# "<id>の" and "<id>'s" are left to a check that knows the ids: here they matched counts,
+# dates and "oracle 10's" far more often than ids.
+ID = r"(?<![A-Za-z0-9#_.\-])[0-9a-f]{2}(?![A-Za-z0-9])"
+SESSION_ID_RE = re.compile(ID + r"\s*(?:の\s*)?(?:レビュー|(?i:review)|指摘|検証|セッション|(?i:session))"
+                           r"|(?<![A-Za-z])(?i:session)\s*" + ID + r"|セッション\s*" + ID)
 # labels of review findings ("F1", "F2 / F3") named as such
 REVIEW_LABEL_RE = re.compile(r"(?<![A-Za-z0-9])F\d+(?:\s*/\s*F\d+)*\s*(?:の\s*)?(?:レビュー|指摘|(?i:review))")
 
 
 def session_ids(line: str) -> bool:
-    """a session id (by hash) in the context that names a person or a review"""
-    return any(hashlib.sha256(m.group(1).encode()).hexdigest() in SESSION_ID_HASHES
-               for m in SESSION_ID_RE.finditer(line))
+    """an id-like token next to a word that names a review or a session"""
+    return bool(SESSION_ID_RE.search(line))
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_\-\u3040-\u30ff\u4e00-\u9fff]+")

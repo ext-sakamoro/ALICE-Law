@@ -152,31 +152,22 @@ class Vocabulary(unittest.TestCase):
 
 
 class SessionIds(Base):
-    """short session ids, held by hash, found when they name a person or a review"""
-    FAKE = ("e9", "c1")  # made-up ids, not ones in use
+    """id-like tokens next to a word naming a review or a session; no id is listed"""
 
-    def setUp(self):
-        super().setUp()
-        self.saved_ids = ptc.SESSION_ID_HASHES
-        ptc.SESSION_ID_HASHES = {hashlib.sha256(i.encode()).hexdigest() for i in self.FAKE}
-
-    def tearDown(self):
-        ptc.SESSION_ID_HASHES = self.saved_ids
-        super().tearDown()
-
-    def test_an_id_in_context_is_found(self):
-        for line in ("e9 レビュー対応", "e9 の指摘で直した", "c1's ruling", "c1 review", "per e9 session",
-                     "c1レビュー", "e9 セッション", "c1 検証"):
+    def test_an_id_like_token_next_to_a_review_or_session_word_is_found(self):
+        for line in ("e9 レビュー対応", "e9 の指摘で直した", "c1 review", "per e9 session", "c1レビュー",
+                     "e9 セッション", "c1 検証", "e9指摘", "session 4d", "セッション 7a", "Session e9"):
             self.assertEqual(ptc.kinds(line), ["session id"], line)
 
-    def test_an_id_without_context_or_an_unknown_id_passes(self):
-        for line in ("e9 tests", "0xe9 の値", "#c1 の色", "ae9 の", "e91 の", "d4 の候補", "e9", "c1-c2"):
+    def test_numbers_dates_versions_and_other_contexts_pass(self):
+        for line in ("e9 tests", "0xe9 review", "#c1 review", "2026-09-15 review", "v1.53 review", "x86_64's",
+                     "oracle 10's", "53 の候補", "ae9 review", "e91 review", "a netcode session", "e9", "c1-c2",
+                     "session key", "F1 score and F2 keys"):
             self.assertEqual(ptc.kinds(line), [], line)
 
     def test_review_labels_are_found(self):
         for line in ("F1/F2 review", "F3 の指摘", "F4 レビュー"):
             self.assertEqual(ptc.kinds(line), ["session id"], line)
-        self.assertEqual(ptc.kinds("F1 score and F2 keys"), [])
 
     def test_a_commit_message_with_an_id_is_found_and_the_id_not_printed(self):
         commit(self.repo, {"a.txt": "x\n"}, message="fix: e9 の指摘")
@@ -187,9 +178,9 @@ class SessionIds(Base):
         self.assertNotRegex(out, r"(?<![0-9a-f])e9(?![0-9a-f])")
         self.assertNotIn("の指摘", out)
 
-    def test_the_id_hashes_are_sha256(self):
-        for h in self.saved_ids:
-            self.assertRegex(h, r"^[0-9a-f]{64}$")
+    def test_the_checker_holds_no_list_of_ids(self):
+        self.assertFalse(hasattr(ptc, "SESSION_ID_HASHES"))
+
 
 if __name__ == "__main__":
     unittest.main()

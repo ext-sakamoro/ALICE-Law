@@ -21,7 +21,8 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/readme_roster_check.py`: fails when README.md's intro paragraph (whole-name matched, not substring) falls behind `release-train.toml`'s roster
 - `scripts/conformance_docs_schema_check.py`: fails when a `### G<n> — <name>` heading in `docs/CONFORMANCE.md` and the matching `[[gate]]` entry in `conformance/gates.toml` disagree in id, name, or count
 - `release_train.py publish-gate`: the packaged `.crate` is unpacked into a directory with no `Cargo.lock` or `Cargo.toml` above it and built as the dependency of an empty crate (as a crates.io consumer builds it); a failed build or one that compiled no library of the crate is refused
-- `scripts/public_text_check.py`: the short ids of the work sessions (held as SHA-256 hashes) followed by a word that names a person or a review, and the labels of review findings (an F and a number named as a review), in file contents and commit messages
+- `release_train.py publish-gate`: the consumer build runs with an empty `CARGO_HOME` and a minimal environment, refuses a `.cargo/config` above the build directory, and builds the default features, no default features and every feature (or each one alone, or the roster's `consumer-features`); a crate with no library is built on its own
+- `scripts/public_text_check.py`: an id-like token (two hex digits, not glued to a digit, letter, `#`, `_`, `-` or `.`) next to a word naming a review or a session, on either side, and the labels of review findings, in file contents and commit messages; no list of ids is held (two-digit ids are enumerable even hashed)
 
 ### Changed
 - The dependency consistency check covers alice-edge (this repository requires alice-edge 0.1 with its sdf, db and dashboard features) and alice-lol-macro; the core crate list is the roster's library crates (`release-train.toml`, every crate not exempt and not marked `law-dependency = false`), held equal by a test
