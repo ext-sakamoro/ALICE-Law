@@ -949,7 +949,8 @@ def added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
 
 def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
     findings, compared, files = [], 0, 0
-    approver = config_approver(repo, rng.split("..")[-1] or "HEAD")
+    # the tip of "a..b" or "a...b"
+    approver = config_approver(repo, rng.split("..")[-1].lstrip(".") or "HEAD")
     for commit in git(repo, "rev-list", "--no-merges", rng).splitlines():
         if upstream_commit(repo, commit):
             continue  # the upstream project's commit in a fork (up to the fork point)
@@ -968,9 +969,12 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
             if approval_changed(repo, commit):
                 findings.append(f"commit {short} {REPO_CONFIG}: policy config changed and approved in the same "
                                 f"commit ({', '.join(keys) or 'file'})")
-            elif not (approver and approver != commit and subprocess.run(
+            elif approver and approver != commit and subprocess.run(
                     ["git", "-C", repo, "merge-base", "--is-ancestor", commit, approver],
-                    capture_output=True).returncode == 0):
+                    capture_output=True).returncode == 0:
+                # reviewed: named in the run's output, so a reader sees which commit approved which change
+                SKIPPED.append(f"config change {short} ({', '.join(keys) or 'file'}) approved by {approver[:12]}")
+            else:
                 findings.append(f"commit {short} {REPO_CONFIG}: policy config changed ({', '.join(keys) or 'file'})")
         gitlinks = {l.split("\t", 1)[1] for l in git(repo, "diff-tree", "--root", "--no-commit-id", "-r",
                                                       "--no-renames", "--diff-filter=d", commit).splitlines()
@@ -1111,8 +1115,12 @@ def main(argv: list[str] | None = None) -> int:
         settings.append(f"upstream fork at {CONFIG['upstream-base'][:12]}")
     if settings:
         print(f"public text: {REPO_CONFIG}: " + "; ".join(settings))
-    if SKIPPED:
-        print(f"public text: not read: {len(SKIPPED)} entries (first: {SKIPPED[0]})")
+    approvals = [x for x in SKIPPED if x.startswith("config change ")]
+    unread = [x for x in SKIPPED if not x.startswith("config change ")]
+    for a_line in approvals:
+        print(f"public text: {a_line}")
+    if unread:
+        print(f"public text: not read: {len(unread)} entries (first: {unread[0]})")
     if not zstd_available():
         print(f"public text: Python {sys.version_info.major}.{sys.version_info.minor} has no zstd reader: "
               f"a zstd stream is an unscanned container (Python 3.14 reads it)")

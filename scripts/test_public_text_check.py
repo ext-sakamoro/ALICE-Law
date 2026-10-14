@@ -806,8 +806,12 @@ class ConfigApproval(Base):
         commit(self.repo, {".public-text.toml": self.CONFIG})
         config_commit = self.head()
         commit(self.repo, {".github/public-text-pin": self.pin(self.CONFIG)})
-        self.assertEqual(run(self.repo, "--range", f"{self.base}..HEAD")[0], 0)      # both commits
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")                  # both commits
+        self.assertEqual(code, 0, out)
+        approval = self.head()
+        self.assertIn(f"config change {config_commit[:12]} (technical-paths) approved by {approval[:12]}", out)
         self.assertEqual(run(self.repo, "--range", f"{config_commit}..HEAD")[0], 0)  # the approval alone
+        self.assertEqual(run(self.repo, "--range", f"{self.base}...HEAD")[0], 0)     # a three-dot range
         self.assertEqual(run(self.repo, "--tree")[0], 0)
 
     def test_a_change_and_its_approval_in_one_commit_is_a_finding(self):
