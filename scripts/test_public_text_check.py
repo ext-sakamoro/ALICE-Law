@@ -955,21 +955,35 @@ class Terms(unittest.TestCase):
     """programming terms and English verbs that only look like process words or ids"""
 
     def test_a_worker_identifier_or_thread_is_not_the_process(self):
-        for line in ("ThreadPoolExecutor(max_workers=16)", "pool = Pool(num_workers)", "worker_id = 3",
-                     "first touched from its worker thread", "else the worker threads run"):
+        # a closed list of pool-size arguments, and a thread
+        for line in ("ThreadPoolExecutor(max_workers=16)", "DataLoader(num_workers=4)", "n_workers = 8",
+                     "first touched from its worker thread", "else the worker threads run",
+                     "- **Cloudflare Workers**: a separate binary"):
             self.assertNotIn("agent process", ptc.kinds(line), line)
         for line in ("a worker did X", "worker 3", "found by the worker", "the workers ran the tests",
-                     "a worker, threading the needle", "workers: 4"):
+                     "a worker, threading the needle", "workers: 4",
+                     "found by worker_3", "worker_id = 3", "found_by_workers",   # any other identifier
+                     "Worker 3 measured it", "WORKER found it", "Workers ran it"):  # any case
             self.assertIn("agent process", ptc.kinds(line), line)
 
+    def test_the_other_process_words_in_any_case_but_not_in_identifiers(self):
+        for line in ("Subagent ran", "Skills used", "SKILLS:", "a Multi-Agent setup"):
+            self.assertIn("agent process", ptc.kinds(line), line)
+        for line in ("see SKILL.md", "SKILL_PACKAGE_DIR = PACKAGE_ROOT", "def test_a_skills_path_segment(self):"):
+            self.assertNotIn("agent process", ptc.kinds(line), line)
+
     def test_this_session_and_in_chat_are_process_words(self):
-        for line in ("This session's simulator tooling", "as decided in this session", "asked in chat"):
+        for line in ("This session's simulator tooling", "as decided in this session", "asked in chat",
+                     "THIS SESSION", "In Chat"):
             self.assertIn("agent process", ptc.kinds(line), line)
         for line in ("a netcode session", "the session ends", "chat in channels", "within chatter", "Thisession"):
             self.assertNotIn("agent process", ptc.kinds(line), line)
 
     def test_the_verb_be_before_review_is_not_an_id(self):
-        for line in ("and cannot be reviewed. Such files", "it must be reviewed first"):
+        # decided: a bare "be" before review is never read as an id ("be" is not a current id, and the
+        # hashed-id check of commit messages still covers every current one)
+        for line in ("and cannot be reviewed. Such files", "it must be reviewed first", "be review: ok",
+                     "be reviewed this"):
             self.assertNotIn("session id", ptc.kinds(line), line)
         for line in ("fb reviewed it", "6e review", "(be) review", "be/fb review", "session be"):
             self.assertIn("session id", ptc.kinds(line), line)
