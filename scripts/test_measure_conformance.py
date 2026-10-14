@@ -112,6 +112,40 @@ class Measure(unittest.TestCase):
                       self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n"
                                   "    steps:\n      - run: cargo test --release\n", "src/lib.rs": ""})["G5"])
 
+    def test_g12_finds_the_text_check_named_in_a_workflow(self):
+        c = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n"
+                        "      - run: python3 law/scripts/public_text_check.py --range HEAD~1..HEAD\n", "src/lib.rs": ""})
+        self.assertEqual("public_text_check in CI", c["G12"])
+
+    def test_g12_follows_a_workflow_call_of_a_repository_script_that_runs_the_text_check(self):
+        script = "#!/bin/sh\ncurl -fsSL \"$LAW_RAW/scripts/public_text_check.py\" -o /tmp/p.py\npython3 /tmp/p.py \"$@\"\n"
+        for call in ("bash scripts/public_text.sh", "./scripts/public_text.sh", "sh scripts/public_text.sh",
+                     "scripts/public_text.sh --range x", "cd . && bash scripts/public_text.sh",
+                     'if [ -n \"$b\" ]; then scripts/public_text.sh \"$b\"; else scripts/public_text.sh; fi'):
+            c = self.cells({".github/workflows/ci.yml": f"jobs:\n  t:\n    steps:\n      - run: {call}\n",
+                            "scripts/public_text.sh": script, "src/lib.rs": ""})
+            self.assertEqual("public_text_check in CI, found via scripts/public_text.sh", c["G12"], call)
+        block = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n      - name: text\n        run: |\n"
+                            "          set -e\n          python3 scripts/text.py\n",
+                            "scripts/text.py": "import subprocess\nsubprocess.run(['python3', 'public_text_check.py'])\n",
+                            "src/lib.rs": ""})
+        self.assertEqual("public_text_check in CI, found via scripts/text.py", block["G12"])
+
+    def test_g12_does_not_count_a_called_script_without_the_text_check(self):
+        c = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n      - run: bash scripts/other.sh\n",
+                        "scripts/other.sh": "#!/bin/sh\ncargo test\n", "src/lib.rs": ""})
+        self.assertEqual("not found", c["G12"])
+
+    def test_g12_does_not_count_a_script_no_workflow_runs(self):
+        script = "#!/bin/sh\npython3 public_text_check.py\n"
+        uncalled = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n      - run: cargo test\n",
+                               "scripts/public_text.sh": script, "src/lib.rs": ""})
+        self.assertEqual("not found", uncalled["G12"])
+        only_a_path = self.cells({".github/workflows/ci.yml": "on:\n  push:\n    paths:\n      - scripts/public_text.sh\n"
+                                  "jobs:\n  t:\n    steps:\n      - run: cat scripts/public_text.sh\n",
+                                  "scripts/public_text.sh": script, "src/lib.rs": ""})
+        self.assertEqual("not found", only_a_path["G12"])
+
     def test_a_gate_list_without_banned_methods_measures_nothing(self):
         law = self.root / "law"
         (law / "conformance").mkdir(parents=True)
