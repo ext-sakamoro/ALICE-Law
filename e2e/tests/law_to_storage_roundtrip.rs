@@ -437,10 +437,15 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         ("alice-analytics", alice_analytics::SEMANTICS_ID),
         ("alice-edge", alice_edge::SEMANTICS_ID),
     ];
-    let det_math_version = locked_alice_versions()
-        .into_iter()
+    // one version of every alice-* crate first: the identifier below is looked up by the one
+    // alice-det-math release in the build
+    let locked = locked_alice_versions();
+    let twice: Vec<_> = locked.iter().filter(|(_, v)| v.len() > 1).collect();
+    assert!(twice.is_empty(), "linked at two or more versions: {twice:?}");
+    let det_math_version = locked
+        .iter()
         .find(|(name, _)| name == "alice-det-math")
-        .and_then(|(_, v)| v.into_iter().next())
+        .and_then(|(_, v)| v.first().cloned())
         .expect("alice-det-math in Cargo.lock");
     let position = KNOWN_SEMANTICS
         .iter()
@@ -471,9 +476,6 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     );
     let compared_ids = identifiers.len() + 1;
 
-    let locked = locked_alice_versions();
-    let twice: Vec<_> = locked.iter().filter(|(_, v)| v.len() > 1).collect();
-    assert!(twice.is_empty(), "linked at two or more versions: {twice:?}");
     for core in [
         "alice-det-math", "alice-crypto", "alice-zip", "alice-analytics",
         "alice-db", "alice-physics", "alice-sdf", "alice-lol", "alice-edge",
