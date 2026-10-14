@@ -347,10 +347,13 @@ CLAIM_RE = re.compile(r"\bG(?:1[0-4]|[1-9])\b"
 
 
 # in a line that names the Law or the gate definitions, these are claims too ("Fully conformant",
-# "passes every ALICE-Law conformance gate", "all gates pass")
+# "passes every ALICE-Law conformance gate", "all gates pass", "meets every Law requirement",
+# "100% Law-clean", "Law: ✅ all green", "passes all of the Law's checks")
 CONTEXT_RE = re.compile(r"\bLaw\b|CONFORMANCE\.md", re.I)
 CONTEXT_CLAIM_RE = re.compile(r"\b(?:conformant|conforming|compliant)\b"
-                              r"|\bpass(?:es|ed|ing)?\b[^.]{0,60}?\bgates?\b"
+                              r"|\bpass(?:es|ed|ing)?\b[^.]{0,60}?\b(?:gates?|checks?)\b"
+                              r"|\b(?:meets?|satisf(?:y|ies))\b[^.]{0,40}?\brequirements?\b"
+                              r"|\bLaw-clean\b|\ball\s+green\b|\u2705"
                               r"|\b(?:all|every|each)\s+(?:\w+\s+){0,3}gates?\b[^.]{0,30}?\bpass", re.I)
 
 
