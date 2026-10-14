@@ -110,14 +110,14 @@ evidence_kinds = ["semantics-id-source", "staleness-guard-test"]
 id = "G7"
 checked_by = "machine and audit"
 name = "handshake-carries-id"
-definition = "A Law-bearing value crossing a crate boundary carries its producer's G6 identifier; a mismatch against the consumer's own identifier is an explicit, distinctly-typed error naming both identifiers."
+definition = "A Law-bearing value crossing a crate boundary within one exchange carries its producer's G6 identifier; a mismatch against the consumer's own identifier is an explicit, distinctly-typed error naming both identifiers."
 evidence_kinds = ["handshake-error-type", "mismatch-test"]
 
 [[gate]]
 id = "G8"
 checked_by = "machine and audit"
 name = "persisted-semantics-id"
-definition = "Law-bearing values written to a durable form carry their own identifier, distinct from G6's in-process one, describing the meaning of the stored bytes rather than the platform that wrote them."
+definition = "Law-bearing values written to a durable form carry their own identifier, distinct from G6's in-process one, describing the meaning of the stored bytes rather than the platform that wrote them; the reader accepts its own identifier or a verified earlier one, and a durable form read back later is this gate's, not G7's."
 evidence_kinds = ["persisted-id-format", "roundtrip-test"]
 
 [[gate]]
