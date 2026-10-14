@@ -27,6 +27,7 @@ import hashlib
 import re
 import subprocess
 import sys
+import unicodedata
 
 EXEMPT = {"scripts/public_text_check.py", "scripts/test_public_text_check.py", "scripts/public_text_private_repos.txt"}
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
@@ -196,6 +197,32 @@ BRACKETED_IDS_RE = re.compile(r"[(\[]\s*(" + ID + r"(?:\s*/\s*" + ID + r")*)\s*[
 # a digit-only id after "by", "from", "cc" or "per" ("verified by 53"): 0 such quantities in the
 # last 300 commit messages of this repository and the release-train repositories
 ATTRIBUTED_ID_RE = re.compile(r"(?<![A-Za-z])(?i:by|from|cc|per)\s+(" + ID + r")(?!%|\.\d)")
+
+
+# A commit message is written once and cannot be fixed afterwards, so the closed list of agent words is
+# also read through a fold that undoes the usual disguises: NFKC (full-width letters), look-alike
+# letters and digits ("w0rker", Cyrillic "ѕkill"), separators inside the word ("wor-ker", "w.o.r.k.e.r",
+# zero-width characters) and spaced single letters ("w o r k e r"). 0 new hits over the 40,479
+# message lines of the 8 release-train repositories when this was added.
+FOLDED_AGENT_RE = re.compile(r"(?<![a-z])(?:workers?|subagents?|multiagents?|skills?)(?![a-z])")
+CONFUSABLE = str.maketrans({"а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "і": "i",
+                            "ј": "j", "ѕ": "s", "к": "k", "ԝ": "w", "ѡ": "w", "ɡ": "g", "ⅼ": "l", "ι": "i",
+                            "ο": "o", "κ": "k", "ρ": "p", "ν": "v", "α": "a", "0": "o", "3": "e",
+                            "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"})
+
+
+def folded_agent_word(line: str) -> bool:
+    """an agent word that appears only after the fold (a word in plain letters is left to kinds())"""
+    if FOLDED_AGENT_RE.search(line.lower()):
+        return False
+    base = unicodedata.normalize("NFKC", line).lower()
+    for one in ("l", "i"):  # "1" stands for either
+        t = base.replace("1", one).translate(CONFUSABLE)
+        t = re.sub(r"(?<=[a-z])[-_.·\u200b\u200c\u200d\u2060]+(?=[a-z])", "", t)
+        t = re.sub(r"\b(?:[a-z] ){2,}[a-z]\b", lambda m: m.group(0).replace(" ", ""), t)
+        if FOLDED_AGENT_RE.search(t):
+            return True
+    return False
 
 
 def commit_session_tokens(line: str) -> bool:
@@ -1018,6 +1045,8 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
         findings += scan_text(f"commit {short} message", message)
         findings += [f"commit {short} message:{n}: session id" for n, line in enumerate(message.splitlines(), 1)
                      if commit_session_tokens(line) and not session_ids(line)]
+        findings += [f"commit {short} message:{n}: agent process (disguised)" for n, line in enumerate(message.splitlines(), 1)
+                     if folded_agent_word(line) and "agent process" not in kinds(line)]
         # the paths the commit adds or changes, from a NUL-separated listing (not the diff headers,
         # which quote non-ASCII names and end a name with a space in a tab)
         changed = paths_z(git(repo, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only",

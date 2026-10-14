@@ -1003,6 +1003,27 @@ class Terms(unittest.TestCase):
             self.assertIn("session id", ptc.kinds(line), line)
 
 
+class DisguisedWords(Base):
+    """the closed agent words in a commit message, read through NFKC, look-alikes and separators"""
+
+    def test_disguised_forms_are_findings(self):
+        for line in ("found by the w0rker", "wor-ker 3", "w o r k e r ran it", "\u0455kill used", "sub_agent",
+                     "\uff57\uff4f\uff52\uff4b\uff45\uff52", "w.o.r.k.e.r", "wo\u200brker", "mult1agent"):
+            self.assertTrue(ptc.folded_agent_word(line), line)
+
+    def test_ordinary_text_and_plain_words_are_left_alone(self):
+        for line in ("networker", "skilled work", "a work er", "box2 worked", "max_workers=4",
+                     "worker thread",            # a plain word: kinds() decides (exempt there)
+                     "s0 k1 l1"):
+            self.assertFalse(ptc.folded_agent_word(line), line)
+
+    def test_a_disguised_word_in_a_commit_message_fails_the_range(self):
+        commit(self.repo, {"a.md": "x\n"}, message="fix: found by the w0rker")
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("message:1: agent process (disguised)", out)
+
+
 class ClassAllow(Base):
     """a kind of finding allowed in a scope by the repository's settings, at a pinned count"""
 
