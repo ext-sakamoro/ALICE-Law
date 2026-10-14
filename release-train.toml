@@ -26,10 +26,37 @@ owners = ["ext-sakamoro"]
 github = "ext-sakamoro"
 
 [crate.alice-det-math]
-version = "0.5.0"
-state = "published"
+# 0.5.1 は max / min / max64 / min64 を足し (算術の識別子が 135c407d… から 85e08846… に変わる)、0.5.0 の
+# 識別子を PREVIOUS_SEMANTICS_IDS に残して check_semantics が検証済みの以前の識別子として受ける版
+# CHANGELOG に日付つきの [0.5.1] - 2026-10-15 を入れた DetMath main e42216e から公開する
+# (その後の main の変更は次の版の [Unreleased])
+version = "0.5.1"
+state = "prepared"
 order = 0
 repo = "ALICE-DetMath"
+must-contain = ["e42216e669dd7f05ddd1bd40a9af9195365bde02"]
+changelog-has = [
+    "`max` / `min` / `max64` / `min64` を追加",
+    "`PREVIOUS_SEMANTICS_IDS` に残し",
+]
+required-ci = [
+    { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (macos-15-intel)", "Test (ubuntu-latest)", "Test (ubuntu-24.04-arm)", "Test (windows-latest)", "Test (wasm32-wasip1 via wasmtime)"] },
+    { workflow = "CI", job = "Clippy (-D warnings)" },
+    { workflow = "CI", job = "no_std (rlib, thumbv7em-none-eabihf)" },
+    { workflow = "CI", job = "MSRV (rust-version = 1.85)" },
+    { workflow = "CI", job = "Feature powerset (cargo-hack)" },
+    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
+    { workflow = "CI", job = "Format" },
+    { workflow = "CI", job = "actionlint (workflow YAML)" },
+    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
+    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
+    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
+    { workflow = "Security & Hygiene", job = "Stub / mock / dbg / libm guard (grep)" },
+    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_simd_parity" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_accuracy" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_round_exact" },
+]
 
 [crate.alice-crypto]
 version = "0.4.1"
