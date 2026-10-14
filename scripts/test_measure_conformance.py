@@ -103,6 +103,15 @@ class Measure(unittest.TestCase):
                       self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: ubuntu-latest\n"
                                   "    steps:\n      - run: cargo test --release\n", "src/lib.rs": ""})["G5"])
 
+    def test_g5_does_not_read_release_type_as_a_release_leg(self):
+        semver = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n"
+                             "    steps:\n      - run: cargo semver-checks --release-type patch\n", "src/lib.rs": ""})["G5"]
+        self.assertIn("release test not found, aarch64 runner macos-latest", semver)
+        self.assertNotIn("release test found", semver)
+        self.assertIn("release test found, aarch64 runner macos-latest",
+                      self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n"
+                                  "    steps:\n      - run: cargo test --release\n", "src/lib.rs": ""})["G5"])
+
     def test_a_gate_list_without_banned_methods_measures_nothing(self):
         law = self.root / "law"
         (law / "conformance").mkdir(parents=True)

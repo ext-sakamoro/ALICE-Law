@@ -129,7 +129,7 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
 
     # G4 / G5: the release profile on an aarch64 runner
     arm = re.search(r"(macos-latest|macos-1[45]\b|ubuntu-24\.04-arm|ubuntu-22\.04-arm)", wf_text)
-    rel = "--release" in wf_text
+    rel = re.search(r"--release(?![\w-])", wf_text) is not None
     cells["G5"] = ("release test found" if rel else "release test not found") + \
                   (f", aarch64 runner {arm.group(1)}" if arm else ", aarch64 runner not found")
     cells["G4"] = "needs the test names (audit): " + cells["G5"]
