@@ -112,12 +112,12 @@ Each crate in the release train carries its own `alice-law-conformance.toml` at 
 5. restore: reopen the directory and read everything back
 6. compare: every value by `to_bits`, the law coefficients, domain, record and identifier, every field of the residual summary, and the alice-crypto digest of the whole run
 
-It also checks that the crates were built with one arithmetic (the `SEMANTICS_ID` of alice-det-math as alice-zip, alice-db, alice-analytics, alice-edge and alice-lol see it, pinned to its hex), that every `alice-*` crate is locked at one version, and that the nine core crates it names are in the build (`e2e/tests/law_to_storage_roundtrip.rs`; not derived from the roster, so a repository joining the train does not reach this check on its own). Each comparison fails when it compared nothing. A golden digest of the computed run (`e2e/golden/run.digest`) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing. In `.github/workflows/e2e-main.yml` the same run is made on an aarch64 and an x86_64 runner, each writes its digest (`ALICE_LAW_E2E_DIGEST_OUT`), and a last job requires the two to be equal to each other and to the golden.
+It also checks that the crates were built with one arithmetic (the `SEMANTICS_ID` of alice-det-math as alice-zip, alice-db, alice-analytics, alice-edge and alice-lol see it, equal to the identifier recorded for the linked alice-det-math release in `KNOWN_SEMANTICS`, with the identifiers of the earlier releases there accepted by `alice_det_math::check_semantics` as verified earlier ones), that every `alice-*` crate is locked at one version, and that the nine core crates it names are in the build (`e2e/tests/law_to_storage_roundtrip.rs`; not derived from the roster, so a repository joining the train does not reach this check on its own). Each comparison fails when it compared nothing. A golden digest of the computed run (`e2e/golden/run.digest`, one line `<alice-det-math version> <digest>` per release: the law records carry identifiers derived from the arithmetic, so each release has its own digest) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing. In `.github/workflows/e2e-main.yml` the same run is made on an aarch64 and an x86_64 runner, each writes its digest (`ALICE_LAW_E2E_DIGEST_OUT`), and a last job requires the two to be equal to each other and to the golden line of their alice-det-math release.
 
 ```sh
 cd e2e
 cargo test --release -- --nocapture             # published releases (resolved against crates.io)
-ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest again
+ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of the linked alice-det-math release again
 ```
 
 Two modes run the same test:

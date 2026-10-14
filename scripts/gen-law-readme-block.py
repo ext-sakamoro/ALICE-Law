@@ -139,6 +139,15 @@ def cell(text: str) -> str:
     return t
 
 
+def golden_digest(golden: str, det_math: str | None) -> str | None:
+    """the golden digest for an alice-det-math release: the line "<version> <digest>" of
+    e2e/golden/run.digest (an earlier revision held one digest alone)"""
+    lines = [l.split() for l in golden.splitlines() if l.strip()]
+    if len(lines) == 1 and len(lines[0]) == 1:
+        return lines[0][0]
+    return next((l[1] for l in lines if len(l) == 2 and l[0] == det_math), None)
+
+
 def law_facts(law: str, rev: str, crate: str) -> dict:
     roster_text = show(law, rev, "release-train.toml")
     gates_text = show(law, rev, "conformance/gates.toml")
@@ -152,9 +161,15 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
         raise InputError(f"{crate} is not in release-train.toml at ALICE-Law {rev[:12]}")
     entry = roster[crate]
     dm = roster.get("alice-det-math", {}).get("version")
-    sid = re.search(r'const SEMANTICS_HEX: &str = "([0-9a-f]{64})";', e2e_test)
+    # the identifier of the roster's alice-det-math release: its row of KNOWN_SEMANTICS (an earlier
+    # revision pinned one hex, SEMANTICS_HEX)
+    sid = (re.search(r'\("' + re.escape(dm or "") + r'", "([0-9a-f]{64})"\)', e2e_test)
+           or re.search(r'const SEMANTICS_HEX: &str = "([0-9a-f]{64})";', e2e_test))
     if dm is None or sid is None:
-        raise InputError(f"ALICE-Law {rev[:12]}: no alice-det-math entry or no SEMANTICS_HEX")
+        raise InputError(f"ALICE-Law {rev[:12]}: no alice-det-math entry, or no identifier for alice-det-math {dm}")
+    digest = golden_digest(golden, dm)
+    if digest is None:
+        raise InputError(f"ALICE-Law {rev[:12]}: e2e/golden/run.digest has no digest for alice-det-math {dm}")
     deps = tomllib.loads(e2e_toml).get("dependencies", {})
     req = deps.get(crate)
     if isinstance(req, dict):
@@ -166,7 +181,7 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
     return {
         "version": entry.get("version", "?"), "state": entry.get("state", "?"),
         "law_dependency": entry.get("law-dependency", True), "det_math": dm, "semantics": sid.group(1),
-        "e2e_req": req, "digest": golden.strip(), "manifest_path": entry.get("manifest-path", "Cargo.toml"),
+        "e2e_req": req, "digest": digest, "manifest_path": entry.get("manifest-path", "Cargo.toml"),
         # the job that requires the two digests to be equal, and both runners named whole
         "arches": (bool(re.search(r"^\s+digest-compare:\s*$", workflow, re.M))
                    and bool(re.search(r"runner:\s*macos-15\s*$", workflow, re.M))
