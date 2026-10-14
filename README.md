@@ -1,6 +1,6 @@
 # ALICE-Law
 
-Integration checks across the crates in the release train (`release-train.toml`): ALICE-LOL, ALICE-DetMath, ALICE-SDF, ALICE-Physics, ALICE-DB, ALICE-Zip, ALICE-Crypto, ALICE-Analytics, ALICE-Edge, ALICE-ML and ALICE-LLM. `scripts/readme_roster_check.py` fails this file's own check if this sentence falls behind the roster.
+Integration checks across the crates in the release train (`release-train.toml`): ALICE-LOL, ALICE-DetMath, ALICE-SDF, ALICE-Physics, ALICE-DB, ALICE-Zip, ALICE-Crypto, ALICE-Analytics, ALICE-Edge, ALICE-ML, ALICE-LLM and ALICE-Kinematics. `scripts/readme_roster_check.py` fails this file's own check if this sentence falls behind the roster.
 
 Everything here is built from the versions published on crates.io, with no path dependencies. Two kinds of check:
 

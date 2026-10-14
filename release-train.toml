@@ -75,22 +75,30 @@ consumer-check-features = [["python"]]
 consumer-expected-failure = [{ features = ["python"], expect = { code = "E0308", file = "src/lib.rs", text = "arr", count = 1, label = "expected `ArrayBase<OwnedRepr<f64>, ..., f64>`, found `ArrayBase<OwnedRepr<f64>, ...>`", message = "mismatched types" }, until = "alice-db 0.4.1", why = "0.4.0 の python は新規解決で numpy と alice-db が別の版の ndarray を引き src/lib.rs の PyArray2::from_owned_array が型不一致になる" }]
 
 [crate.alice-physics]
-version = "3.0.0"
-state = "published"
+version = "3.0.1"
+state = "planned"
 order = 6
 repo = "ALICE-Physics"
 consumer-features = [["analytics", "ffi", "gpu-solver-bridge", "neural", "parallel", "privacy-crypto", "replay", "simd", "std"], ["std", "wasm"]]
-consumer-features-why = "python は std を有効にしない (3.0.0、no_std では compile できない) ので std と組にする wasm と ffi は互いに排他 (src/lib.rs の compile_error) なので別の組にする python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
+consumer-features-why = "python は std を有効にしない (no_std では compile できない) ので std と組にする wasm と ffi は互いに排他 (src/lib.rs の compile_error) なので別の組にする python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["std", "python"]]
-# 3.0.0 は等しいゼロの max / min を全 target で揃える変更を含めて公開する (x86_64 の
-# 保存値が変わるが PHYSICS_SEMANTICS_ID は 3.0.0 の値のまま、公開後なら識別子の更新が要る)
-# 変更の 2 commit (det_math の max / min と、lib の f32 / f64 max・min を禁じる clippy の gate) を
-# patch id (git patch-id --stable) で持つ: rebase された写しでも当たる
+# 3.0.1 は [lib] crate-type を rlib だけにした版 (no_std の crate の依存として build できなかった)
+# 公開する commit は 3.0.1 の commit 306d8d6f (main にはその後の [Unreleased] の変更が続くので main の
+# 先頭は公開しない) 消費者 build の no-default の組が修正の中身を見る 3.0.0 から続く 2 commit
+# (等しいゼロの max / min) と 3.0.1 の 4 commit を patch id (git patch-id --stable) でも持つ
+must-contain = ["306d8d6fee8d769324617711c41c208068f1c0b0"]
 must-contain-patch = [
     "713407beaf620dcc766632eab58d414d13146230",  # fix: 等しいゼロを max / min にかけた時の符号を全 target で揃える
     "12181a10bfd8ab5d0dfc5003f4bacd151154e79e",  # ci: library の code で f32 / f64 の max と min を使えなくする (wasm / python の lib pass を含む版)
+    "2286e4053e9cdddc986f6bcc294a448af2d72e78",  # fix: no_std の crate から依存として build できるようにする (3.0.1)
+    "12480b7cacb010edfb6f1ad61429af52ae066d55",  # fix: binding を crate type の指定つきで build し、README の手順を CI で実行する
+    "e63c33ec8ab397dd53c0214547c30b07c3c532c7",  # ci: full の preflight で Python の wheel を maturin で作り binding の試験を走らせる
+    "73f6ceb903bd6958138f91b22d1d13e7d89d8205",  # test: no_std の依存 build で比較 0 件を exit 2 にする判定を試験で固定する
 ]
-changelog-has = ["**Behavior change:**"]
+changelog-has = [
+    "3.0.0 could not be used as a dependency of a `no_std` crate",
+    "| Binding | 3.0.0 | 3.0.1 |",
+]
 # CI jobs that must be green on the published commit, with every leg named: the tests
 # on every OS and target (x86_64 and aarch64, wasm), clippy with the library gate (no
 # f32 / f64 max and min), the wheel
@@ -103,9 +111,8 @@ required-ci = [
     { workflow = "CI", job = "Clippy" },
     { workflow = "Python binding", job = "Build, install and test the wheel" },
 ]
-# 3.0.1 から (3.0.0 の commit には無い): 決定論試験の release leg (macos-latest は fma の分かれを
-# 見る唯一の leg、ubuntu-24.04-arm と ubuntu-latest も) を、その job が main に入って workflow 名と
-# leg 名が確定した時に `since = "3.0.1"` の entry として足す
+# 決定論試験の release leg (macos-latest は fma の分かれを見る唯一の leg) は 3.0.1 の commit の後に
+# main に入ったので、次の版の entry で足す
 
 [crate.alice-sdf]
 version = "6.0.0"
@@ -339,6 +346,30 @@ order = 13
 repo = "ALICE-ML"
 # この repository は alice-ml を引かない (scripts/dep_consistency.py CORE の外)
 law-dependency = false
+
+[crate.alice-kinematics]
+# 0.2.1 は lol feature の alice-lol の要求を 0.4 に上げ (0.2.0、未公開)、配布 package を crate 本体に
+# 限り、stable の toolchain で build できない rerun-viz feature を非公開の example crate に移した版
+# (1cc1b09 まで) 公開済みの 0.1.0 は alice-lol ^0.3 を要求するので、alice-lol 0.3.0 の yank の前に
+# 公開する この repository は alice-kinematics を引かない
+version = "0.2.1"
+state = "planned"
+order = 14
+repo = "ALICE-Kinematics"
+law-dependency = false
+must-contain = ["1cc1b09e085a2ff76f75fc3a49edb33a14d200cf"]
+changelog-has = [
+    "`include` allowlist を Cargo.toml に追加し、配布 package を crate 本体に限定",
+    "`rerun-viz` feature と optional な `rerun` 依存をライブラリから削除",
+]
+required-ci = [
+    { workflow = "CI", job = "test" },
+    { workflow = "CI", job = "clippy" },
+    { workflow = "CI", job = "fmt" },
+    { workflow = "CI", job = "doc" },
+    { workflow = "CI", job = "actionlint (workflow YAML 検証)" },
+    { workflow = "rerun-viz example", job = "build-example" },
+]
 
 # The Actions secrets of each repository in the train, by name, with what they are for:
 # publish-gate reads the repository's secrets and refuses a secret that is not listed here, a
