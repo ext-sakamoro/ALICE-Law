@@ -30,17 +30,21 @@ resolution matters: the same method name can be banned on `f32`/`f64` and
 allowed on an unrelated type) plus a canary test that injects a direct call
 and confirms the lint catches it in a crate this is not yet wired into.
 
-Out of scope: `sqrt` (IEEE 754 requires it correctly rounded, so every
-conforming platform already agrees) and `powi` (repeated squaring from an
-integer exponent, portable by construction, not a transcendental lookup).
+The methods G1 rules on are one list, owned by this repository: the
+`methods` array of G1 in `conformance/gates.toml`, each with its verdict
+(`banned`, `allowed`, `pending`) and the reason. `sqrt` and `mul_add` are
+allowed (IEEE 754 requires both correctly rounded, so every conforming
+platform agrees). `powi` is pending: whether an integer power gives the same
+bits on every target is being measured; until it is decided a crate may ban
+it, and a crate that allows it says why in its manifest.
 
-**Claim.** No code of the crate calls a platform transcendental method of `f32` / `f64` (`sin`, `cos`, `tan`, `exp`, `ln`, `log*`, `powf`, `atan2`, `sinh`, ... the list in the crate's clippy configuration) except through alice-det-math, in every target and feature combination the crate builds.
+**Claim.** No code of the crate calls an `f32` / `f64` method the G1 list in `conformance/gates.toml` marks `banned` except through alice-det-math, in every target and feature combination the crate builds.
 
 **Evidence for `pass`.** the clippy configuration with the method list; the CI job running `cargo clippy -- -D clippy::disallowed_methods` for each feature set the crate builds (the job names); the canary test.
 
 **Mutant** (turns the evidence red). add `x.sin()` to a library source file, and once more inside a feature-gated module: the CI job fails on both.
 
-**Look at.** the method list against alice-det-math's function list; the CI job's feature sets against `[features]` in Cargo.toml (a feature the job does not build is not covered).
+**Look at.** the crate's clippy `disallowed-methods` against the G1 list: every `banned` entry for `f32` and `f64` is there (a missing one is a gap unless the manifest justifies it), and the crate's choice for each `pending` entry is stated; the CI job's feature sets against `[features]` in Cargo.toml (a feature the job does not build is not covered).
 
 **Checked by.** machine
 
@@ -463,7 +467,7 @@ meaning changed, it is marked.
 
 | gate | earlier definition (verbatim) | change |
 |---|---|---|
-| G1 | Platform transcendental functions are banned outside alice-det-math; sqrt (correctly rounded by IEEE 754) and powi (portable by construction) are out of scope. | wording: the ban covers every target and feature the crate builds, so the evidence must cover each feature set |
+| G1 | Platform transcendental functions are banned outside alice-det-math; sqrt (correctly rounded by IEEE 754) and powi (portable by construction) are out of scope. | **meaning**: one method list owned by `conformance/gates.toml` with a verdict and reason per method (it names `hypot`, `cbrt`, `exp_m1`, `ln_1p` and the others as banned, `mul_add` as allowed); `powi` moves from out of scope to pending a cross-target measurement; a crate's clippy list must contain every banned entry; the evidence must cover each feature set |
 | G2 | f32/f64 max/min must implement IEEE 754 maximumNumber/minimumNumber, at scalar width and at every SIMD width the crate builds for, via Law helpers and a default-deny manifest of named raw_* exceptions. | wording: one test per SIMD width named as evidence |
 | G3 | Negating the whole result of a fused multiply-add (a.mul_add(b,c)) is banned in every syntactic form; the Law-conforming form negates the fma's operands instead, (-a).mul_add(b, -c). | wording |
 | G4 | Signed-zero and exact-cancellation test cases are checked against fixed expected bit patterns under {debug, release} x {x86_64, aarch64}. | **meaning** (tightening): the four legs must be required jobs, not only run |

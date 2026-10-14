@@ -125,5 +125,28 @@ class RealFiles(unittest.TestCase):
                                      "--schema", str(root / "conformance" / "gates.toml")]), 0)
 
 
+
+class G1MethodList(unittest.TestCase):
+    """the one list of f32 / f64 methods G1 rules on (conformance/gates.toml, gate G1 `methods`)"""
+
+    def test_the_list_is_well_formed(self):
+        import tomllib
+        gates = tomllib.loads((Path(__file__).resolve().parent.parent / "conformance" / "gates.toml")
+                              .read_text(encoding="utf-8"))["gate"]
+        g1 = next(g for g in gates if g["id"] == "G1")
+        methods = g1["methods"]
+        self.assertGreater(len(methods), 0)
+        names = [m["name"] for m in methods]
+        self.assertEqual(len(names), len(set(names)), "a method is listed twice")
+        for m in methods:
+            self.assertIn(m["verdict"], ("banned", "allowed", "pending"), m)
+            self.assertTrue(m["reason"].strip(), m)
+        verdict = {m["name"]: m["verdict"] for m in methods}
+        self.assertEqual(verdict["sqrt"], "allowed")
+        self.assertEqual(verdict["mul_add"], "allowed")
+        self.assertEqual(verdict["powi"], "pending")  # until the cross-target measurement decides it
+        for banned in ("sin", "cos", "exp", "ln", "powf", "hypot", "cbrt", "atan2"):
+            self.assertEqual(verdict[banned], "banned", banned)
+
 if __name__ == "__main__":
     unittest.main()

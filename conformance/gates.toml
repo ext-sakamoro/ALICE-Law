@@ -22,8 +22,53 @@ legacy_status = ["missing"]
 id = "G1"
 checked_by = "machine"
 name = "no-libm-direct"
-definition = "Platform transcendental functions are banned outside alice-det-math; sqrt (correctly rounded by IEEE 754) and powi (portable by construction) are out of scope."
+definition = "The f32/f64 methods listed as banned in this gate's methods list (platform transcendentals and other results IEEE 754 does not require correctly rounded) are not called outside alice-det-math; sqrt and mul_add are allowed (correctly rounded); powi is pending a cross-target measurement."
 evidence_kinds = ["clippy-disallowed-methods-type-resolved", "canary-test"]
+# the f32 / f64 methods G1 rules on, owned here: "banned" outside alice-det-math, "allowed",
+# or "pending" (not decided yet; a crate states its choice); a crate's clippy configuration must
+# ban every "banned" entry (a justified subset only with a reason in the crate's manifest)
+methods = [
+    { name = "sin", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "cos", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "tan", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "sin_cos", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "asin", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "acos", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "atan", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "atan2", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "sinh", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "cosh", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "tanh", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "asinh", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "acosh", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "atanh", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "exp", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "exp2", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "exp_m1", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "ln", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "log", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "log2", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "log10", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "ln_1p", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "powf", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "cbrt", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "hypot", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
+    { name = "sqrt", verdict = "allowed", reason = "correctly rounded by IEEE 754: every conforming platform gives the same bits" },
+    { name = "mul_add", verdict = "allowed", reason = "fusedMultiplyAdd is correctly rounded (one rounding) on every platform; the sign of an outer negation is G3" },
+    { name = "powi", verdict = "pending", reason = "integer power: whether it is the same on every target (a compiler runtime routine, repeated multiplication with target-dependent order) is being measured with a cross-target probe; until then a crate may ban it, and a crate allowing it states why" },
+    { name = "recip", verdict = "allowed", reason = "one correctly rounded division" },
+    { name = "to_degrees", verdict = "allowed", reason = "one multiplication by a constant" },
+    { name = "to_radians", verdict = "allowed", reason = "one multiplication by a constant" },
+    { name = "abs", verdict = "allowed", reason = "exact" },
+    { name = "copysign", verdict = "allowed", reason = "exact" },
+    { name = "floor", verdict = "allowed", reason = "exact" },
+    { name = "ceil", verdict = "allowed", reason = "exact" },
+    { name = "round", verdict = "allowed", reason = "exact" },
+    { name = "trunc", verdict = "allowed", reason = "exact" },
+    { name = "fract", verdict = "allowed", reason = "exact (x - trunc(x))" },
+    { name = "rem_euclid", verdict = "allowed", reason = "exact remainder" },
+    { name = "div_euclid", verdict = "allowed", reason = "correctly rounded division then floor" },
+]
 
 [[gate]]
 id = "G2"
