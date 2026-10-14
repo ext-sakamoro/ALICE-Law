@@ -423,6 +423,48 @@ def upstream_commit(repo: str, commit: str) -> bool:
         ["git", "-C", repo, "merge-base", "--is-ancestor", commit, base], capture_output=True).returncode == 0
 
 
+# A change of the settings file is reviewed when a later commit records its hash in the repository's
+# pin file (`config-sha256 <sha256 of .public-text.toml>`): the approval is a separate commit, never
+# the one that changes the settings, and any change after it needs a new approval.
+PIN_FILE = ".github/public-text-pin"
+PIN_CONFIG_RE = re.compile(r"^config-sha256\s+([0-9a-f]{64})\s*$", re.M)
+
+
+def pin_config_hash(repo: str, rev: str) -> str | None:
+    r = subprocess.run(["git", "-C", repo, "show", f"{rev}:{PIN_FILE}"], capture_output=True, text=True)
+    m = PIN_CONFIG_RE.search(r.stdout) if r.returncode == 0 else None
+    return m.group(1) if m else None
+
+
+def config_hash(repo: str, rev: str) -> str | None:
+    r = subprocess.run(["git", "-C", repo, "show", f"{rev}:{REPO_CONFIG}"], capture_output=True)
+    return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else None
+
+
+def first_parent(repo: str, commit: str) -> str | None:
+    parents = git(repo, "rev-list", "--parents", "-n", "1", commit).split()[1:2]
+    return parents[0] if parents else None
+
+
+def approval_changed(repo: str, commit: str) -> bool:
+    """the commit changes the pin file's config-sha256"""
+    parent = first_parent(repo, commit)
+    return pin_config_hash(repo, commit) != (pin_config_hash(repo, parent) if parent else None)
+
+
+def config_approver(repo: str, tip: str) -> str | None:
+    """the commit that last set the pin's config-sha256, when it equals the hash of the settings at
+    tip, or None (a commit that changes the settings and their approval together is a finding of its
+    own in scan_range, so it never makes its own change reviewed)"""
+    want = pin_config_hash(repo, tip)
+    if want is None or want != config_hash(repo, tip):
+        return None
+    for commit in git(repo, "log", "--format=%H", tip, "--", PIN_FILE).split():
+        if approval_changed(repo, commit):
+            return commit
+    return None
+
+
 def config_changes(repo: str, commit: str) -> list[str]:
     """the keys of the settings file this commit adds, removes or changes (sorted)"""
     parent = git(repo, "rev-list", "--parents", "-n", "1", commit).split()[1:2]
@@ -855,6 +897,9 @@ SKIPPED: list[str] = []
 
 def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
     findings, compared = [], 0
+    want = pin_config_hash(repo, ref)
+    if want is not None and want != config_hash(repo, ref):
+        findings.append(f"{PIN_FILE}: config-sha256 does not match {REPO_CONFIG} (the settings are not approved)")
     paths = paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", ref))
     if CONFIG["upstream-fork"]:
         # a fork: the files the fork added or changed after the fork point (the others are the
@@ -904,6 +949,7 @@ def added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
 
 def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
     findings, compared, files = [], 0, 0
+    approver = config_approver(repo, rng.split("..")[-1] or "HEAD")
     for commit in git(repo, "rev-list", "--no-merges", rng).splitlines():
         if upstream_commit(repo, commit):
             continue  # the upstream project's commit in a fork (up to the fork point)
@@ -919,7 +965,13 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                               "--no-renames", "--diff-filter=d", commit))
         if REPO_CONFIG in changed:
             keys = config_changes(repo, commit)
-            findings.append(f"commit {short} {REPO_CONFIG}: policy config changed ({', '.join(keys) or 'file'})")
+            if approval_changed(repo, commit):
+                findings.append(f"commit {short} {REPO_CONFIG}: policy config changed and approved in the same "
+                                f"commit ({', '.join(keys) or 'file'})")
+            elif not (approver and approver != commit and subprocess.run(
+                    ["git", "-C", repo, "merge-base", "--is-ancestor", commit, approver],
+                    capture_output=True).returncode == 0):
+                findings.append(f"commit {short} {REPO_CONFIG}: policy config changed ({', '.join(keys) or 'file'})")
         gitlinks = {l.split("\t", 1)[1] for l in git(repo, "diff-tree", "--root", "--no-commit-id", "-r",
                                                       "--no-renames", "--diff-filter=d", commit).splitlines()
                     if l.split(" ", 2)[1:2] == ["160000"]}
