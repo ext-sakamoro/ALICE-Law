@@ -117,6 +117,25 @@ def run_texts(text: str) -> list[str]:
     return out
 
 
+RELEASE_TEST = re.compile(r"\bcargo\b[^\n;&|]*?\b(?:test|nextest\s+run)\b")
+
+
+def commands(wf: dict[str, str]) -> list[str]:
+    """the commands of all run steps, with backslash-continued lines joined"""
+    out: list[str] = []
+    for text in wf.values():
+        pending = ""
+        for line in run_texts(text):
+            if line.endswith("\\"):
+                pending += line[:-1] + " "
+                continue
+            out.append(pending + line)
+            pending = ""
+        if pending:
+            out.append(pending)
+    return out
+
+
 def invoked_scripts(wf: dict[str, str]) -> set[str]:
     """repository scripts (scripts/*.sh, scripts/*.py) that a workflow run step invokes"""
     return {m.group(1) for text in wf.values() for cmd in run_texts(text) for m in SCRIPT_CALL.finditer(cmd)}
@@ -159,7 +178,19 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
 
     # G4 / G5: the release profile on an aarch64 runner
     arm = re.search(r"(macos-latest|macos-1[45]\b|ubuntu-24\.04-arm|ubuntu-22\.04-arm)", wf_text)
-    rel = re.search(r"--release(?![\w-])", wf_text) is not None
+    # a test command with the release profile: `cargo test` / `cargo nextest run` (also through
+    # `cargo hack` or a toolchain `+…`) and `--release` in the same command; `cargo build --release`
+    # builds, it does not test
+    # the flag may come from a matrix value (`profile: ["", " --release"]` with `${{ matrix.profile }}`)
+    release_keys = {m.group(1) for text in wf.values()
+                    for m in re.finditer(r"(?m)^\s*([\w-]+):\s*\[[^\]\n]*?(?:--release(?![\w-])|--profile[= ]release\b)", text)}
+
+    def release_flag(part: str) -> bool:
+        return bool(re.search(r"--release(?![\w-])|--profile[= ]release\b", part)
+                    or any(re.search(r"\$\{\{\s*matrix\." + re.escape(k) + r"\s*\}\}", part) for k in release_keys))
+
+    rel = any(RELEASE_TEST.search(part) and release_flag(part)
+              for cmd in commands(wf) for part in re.split(r"&&|\|\||[;|]", cmd))
     cells["G5"] = ("release test found" if rel else "release test not found") + \
                   (f", aarch64 runner {arm.group(1)}" if arm else ", aarch64 runner not found")
     cells["G4"] = "needs the test names (audit): " + cells["G5"]

@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/measure_conformance.py` G5: a release test leg needs `--release` (or `--profile release`, or a matrix value holding it that the command uses) on a test command (`cargo test` / `cargo nextest run`, also through `cargo hack` or `+toolchain`), not on `cargo build` / `cargo run` / packaging; on the 8 release-train repositories Physics, SDF and Zip move from found to not found (their release lines build or package), Edge and LOL stay found
 - `scripts/measure_conformance.py`: G12 also follows a workflow's call of a repository script (one level) and counts it when that script runs ALICE-Law's text check (ALICE-Edge calls `scripts/public_text.sh`)
 - `scripts/measure_conformance.py`: the cargo `--release` flag is matched as a whole flag (not inside `--release-type`), so a semver-checks step is no longer read as a release test leg (G4/G5)
 - `conformance/gates.toml` G1: `powi` stays pending and is banned by default (`default = "banned"`): a crate allowing it states the reason in its manifest (alice-det-math's `powi` covers `f32` only); the reason records the probe (11,352 points, 0 differences between aarch64 and x86_64 code translated to run on the same arm64 floating-point unit, so not evidence for real x86_64 hardware); a pending method must say its default; `scripts/measure_conformance.py` reports a default-banned method a clippy list does not ban apart from the banned ones

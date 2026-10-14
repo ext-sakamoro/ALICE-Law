@@ -146,6 +146,32 @@ class Measure(unittest.TestCase):
                                   "scripts/public_text.sh": script, "src/lib.rs": ""})
         self.assertEqual("not found", only_a_path["G12"])
 
+    def test_g5_needs_the_release_flag_on_a_test_command(self):
+        def g5(run):
+            return self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n"
+                               f"    steps:\n      - run: {run}\n", "src/lib.rs": ""})["G5"]
+        for run in ("cargo build --release", "cargo build --release --features x && cargo test",
+                    "cargo bench --release"):
+            self.assertIn("release test not found", g5(run), run)
+        for run in ("cargo test --release", "cargo +1.90 test --release --all-features",
+                    "cargo nextest run --release", "cargo hack --feature-powerset test --release"):
+            self.assertIn("release test found", g5(run), run)
+            self.assertNotIn("not found,", g5(run).split(", aarch64")[0], run)
+        matrix = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n    strategy:\n"
+                             "      matrix:\n        profile: [\"\", \" --release\"]\n    steps:\n"
+                             "      - run: cargo test -p foo${{ matrix.profile }}\n", "src/lib.rs": ""})["G5"]
+        self.assertIn("release test found", matrix)
+        self.assertNotIn("not found,", matrix.split(", aarch64")[0])
+        other = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n    strategy:\n"
+                            "      matrix:\n        profile: [\"\", \" --release\"]\n    steps:\n"
+                            "      - run: cargo test ${{ matrix.features }}\n", "src/lib.rs": ""})["G5"]
+        self.assertIn("release test not found", other)  # the release value is not used by the test command
+        self.assertIn("release test found", g5("cargo test --profile release"))
+        multi = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n    steps:\n"
+                            "      - run: |\n          cargo test \\\n            --release --workspace\n",
+                            "src/lib.rs": ""})["G5"]
+        self.assertIn("release test found", multi)
+
     def test_a_gate_list_without_banned_methods_measures_nothing(self):
         law = self.root / "law"
         (law / "conformance").mkdir(parents=True)
