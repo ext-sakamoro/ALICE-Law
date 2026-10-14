@@ -933,12 +933,26 @@ class RangeAllow(Base):
         commit(self.repo, {"shaders/a.metal": "uint v [[vertex_id]]\n"})  # removed and added again
         self.assertEqual(run(self.repo, "--range", f"{base}..HEAD")[0], 0)
 
-    def test_identical_lines_count_once_in_a_range(self):
-        # the cap counts distinct (path, text) pairs: the same line at two places is one allowed line
-        # (the tree check still counts every line against the entry)
+    def test_lines_already_there_count_toward_the_entry(self):
+        # 2 allowed lines before the range, 1 added: 3 in all against a count of 2
+        commit(self.repo, {"shaders/a.metal": "uint a [[vertex_id]]\nuint b [[instance_id]]\n"})
+        base = self.settings([("shaders/a.metal", "note link", 2)])
+        commit(self.repo, {"shaders/a.metal": "uint a [[vertex_id]]\nuint b [[instance_id]]\nuint c [[base_vertex]]\n"})
+        code, out = run(self.repo, "--range", f"{base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("allows 2 lines, 3 at", out)
+        commit(self.repo, {"shaders/a.metal": "uint a [[vertex_id]]\nuint c [[base_vertex]]\n"})  # back to 2 in all
+        self.assertEqual(run(self.repo, "--range", f"{base}..HEAD")[0], 0)
+
+    def test_identical_lines_count_once_among_the_added_lines(self):
+        # the added-lines cap counts distinct (path, text) pairs; the total at the tip counts every line,
+        # as the tree check does
         base = self.settings([("shaders/a.metal", "note link", 1)])
         commit(self.repo, {"shaders/a.metal": "uint v [[vertex_id]]\n// x\nuint v [[vertex_id]]\n"})
-        self.assertEqual(run(self.repo, "--range", f"{base}..HEAD")[0], 0)
+        code, out = run(self.repo, "--range", f"{base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("adds", out)
+        self.assertIn("allows 1 lines, 2 at", out)
 
     def test_a_three_dot_range_reads_the_merge_base(self):
         merge_base = self.settings([("shaders/a.metal", "note link", 1)])

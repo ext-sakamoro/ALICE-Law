@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/public_text_check.py` `--range`: an allow entry that the range uses is also checked against its lines in all at the range's tip (lines already there count too, as in `--tree`), besides the cap on the distinct lines the range adds
 - `scripts/public_text_check.py`: the process word for a background job is matched in any case as a word ("… 3 measured it" with a capital, all capitals, the plural); it is not counted as the pool-size argument of Python's executors and loaders (a closed list: the `max_`, `num_` and `n_` prefixes), before the word "thread(s)", or in the product name "Cloudflare …"; any other identifier with it stays a finding
 - `scripts/public_text_check.py`: the other agent-process words are matched in any case as words; an identifier containing them (an `_` next to the word) and the instruction format's fixed file name (`SKILL.md`) are not counted
 - `scripts/public_text_check.py`: two English phrases that refer to the current conversation ("this" + the word for a work session, and "in" + "chat", any case) are agent-process words (0 hits in the tracked files of the 8 release-train repositories before the change)

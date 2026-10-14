@@ -1061,12 +1061,26 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                         findings.append(f"commit {short} {path}:{n}: {k}")
                     else:
                         RANGE_ALLOWED.setdefault((entry["path"], k), set()).add((path, text))
-    # an entry allows at most its count of distinct added lines
+    # an entry allows at most its count of distinct added lines, and at most its count of lines in all
+    # at the tip (lines already there before the range count too)
+    tip = rng.split("..")[-1].lstrip(".") or "HEAD"
+    tip_paths = None
     for e in CONFIG["allow"]:
         got = len(RANGE_ALLOWED.get((e["path"], e["class"]), ()))
         if got > e["count"]:
             findings.append(f"{REPO_CONFIG}: allow {e['path']} / {e['class']} allows {e['count']} lines, "
                             f"{rng} adds {got}")
+        elif got:
+            if tip_paths is None:
+                tip_paths = paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", tip))
+            total = 0
+            for f in tip_paths:
+                if e["path"] in scopes(f) and f not in EXEMPT:
+                    text = text_of(blob_bytes(repo, tip, f))
+                    total += sum(1 for line in text.splitlines() if e["class"] in kinds(line, f))
+            if total > e["count"]:
+                findings.append(f"{REPO_CONFIG}: allow {e['path']} / {e['class']} allows {e['count']} lines, "
+                                f"{total} at {tip[:12]}")
     return findings, compared, files
 
 
