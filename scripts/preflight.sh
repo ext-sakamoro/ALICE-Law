@@ -15,6 +15,7 @@ python3 scripts/expected_failure.py --check
 python3 scripts/test_public_text_check.py
 python3 scripts/test_readme_roster_check.py
 python3 scripts/test_conformance_docs_schema_check.py
+python3 scripts/test_gen_law_readme_block.py
 
 echo "== README names every release-train repository"
 python3 scripts/readme_roster_check.py

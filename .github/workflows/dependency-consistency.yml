@@ -59,6 +59,9 @@ jobs:
       - name: Conformance docs and schema agree
         run: python3 scripts/conformance_docs_schema_check.py
 
+      - name: Test the README integration block generator
+        run: python3 scripts/test_gen_law_readme_block.py
+
       # the release train (release-train.toml): its tests, and what the roster says
       # is next (informational here; the publisher runs `publish-gate <crate>` right
       # before each `cargo publish`)
