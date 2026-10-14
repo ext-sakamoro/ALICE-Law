@@ -770,21 +770,27 @@ def gh_json_lines(path: str, jq: str) -> list[dict]:
 
 
 def github_actions_jobs(owner_repo: str, sha: str) -> dict[str, list[dict]]:
-    """{workflow name: the jobs (name, status, conclusion) of its latest run on the commit}
-    from the GitHub Actions API (a job of another workflow or app cannot stand in)"""
+    """{workflow name: the jobs (name, status, conclusion, and the event of the run) of its latest
+    run on the commit} from the GitHub Actions API (a job of another workflow or app cannot stand in)"""
     runs = gh_json_lines(f"repos/{owner_repo}/actions/runs?head_sha={sha}&per_page=100",
-                         ".workflow_runs[] | {id, name, created_at}")
+                         ".workflow_runs[] | {id, name, created_at, event}")
     latest: dict[str, dict] = {}
     for r in runs:
         if r["name"] not in latest or r["created_at"] > latest[r["name"]]["created_at"]:
             latest[r["name"]] = r
-    return {name: gh_json_lines(f"repos/{owner_repo}/actions/runs/{r['id']}/jobs?per_page=100",
-                                ".jobs[] | {name, status, conclusion}")
+    return {name: [{**j, "event": r.get("event")}
+                   for j in gh_json_lines(f"repos/{owner_repo}/actions/runs/{r['id']}/jobs?per_page=100",
+                                          ".jobs[] | {name, status, conclusion}")]
             for name, r in latest.items()}
 
 
-def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, actions) -> tuple[list[str], int]:
-    """(problems, compared) for the roster's `required-ci` jobs of `crate` on `commit`"""
+def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, actions,
+                dispatched: list[str] | None = None) -> tuple[list[str], int]:
+    """(problems, compared) for the roster's `required-ci` jobs of `crate` on `commit`. A required
+    job the run skipped (a path filter that the commit did not match, which also leaves a matrix
+    unexpanded: `Fuzz — ${{ matrix.target }}`) is never green: it is refused with the workflow to
+    dispatch on the commit. The green jobs that came from a dispatched run are added to
+    `dispatched` ("<workflow>: <job>"), for the gate's record"""
     wanted = [w for w in c.get("required-ci", [])
               if "since" not in w or dc.Version(c["version"]) >= dc.Version(w["since"])]
     if not wanted:
@@ -807,6 +813,11 @@ def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, actions) -> t
         mine = [j for j in by_workflow[workflow]
                 if j.get("name") == job or str(j.get("name", "")).startswith(job + " (")]
         names = sorted({str(j.get("name")) for j in mine})
+        unexpanded = [j for j in by_workflow[workflow]
+                      if "${{" in str(j.get("name", "")) and j.get("conclusion") == "skipped"]
+        if (mine and all(j.get("conclusion") == "skipped" for j in mine)) or (not mine and unexpanded):
+            problems.append(f"{where}: skipped by the run (not green): dispatch {workflow} on {commit}")
+            continue
         if isinstance(legs, int):
             if len(names) != legs:
                 problems.append(f"{where}: {len(names)} legs ran, the roster expects {legs}: {names}")
@@ -819,6 +830,8 @@ def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, actions) -> t
                       if j.get("status") != "completed" or j.get("conclusion") != "success"})
         if bad:
             problems.append(f"{where}: not green: {'; '.join(bad)}")
+        elif dispatched is not None and mine and all(j.get("event") == "workflow_dispatch" for j in mine):
+            dispatched.append(f"{workflow}: {job} ({len(names)} legs)")
     return problems, compared
 
 
@@ -1515,13 +1528,15 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
                                               [set(x) for x in (inv or {}).get("runners", [])])
             problems += wf
             compared += n
+            dispatched: list[str] = []
             if roster[a.crate].get("required-ci"):
                 github = tomllib.loads(roster_text).get("train", {}).get("github")
                 if not isinstance(github, str) or not github or "repo" not in roster[a.crate]:
                     print(f"error: {a.roster}: required-ci needs [train] github (the owner) and the crate's repo",
                           file=sys.stderr)
                     return 2
-                ci, n = ci_problems(a.crate, roster[a.crate], f"{github}/{roster[a.crate]['repo']}", commit, actions)
+                ci, n = ci_problems(a.crate, roster[a.crate], f"{github}/{roster[a.crate]['repo']}", commit, actions,
+                                    dispatched)
                 problems += ci
                 compared += n
             problems += package_problems(a.crate, lister(a.repo, a.manifest_path))
@@ -1558,6 +1573,8 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             print(f"publish-gate: go for {a.crate} {version} ({compared} checks)")
             print(f"  commit:        {commit}")
             print(f"  .crate sha256: {digest} ({len(crate_files(body))} files, built by cargo package)")
+            if dispatched:
+                print(f"  dispatched:    required CI from a dispatched run: {'; '.join(dispatched)}")
             print("  text:          every file of the package read by scripts/public_text_check.py")
             print("  consumer:      the unpacked .crate built as a crates.io consumer builds it (empty CARGO_HOME, "
                   "minimal environment, no Cargo.lock or configuration above it, each feature set)")

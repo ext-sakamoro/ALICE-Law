@@ -92,6 +92,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - This repository requires alice-edge 0.2; `release-train.toml`: alice-edge 0.2.0 is published (its pending entry removed, 7 expected problems remain until alice-lol 0.4.0) and alice-ml is held at its published 0.2.0
 
 ### Fixed
+- `scripts/release_train.py` publish-gate: a required CI job that the run skipped is refused with the workflow to dispatch (`dispatch <workflow> on <sha>`). A path filter the commit did not match skips the job, or leaves a matrix unexpanded (`Fuzz — ${{ matrix.target }}`). The go record lists the required jobs that came from a dispatched run
 - `scripts/public_text_check.py`: the SHA-256 set of private repository names is held in the checker itself (`scripts/public_text_private_repos.txt` is removed). A repository's CI fetches the checker as one pinned file, so the list beside it never came along and the private path check compared nothing there. The checker now exits 2 when the private repository set or the private name set is empty, and the publish gate refuses a package read with an empty set. Tests copy the checker alone into an empty directory: one test finds a private path, and one test refuses an emptied set
 - `scripts/gen-law-readme-block.py`: the Japanese README is `README_JP.md` or `README_ja.md`, whichever the repository has (ALICE-Zip uses the second); both present is refused
 - `scripts/gen-law-readme-block.py`: the block of alice-det-math itself says "this crate is alice-det-math" instead of "this crate requires no alice-det-math"

@@ -912,6 +912,39 @@ class RequiredCi(unittest.TestCase):
             self.assertEqual(code, 1, (status, conclusion))
             self.assertIn("not green: Geometry digests (windows)", out)
 
+    def test_a_job_the_run_skipped_asks_for_a_dispatch_on_the_commit(self):
+        # a path filter the commit did not match: named jobs skipped, or a matrix left unexpanded
+        w = self.green()
+        w["CI"][2] = {"name": "Clippy", "status": "completed", "conclusion": "skipped"}
+        code, out, _, ref = self.gate(w)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"required CI job 'Clippy' of workflow 'CI' on {ref[:12]}: skipped by the run (not green): "
+                      f"dispatch CI on {ref}", out)
+        w = self.green()
+        w["Wheel"] = [{"name": "Gate", "status": "completed", "conclusion": "success"},
+                      {"name": "Build (${{ matrix.python }})", "status": "completed", "conclusion": "skipped"}]
+        code, out, _, ref = self.gate(w)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"skipped by the run (not green): dispatch Wheel on {ref}", out)
+        self.assertNotIn("dispatch CI", out)
+        # a job named per matrix value, where the skipped run shows the matrix unexpanded
+        fuzz = {"Fuzz": [{"name": "Gate", "status": "completed", "conclusion": "success"},
+                         {"name": "Fuzz — ${{ matrix.target }}", "status": "completed", "conclusion": "skipped"}]}
+        code, out, _, ref = self.gate(fuzz, extra='required-ci = [{ workflow = "Fuzz", job = "Fuzz — parse" }]')
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"required CI job 'Fuzz — parse' of workflow 'Fuzz' on {ref[:12]}: skipped by the run "
+                      f"(not green): dispatch Fuzz on {ref}", out)
+
+    def test_the_go_record_names_the_jobs_from_a_dispatched_run(self):
+        w = self.green()
+        w["Wheel"] = [dict(j, event="workflow_dispatch") for j in w["Wheel"]]
+        code, out, _, _ = self.gate(w)
+        self.assertEqual(code, 0, out)
+        self.assertIn("  dispatched:    required CI from a dispatched run: Wheel: Build (2 legs)", out)
+        code, out, _, _ = self.gate(self.green())
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("dispatched:", out)
+
     def test_a_name_that_only_starts_like_the_job_does_not_count(self):
         w = self.green()
         w["CI"] = [j for j in w["CI"] if j["name"] != "Clippy"] + [self.ok("Clippy-lib")]
