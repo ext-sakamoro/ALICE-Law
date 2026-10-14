@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dependency-consistency-${{ github.ref }}
+  group: dependency-consistency-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
@@ -61,6 +61,11 @@ jobs:
 
       - name: Test the README integration block generator
         run: python3 scripts/test_gen_law_readme_block.py
+
+      - name: Every branch-triggered workflow has a concurrency group per commit on main
+        run: |
+          python3 scripts/test_workflow_concurrency.py
+          python3 scripts/workflow_concurrency.py
 
       - name: Test the conformance measurement
         run: python3 scripts/test_measure_conformance.py
