@@ -7,96 +7,111 @@
 # entry per gate here, in the shape `docs/CONFORMANCE.md`'s "Manifest"
 # section describes (status / evidence / since / note / reference_repo).
 #
-# status_vocabulary is the same three values for every gate: "pass",
-# "missing", "n/a". A gate-specific restriction (a gate that can never
-# legitimately be "n/a", for instance) is not encoded here in v0; a crate
-# manifest claiming "n/a" for a gate where that makes no sense is a reading
-# of `docs/CONFORMANCE.md`'s prose, not a schema-level check, in this
-# version.
+# status_vocabulary is the same four values for every gate: "pass",
+# "fail-known" (checked, unmet), "unverified" (not checked) and "n/a"; the
+# fields each status needs are in docs/CONFORMANCE.md's "Manifest" section.
+# checked_by says whether a gate is decided by a machine check, a machine
+# check plus a human audit of part of it, or an audit alone.
 
 schema_version = 0
-status_vocabulary = ["pass", "missing", "n/a"]
+status_vocabulary = ["pass", "fail-known", "unverified", "n/a"]
+# read as "unverified", with a warning, until the release-train manifests are rewritten
+legacy_status = ["missing"]
 
 [[gate]]
 id = "G1"
+checked_by = "machine"
 name = "no-libm-direct"
 definition = "Platform transcendental functions are banned outside alice-det-math; sqrt (correctly rounded by IEEE 754) and powi (portable by construction) are out of scope."
 evidence_kinds = ["clippy-disallowed-methods-type-resolved", "canary-test"]
 
 [[gate]]
 id = "G2"
+checked_by = "machine and audit"
 name = "ieee-max-min"
 definition = "f32/f64 max/min must implement IEEE 754 maximumNumber/minimumNumber, at scalar width and at every SIMD width the crate builds for, via Law helpers and a default-deny manifest of named raw_* exceptions."
 evidence_kinds = ["law-helper-source", "raw-helper-manifest", "simd-width-test-matrix"]
 
 [[gate]]
 id = "G3"
+checked_by = "machine"
 name = "no-outer-fneg-of-fma"
 definition = "Negating the whole result of a fused multiply-add (a.mul_add(b,c)) is banned in every syntactic form; the Law-conforming form negates the fma's operands instead, (-a).mul_add(b, -c)."
 evidence_kinds = ["syn-ast-checker", "macro-mention-hard-fail", "tests-examples-allowlist-with-reason"]
 
 [[gate]]
 id = "G4"
+checked_by = "machine"
 name = "debug-release-arch-goldens"
 definition = "Signed-zero and exact-cancellation test cases are checked against fixed expected bit patterns under {debug, release} x {x86_64, aarch64}."
 evidence_kinds = ["golden-test-file", "ci-matrix-leg-list"]
 
 [[gate]]
 id = "G5"
+checked_by = "machine"
 name = "release-profile-test-leg"
 definition = "The full Law-bearing test suite runs under the release profile in CI; the aarch64 release leg is required (the one common target whose default codegen uses a hardware fma instruction)."
 evidence_kinds = ["ci-workflow-required-leg"]
 
 [[gate]]
 id = "G6"
+checked_by = "machine and audit"
 name = "semantics-id"
 definition = "Each crate computes an identifier folding its own Law pins with upstream crates' identifiers, guarded by its own version and toolchain so staleness is visible; the identifier attests the fingerprint, not that every call site routes through it (G1 attests that)."
 evidence_kinds = ["semantics-id-source", "staleness-guard-test"]
 
 [[gate]]
 id = "G7"
+checked_by = "machine and audit"
 name = "handshake-carries-id"
 definition = "A Law-bearing value crossing a crate boundary carries its producer's G6 identifier; a mismatch against the consumer's own identifier is an explicit, distinctly-typed error naming both identifiers."
 evidence_kinds = ["handshake-error-type", "mismatch-test"]
 
 [[gate]]
 id = "G8"
+checked_by = "machine and audit"
 name = "persisted-semantics-id"
 definition = "Law-bearing values written to a durable form carry their own identifier, distinct from G6's in-process one, describing the meaning of the stored bytes rather than the platform that wrote them."
 evidence_kinds = ["persisted-id-format", "roundtrip-test"]
 
 [[gate]]
 id = "G9"
+checked_by = "audit"
 name = "persisted-meaning-change-is-major"
 definition = "The G8 identifier is defined against the crate's reference platform; bringing another architecture to bit-for-bit agreement with it is a fix, not a bump. An actual meaning change moves the identifier and is recorded as semver-major."
 evidence_kinds = ["changelog-major-entry", "identifier-history-test"]
 
 [[gate]]
 id = "G10"
+checked_by = "machine"
 name = "no-run-varying-artifacts"
 definition = "Law-bearing output must not depend on an unseeded RNG, a freshly generated UUID, or an ambient wall-clock read; where randomness or time is part of the computation it is an explicit input."
 evidence_kinds = ["determinism-test"]
 
 [[gate]]
 id = "G11"
+checked_by = "machine"
 name = "gate-self-tests"
 definition = "Every gate's own checker carries: (a) a canary case it must flag, (b) a zero-compared-fails check, and (c) where a checker or helper is meant to be shared across crates, a cross-repository byte-identity check."
 evidence_kinds = ["canary-test", "zero-scanned-fails-test", "cross-repo-identity-check"]
 
 [[gate]]
 id = "G12"
+checked_by = "machine"
 name = "public-repo-text-rules"
-definition = "A crate's public repository runs the equivalent of this repository's own public_text_check against its own text; this gate references that requirement rather than redefining it."
+definition = "A crate's CI runs ALICE-Law's scripts/public_text_check.py (fetched at a named revision, or a byte-identical copy) on its repository, failing when it compared nothing; a crate's own checker counts only if it is that file."
 evidence_kinds = ["public-text-check-ci-job"]
 
 [[gate]]
 id = "G13"
+checked_by = "machine and audit"
 name = "no-unspecified-order"
 definition = "Law-bearing output must not depend on HashMap/HashSet iteration order, parallel-reduction combination order, or thread-count/address-dependent ordering."
 evidence_kinds = ["order-independence-test"]
 
 [[gate]]
 id = "G14"
+checked_by = "machine"
 name = "float-environment-invariants"
 definition = "Shipped Law-bearing artifacts are not built with fast-math-style flags or target-cpu=native; round-to-nearest-even and no-flush-to-zero are asserted by test, not assumed."
 evidence_kinds = ["build-flags-check", "rne-no-ftz-assertion-test"]

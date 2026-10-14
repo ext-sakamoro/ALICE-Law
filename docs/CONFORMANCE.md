@@ -10,7 +10,7 @@ The crates this applies to are the crates in the release train
 (`release-train.toml`), not a fixed list repeated here: a crate joins or
 leaves conformance tracking by joining or leaving the train, in one place.
 
-Contents: [Gates](#gates) · [Manifest](#manifest) · [Out of scope](#out-of-scope)
+Contents: [Gates](#gates) · [Manifest](#manifest) · [Definition changes](#definition-changes-2026-10-14) · [Out of scope](#out-of-scope)
 
 ## Gates
 
@@ -34,6 +34,16 @@ Out of scope: `sqrt` (IEEE 754 requires it correctly rounded, so every
 conforming platform already agrees) and `powi` (repeated squaring from an
 integer exponent, portable by construction, not a transcendental lookup).
 
+**Claim.** No code of the crate calls a platform transcendental method of `f32` / `f64` (`sin`, `cos`, `tan`, `exp`, `ln`, `log*`, `powf`, `atan2`, `sinh`, ... the list in the crate's clippy configuration) except through alice-det-math, in every target and feature combination the crate builds.
+
+**Evidence for `pass`.** the clippy configuration with the method list; the CI job running `cargo clippy -- -D clippy::disallowed_methods` for each feature set the crate builds (the job names); the canary test.
+
+**Mutant** (turns the evidence red). add `x.sin()` to a library source file, and once more inside a feature-gated module: the CI job fails on both.
+
+**Look at.** the method list against alice-det-math's function list; the CI job's feature sets against `[features]` in Cargo.toml (a feature the job does not build is not covered).
+
+**Checked by.** machine
+
 ### G2 — ieee-max-min
 
 `f32::max`/`f32::min` (and their `f64` equivalents) are not the IEEE 754
@@ -49,6 +59,16 @@ site that must call the platform operation directly, tracked by a manifest
 that defaults to deny and ratchets down, not a blanket allow on the
 containing module (a module-wide allow also hides an unrelated G1 violation
 in the same module, since both lints share a name).
+
+**Claim.** Every `f32` / `f64` max and min the crate computes, at scalar width and at each SIMD width it builds, goes through a Law helper with maximumNumber / minimumNumber semantics; a site that must use the platform operation is a named `raw_*` helper listed in a default-deny manifest.
+
+**Evidence for `pass`.** the clippy ban on `f32::max` / `f32::min` / `f64::max` / `f64::min` in library code; the manifest check script and its CI step; for each SIMD width the crate builds, one test with the `(+0, -0)` and `(-0, +0)` pairs (test names per width).
+
+**Mutant** (turns the evidence red). replace one Law max with `f32::max` (the lint fails); add a `raw_*` site the manifest does not list (the manifest check fails); swap the operand order in one SIMD Law max (that width's test fails).
+
+**Look at.** the list of SIMD widths the crate builds (from its `cfg(target_feature)` and SIMD types), one test per width.
+
+**Checked by.** machine and audit (the width list)
 
 ### G3 — no-outer-fneg-of-fma
 
@@ -104,6 +124,16 @@ cancellation" — the two look identical at the single call site a text or
 AST rewrite can see. The shape-limited static checker plus the G4 dynamic
 backstop stay the gate.
 
+**Claim.** No library source negates the whole result of a fused multiply-add in any syntactic form, and no macro invocation in library code mentions a fma call.
+
+**Evidence for `pass`.** the syntax-tree checker and its CI step; its own tests over every form listed above.
+
+**Mutant** (turns the evidence red). insert `-(a.mul_add(b, c))` (and `.neg()`, `-0.0 - fma`, `-1.0 * fma`) in a library source file: the checker fails on each.
+
+**Look at.** the checker's file set covers `src/` of every workspace member that is a published crate.
+
+**Checked by.** machine
+
 ### G4 — debug-release-arch-goldens
 
 A Law-bearing crate's test suite checks every signed-zero and
@@ -112,6 +142,16 @@ pattern, run under both `debug` and `release` profiles on both `x86_64` and
 `aarch64`. Agreement across profile and architecture is the property G1–G3
 exist to guarantee; this gate is where that guarantee is actually exercised
 against concrete inputs, including ones no static checker reaches.
+
+**Claim.** A named test checks the crate's signed-zero and exact-cancellation cases against fixed expected bit patterns, and CI runs it on all of {debug, release} x {x86_64, aarch64} as required jobs.
+
+**Evidence for `pass`.** the test name(s); the CI matrix showing the four combinations, without `continue-on-error`.
+
+**Mutant** (turns the evidence red). flip one expected bit (the test fails on all four legs); rewrite one Law site to the outer-negated fma form of G3 (the test fails on the aarch64 release leg).
+
+**Look at.** that each case named in the test reaches a library function (not a copy of it in the test).
+
+**Checked by.** machine
 
 ### G5 — release-profile-test-leg
 
@@ -124,6 +164,16 @@ instruction at all: the equivalent `x86_64` default target lowers
 `mul_add` to a library call with no native fma, so that leg alone cannot
 demonstrate — or catch a regression of — the class of bug G3 and G4 exist
 for.
+
+**Claim.** CI runs the crate's Law-bearing test suite with `--release` on an aarch64 runner, as a required job.
+
+**Evidence for `pass`.** the workflow job and its runner label.
+
+**Mutant** (turns the evidence red). remove the aarch64 release leg from the workflow: the required check is missing and the gate's workflow check fails.
+
+**Look at.** that the release leg runs the same test set as the debug legs (no filter that drops the Law tests).
+
+**Checked by.** machine
 
 ### G6 — semantics-id
 
@@ -141,6 +191,16 @@ arithmetic the same way — that every call site actually routes through the
 Law-conforming path is what G1 (and G2, G3) check; G6 is the fingerprint of
 the result those gates protect, not a substitute for them.
 
+**Claim.** The crate exports a constant identifier (32 bytes) folded from its own Law pins and the identifiers of the Law-bearing crates it depends on; a test pins it to its hexadecimal value, and changing any pin changes it.
+
+**Evidence for `pass`.** `pub const SEMANTICS_ID` (or the crate's named equivalent) with its file:line; the test asserting its hex; a test that changing one pin changes the identifier.
+
+**Mutant** (turns the evidence red). change one pin constant: the hex test fails.
+
+**Look at.** the fold's inputs (its own pins and each upstream identifier) against the crate's Law-bearing dependencies; the tie to version and toolchain is described in the note and audited.
+
+**Checked by.** machine and audit (the version / toolchain tie)
+
 ### G7 — handshake-carries-id
 
 Whenever one Law-bearing crate's output is consumed as another's input
@@ -149,6 +209,16 @@ producer's G6 identifier travels with the value, and the consumer compares
 it against its own. A mismatch is a distinct, explicit error (not a silent
 fallback, not a generic parse failure) carrying both identifiers, so the two
 sides of a mismatch are always named.
+
+**Claim.** A Law-bearing value crossing a crate boundary is checked against the producer's identifier: a value in serialized form (bytes, a record, a file, a network message) carries the producer's G6 identifier and the reading function compares it, returning a dedicated error variant that names both identifiers; a value passed in memory between crates relies on one linked version of each crate and on the consumer's test that the upstream identifier equals the one it was built against.
+
+**Evidence for `pass`.** the list of the crate's public functions that read another Law-bearing crate's serialized output (empty list for none); for each, the error variant (two identifiers) and a test feeding a mismatched identifier; for in-memory use, the consumer test asserting the upstream identifier.
+
+**Mutant** (turns the evidence red). remove the comparison in one reading function: its mismatch test fails.
+
+**Look at.** every public decode / read / from_bytes / open entry point of the crate (the list is the evidence; its completeness is audited).
+
+**Checked by.** machine and audit (completeness of the entry point list)
 
 ### G8 — persisted-semantics-id
 
@@ -159,6 +229,16 @@ a value read back after a crate upgrade is compared against the identifier
 recorded when it was written, not against the identifier of whichever crate
 version happens to be reading it now. This identifier is about the meaning
 of the stored bytes, not about which platform produced them.
+
+**Claim.** Every durable format the crate writes Law-bearing values in carries an identifier of the meaning of the stored bytes, and the reader compares the stored identifier, not its own build's.
+
+**Evidence for `pass`.** the list of the crate's encode / write functions; the identifier field in each format; a round-trip test that reads a value written with another identifier and gets the mismatch.
+
+**Mutant** (turns the evidence red). drop the identifier from one format's writer: the reader's test fails.
+
+**Look at.** every public encode / write / save entry point (the list is the evidence; its completeness is audited).
+
+**Checked by.** machine and audit (completeness of the entry point list)
 
 ### G9 — persisted-meaning-change-is-major
 
@@ -171,6 +251,16 @@ meaning — folding in a changed upstream Law, or changing the reference
 platform's own computed value — and is recorded as a semver-major change
 when it happens, with the identifiers either side of the change named.
 
+**Claim.** (unchanged) The G8 identifier is defined against the crate's reference platform; bringing another architecture to bit-for-bit agreement is a fix, not a change of the identifier; an actual meaning change moves the identifier and is released as semver-major, naming the identifiers on either side.
+
+**Evidence for `pass`.** the audit of the identifier's history: every commit that changed the identifier's definition (`git log -S` over it), each with the release it shipped in, showing each was a meaning change released as a major version whose CHANGELOG names the old and new identifiers, and that no cross-architecture fix moved it.
+
+**Mutant** (turns the evidence red). none (a property of the history); the audit list is re-done at each major release.
+
+**Look at.** the history of the identifier's definition and the CHANGELOG of each release it moved in.
+
+**Checked by.** audit
+
 ### G10 — no-run-varying-artifacts
 
 A Law-bearing crate's output must not depend on anything that varies between
@@ -180,6 +270,16 @@ in a Law-bearing value. Where randomness or a timestamp is genuinely part of
 what is being computed, it is an explicit input the caller supplies (and
 which the gates above then apply to), not an ambient source the function
 reaches for on its own.
+
+**Claim.** No library code reachable from a Law-bearing output reads an unseeded random source, generates a UUID, or reads the wall clock or a monotonic clock; randomness or time that is part of the computation is a parameter.
+
+**Evidence for `pass`.** a lint (`disallowed_methods` / `disallowed_types` for `SystemTime::now`, `Instant::now`, `Uuid::new_v4` and similar, `thread_rng`, `rand::random`, unseeded `from_entropy`) or a scan step in CI with its canary.
+
+**Mutant** (turns the evidence red). add `SystemTime::now()` to a library source file: the lint or scan fails.
+
+**Look at.** `src/` excluding `cfg(test)`, benches and examples; the list of banned paths against the crate's dependencies.
+
+**Checked by.** machine
 
 ### G11 — gate-self-tests
 
@@ -197,6 +297,16 @@ would catch:
   than one crate (a shared checker, a shared helper source file), a
   cross-repository check that the copies have not silently diverged
 
+**Claim.** Each machine-checked gate of the crate has (a) a canary its checker must flag, (b) a failure when it compared nothing, and (c) where its checker or helper is shared with other crates, a check that the copies are identical.
+
+**Evidence for `pass`.** per gate, the names of the canary test, the zero-compared test and (where shared) the copy check.
+
+**Mutant** (turns the evidence red). disable one canary's assertion (its test fails); make one checker scan an empty set (it fails).
+
+**Look at.** every gate the manifest marks `pass` by machine has its three entries.
+
+**Checked by.** machine
+
 ### G12 — public-repo-text-rules
 
 A Law-bearing crate's public repository follows the text rules this
@@ -205,6 +315,16 @@ internal process vocabulary, no private names, checked by hash rather than
 by a plaintext list a check could itself leak). This gate does not redefine
 those rules; it requires that a conforming crate run the equivalent check
 against its own repository.
+
+**Claim.** The crate's CI runs ALICE-Law's `scripts/public_text_check.py` on its repository (the file fetched from ALICE-Law at a named revision, or a copy byte-identical to it), failing when it compared nothing; a crate's own checker counts only if it is that file.
+
+**Evidence for `pass`.** the CI step that fetches or carries the script and the revision or hash it checks; a run's output showing the files compared.
+
+**Mutant** (turns the evidence red). add an internal word to a tracked document: the step fails.
+
+**Look at.** the script's hash against ALICE-Law's at the named revision.
+
+**Checked by.** machine
 
 ### G13 — no-unspecified-order
 
@@ -217,6 +337,16 @@ order-preserving collection or an explicitly associative, order-independent
 reduction, not an incidental order that today's standard library or runtime
 happens to produce.
 
+**Claim.** No Law-bearing output depends on `HashMap` / `HashSet` iteration order, on the order a parallel reduction combines partial results, or on thread count or address order.
+
+**Evidence for `pass`.** a lint banning `HashMap` / `HashSet` iteration in the crate's Law modules, or a reasoned allowlist of sites where the collection is used for membership only (each with why its order cannot reach an output); parallel reductions over floats either absent (scan) or ordered (named test with two thread counts).
+
+**Mutant** (turns the evidence red). iterate a `HashMap` into a Law-bearing output: the lint fails; run the ordered-reduction test with a different thread count after making the reduction unordered: it fails.
+
+**Look at.** each allowlisted site's reason.
+
+**Checked by.** machine and audit (the allowlist reasons)
+
 ### G14 — float-environment-invariants
 
 A Law-bearing crate's shipped artifacts are not built with flags that change
@@ -228,6 +358,16 @@ that runs it). The crate's tests assert the assumptions those flags would
 violate directly — round-to-nearest-even, and that denormals are not flushed
 to zero — rather than relying on nobody having set the flag.
 
+**Claim.** No build configuration of the crate (`.cargo/config.toml`, CI `RUSTFLAGS`, `build.rs`) sets a fast-math-style flag or `target-cpu=native`, and the crate's tests assert round-to-nearest-even and that subnormals are not flushed to zero.
+
+**Evidence for `pass`.** the scan step over those files in CI; the two test names.
+
+**Mutant** (turns the evidence red). set `-C target-cpu=native` in the CI environment (the scan fails); a subnormal input in the flush test (it fails under a flush-to-zero mode).
+
+**Look at.** every place a flag can come from: `.cargo/config*`, workflow `env`, `build.rs`, `Cargo.toml` profiles.
+
+**Checked by.** machine
+
 ## Manifest
 
 Each crate's own manifest (`alice-law-conformance.toml` at its repository
@@ -235,17 +375,32 @@ root) has one entry per gate, with these fields:
 
 | field | meaning |
 |---|---|
-| `status` | `pass`, `missing`, or `n/a` |
-| `evidence` | mandatory when `status = "pass"`: the test file(s) or CI job that exercises the gate |
-| `since` | the version or date the gate first passed |
-| `note` | mandatory unless `status = "pass"`: why it is missing, or why it does not apply |
+| `status` | `pass`, `fail-known`, `unverified`, or `n/a` |
+| `evidence` | a list of strings: mandatory for `pass` and `n/a`; an entry whose first word is a path (it contains `/` or ends in a file extension) must exist in the repository |
+| `mutant` | mandatory for `pass` and `n/a`: the change that turns the evidence red (the gate's **Mutant** above, as carried out in this crate) |
+| `since` | the version or commit the gate first passed |
+| `note` | mandatory for `fail-known` (what is unmet, with file:line where there is a site) and for `n/a` (what makes the gate not apply) |
 | `reference_repo` | the crate whose implementation this gate's mechanism was taken from or checked against, where one exists |
 
-An `n/a` entry is not a silent skip: its `note` states what makes the gate
-not apply (for example, a crate with no floating-point Law arithmetic at all
-is `n/a` for G1–G3, with evidence that the same scanners that catch a
-violation elsewhere find zero relevant call sites in this crate — absence
-demonstrated, not assumed).
+The four statuses keep "not looked at" apart from "looked and unmet":
+
+- `pass`: checked; the evidence exists and the mutant turns it red.
+- `fail-known`: checked, and the requirement is not met; the note says where.
+- `unverified`: not checked yet. A gate the manifest does not list, and every
+  gate of a crate with no manifest, is `unverified`.
+- `n/a`: the gate does not apply. This is not a silent skip: its evidence is
+  the same scanner that catches a violation elsewhere finding zero relevant
+  sites in this crate, and its mutant is adding one such site (absence
+  demonstrated, not assumed). For example, a crate with no floating-point Law
+  arithmetic at all is `n/a` for G1–G3.
+
+A `pass` or `n/a` entry without `evidence` or without `mutant` is read as
+`unverified`: a generated view never shows it as met.
+
+Transition: the earlier vocabulary had `missing` in place of the split between
+`fail-known` and `unverified`. Until the release-train crates' manifests are
+rewritten, `missing` is read as `unverified` with a warning; after that it is
+refused.
 
 ### Features and the guarantee
 
@@ -292,6 +447,31 @@ meet. A feature the table does not list is not declared, and the README block
 (`scripts/gen-law-readme-block.py`) shows it as such, never as inside; the
 generator refuses a feature marked `inside` without evidence, and a listed
 feature the crate does not have.
+
+## Definition changes (2026-10-14)
+
+Each gate above gained **Claim**, **Evidence for `pass`**, **Mutant**, **Look
+at** and **Checked by**, so that one pass over a crate decides each gate. The
+claims restate the earlier definitions (`conformance/gates.toml`); where the
+meaning changed, it is marked.
+
+| gate | earlier definition (verbatim) | change |
+|---|---|---|
+| G1 | Platform transcendental functions are banned outside alice-det-math; sqrt (correctly rounded by IEEE 754) and powi (portable by construction) are out of scope. | wording: the ban covers every target and feature the crate builds, so the evidence must cover each feature set |
+| G2 | f32/f64 max/min must implement IEEE 754 maximumNumber/minimumNumber, at scalar width and at every SIMD width the crate builds for, via Law helpers and a default-deny manifest of named raw_* exceptions. | wording: one test per SIMD width named as evidence |
+| G3 | Negating the whole result of a fused multiply-add (a.mul_add(b,c)) is banned in every syntactic form; the Law-conforming form negates the fma's operands instead, (-a).mul_add(b, -c). | wording |
+| G4 | Signed-zero and exact-cancellation test cases are checked against fixed expected bit patterns under {debug, release} x {x86_64, aarch64}. | wording: the four legs must be required jobs |
+| G5 | The full Law-bearing test suite runs under the release profile in CI; the aarch64 release leg is required (the one common target whose default codegen uses a hardware fma instruction). | wording |
+| G6 | Each crate computes an identifier folding its own Law pins with upstream crates' identifiers, guarded by its own version and toolchain so staleness is visible; the identifier attests the fingerprint, not that every call site routes through it (G1 attests that). | wording: names what to look at (the exported constant, its hex test, a pin-change test); the version and toolchain tie is an audit |
+| G7 | A Law-bearing value crossing a crate boundary carries its producer's G6 identifier; a mismatch against the consumer's own identifier is an explicit, distinctly-typed error naming both identifiers. | wording: "crossing a crate boundary" split into a serialized value (identifier carried and compared at the reading function) and a value in memory (one linked version and the consumer's identifier test) |
+| G8 | Law-bearing values written to a durable form carry their own identifier, distinct from G6's in-process one, describing the meaning of the stored bytes rather than the platform that wrote them. | wording |
+| G9 | The G8 identifier is defined against the crate's reference platform; bringing another architecture to bit-for-bit agreement with it is a fix, not a bump. An actual meaning change moves the identifier and is recorded as semver-major. | none: the claim is kept as it was; the history audit (each move a major release naming both identifiers, no cross-architecture fix among them) is its evidence |
+| G10 | Law-bearing output must not depend on an unseeded RNG, a freshly generated UUID, or an ambient wall-clock read; where randomness or time is part of the computation it is an explicit input. | wording: the evidence is a lint or scan with a canary |
+| G11 | Every gate's own checker carries: (a) a canary case it must flag, (b) a zero-compared-fails check, and (c) where a checker or helper is meant to be shared across crates, a cross-repository byte-identity check. | wording |
+| G12 | A crate's public repository runs the equivalent of this repository's own public_text_check against its own text; this gate references that requirement rather than redefining it. | **meaning**: "the equivalent" is defined as ALICE-Law's own script (fetched at a named revision or byte-identical); a crate's own checker no longer counts unless it is that file |
+| G13 | Law-bearing output must not depend on HashMap/HashSet iteration order, parallel-reduction combination order, or thread-count/address-dependent ordering. | wording: membership-only uses may be allowlisted with a reason |
+| G14 | Shipped Law-bearing artifacts are not built with fast-math-style flags or target-cpu=native; round-to-nearest-even and no-flush-to-zero are asserted by test, not assumed. | wording |
+| manifest | `status` = `pass`, `missing`, or `n/a` | **meaning**: `missing` split into `fail-known` (checked, unmet) and `unverified` (not checked); `mutant` mandatory for `pass` and `n/a`; a `pass` without evidence or mutant reads as `unverified` |
 
 ## Out of scope
 

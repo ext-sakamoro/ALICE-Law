@@ -47,7 +47,8 @@ from pathlib import Path
 BEGIN_RE = re.compile(r"^<!-- law-integration:begin law=([0-9a-f]{40}) -->$", re.M)
 END = "<!-- law-integration:end -->"
 MANIFEST = "alice-law-conformance.toml"
-STATUSES = ("pass", "missing", "n/a")
+STATUSES = ("pass", "fail-known", "unverified", "n/a")
+LEGACY = {"missing": "unverified"}  # read with a warning until the release-train manifests are rewritten
 README = {"en": "README.md", "ja": "README_JP.md"}
 LICENSE_HEADING = {"en": re.compile(r"^## License\b", re.M), "ja": re.compile(r"^## ライセンス", re.M)}
 NOTE_LEN = 160
@@ -71,7 +72,8 @@ TEXT = {
         "feat": "### Features and the guarantee",
         "feat_h": "| feature | guarantee | note |",
         "no_features": "The crate declares no features.",
-        "st": {"pass": "pass", "missing": "missing", "n/a": "n/a", "undeclared": "not declared",
+        "st": {"pass": "pass", "fail-known": "known unmet", "unverified": "unverified", "n/a": "n/a",
+               "undeclared": "not declared",
                "inside": "inside", "outside": "outside"},
     },
     "ja": {
@@ -91,7 +93,7 @@ TEXT = {
         "feat": "### feature と保証の範囲",
         "feat_h": "| feature | 保証 | 注記 |",
         "no_features": "この crate は feature を宣言していない",
-        "st": {"pass": "適合", "missing": "未達", "n/a": "対象外", "undeclared": "未申告",
+        "st": {"pass": "適合", "fail-known": "未達", "unverified": "未確認", "n/a": "対象外", "undeclared": "未申告",
                "inside": "範囲内", "outside": "範囲外"},
     },
 }
@@ -202,12 +204,17 @@ PATH_TOKEN_RE = re.compile(r"^(?:[\w.\-]*/[\w.\-/]*|[\w.\-]+\.(?:rs|toml|py|yml|
 
 
 def evidence_list(where: str, evidence) -> list[str]:
-    """the evidence as a list of strings (a single string or another type is refused, not iterated)"""
+    """the evidence as a list of strings (a single string or another type is refused, not iterated);
+    empty strings are not evidence"""
     if evidence is None:
         return []
     if not isinstance(evidence, list) or not all(isinstance(e, str) for e in evidence):
         raise InputError(f"{MANIFEST} {where}: evidence must be a list of strings")
-    return evidence
+    return [e for e in evidence if e.strip()]
+
+
+def warn(text: str) -> None:
+    print(f"warning: {text}", file=sys.stderr)
 
 
 def missing_evidence(repo: str, rev: str, evidence: list) -> list[str]:
@@ -232,16 +239,22 @@ def gate_rows(manifest: dict | None, gates: list, repo: str = "", rev: str = "")
             rows.append((f"{gid} {name}", "undeclared", ""))
             continue
         status = e["status"]
+        if status in LEGACY:
+            warn(f"{MANIFEST} {gid}: status {status!r} is the earlier vocabulary, read as {LEGACY[status]!r}")
+            status = LEGACY[status]
         if status not in STATUSES:
             raise InputError(f"{MANIFEST} {gid}: status {status!r} is not one of {STATUSES}")
         evidence = evidence_list(gid, e.get("evidence"))
-        if status == "pass" and not evidence:
-            raise InputError(f"{MANIFEST} {gid}: pass without evidence")
         gone = missing_evidence(repo, rev, evidence) if repo else []
         if gone:
             raise InputError(f"{MANIFEST} {gid}: evidence names paths that are not in the crate: {gone}")
-        if status != "pass" and not str(e.get("note", "")).strip():
+        if status in ("fail-known", "n/a") and not str(e.get("note", "")).strip():
             raise InputError(f"{MANIFEST} {gid}: {status} without a note")
+        if status in ("pass", "n/a") and (not evidence or not str(e.get("mutant", "")).strip()):
+            # a pass the manifest does not back with evidence and a mutant is not shown as met
+            warn(f"{MANIFEST} {gid}: {status} without " + ("evidence" if not evidence else "a mutant")
+                 + ", shown as unverified")
+            status = "unverified"
         rows.append((f"{gid} {name}", status, cell(e.get("note", ""))))
     return rows
 

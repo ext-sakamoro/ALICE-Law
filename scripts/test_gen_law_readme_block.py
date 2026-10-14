@@ -63,9 +63,10 @@ MANIFEST = """
 [G1]
 status = "pass"
 evidence = ["clippy.toml"]
+mutant = "x.sin() in src/lib.rs fails the lint"
 note = "type-resolved ban"
 [G2]
-status = "missing"
+status = "fail-known"
 note = "no per-width test yet"
 [features.std]
 guarantee = "inside"
@@ -152,7 +153,7 @@ class Render(Base):
         self.assertIn('this crate requires `alice-det-math = "0.5"`', out)
         self.assertIn(f'covered (`alice-foo = "1"`), digest `{DIGEST}`, the same on aarch64 and x86_64', out)
         self.assertIn("| G1 no-libm-direct | pass | type-resolved ban |", out)
-        self.assertIn("| G2 ieee-max-min | missing | no per-width test yet |", out)
+        self.assertIn("| G2 ieee-max-min | known unmet | no per-width test yet |", out)
         self.assertIn("| G3 no-outer-fneg-of-fma | not declared |  |", out)  # absent from the manifest
         self.assertIn("| `std` | inside | same arithmetic generation |", out)
         self.assertIn("| `simd` | outside | lane order differs |", out)
@@ -199,9 +200,8 @@ class Render(Base):
         self.assertIn("## ALICE-Law との統合", ja)
 
     def test_a_manifest_the_block_must_not_render_is_refused(self):
-        for bad in ('[G1]\nstatus = "pass"\nevidence = []\n',                       # pass without evidence
-                    '[G1]\nstatus = "pass"\n',                                       # pass, no evidence key
-                    '[G1]\nstatus = "missing"\n',                                    # missing without a note
+        for bad in ('[G1]\nstatus = "fail-known"\n',                                 # fail-known without a note
+                    '[G1]\nstatus = "n/a"\nevidence = ["clippy.toml"]\nmutant = "m"\n',  # n/a without a note
                     '[G1]\nstatus = "done"\nnote = "x"\n',                           # unknown status
                     '[features.std]\nguarantee = "inside"\nnote = "x"\n',            # inside without evidence
                     '[features.gpu]\nguarantee = "outside"\nnote = "x"\n',           # not a feature of the crate
@@ -213,6 +213,33 @@ class Render(Base):
                     '[features.std]\nguarantee = "inside"\nevidence = ["src/none/"]\nnote = "x"\n'):
             commit(self.crate, {"alice-law-conformance.toml": bad})
             self.assertEqual(self.render()[0], 2, bad)
+
+    def test_a_pass_without_evidence_or_mutant_is_shown_as_unverified_with_a_warning(self):
+        for m in ('[G1]\nstatus = "pass"\nmutant = "m"\n',                               # no evidence key
+                  '[G1]\nstatus = "pass"\nevidence = []\nmutant = "m"\n',                # empty list
+                  '[G1]\nstatus = "pass"\nevidence = ["", "  "]\nmutant = "m"\n',        # empty strings
+                  '[G1]\nstatus = "pass"\nevidence = ["clippy.toml"]\n',                # no mutant
+                  '[G1]\nstatus = "n/a"\nevidence = ["clippy.toml"]\nnote = "x"\n'):   # n/a, no mutant
+            commit(self.crate, {"alice-law-conformance.toml": m})
+            rc, out = self.render()
+            self.assertEqual(rc, 0, m)
+            self.assertIn("| G1 no-libm-direct | unverified |", out, m)
+            self.assertIn("shown as unverified", out, m)
+            self.assertNotIn("| pass |", out, m)
+
+    def test_the_four_statuses_and_the_legacy_missing(self):
+        commit(self.crate, {"alice-law-conformance.toml":
+                            '[G1]\nstatus = "n/a"\nevidence = ["clippy.toml"]\nmutant = "m"\nnote = "no float"\n'
+                            '[G2]\nstatus = "missing"\nnote = "old"\n[G3]\nstatus = "unverified"\n'})
+        rc, out = self.render()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("| G1 no-libm-direct | n/a | no float |", out)
+        self.assertIn("| G2 ieee-max-min | unverified | old |", out)
+        self.assertIn("'missing' is the earlier vocabulary, read as 'unverified'", out)
+        self.assertIn("| G3 no-outer-fneg-of-fma | unverified |  |", out)
+        ja = self.render("ja")[1]
+        self.assertIn("| G1 no-libm-direct | 対象外 | no float |", ja)
+        self.assertIn("| G2 ieee-max-min | 未確認 | old |", ja)
 
     def test_free_text_evidence_and_existing_paths_are_accepted(self):
         commit(self.crate, {"alice-law-conformance.toml":
