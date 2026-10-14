@@ -213,21 +213,29 @@ a boundary such as a saved file or a network call, the producer's G6
 identifier travels with the value, and the consumer compares it against its
 own. A mismatch is a distinct, explicit error (not a silent fallback, not a
 generic parse failure) carrying both identifiers, so the two sides of a
-mismatch are always named. A value passed in memory between crates of one
-build does not carry the identifier: this repository's dependency
-consistency check and the end to end test require one version of each Law
-crate in the build (Cargo itself would link two semver-incompatible versions
-side by side), so the producer's identifier is the consumer's by
-construction, and the consumer's test pins the upstream identifier it was
-built against.
+mismatch are always named.
 
-**Claim.** A Law-bearing value crossing a crate boundary is checked against the producer's identifier: a value in serialized form (bytes, a record, a file, a network message) carries the producer's G6 identifier and the reading function compares it, returning a dedicated error variant that names both identifiers; a value passed in memory between crates relies on one linked version of each crate and on the consumer's test that the upstream identifier equals the one it was built against.
+A value passed in memory as a concrete Rust type does not carry the
+identifier. Rust's types are nominal per crate version: `alice_zip::X` from
+one version is a different type from the same name in another version, so
+two versions cannot exchange such a value without a compile error, even when
+a build links both (Cargo does link semver-incompatible versions side by
+side). And Cargo unifies the features of one crate version across a build,
+so one version has one configuration. A value that type-checks as the
+consumer's expected type therefore comes from the same crate version in the
+same configuration, which has the same G6 identifier by construction. This
+holds only while the type is kept: any boundary that erases it (serialized
+bytes, a file, FFI / C ABI, wasm and JavaScript, Python bindings, `dyn Any`,
+a registry of trait objects keyed by name) still carries the per-value
+identifier and returns the distinct error.
 
-**Evidence for `pass`.** the list of the crate's public functions that read another Law-bearing crate's serialized output (empty list for none); for each, the error variant (two identifiers) and a test feeding a mismatched identifier; for in-memory use, the consumer test asserting the upstream identifier.
+**Claim.** A Law-bearing value crossing a crate boundary is checked against the producer's identifier: at every boundary that erases the Rust type (serialized bytes, a file, a network message, FFI / C ABI, wasm and JavaScript, Python bindings, `dyn Any`, a registry of trait objects) the value carries the producer's G6 identifier and the receiving function compares it, returning a dedicated error variant that names both identifiers; a value passed in memory as a concrete Rust type needs no per-value identifier (see the reason above).
+
+**Evidence for `pass`.** the list of the crate's type-erasing boundaries that receive another Law-bearing crate's values (an empty list is the evidence that this part does not apply); for each, the error variant (two identifiers) and a test feeding a mismatched identifier.
 
 **Mutant** (turns the evidence red). remove the comparison in one reading function: its mismatch test fails.
 
-**Look at.** every public decode / read / from_bytes / open entry point of the crate (the list is the evidence; its completeness is audited).
+**Look at.** every public decode / read / from_bytes / open entry point, every `extern "C"` / `#[no_mangle]` function, every wasm-bindgen and PyO3 export, and every `dyn Any` or name-keyed registry (the list is the evidence; its completeness is audited).
 
 **Checked by.** machine and audit (completeness of the entry point list)
 
@@ -474,7 +482,7 @@ meaning changed, it is marked.
 | G4 | Signed-zero and exact-cancellation test cases are checked against fixed expected bit patterns under {debug, release} x {x86_64, aarch64}. | **meaning** (tightening): the four legs must be required jobs, not only run |
 | G5 | The full Law-bearing test suite runs under the release profile in CI; the aarch64 release leg is required (the one common target whose default codegen uses a hardware fma instruction). | wording |
 | G6 | Each crate computes an identifier folding its own Law pins with upstream crates' identifiers, guarded by its own version and toolchain so staleness is visible; the identifier attests the fingerprint, not that every call site routes through it (G1 attests that). | wording: names what to look at (the exported constant, its hex test, a pin-change test); the version and toolchain tie is an audit |
-| G7 | A Law-bearing value crossing a crate boundary carries its producer's G6 identifier; a mismatch against the consumer's own identifier is an explicit, distinctly-typed error naming both identifiers. | **meaning** (relaxation, for review): a serialized value still carries the identifier and is compared where it is read; a value passed in memory between crates of one build no longer carries it per value. Reason: the dependency consistency check and the end to end test require one version of each Law crate in a build (Cargo alone would link two semver-incompatible versions side by side), so the producer's identifier equals the consumer's by construction, and the consumer's test pins the upstream identifier; a per-value identifier in memory would compare two copies of the same constant |
+| G7 | A Law-bearing value crossing a crate boundary carries its producer's G6 identifier; a mismatch against the consumer's own identifier is an explicit, distinctly-typed error naming both identifiers. | **meaning** (relaxation, accepted 2026-10-14 by the coordinator of the release train, open to the owner's veto): a value passed in memory as a concrete Rust type no longer carries a per-value identifier. Reason: Rust's types are nominal per crate version (two versions cannot exchange such a value without a compile error, even when a build links both) and Cargo unifies features per crate version, so the same type means the same version and configuration, hence the same G6 identifier. Carve-out: every type-erasing boundary (serialized bytes, files, FFI / C ABI, wasm / JavaScript, Python bindings, `dyn Any`, trait-object registries) still carries and compares the identifier; the manifest lists the crate's erased boundaries |
 | G8 | Law-bearing values written to a durable form carry their own identifier, distinct from G6's in-process one, describing the meaning of the stored bytes rather than the platform that wrote them. | wording |
 | G9 | The G8 identifier is defined against the crate's reference platform; bringing another architecture to bit-for-bit agreement with it is a fix, not a bump. An actual meaning change moves the identifier and is recorded as semver-major. | none: the claim is kept as it was; the history audit (each move a major release naming both identifiers, no cross-architecture fix among them) is its evidence |
 | G10 | Law-bearing output must not depend on an unseeded RNG, a freshly generated UUID, or an ambient wall-clock read; where randomness or time is part of the computation it is an explicit input. | wording: the evidence is a lint or scan with a canary |
