@@ -247,6 +247,52 @@ is `n/a` for G1–G3, with evidence that the same scanners that catch a
 violation elsewhere find zero relevant call sites in this crate — absence
 demonstrated, not assumed).
 
+### Features and the guarantee
+
+The manifest may also say, per Cargo feature of the crate, whether the
+feature is inside or outside the guarantee, in a `[features]` table:
+
+```toml
+[features.std]
+guarantee = "inside"
+evidence = ["tests/law_oracle.rs", ".github/workflows/ci.yml determinism job"]
+note = "same arithmetic as the default build"
+
+[features.simd]
+guarantee = "outside"
+note = "lane order of the reductions differs from the scalar path"
+```
+
+| field | meaning |
+|---|---|
+| `guarantee` | `inside` or `outside` |
+| `evidence` | mandatory when `guarantee = "inside"`: the test file(s) or CI job that shows it, as for a gate's `pass` |
+| `note` | what the feature changes, and for `outside`, why it is outside |
+
+A feature is **inside** the guarantee only when all of these hold with the
+feature enabled, and the evidence shows it:
+
+1. **The same arithmetic generation**: the crate built with the feature reports
+   the same arithmetic identifier (`SEMANTICS_ID` of alice-det-math, as the
+   crate re-exports or pins it) as without it, and the feature adds no
+   floating-point path the gates of this document do not cover (G1–G3 and G13
+   apply to its code as to the rest).
+2. **The same values**: a computation the feature reaches produces the same bits
+   as the same computation without the feature, or, where the feature adds a
+   computation of its own, that computation is pinned by a golden that holds on
+   every architecture the crate's own G4 matrix runs.
+3. **Covered**: the feature is exercised either by the end to end check of this
+   repository (`e2e/`, with the feature in the dependency's feature list) or by a
+   named oracle in the crate's own suite that compares against an external
+   reference (an analytic solution or an independent implementation), not
+   against the crate's own output.
+
+Anything else is `outside`, and its note says which condition it does not
+meet. A feature the table does not list is not declared, and the README block
+(`scripts/gen-law-readme-block.py`) shows it as such, never as inside; the
+generator refuses a feature marked `inside` without evidence, and a listed
+feature the crate does not have.
+
 ## Out of scope
 
 The following are explicitly not covered by these gates, each for a stated
