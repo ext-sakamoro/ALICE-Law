@@ -209,9 +209,10 @@ identifier travels with the value, and the consumer compares it against its
 own. A mismatch is a distinct, explicit error (not a silent fallback, not a
 generic parse failure) carrying both identifiers, so the two sides of a
 mismatch are always named. A value passed in memory between crates of one
-build does not carry the identifier: Cargo links one version of each crate
-into the build (checked by this repository's dependency consistency check
-and the end to end test), so the producer's identifier is the consumer's by
+build does not carry the identifier: this repository's dependency
+consistency check and the end to end test require one version of each Law
+crate in the build (Cargo itself would link two semver-incompatible versions
+side by side), so the producer's identifier is the consumer's by
 construction, and the consumer's test pins the upstream identifier it was
 built against.
 
@@ -468,7 +469,7 @@ meaning changed, it is marked.
 | G4 | Signed-zero and exact-cancellation test cases are checked against fixed expected bit patterns under {debug, release} x {x86_64, aarch64}. | **meaning** (tightening): the four legs must be required jobs, not only run |
 | G5 | The full Law-bearing test suite runs under the release profile in CI; the aarch64 release leg is required (the one common target whose default codegen uses a hardware fma instruction). | wording |
 | G6 | Each crate computes an identifier folding its own Law pins with upstream crates' identifiers, guarded by its own version and toolchain so staleness is visible; the identifier attests the fingerprint, not that every call site routes through it (G1 attests that). | wording: names what to look at (the exported constant, its hex test, a pin-change test); the version and toolchain tie is an audit |
-| G7 | A Law-bearing value crossing a crate boundary carries its producer's G6 identifier; a mismatch against the consumer's own identifier is an explicit, distinctly-typed error naming both identifiers. | **meaning** (relaxation, for review): a serialized value still carries the identifier and is compared where it is read; a value passed in memory between crates of one build no longer carries it per value. Reason: one version of each crate is linked into a build (dependency consistency check, end to end test), so the producer's identifier equals the consumer's by construction, and the consumer's test pins the upstream identifier; a per-value identifier in memory would compare two copies of the same constant |
+| G7 | A Law-bearing value crossing a crate boundary carries its producer's G6 identifier; a mismatch against the consumer's own identifier is an explicit, distinctly-typed error naming both identifiers. | **meaning** (relaxation, for review): a serialized value still carries the identifier and is compared where it is read; a value passed in memory between crates of one build no longer carries it per value. Reason: the dependency consistency check and the end to end test require one version of each Law crate in a build (Cargo alone would link two semver-incompatible versions side by side), so the producer's identifier equals the consumer's by construction, and the consumer's test pins the upstream identifier; a per-value identifier in memory would compare two copies of the same constant |
 | G8 | Law-bearing values written to a durable form carry their own identifier, distinct from G6's in-process one, describing the meaning of the stored bytes rather than the platform that wrote them. | wording |
 | G9 | The G8 identifier is defined against the crate's reference platform; bringing another architecture to bit-for-bit agreement with it is a fix, not a bump. An actual meaning change moves the identifier and is recorded as semver-major. | none: the claim is kept as it was; the history audit (each move a major release naming both identifiers, no cross-architecture fix among them) is its evidence |
 | G10 | Law-bearing output must not depend on an unseeded RNG, a freshly generated UUID, or an ambient wall-clock read; where randomness or time is part of the computation it is an explicit input. | wording: the evidence is a lint or scan with a canary |
