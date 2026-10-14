@@ -326,6 +326,47 @@ class Write(Base):
                              "--crate-repo", str(self.crate))[0], 2)
 
 
+class PerReleaseRecords(Base):
+    """the identifier and the golden digest of the roster's alice-det-math release, from the
+    per-release records (KNOWN_SEMANTICS, "<version> <digest>" lines); the single-value forms of
+    earlier revisions still read"""
+
+    def test_the_roster_release_picks_its_identifier_and_digest(self):
+        other_sid, other_digest = "12" * 32, "34" * 32
+        self.sha = commit(self.law, {
+            "e2e/tests/law_to_storage_roundtrip.rs":
+                f'const KNOWN_SEMANTICS: &[(&str, &str)] = &[\n    ("0.4.9", "{other_sid}"),\n'
+                f'    ("0.5.0", "{SID}"),\n    ("0.5.1", "{other_sid}"),\n];\n',
+            "e2e/golden/run.digest": f"0.4.9 {other_digest}\n0.5.0 {DIGEST}\n0.5.1 {other_digest}\n"})
+        rc, out = self.render()
+        self.assertEqual(rc, 0, out)
+        self.assertIn(SID, out)
+        self.assertIn(DIGEST, out)
+        self.assertNotIn(other_sid, out)
+        self.assertNotIn(other_digest, out)
+
+    def test_a_release_without_a_golden_line_is_an_error(self):
+        self.sha = commit(self.law, {
+            "e2e/tests/law_to_storage_roundtrip.rs": f'const KNOWN_SEMANTICS: &[(&str, &str)] = &[("0.5.0", "{SID}")];\n',
+            "e2e/golden/run.digest": f"0.5.1 {DIGEST}\n"})
+        rc, out = self.render()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("no digest for alice-det-math 0.5.0", out)
+
+    def test_a_release_without_an_identifier_is_an_error(self):
+        self.sha = commit(self.law, {
+            "e2e/tests/law_to_storage_roundtrip.rs": f'const KNOWN_SEMANTICS: &[(&str, &str)] = &[("0.5.1", "{SID}")];\n',
+            "e2e/golden/run.digest": f"0.5.0 {DIGEST}\n"})
+        rc, out = self.render()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("no identifier for alice-det-math 0.5.0", out)
+
+    def test_the_earlier_single_value_forms_still_read(self):
+        self.assertEqual(glrb.golden_digest(DIGEST + "\n", "0.5.0"), DIGEST)
+        self.assertEqual(glrb.golden_digest(f"0.5.0 {DIGEST}\n", "0.5.0"), DIGEST)
+        self.assertIsNone(glrb.golden_digest(f"0.5.1 {DIGEST}\n", "0.5.0"))
+
+
 class Claims(unittest.TestCase):
     def test_the_closed_list(self):
         for claim in ("passes G7", "G14 is met", "Law-conformant", "ALICE-Law compliant", "conforms to the Law",
