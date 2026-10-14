@@ -287,24 +287,22 @@ required-ci = [
 ]
 
 [crate.alice-edge]
-version = "0.2.0"
-state = "published"
+version = "0.2.1"
+state = "planned"
 order = 11
 # 0.2.0 は alice-sdf 6 を要求して公開する (optional でも: publish-gate は roster の版を受けない要求を
 # 拒否する、test_an_optional_requirement_on_an_older_major_is_refused)
 repo = "ALICE-Edge"
 consumer-features = [["asp", "codec", "dashboard", "db", "depth-camera", "edge-pipeline", "ffi", "law", "ml", "mqtt", "pyo3", "sdf", "sensors", "std", "zip"]]
 consumer-features-why = "外す feature: sensors-hw (rppal は特定の Linux board の GPIO 専用で他の target では build できない)"
-# 0.2.0 は main の db / zip の破壊的変更 (e446bd5 まで) と、その上の alice-sdf 6 への引き上げを含めて
-# 公開する (後者は patch id で持つ)
-must-contain = ["e446bd56319283157f4f89fc9fa592c6200ee0e0"]
-must-contain-patch = [
-    "2c05e4a297be9d007ec33efe20b8ee6022f5b5ab",  # deps: sdf feature の alice-sdf の要求を 1.9 から 6 に
-]
+# 0.2.1 は線形 fit の正規方程式を i128 で解いて長い窓の桁あふれを直し、Python の evaluate_linear_batch が
+# 列が 2 でない係数を ValueError で断る版で、CHANGELOG に日付を入れた commit (5a6ba33) の上で job の上限を
+# CHANGELOG に書いた規則の値に直した commit (ebf65d8、ci.yml のみ) から公開する
+# (互換、公開済みの 0.2.0 と src が違うので版を上げる)
+must-contain = ["ebf65d850a3d036bab908ff6a6bc7e1113a84ca9"]
 changelog-has = [
-    "**Breaking:** the `sdf` feature requires `alice-sdf` 6 (was 1.9)",
-    "**破壊的変更 (`db` feature):**",
-    "**破壊的変更 (`zip` feature の送信形式):**",
+    "`fit_linear_fixed` / `fit_linear_simd` (SSE2 / NEON) が約 10 万点以上の窓で誤った直線を返していた",
+    "列が 2 でない時は `ValueError` を返す",
 ]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (ubuntu-latest)", "Test (macos-latest)", "Test (windows-latest)", "Test (ubuntu-24.04-arm)"] },
@@ -316,6 +314,7 @@ required-ci = [
     { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
     { workflow = "CI", job = "actionlint (workflow YAML)" },
     { workflow = "CI", job = "Docs lint", legs = ["Docs lint (ubuntu-latest)", "Docs lint (macos-latest)", "Docs lint (windows-latest)"] },
+    { workflow = "CI", job = "Python (maturin build + binding tests)" },
     { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
     { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
     { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
