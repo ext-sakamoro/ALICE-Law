@@ -20,7 +20,8 @@
 //! computed run (`golden/run.digest`) is a change detector, separate from the
 //! round trip: the round trip says that saving and restoring loses nothing, the
 //! golden says that the crates still compute what they computed when it was recorded.
-//! `ALICE_LAW_E2E_BLESS=1` writes the current digest instead of comparing.
+//! `ALICE_LAW_E2E_BLESS=1` writes the current digest (for the linked alice-det-math release)
+//! instead of comparing.
 
 #![allow(clippy::float_cmp, clippy::unwrap_used, clippy::cast_precision_loss)]
 
@@ -42,7 +43,14 @@ const LAW_NAME: &str = "newton-cooling";
 const EDGE_LAW_NAME: &str = "edge-window";
 /// The identifier of the arithmetic every crate here is built with (alice-det-math 0.5):
 /// alice-edge publishes it as its own, and it is recorded with every stored law
-const SEMANTICS_HEX: &str = "135c407d4249c1c200e4d1be79a12e848ce5c355fc3a918da965849e697ef000";
+/// The arithmetic identifier of each alice-det-math release this check runs with, oldest first.
+/// The locked release must be listed and its identifier must be the listed one; each release
+/// listed before it must be one `alice_det_math::check_semantics` accepts as a verified earlier
+/// identifier. A new release adds its row (its identifier changes when its set of functions does).
+const KNOWN_SEMANTICS: &[(&str, &str)] = &[
+    ("0.5.0", "135c407d4249c1c200e4d1be79a12e848ce5c355fc3a918da965849e697ef000"),
+    ("0.5.1", "85e0884623b154a3b2b264374907b6cbac09307ca3f9a08339e48c567d3cb315"),
+];
 /// 0 to 600 s every 0.25 s: on about one point in ten, `alice_det_math::exp64` and
 /// a platform's `exp` round differently, so the grid shows which one was used
 const COOLING_POINTS: i64 = 2401;
@@ -338,6 +346,14 @@ fn locked_alice_versions() -> Vec<(String, Vec<String>)> {
     found.into_iter().collect()
 }
 
+fn unhex(text: &str) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    for (k, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&text[2 * k..2 * k + 2], 16).expect("hex");
+    }
+    out
+}
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -421,7 +437,25 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         ("alice-analytics", alice_analytics::SEMANTICS_ID),
         ("alice-edge", alice_edge::SEMANTICS_ID),
     ];
-    assert_eq!(hex(&semantics), SEMANTICS_HEX, "the arithmetic identifier changed");
+    let det_math_version = locked_alice_versions()
+        .into_iter()
+        .find(|(name, _)| name == "alice-det-math")
+        .and_then(|(_, v)| v.into_iter().next())
+        .expect("alice-det-math in Cargo.lock");
+    let position = KNOWN_SEMANTICS
+        .iter()
+        .position(|(version, _)| *version == det_math_version)
+        .unwrap_or_else(|| panic!("no identifier recorded for alice-det-math {det_math_version}: add it to KNOWN_SEMANTICS"));
+    assert_eq!(hex(&semantics), KNOWN_SEMANTICS[position].1, "alice-det-math {det_math_version} has another identifier");
+    for (version, earlier) in &KNOWN_SEMANTICS[..position] {
+        let id = unhex(earlier);
+        assert_eq!(
+            alice_det_math::check_semantics(&id),
+            alice_det_math::SemanticsCheck::VerifiedPrevious(id),
+            "alice-det-math {det_math_version} does not accept the identifier of {version} as a verified earlier one"
+        );
+    }
+    println!("e2e: alice-det-math {det_math_version}, identifier {}, {} earlier identifier(s) accepted", hex(&semantics), position);
     for (name, id) in identifiers {
         assert_eq!(id, semantics, "{name} was built with a different alice-det-math");
     }
@@ -553,20 +587,42 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     );
     assert!(compared > 0 && compared_ids > 0);
 
-    // golden: what the crates compute, recorded when it was last blessed
+    // golden: what the crates compute, recorded when it was last blessed, one line per
+    // alice-det-math release ("<version> <digest>"): the run is digested with law records that
+    // carry identifiers derived from the arithmetic, so each release of it has its own digest
     let golden_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("golden/run.digest");
     let got = hex(&computed);
+    let line = format!("{det_math_version} {got}");
     println!("e2e: run digest without the alice-edge records {}", hex(&digest_of(&run, &world_raw, false)));
     if let Some(out) = std::env::var_os("ALICE_LAW_E2E_DIGEST_OUT") {
-        // for the comparison of two architectures (.github/workflows/e2e-main.yml)
-        std::fs::write(out, format!("{got}\n")).unwrap();
+        // for the comparison of two architectures (.github/workflows/e2e.yml, e2e-main.yml)
+        std::fs::write(out, format!("{line}\n")).unwrap();
+    }
+    let recorded = std::fs::read_to_string(&golden_path).unwrap_or_default();
+    let mut lines: Vec<(String, String)> = Vec::new();
+    for l in recorded.lines().filter(|l| !l.trim().is_empty()) {
+        let (version, digest) = l.split_once(' ').expect("golden/run.digest: \"<version> <digest>\" per line");
+        assert!(
+            KNOWN_SEMANTICS.iter().any(|(known, _)| *known == version),
+            "golden/run.digest names alice-det-math {version}, which KNOWN_SEMANTICS does not list"
+        );
+        assert!(lines.iter().all(|(v, _)| v != version), "golden/run.digest names {version} twice");
+        lines.extend([(version.to_string(), digest.to_string())]);
     }
     if std::env::var_os("ALICE_LAW_E2E_BLESS").is_some() {
-        std::fs::write(&golden_path, format!("{got}\n")).unwrap();
-        println!("e2e: wrote {}", golden_path.display());
+        lines.retain(|(v, _)| *v != det_math_version);
+        lines.extend([(det_math_version.clone(), got.clone())]);
+        lines.sort_by_key(|(v, _)| KNOWN_SEMANTICS.iter().position(|(known, _)| known == v));
+        let text: String = lines.iter().map(|(v, d)| format!("{v} {d}\n")).collect();
+        std::fs::write(&golden_path, text).unwrap();
+        println!("e2e: wrote {} for alice-det-math {det_math_version}", golden_path.display());
     } else {
-        let want = std::fs::read_to_string(&golden_path).expect("golden/run.digest");
-        assert_eq!(got, want.trim(), "the run computes something else than when the golden was recorded");
+        let want = lines
+            .iter()
+            .find(|(v, _)| *v == det_math_version)
+            .map(|(_, d)| d.clone())
+            .unwrap_or_else(|| panic!("golden/run.digest has no digest for alice-det-math {det_math_version}: record it with ALICE_LAW_E2E_BLESS=1"));
+        assert_eq!(got, want, "the run computes something else than when the golden was recorded");
     }
     println!("e2e: run digest {got}");
 }
