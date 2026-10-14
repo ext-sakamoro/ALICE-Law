@@ -197,7 +197,17 @@ def crate_facts(repo: str, rev: str, manifest_path: str = "Cargo.toml") -> dict:
     return {"det_math": dm, "features": features, "manifest": manifest}
 
 
-PATH_TOKEN_RE = re.compile(r"^[\w.\-/]*(?:/|\.(?:rs|toml|py|yml|yaml|md|sh|txt|json))$")
+# a path: a first word with a `/` in it, or a file name with an extension
+PATH_TOKEN_RE = re.compile(r"^(?:[\w.\-]*/[\w.\-/]*|[\w.\-]+\.(?:rs|toml|py|yml|yaml|md|sh|txt|json))$")
+
+
+def evidence_list(where: str, evidence) -> list[str]:
+    """the evidence as a list of strings (a single string or another type is refused, not iterated)"""
+    if evidence is None:
+        return []
+    if not isinstance(evidence, list) or not all(isinstance(e, str) for e in evidence):
+        raise InputError(f"{MANIFEST} {where}: evidence must be a list of strings")
+    return evidence
 
 
 def missing_evidence(repo: str, rev: str, evidence: list) -> list[str]:
@@ -224,9 +234,10 @@ def gate_rows(manifest: dict | None, gates: list, repo: str = "", rev: str = "")
         status = e["status"]
         if status not in STATUSES:
             raise InputError(f"{MANIFEST} {gid}: status {status!r} is not one of {STATUSES}")
-        if status == "pass" and not e.get("evidence"):
+        evidence = evidence_list(gid, e.get("evidence"))
+        if status == "pass" and not evidence:
             raise InputError(f"{MANIFEST} {gid}: pass without evidence")
-        gone = missing_evidence(repo, rev, e.get("evidence", [])) if repo else []
+        gone = missing_evidence(repo, rev, evidence) if repo else []
         if gone:
             raise InputError(f"{MANIFEST} {gid}: evidence names paths that are not in the crate: {gone}")
         if status != "pass" and not str(e.get("note", "")).strip():
@@ -243,9 +254,10 @@ def feature_rows(manifest: dict | None, features: list[str], repo: str = "", rev
         if not isinstance(e, dict) or e.get("guarantee") not in ("inside", "outside"):
             rows.append((f"`{f}`", "undeclared", ""))
             continue
-        if e["guarantee"] == "inside" and not e.get("evidence"):
+        evidence = evidence_list(f"features.{f}", e.get("evidence"))
+        if e["guarantee"] == "inside" and not evidence:
             raise InputError(f"{MANIFEST} features.{f}: inside the guarantee without evidence")
-        gone = missing_evidence(repo, rev, e.get("evidence", [])) if repo else []
+        gone = missing_evidence(repo, rev, evidence) if repo else []
         if gone:
             raise InputError(f"{MANIFEST} features.{f}: evidence names paths that are not in the crate: {gone}")
         rows.append((f"`{f}`", e["guarantee"], cell(e.get("note", ""))))

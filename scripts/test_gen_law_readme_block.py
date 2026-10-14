@@ -206,13 +206,17 @@ class Render(Base):
                     '[features.std]\nguarantee = "inside"\nnote = "x"\n',            # inside without evidence
                     '[features.gpu]\nguarantee = "outside"\nnote = "x"\n',           # not a feature of the crate
                     '[G1]\nstatus = "pass"\nevidence = ["tests/gone.rs"]\n',          # evidence path not in the crate
+                    '[G1]\nstatus = "pass"\nevidence = "tests/gone.rs"\n',            # a string, not a list
+                    '[G1]\nstatus = "pass"\nevidence = "clippy.toml"\n',              # a string, even an existing path
+                    '[G1]\nstatus = "pass"\nevidence = [1]\n',                        # not strings
+                    '[G1]\nstatus = "pass"\nevidence = ["src/law"]\n',                # a directory without a slash
                     '[features.std]\nguarantee = "inside"\nevidence = ["src/none/"]\nnote = "x"\n'):
             commit(self.crate, {"alice-law-conformance.toml": bad})
             self.assertEqual(self.render()[0], 2, bad)
 
     def test_free_text_evidence_and_existing_paths_are_accepted(self):
         commit(self.crate, {"alice-law-conformance.toml":
-                            '[G1]\nstatus = "pass"\nevidence = ["clippy.toml (repository root)", "tests/", '
+                            '[G1]\nstatus = "pass"\nevidence = ["clippy.toml (repository root)", "tests/", "tests", '
                             '"the determinism job in ci"]\n'})
         self.assertEqual(self.render()[0], 0)
 
