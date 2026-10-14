@@ -346,8 +346,14 @@ CLAIM_RE = re.compile(r"\bG(?:1[0-4]|[1-9])\b"
                       r"|(?:ALICE[- ])?Law\s*(?:に|へ)?\s*(?:準拠|適合)", re.I)
 
 
+# a line that is only a link to the gate definitions ("- [Conformance](…/docs/CONFORMANCE.md#g12)"):
+# its target (an anchor such as #g12) is not a claim, its text still is checked
+LINK_ONLY_RE = re.compile(r"\s*(?:[-*+]\s+)?\[([^\]]*)\]\([^)\s]*CONFORMANCE\.md(?:#[^)\s]*)?\)\s*")
+
+
 def outside_claims(text: str) -> list[int]:
-    """line numbers of claims outside the markers (code fences, and lines linking docs/CONFORMANCE.md, ignored)"""
+    """line numbers of claims outside the markers (code fences ignored; on a line that is only a link to
+    docs/CONFORMANCE.md, only the link text is read)"""
     hits, inside, fence = [], False, False
     for n, line in enumerate(text.splitlines(), 1):
         if BEGIN_RE.match(line):
@@ -355,8 +361,10 @@ def outside_claims(text: str) -> list[int]:
         if not inside:
             if line.lstrip().startswith("```"):
                 fence = not fence
-            elif not fence and "CONFORMANCE.md" not in line and CLAIM_RE.search(line):
-                hits.append(n)
+            elif not fence:
+                link = LINK_ONLY_RE.fullmatch(line)
+                if CLAIM_RE.search(link.group(1) if link else line):
+                    hits.append(n)
         if line == END:
             inside = False
     return hits
