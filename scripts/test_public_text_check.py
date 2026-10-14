@@ -176,6 +176,30 @@ class SessionIds(Base):
         for line in ("F1/F2 review", "F3 の指摘", "F4 レビュー"):
             self.assertEqual(ptc.kinds(line), ["session id"], line)
 
+    def with_ids(self, *ids: str):
+        saved = ptc.SESSION_TOKEN_HASHES
+        self.addCleanup(lambda: setattr(ptc, "SESSION_TOKEN_HASHES", saved))
+        ptc.SESSION_TOKEN_HASHES = {hashlib.sha256(i.encode()).hexdigest() for i in ids}
+
+    def test_in_a_commit_message_a_current_id_is_found_as_a_whole_token(self):
+        self.with_ids("e9", "42")
+        for line in ("fix: tidy the parser (e9)", "e9 検証: ok", "per e9", "reviewed by [e9/42]", "(42)", "e9-verified"):
+            self.assertTrue(ptc.commit_session_tokens(line), line)
+        for line in ("42 comparisons, 0 problems", "E9 done (ids are lower case)", "commit 0be9fac0", "x86_64 e9a1", "B3 phase", "v1.e9",
+                     "#e9", "ae9", "1-e9", "max error e9-8", "tolerance 1e9+3", "max(fa, `e9`)"):
+            self.assertFalse(ptc.commit_session_tokens(line), line)
+
+    def test_the_commit_rule_does_not_apply_to_file_text(self):
+        self.with_ids("e9")
+        commit(self.repo, {"doc.md": "the joint (e9) and plan B3\n"}, message="docs: add the joint table")
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 0, out)
+        commit(self.repo, {"doc2.md": "x\n"}, message="docs: more (e9)")
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("message:1: session id", out)
+        self.assertNotIn("e9", out)
+
     def test_a_commit_message_with_an_id_is_found_and_the_id_not_printed(self):
         commit(self.repo, {"a.txt": "x\n"}, message="fix: e9 の指摘")
         code, out = run(self.repo, "--range", f"{self.base}..HEAD")

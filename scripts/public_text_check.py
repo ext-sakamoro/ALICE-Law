@@ -158,6 +158,40 @@ def session_ids(line: str) -> bool:
     return bool(SESSION_ID_RE.search(line))
 
 
+# In a commit message (a subject or body is not prose about joint types or plan labels, where
+# such tokens are ordinary), the ids the current work sessions go by are findings on their own,
+# as whole tokens: SHA-256 of the lower-case id. An id of digits only is a count far more often
+# ("53 comparisons"), so it is a finding only in brackets ("(53)", "[d6/53]") or next to a review
+# word (above). File text keeps the context rule above only.
+SESSION_TOKEN_HASHES: set[str] = {
+    "2858dcd1057d3eae7f7d5f782167e24b61153c01551450a628cee722509f6529",
+    "3e1e967e9b793e908f8eae83c74dba9bcccce6a5535b4b462bd9994537bfe15c",
+    "5f3731b52ad0fb2f820b91495eb9961aebcbbc79d5881e5a26a382e694b9ccc0",
+    "76a8277347f52530e1cf979175a178980b3a180d176165c985d85f7e142f1eed",
+    "79b98f273c175489f40b682a0e43f0b22aa3cc9cf2a578e163f291f13fc9f912",
+    "86e50149658661312a9e0b35558d84f6c6d3da797f552a9657fe0558ca40cdef",
+    "a88a7902cb4ef697ba0b6759c50e8c10297ff58f942243de19b984841bfe1f73",
+    "b896847e673d4c22a7c4e2a2b06f2559eaacc530874a7ad3215fbe746a3277b5",
+    "cd70bea023f752a0564abb6ed08d42c1440f2e33e29914e55e0be1595e24f45a",
+    "f4df435df41a53e0ed8d0e16397d0287705803e94328316ef5b5ca97a9820e67",
+}
+BRACKETED_IDS_RE = re.compile(r"[(\[]\s*(" + ID + r"(?:\s*/\s*" + ID + r")*)\s*[)\]]")
+
+
+def commit_session_tokens(line: str) -> bool:
+    """a current session id as a whole token in a line of a commit message (not a number's
+    exponent such as "6e-8", not inside a `code span`)"""
+    line = re.sub(r"`[^`]*`", " ", line)
+    bracketed = {t.strip() for m in BRACKETED_IDS_RE.finditer(line) for t in m.group(1).split("/")}
+    for m in re.finditer(ID + r"(?![-+]\d)", line):
+        token = m.group(0).lower()
+        if hashlib.sha256(token.encode("utf-8")).hexdigest() not in SESSION_TOKEN_HASHES:
+            continue
+        if not token.isdigit() or token in bracketed:
+            return True
+    return False
+
+
 TOKEN_RE = re.compile(r"[A-Za-z0-9_\-\u3040-\u30ff\u4e00-\u9fff]+")
 # Japanese is written without spaces, so a name is usually glued to a particle or
 # another word ("<name>の", "<name>編"); the second tokenisation splits at every
@@ -868,7 +902,10 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
             continue  # the upstream project's commit in a fork (up to the fork point)
         compared += 1
         short = commit[:12]
-        findings += scan_text(f"commit {short} message", git(repo, "log", "-1", "--format=%B", commit))
+        message = git(repo, "log", "-1", "--format=%B", commit)
+        findings += scan_text(f"commit {short} message", message)
+        findings += [f"commit {short} message:{n}: session id" for n, line in enumerate(message.splitlines(), 1)
+                     if commit_session_tokens(line) and not session_ids(line)]
         # the paths the commit adds or changes, from a NUL-separated listing (not the diff headers,
         # which quote non-ASCII names and end a name with a space in a tab)
         changed = paths_z(git(repo, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only",
