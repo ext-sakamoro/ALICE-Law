@@ -941,6 +941,12 @@ class RequiredCi(unittest.TestCase):
         code, out, _, _ = self.gate(w)
         self.assertEqual(code, 0, out)
         self.assertIn("  dispatched:    required CI from a dispatched run: Wheel: Build (2 legs)", out)
+        # one leg from a push run and one from a dispatched run: not a dispatched job
+        w = self.green()
+        w["Wheel"] = [dict(w["Wheel"][0], event="push"), dict(w["Wheel"][1], event="workflow_dispatch")]
+        code, out, _, _ = self.gate(w)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("dispatched:", out)
         code, out, _, _ = self.gate(self.green())
         self.assertEqual(code, 0, out)
         self.assertNotIn("dispatched:", out)
