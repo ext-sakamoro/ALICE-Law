@@ -92,6 +92,36 @@ def workflows(repo: Repo) -> dict[str, str]:
     return {f: repo.show(f) for f in repo.files if f.startswith(".github/workflows/") and f.endswith((".yml", ".yaml"))}
 
 
+# a repository script in command position of a run step (line start, after ; && || | ( or then / else / do):
+# optionally after bash / sh / python / python3, or as ./path
+SCRIPT_CALL = re.compile(r"(?:^|&&|\|\||[;|(]|\b(?:then|else|do)\s)\s*(?:(?:bash|sh|python3?)\s+)?(?:\./)?(scripts/[\w./-]+\.(?:sh|py))(?![\w.-])")
+
+
+def run_texts(text: str) -> list[str]:
+    """the commands of each `run:` of a workflow (inline, or a | / > block by indentation)"""
+    out, lines, i = [], text.splitlines(), 0
+    while i < len(lines):
+        m = re.match(r"^(\s*)(?:-\s+)?run:\s*(.*)$", lines[i])
+        i += 1
+        if not m:
+            continue
+        indent, value = len(m.group(1)), m.group(2).strip()
+        if not re.fullmatch(r"[|>][-+0-9]*", value):
+            out.append(value.strip("'\""))
+            continue
+        block = []
+        while i < len(lines) and (not lines[i].strip() or len(lines[i]) - len(lines[i].lstrip()) > indent):
+            block.append(lines[i].strip())
+            i += 1
+        out.extend(block)
+    return out
+
+
+def invoked_scripts(wf: dict[str, str]) -> set[str]:
+    """repository scripts (scripts/*.sh, scripts/*.py) that a workflow run step invokes"""
+    return {m.group(1) for text in wf.values() for cmd in run_texts(text) for m in SCRIPT_CALL.finditer(cmd)}
+
+
 def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()) -> dict[str, str]:
     cells: dict[str, str] = {}
     lists = clippy_lists(repo)
@@ -160,8 +190,13 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
                    (f"; {len(uses)} uses in library sources ({scan}, cfg(test) included, audit; first {uses[0]})"
                     if uses else f"; none of the forms in library sources ({scan})")
 
-    # G12: CI runs ALICE-Law's public_text_check
-    cells["G12"] = "public_text_check in CI" if "public_text_check" in wf_text else "not found"
+    # G12: CI runs ALICE-Law's public_text_check, named in a workflow or in a repository script a workflow
+    # step runs (one level: a script that calls another script is not followed)
+    if "public_text_check" in wf_text:
+        cells["G12"] = "public_text_check in CI"
+    else:
+        via = sorted(s for s in invoked_scripts(wf) if s in repo.files and "public_text_check" in repo.show(s))
+        cells["G12"] = f"public_text_check in CI, found via {', '.join(via)}" if via else "not found"
 
     # G14: flags that change float semantics, and the tests that assert the environment
     flag_re = re.compile(r"target-cpu=native|fast-math")
