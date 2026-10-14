@@ -888,6 +888,62 @@ class ConfigApproval(Base):
         self.assertIn("config-sha256 does not match", run(self.repo, "--tree")[1])
 
 
+class RangeAllow(Base):
+    """--range reads the allow entries of the range's base: an added line of an allowed class passes,
+    entries added inside the range do not apply to it, and an entry caps the distinct lines added"""
+
+    def settings(self, entries) -> str:
+        text = "[public-text]\n" + "".join(
+            f'[[public-text.allow]]\npath = "{p}"\nclass = "{c}"\ncount = {n}\nwhy = "shader attributes"\n'
+            for p, c, n in entries)
+        return commit(self.repo, {".public-text.toml": text})
+
+    def test_an_added_line_of_a_class_the_base_allows_passes(self):
+        base = self.settings([("shaders/a.metal", "note link", 2)])
+        commit(self.repo, {"shaders/a.metal": "vertex float4 f(uint v [[vertex_id]]) { return 0; }\n"})
+        code, out = run(self.repo, "--range", f"{base}..HEAD")
+        self.assertEqual(code, 0, out)
+
+    def test_an_entry_added_in_the_same_range_does_not_apply(self):
+        base = git(self.repo, "rev-parse", "HEAD").strip()
+        self.settings([("shaders/a.metal", "note link", 2)])
+        commit(self.repo, {"shaders/a.metal": "vertex float4 f(uint v [[vertex_id]]) { return 0; }\n"})
+        code, out = run(self.repo, "--range", f"{base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("policy config changed", out)
+        self.assertIn("shaders/a.metal:1: note link", out)
+
+    def test_another_path_or_more_lines_than_the_count_is_a_finding(self):
+        base = self.settings([("shaders/a.metal", "note link", 2)])
+        commit(self.repo, {"shaders/b.metal": "uint v [[vertex_id]]\n"})
+        code, out = run(self.repo, "--range", f"{base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("shaders/b.metal:1: note link", out)
+        base = git(self.repo, "rev-parse", "HEAD").strip()
+        commit(self.repo, {"shaders/a.metal": "uint a [[vertex_id]]\nuint b [[instance_id]]\nuint c [[base_vertex]]\n"})
+        code, out = run(self.repo, "--range", f"{base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("allow shaders/a.metal / note link allows 2 lines", out)
+        self.assertIn("adds 3", out)
+
+    def test_the_same_line_added_twice_counts_once(self):
+        base = self.settings([("shaders/a.metal", "note link", 1)])
+        commit(self.repo, {"shaders/a.metal": "uint v [[vertex_id]]\n"})
+        commit(self.repo, {"shaders/a.metal": "// x\n"})
+        commit(self.repo, {"shaders/a.metal": "uint v [[vertex_id]]\n"})  # removed and added again
+        self.assertEqual(run(self.repo, "--range", f"{base}..HEAD")[0], 0)
+
+    def test_a_three_dot_range_reads_the_merge_base(self):
+        merge_base = self.settings([("shaders/a.metal", "note link", 1)])
+        git(self.repo, "checkout", "-q", "-b", "side")
+        side = commit(self.repo, {".public-text.toml": "[public-text]\n"})  # the other side drops the entry
+        git(self.repo, "checkout", "-q", merge_base)
+        commit(self.repo, {"shaders/a.metal": "uint v [[vertex_id]]\n"})
+        self.assertEqual(run(self.repo, "--range", f"{side}...HEAD")[0], 1)  # the side's own config change
+        out = run(self.repo, "--range", f"{side}...HEAD")[1]
+        self.assertNotIn("shaders/a.metal:1: note link", out)  # allowed by the merge base's entry
+
+
 class ClassAllow(Base):
     """a kind of finding allowed in a scope by the repository's settings, at a pinned count"""
 

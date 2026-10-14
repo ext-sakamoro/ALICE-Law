@@ -428,6 +428,19 @@ def load_config(repo: str, rev: str) -> dict:
 
 
 CLASS_USED: dict = {}
+# --range: the distinct (path, line) pairs each base-config entry allowed among the added lines
+RANGE_ALLOWED: dict = {}
+
+
+def range_base(repo: str, rng: str) -> str | None:
+    """the base of "a..b" (a) or "a...b" (their merge base); None when the range has no base"""
+    if "..." in rng:
+        a, b = rng.split("...", 1)
+        r = subprocess.run(["git", "-C", repo, "merge-base", a or "HEAD", b or "HEAD"], capture_output=True, text=True)
+        return r.stdout.strip() or None if r.returncode == 0 else None
+    if ".." in rng:
+        return rng.split("..", 1)[0] or "HEAD"
+    return None
 
 
 def class_allowed(path: str | None, label: str, n: int = 1) -> bool:
@@ -1024,7 +1037,18 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
             elif added and added[0][0] == 1 and added[0][1] + "\n" == LFS_POINTER.decode():
                 findings += [f"commit {short} {f}" for f in file_findings(path, blob_bytes(repo, commit, path), path)]
             for n, text in added:
-                findings += [f"commit {short} {path}:{n}: {k}" for k in kinds(text, path)]
+                for k in kinds(text, path):
+                    entry = next((e for e in CONFIG["allow"] if e["class"] == k and e["path"] in scopes(path)), None)
+                    if entry is None:
+                        findings.append(f"commit {short} {path}:{n}: {k}")
+                    else:
+                        RANGE_ALLOWED.setdefault((entry["path"], k), set()).add((path, text))
+    # an entry allows at most its count of distinct added lines
+    for e in CONFIG["allow"]:
+        got = len(RANGE_ALLOWED.get((e["path"], e["class"]), ()))
+        if got > e["count"]:
+            findings.append(f"{REPO_CONFIG}: allow {e['path']} / {e['class']} allows {e['count']} lines, "
+                            f"{rng} adds {got}")
     return findings, compared, files
 
 
@@ -1099,6 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
         print(allow_hash(path, name))
         return 0
     CLASS_USED.clear()
+    RANGE_ALLOWED.clear()
     SKIPPED.clear()
     APPROVALS.clear()
     if a.suggest_allow is not None:
@@ -1124,6 +1149,10 @@ def main(argv: list[str] | None = None) -> int:
                     findings.append(f"allow-list entry {h[:12]} of {name} allows {got} lines at {a.tree}, "
                                     f"its count is {want}" + (" (it allows nothing)" if got == 0 else ""))
         else:
+            # the range is read with the allow entries of its base: a commit that changes the settings is
+            # a finding of its own, and the entries it adds do not apply to the range that adds them
+            base = range_base(a.repo, a.range)
+            CONFIG["allow"] = load_config(a.repo, base)["allow"] if base else []
             findings, compared, files = scan_range(a.repo, a.range)
             what = f"{compared} commits ({files} files) in {a.range}"
     except subprocess.CalledProcessError as e:
