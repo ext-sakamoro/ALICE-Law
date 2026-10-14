@@ -170,6 +170,13 @@ class Render(Base):
         self.assertIn('this crate requires `alice-det-math = "0.5.0"`', out)
         self.assertIn("| `gpu` | not declared |  |", out)
 
+    def test_alice_det_math_itself_is_named_as_such(self):
+        out = self.render(crate="alice-det-math")[1]
+        self.assertIn("arithmetic identifier `" + SID + "`; this crate is alice-det-math |", out)
+        self.assertNotIn("requires", out.split("Arithmetic", 1)[1].split("\n", 1)[0])
+        ja = self.render("ja", crate="alice-det-math")[1]
+        self.assertIn("この crate が alice-det-math |", ja)
+
     def test_a_crate_outside_the_end_to_end_check_and_without_law_dependency(self):
         rc, out = self.render(crate="alice-bar")
         self.assertEqual(rc, 0, out)

@@ -61,5 +61,6 @@ workflows are the interface, so changes to what they check are recorded here.
 - This repository requires alice-edge 0.2; `release-train.toml`: alice-edge 0.2.0 is published (its pending entry removed, 7 expected problems remain until alice-lol 0.4.0) and alice-ml is held at its published 0.2.0
 
 ### Fixed
+- `scripts/gen-law-readme-block.py`: the block of alice-det-math itself says "this crate is alice-det-math" instead of "this crate requires no alice-det-math"
 - `scripts/public_text_check.py`: file names git quotes (non-ASCII) or ends with a tab in a diff header (a space) were skipped in `--range` and stopped `--tree`; the paths now come from NUL-separated listings (`ls-tree -z`, `diff-tree -z`, the root commit included) and each file's added lines from its own diff with a literal pathspec
 

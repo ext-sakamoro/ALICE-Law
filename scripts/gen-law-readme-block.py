@@ -61,8 +61,8 @@ TEXT = {
         "train": "Release train", "train_v": "{crate} {version} ({state}), law dependency: {dep}",
         "yes": "yes", "no": "no",
         "arith": "Arithmetic", "arith_v": "alice-det-math {dm} in the train, arithmetic identifier `{sid}`; "
-                                          "this crate requires {req}",
-        "req_none": "no alice-det-math",
+                                          "{req_lead}{req}",
+        "req_none": "no alice-det-math", "req_self": "this crate is alice-det-math", "req_lead": "this crate requires ",
         "e2e": "End to end check", "e2e_in": "covered (`{name} = \"{req}\"`), digest `{digest}`{arches}",
         "e2e_out": "not part of the end to end check",
         "arches": ", the same on aarch64 and x86_64",
@@ -82,8 +82,8 @@ TEXT = {
                      "`alice-law-conformance.toml` から生成する 手で編集しない",
         "train": "release train", "train_v": "{crate} {version} ({state})、Law への依存: {dep}",
         "yes": "あり", "no": "なし",
-        "arith": "算術", "arith_v": "train の alice-det-math {dm}、算術の識別子 `{sid}` この crate の要求は {req}",
-        "req_none": "alice-det-math なし",
+        "arith": "算術", "arith_v": "train の alice-det-math {dm}、算術の識別子 `{sid}` {req_lead}{req}",
+        "req_none": "alice-det-math なし", "req_self": "この crate が alice-det-math", "req_lead": "この crate の要求は ",
         "e2e": "end to end 検査", "e2e_in": "対象 (`{name} = \"{req}\"`)、digest `{digest}`{arches}",
         "e2e_out": "end to end 検査の対象外",
         "arches": "、aarch64 と x86_64 で同じ",
@@ -285,7 +285,8 @@ def render(law: str, law_rev: str, crate: str, repo: str, crate_rev: str, lang: 
     lf = law_facts(law, sha, crate)
     cf, t = crate_facts(repo, crate_rev, lf["manifest_path"]), TEXT[lang]
     st = t["st"]
-    req = f'`alice-det-math = "{cf["det_math"]}"`' if cf["det_math"] else t["req_none"]
+    req = (t["req_self"] if crate == "alice-det-math"
+           else f'`alice-det-math = "{cf["det_math"]}"`' if cf["det_math"] else t["req_none"])
     e2e = (t["e2e_in"].format(name=crate, req=lf["e2e_req"], digest=lf["digest"],
                               arches=t["arches"] if lf["arches"] else "")
            if lf["e2e_req"] else t["e2e_out"])
@@ -293,7 +294,8 @@ def render(law: str, law_rev: str, crate: str, repo: str, crate_rev: str, lang: 
            "| | |", "|---|---|",
            f"| {t['train']} | " + t["train_v"].format(crate=crate, version=lf["version"], state=lf["state"],
                                                       dep=t["yes"] if lf["law_dependency"] else t["no"]) + " |",
-           f"| {t['arith']} | " + t["arith_v"].format(dm=lf["det_math"], sid=lf["semantics"], req=req) + " |",
+           f"| {t['arith']} | " + t["arith_v"].format(dm=lf["det_math"], sid=lf["semantics"], req=req,
+                                                      req_lead="" if crate == "alice-det-math" else t["req_lead"]) + " |",
            f"| {t['e2e']} | {e2e} |", "", t["conf"], ""]
     if cf["manifest"] is None:
         out += [t["no_manifest"], ""]
