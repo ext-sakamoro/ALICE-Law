@@ -176,6 +176,9 @@ SESSION_TOKEN_HASHES: set[str] = {
     "f4df435df41a53e0ed8d0e16397d0287705803e94328316ef5b5ca97a9820e67",
 }
 BRACKETED_IDS_RE = re.compile(r"[(\[]\s*(" + ID + r"(?:\s*/\s*" + ID + r")*)\s*[)\]]")
+# a digit-only id after "by", "from", "cc" or "per" ("verified by 53"): 0 such quantities in the
+# last 300 commit messages of this repository and the release-train repositories
+ATTRIBUTED_ID_RE = re.compile(r"(?<![A-Za-z])(?i:by|from|cc|per)\s+(" + ID + r")(?!%|\.\d)")
 
 
 def commit_session_tokens(line: str) -> bool:
@@ -183,6 +186,7 @@ def commit_session_tokens(line: str) -> bool:
     exponent such as "6e-8", not inside a `code span`)"""
     line = re.sub(r"`[^`]*`", " ", line)
     bracketed = {t.strip() for m in BRACKETED_IDS_RE.finditer(line) for t in m.group(1).split("/")}
+    bracketed |= {m.group(1) for m in ATTRIBUTED_ID_RE.finditer(line)}
     for m in re.finditer(ID + r"(?![-+]\d)", line):
         token = m.group(0).lower()
         if hashlib.sha256(token.encode("utf-8")).hexdigest() not in SESSION_TOKEN_HASHES:

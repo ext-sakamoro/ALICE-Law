@@ -8,7 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
-- `scripts/public_text_check.py`: in a commit message, the ids the current work sessions go by (held as SHA-256) are findings as whole tokens, without the review-word context file text needs (a parenthesised id at the end of a subject was missed); an id of digits only only in brackets, not a number's exponent, not inside a code span; file text keeps the context rule
+- `scripts/public_text_check.py`: in a commit message, the ids the current work sessions go by (held as SHA-256) are findings as whole tokens, without the review-word context file text needs (a parenthesised id at the end of a subject was missed); an id of digits only only in brackets or after "by" / "from" / "cc" / "per", not a number's exponent, not inside a code span; file text keeps the context rule
 - `scripts/public_text_check.py`: zlib streams, gzip members and zstd frames at any offset of a binary file (a compressed debug section of a compiled library, for example) are inflated and read for build paths, within the same size budget; a stream that breaks off is read up to where it breaks; a stream over the budget is an `unscanned container` finding; build paths are counted as distinct whole paths (`\` read as `/`), so a path stored twice, or both as it is and compressed, is one
 - `.github/workflows/e2e.yml`: the published releases run on aarch64 and on x86_64, and a job requires the two digests to be equal and equal to the golden (as in main mode)
 - `scripts/public_text_check.py` `ALLOWED`: an entry for ALICE-LOL (a directory of the product's own distribution named in one test file, 2 lines)
