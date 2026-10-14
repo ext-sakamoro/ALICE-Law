@@ -374,6 +374,35 @@ required-ci = [
     { workflow = "rerun-viz example", job = "build-example" },
 ]
 
+[crate.alice-sync]
+# Law に早く載せる crate (README の ALICE-Law 統合の節を置くため) 0.6.1 は公開済み (tag v0.6.1 = 4e15f2e)
+# license は AGPL-3.0-or-later OR LicenseRef-Commercial で、この repository (AGPL) との向きの問題は無い
+# alice-det-math を直接は引かず、physics feature の alice-physics を通す main (0d15202) は
+# alice-physics "2.0" を要求する: 次の版は alice-physics の最新 (3) を受ける要求にしてから prepared にする
+# (publish-gate は最新でない版を受ける要求を拒否する) この repository は alice-sync を引かない
+version = "0.6.1"
+state = "published"
+order = 15
+repo = "ALICE-Sync"
+law-dependency = false
+required-ci = [
+    { workflow = "CI", job = "Test", legs = ["Test — ubuntu-latest", "Test — macos-latest", "Test — windows-latest"] },
+    { workflow = "CI", job = "Format" },
+    { workflow = "CI", job = "Clippy (-D warnings)" },
+    { workflow = "CI", job = "MSRV (rust-version = 1.88 実 compile)" },
+    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
+    { workflow = "CI", job = "Feature powerset (cargo-hack, depth 2)" },
+    { workflow = "CI", job = "actionlint (workflow YAML 検証)" },
+    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
+    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
+    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
+    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
+    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_packet_decode" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_codec_bridge" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_crdt_merge" },
+]
+
 [expected-failure.e2e-db-0-5]
 step = "e2e-published-resolve"
 until = "alice-db 0.5.0"
