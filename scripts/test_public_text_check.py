@@ -933,6 +933,13 @@ class RangeAllow(Base):
         commit(self.repo, {"shaders/a.metal": "uint v [[vertex_id]]\n"})  # removed and added again
         self.assertEqual(run(self.repo, "--range", f"{base}..HEAD")[0], 0)
 
+    def test_identical_lines_count_once_in_a_range(self):
+        # the cap counts distinct (path, text) pairs: the same line at two places is one allowed line
+        # (the tree check still counts every line against the entry)
+        base = self.settings([("shaders/a.metal", "note link", 1)])
+        commit(self.repo, {"shaders/a.metal": "uint v [[vertex_id]]\n// x\nuint v [[vertex_id]]\n"})
+        self.assertEqual(run(self.repo, "--range", f"{base}..HEAD")[0], 0)
+
     def test_a_three_dot_range_reads_the_merge_base(self):
         merge_base = self.settings([("shaders/a.metal", "note link", 1)])
         git(self.repo, "checkout", "-q", "-b", "side")
@@ -942,6 +949,30 @@ class RangeAllow(Base):
         self.assertEqual(run(self.repo, "--range", f"{side}...HEAD")[0], 1)  # the side's own config change
         out = run(self.repo, "--range", f"{side}...HEAD")[1]
         self.assertNotIn("shaders/a.metal:1: note link", out)  # allowed by the merge base's entry
+
+
+class Terms(unittest.TestCase):
+    """programming terms and English verbs that only look like process words or ids"""
+
+    def test_a_worker_identifier_or_thread_is_not_the_process(self):
+        for line in ("ThreadPoolExecutor(max_workers=16)", "pool = Pool(num_workers)", "worker_id = 3",
+                     "first touched from its worker thread", "else the worker threads run"):
+            self.assertNotIn("agent process", ptc.kinds(line), line)
+        for line in ("a worker did X", "worker 3", "found by the worker", "the workers ran the tests",
+                     "a worker, threading the needle", "workers: 4"):
+            self.assertIn("agent process", ptc.kinds(line), line)
+
+    def test_this_session_and_in_chat_are_process_words(self):
+        for line in ("This session's simulator tooling", "as decided in this session", "asked in chat"):
+            self.assertIn("agent process", ptc.kinds(line), line)
+        for line in ("a netcode session", "the session ends", "chat in channels", "within chatter", "Thisession"):
+            self.assertNotIn("agent process", ptc.kinds(line), line)
+
+    def test_the_verb_be_before_review_is_not_an_id(self):
+        for line in ("and cannot be reviewed. Such files", "it must be reviewed first"):
+            self.assertNotIn("session id", ptc.kinds(line), line)
+        for line in ("fb reviewed it", "6e review", "(be) review", "be/fb review", "session be"):
+            self.assertIn("session id", ptc.kinds(line), line)
 
 
 class ClassAllow(Base):

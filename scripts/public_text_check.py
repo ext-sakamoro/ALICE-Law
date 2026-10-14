@@ -42,13 +42,19 @@ def words(*alts: str) -> str:
 
 
 FORBIDDEN = [
-    ("agent process", re.compile(words(r"workers?", r"subagents?", r"multi[- ]?agents?", r"skills?")
+    ("agent process", re.compile(
+                                 # a programming term is not the process: an identifier (`max_workers`,
+                                 # `worker_id`) and a thread ("worker thread", "worker threads")
+                                 r"(?<![A-Za-z_])workers?(?![A-Za-z_])(?!\s+threads?(?![A-Za-z]))|"
+                                 + words(r"subagents?", r"multi[- ]?agents?", r"skills?")
                                  # `git worktree add` is a command, not a description of how the work was done; so is
                                  # the same subcommand as an argument list (`[*git_argv, "worktree", "add", ...]`): the
                                  # quoted word followed by a quoted worktree subcommand
                                  + r"|(?<!git )" + A + r"(?!(?<=[\"'])worktree[\"']\s*,\s*[\"']"
                                  + r"(?:add|list|lock|move|prune|remove|repair|unlock)[\"'])" + r"(?:worktrees?)" + Z
-                                 + r"|ワーカー|マルチエージェント|エージェント|調停役|並走\s*session|他\s*session|session\s*名|この\s*(?:session|セッション)")),
+                                 + r"|ワーカー|マルチエージェント|エージェント|調停役|並走\s*session|他\s*session|session\s*名|この\s*(?:session|セッション)"
+                                 # the same in English prose ("This session's tooling", "asked in chat")
+                                 + r"|(?<![A-Za-z])(?:[Tt]his\s+session|in\s+chat)(?![A-Za-z])")),
     # "session" as a unit of the work: glued after Japanese ("次 session", "別 session" in a
     # table cell), at the start of a line or heading followed by Japanese ("Session 分割案"),
     # "multi-session", and a lettered session ("Session A (~1h)"); "checkout session 作成" or
@@ -150,7 +156,8 @@ PRIVATE_NAME_HASHES = DEVICE_NAME_HASHES | {
 ID = r"(?<![A-Za-z0-9#_.\-])[0-9a-f]{2}(?![A-Za-z0-9])"
 IDS = r"[(\[]?" + ID + r"(?:\s*/\s*" + ID + r")*[)\]]?"  # "fb", "(6e/fb)"
 REVIEW_WORD = r"(?:レビュー|(?i:review)|指摘|検証|セッション|(?i:session))"
-SESSION_ID_RE = re.compile(IDS + r"\s*[、,]?\s*(?:の\s*)?" + REVIEW_WORD
+# "be" before "review" is the English verb ("cannot be reviewed"), not an id
+SESSION_ID_RE = re.compile(r"(?!be\s+(?i:review))" + IDS + r"\s*[、,]?\s*(?:の\s*)?" + REVIEW_WORD
                            + r"|(?<![A-Za-z])(?i:sessions?)\s*[:=]?\s*" + ID + r"|セッション\s*[:=：]?\s*" + ID)
 # labels of review findings ("F1", "F2 / F3") named as such
 REVIEW_LABEL_RE = re.compile(r"(?<![A-Za-z0-9])F\d+(?:\s*/\s*F\d+)*\s*(?:の\s*)?(?:レビュー|指摘|(?i:review))")
@@ -256,6 +263,13 @@ ALLOWED: dict[str, dict[str, int]] = {
         "804f62a499a2ad3dbaf6f93f89c979952b105096028c748d99cef10f8988405c": 1,
     },
     "ALICE-SDF": {
+        # the getting-started guides name the product's own agent skill and the tools that install it
+        # (the heading and the paragraph under it, in English and Japanese): "skill" on 2 lines and
+        # "skills" (the skills/implicit-cad/ path) on 1 line of each
+        "e8ffe091255705a39a10c1476cdadfcf856f4025fd7ee763e37862f5e31c1de6": 2,
+        "18d022074ad61fa06d0a4ee4805dd416a0a4b467231d70c421dec612688a6be0": 1,
+        "662e9ad920561c66b0c9dbc9424ef1a918ac25b0bb7961f6c2ffa024c24dece1": 2,
+        "c8e5037f53918dad1b24dec6ffc0b53f3f3efc820074dc935b935bedb2719e20": 1,
         # the Agent Skills format word "skill" in the product's own skill (each file of
         # skills/implicit-cad/, at the lines it is on; "skills" there is the directory entry below)
         "0d1cd546472a1c5eee45984723451b0408d436c6d843b38f26dac9e7eb0a4343": 14,
