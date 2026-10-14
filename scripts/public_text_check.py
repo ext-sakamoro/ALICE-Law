@@ -168,6 +168,28 @@ SESSION_ID_RE = re.compile(r"(?!be\s+(?i:review))" + IDS + r"\s*[、,]?\s*(?:の
 REVIEW_LABEL_RE = re.compile(r"(?<![A-Za-z0-9])F\d+(?:\s*/\s*F\d+)*\s*(?:の\s*)?(?:レビュー|指摘|(?i:review))")
 
 
+# the row labels of an internal list ("F7", "R2", "C3", "A1", "B4": a letter and 1-2 digits) are
+# findings only next to a word that names the list or its row: "canonical", "ledger", "tracker",
+# "台帳", "項目", "行目", or "行" standing alone (not inside "行列" or "実行"), with at most 20
+# characters between them on one clause. Alone such labels are ordinary (1,167 occurrences in
+# the commit messages and files of the 8 release-train repositories: phases, Mooney-Rivlin
+# constants, rotations, table rows); next to the closed list of words above only the internal
+# label of one commit message was found. The English "row" and
+# "item" were left out: their 5 occurrences included a public table's own row ("the C2 row of
+# the table in §1.3"). The gate ids G1..G14 are public and the letter class has no G; the float
+# widths F16 / F32 / F64 are types, not labels.
+LEDGER_LABEL = r"(?<![A-Za-z0-9])(?!F(?:16|32|64)(?![0-9]))[FRCAB]\d{1,2}(?![0-9A-Za-z])"
+LEDGER_WORD = (r"(?:(?<![A-Za-z])(?i:canonical|ledger|tracker)(?![A-Za-z])|台帳|項目|行目"
+               r"|(?<![一-鿿])行(?![一-鿿]))")
+LEDGER_GAP = r"[^。．.;；|\n]{0,20}?"
+LEDGER_LABEL_RE = re.compile(LEDGER_LABEL + LEDGER_GAP + LEDGER_WORD + "|" + LEDGER_WORD + LEDGER_GAP + LEDGER_LABEL)
+
+
+def ledger_labels(line: str) -> bool:
+    """a row label of an internal list next to a word that names the list or its row"""
+    return bool(LEDGER_LABEL_RE.search(line))
+
+
 def session_ids(line: str) -> bool:
     """an id-like token next to a word that names a review or a session"""
     return bool(SESSION_ID_RE.search(line))
@@ -629,6 +651,8 @@ def kinds(line: str, path: str | None = None) -> list[str]:
                         ALLOW_STATE["used"][h] = ALLOW_STATE["used"].get(h, 0) + 1
                     del tokens[label]
     found = list(tokens)
+    if ledger_labels(line) and "internal tracker" not in found:
+        found.append("internal tracker")
     if private_paths(line):
         found.append("private path")
     if HOST_NAME_HASHES and host_names(line):
