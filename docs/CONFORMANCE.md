@@ -33,8 +33,9 @@ and confirms the lint catches it in a crate this is not yet wired into.
 The methods G1 rules on are one list, owned by this repository: the
 `methods` array of G1 in `conformance/gates.toml`, each with its verdict
 (`banned`, `allowed`, `pending`) and the reason. `sqrt` and `mul_add` are
-allowed (IEEE 754 requires both correctly rounded, so every conforming
-platform agrees). `powi` is pending: whether an integer power gives the same
+allowed (IEEE 754 requires both correctly rounded; on a target without a
+hardware fma, `mul_add` calls the platform library's `fma`, which must be
+correctly rounded, and the cross-target measurement below includes it). `powi` is pending: whether an integer power gives the same
 bits on every target is being measured; until it is decided a crate may ban
 it, and a crate that allows it says why in its manifest.
 
