@@ -162,7 +162,10 @@ def session_ids(line: str) -> bool:
 # such tokens are ordinary), the ids the current work sessions go by are findings on their own,
 # as whole tokens: SHA-256 of the lower-case id. An id of digits only is a count far more often
 # ("53 comparisons"), so it is a finding only in brackets ("(53)", "[d6/53]") or next to a review
-# word (above). File text keeps the context rule above only.
+# word (above). File text keeps the context rule above only. This check accepts some false
+# findings by design; the known forms: a count in brackets ("baseline (34)" in a warning count),
+# a joint type in lower case in a list ("hinge, slider, d6"), and a variable named like an id
+# ("max(fa, fb)") outside a code span: write the joint as D6 and put code in backticks.
 SESSION_TOKEN_HASHES: set[str] = {
     "2858dcd1057d3eae7f7d5f782167e24b61153c01551450a628cee722509f6529",
     "3e1e967e9b793e908f8eae83c74dba9bcccce6a5535b4b462bd9994537bfe15c",
