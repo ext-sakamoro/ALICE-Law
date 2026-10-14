@@ -59,6 +59,14 @@ class Measure(unittest.TestCase):
         self.assertIn("CI clippy -D found", c["G1"])
         self.assertIn("no clippy configuration", self.cells({"src/lib.rs": ""})["G1"])
 
+    def test_g1_reports_a_pending_method_banned_by_default_apart_from_the_banned_ones(self):
+        repo = make(self.root, "rp", {"clippy.toml": CLIPPY.replace('{ path = "f32::cos" }, ', '') + "", "src/lib.rs": ""})
+        c = mc.measure(mc.Repo(repo, "HEAD"), BANNED, {"powi"})
+        self.assertIn("not banned powi (pending, banned by default", c["G1"])
+        listed = make(self.root, "rq", {"clippy.toml": CLIPPY.replace("]\n", '  { path = "f32::powi" }, { path = "f64::powi" },\n]\n', 1),
+                                        "src/lib.rs": ""})
+        self.assertNotIn("not banned powi", mc.measure(mc.Repo(listed, "HEAD"), BANNED, {"powi"})["G1"])
+
     def test_g6_tells_an_own_identifier_from_a_re_export(self):
         own = self.cells({"src/lib.rs": "pub const FOO_SEMANTICS_ID: [u8; 32] = [0; 32];\n"})
         self.assertIn("own identifier src/lib.rs:1 (FOO_SEMANTICS_ID)", own["G6"])

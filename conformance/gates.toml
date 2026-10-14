@@ -22,10 +22,11 @@ legacy_status = ["missing"]
 id = "G1"
 checked_by = "machine"
 name = "no-libm-direct"
-definition = "The f32/f64 methods listed as banned in this gate's methods list (platform transcendentals and other results IEEE 754 does not require correctly rounded) are not called outside alice-det-math; sqrt and mul_add are allowed (correctly rounded); powi is pending a cross-target measurement."
+definition = "The f32/f64 methods listed as banned in this gate's methods list (platform transcendentals and other results IEEE 754 does not require correctly rounded) are not called outside alice-det-math; sqrt and mul_add are allowed (correctly rounded); powi is pending a cross-target measurement and banned by default (a crate allowing it states the reason in its manifest)."
 evidence_kinds = ["clippy-disallowed-methods-type-resolved", "canary-test"]
 # the f32 / f64 methods G1 rules on, owned here: "banned" outside alice-det-math, "allowed",
-# or "pending" (not decided yet; a crate states its choice); a crate's clippy configuration must
+# or "pending" (not decided yet; its "default" says what a crate does unless its manifest states a
+# reason); a crate's clippy configuration must
 # ban every "banned" entry (a justified subset only with a reason in the crate's manifest)
 methods = [
     { name = "sin", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
@@ -55,7 +56,7 @@ methods = [
     { name = "hypot", verdict = "banned", reason = "not correctly rounded by IEEE 754; platform libm results differ" },
     { name = "sqrt", verdict = "allowed", reason = "correctly rounded by IEEE 754: every conforming platform gives the same bits" },
     { name = "mul_add", verdict = "allowed", reason = "fusedMultiplyAdd is correctly rounded (one rounding) per IEEE 754; on a target without a hardware fma in its default features (x86_64) it is a call into the platform library's fma, which IEEE 754 and C99 require correctly rounded; it is included in the cross-target measurement with powi; the sign of an outer negation is G3" },
-    { name = "powi", verdict = "pending", reason = "integer power: whether it is the same on every target (a compiler runtime routine, repeated multiplication with target-dependent order) is being measured with a cross-target probe (x86_64 Linux / macOS / Windows MSVC, aarch64, wasm32), together with mul_add; until then a crate may ban it, and a crate allowing it states why" },
+    { name = "powi", verdict = "pending", default = "banned", reason = "integer power: a probe of 11,352 points (129 integer exponents x 44 bases, f32 and f64) found 0 differing results between aarch64 native and x86_64 under Rosetta, in debug and release; Rosetta runs on the same ARM floating-point unit, so this is not evidence for real x86_64 silicon, and the grid is a structured sample; the cross-target question stays open, so the default is banned: a crate allowing powi states the reason in its manifest or uses alice-det-math's powi" },
     { name = "recip", verdict = "allowed", reason = "one correctly rounded division" },
     { name = "to_degrees", verdict = "allowed", reason = "one multiplication by a constant" },
     { name = "to_radians", verdict = "allowed", reason = "one multiplication by a constant" },

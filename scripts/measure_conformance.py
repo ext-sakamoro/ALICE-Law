@@ -92,7 +92,7 @@ def workflows(repo: Repo) -> dict[str, str]:
     return {f: repo.show(f) for f in repo.files if f.startswith(".github/workflows/") and f.endswith((".yml", ".yaml"))}
 
 
-def measure(repo: Repo, banned: set[str]) -> dict[str, str]:
+def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()) -> dict[str, str]:
     cells: dict[str, str] = {}
     lists = clippy_lists(repo)
     wf = workflows(repo)
@@ -110,6 +110,9 @@ def measure(repo: Repo, banned: set[str]) -> dict[str, str]:
                 continue
             miss = sorted((banned - d["methods"]["f32"]) | (banned - d["methods"]["f64"]))
             parts.append(f"{f}: " + ("all banned listed" if not miss else f"missing {', '.join(miss)}"))
+            pend = sorted((default_banned - d["methods"]["f32"]) | (default_banned - d["methods"]["f64"]))
+            if pend:
+                parts.append(f"{f}: not banned {', '.join(pend)} (pending, banned by default: the manifest states the reason)")
         ci = "clippy" in wf_text and ("-D warnings" in wf_text or "disallowed_methods" in wf_text)
         cells["G1"] = "; ".join(parts) + ("; CI clippy -D found" if ci else "; CI clippy -D not found")
 
@@ -186,13 +189,14 @@ def main(argv: list[str] | None = None) -> int:
     gates = tomllib.loads(Path(a.law, "conformance/gates.toml").read_text(encoding="utf-8"))["gate"]
     g1 = next(g for g in gates if g["id"] == "G1")
     banned = {m["name"] for m in g1.get("methods", []) if m["verdict"] == "banned"}
+    default_banned = {m["name"] for m in g1.get("methods", []) if m["verdict"] == "pending" and m.get("default") == "banned"}
     if not banned:
         print("error: conformance/gates.toml has no banned G1 method", file=sys.stderr)
         return 2
     table = {}
     for name in a.crates.split(","):
         try:
-            table[name] = measure(Repo(Path(a.repos, name), a.ref), banned)
+            table[name] = measure(Repo(Path(a.repos, name), a.ref), banned, default_banned)
         except OSError as e:
             print(f"error: {e}", file=sys.stderr)
             return 2

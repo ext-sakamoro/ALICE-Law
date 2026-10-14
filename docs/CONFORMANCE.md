@@ -36,8 +36,11 @@ The methods G1 rules on are one list, owned by this repository: the
 allowed (IEEE 754 requires both correctly rounded; on a target without a
 hardware fma, `mul_add` calls the platform library's `fma`, which must be
 correctly rounded, and the cross-target measurement below includes it). `powi` is pending: whether an integer power gives the same
-bits on every target is being measured; until it is decided a crate may ban
-it, and a crate that allows it says why in its manifest.
+bits on every target is being measured, and its default is banned: a crate
+bans it, or allows it with the reason in its manifest (or uses alice-det-math's
+`powi`). A probe of 11,352 points found no difference between aarch64 and
+x86_64 under Rosetta, which runs on the same floating-point unit, so it does
+not settle real x86_64 hardware.
 
 **Claim.** No code of the crate calls an `f32` / `f64` method the G1 list in `conformance/gates.toml` marks `banned` except through alice-det-math, in every target and feature combination the crate builds.
 
@@ -479,7 +482,7 @@ meaning changed, it is marked.
 
 | gate | earlier definition (verbatim) | change |
 |---|---|---|
-| G1 | Platform transcendental functions are banned outside alice-det-math; sqrt (correctly rounded by IEEE 754) and powi (portable by construction) are out of scope. | **meaning**: one method list owned by `conformance/gates.toml` with a verdict and reason per method (it names `hypot`, `cbrt`, `exp_m1`, `ln_1p` and the others as banned, `mul_add` as allowed); `powi` moves from out of scope to pending a cross-target measurement; a crate's clippy list must contain every banned entry; the evidence must cover each feature set |
+| G1 | Platform transcendental functions are banned outside alice-det-math; sqrt (correctly rounded by IEEE 754) and powi (portable by construction) are out of scope. | **meaning**: one method list owned by `conformance/gates.toml` with a verdict and reason per method (it names `hypot`, `cbrt`, `exp_m1`, `ln_1p` and the others as banned, `mul_add` as allowed); `powi` moves from out of scope to pending a cross-target measurement, banned by default (2026-10-15: a crate allowing it states the reason); a crate's clippy list must contain every banned entry; the evidence must cover each feature set |
 | G2 | f32/f64 max/min must implement IEEE 754 maximumNumber/minimumNumber, at scalar width and at every SIMD width the crate builds for, via Law helpers and a default-deny manifest of named raw_* exceptions. | wording: one test per SIMD width named as evidence |
 | G3 | Negating the whole result of a fused multiply-add (a.mul_add(b,c)) is banned in every syntactic form; the Law-conforming form negates the fma's operands instead, (-a).mul_add(b, -c). | wording |
 | G4 | Signed-zero and exact-cancellation test cases are checked against fixed expected bit patterns under {debug, release} x {x86_64, aarch64}. | **meaning** (tightening): the four legs must be required jobs, not only run |

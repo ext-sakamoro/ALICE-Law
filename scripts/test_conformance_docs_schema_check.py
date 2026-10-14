@@ -141,10 +141,16 @@ class G1MethodList(unittest.TestCase):
         for m in methods:
             self.assertIn(m["verdict"], ("banned", "allowed", "pending"), m)
             self.assertTrue(m["reason"].strip(), m)
+            # a pending method says what a crate does until it is decided; a decided one has no default
+            if m["verdict"] == "pending":
+                self.assertIn(m.get("default"), ("banned", "allowed"), m)
+            else:
+                self.assertNotIn("default", m, m)
         verdict = {m["name"]: m["verdict"] for m in methods}
         self.assertEqual(verdict["sqrt"], "allowed")
         self.assertEqual(verdict["mul_add"], "allowed")
         self.assertEqual(verdict["powi"], "pending")  # until the cross-target measurement decides it
+        self.assertEqual(next(m for m in methods if m["name"] == "powi")["default"], "banned")
         for banned in ("sin", "cos", "exp", "ln", "powf", "hypot", "cbrt", "atan2"):
             self.assertEqual(verdict[banned], "banned", banned)
 
