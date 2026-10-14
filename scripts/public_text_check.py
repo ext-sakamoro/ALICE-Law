@@ -234,8 +234,31 @@ def private_names(line: str) -> list[str]:
 ALLOWED: dict[str, dict[str, int]] = {
     "ALICE-LOL": {
         "fd9a9d9abcdb50151ee94eb1e9e162ca570d43fc68c7a6c23ea42f57436871ab": 2,
+        # the Agent Skills format word in the product's own skill (each file of skills/lol-sdf/ and its
+        # path, per word, at the lines it is on)
+        "a74d6fb638cfb8c9fee16e3112f683ea2a2ae9d860b7eddc5c4c918ae63334dc": 1,
+        "512ad23a184edef1a5d78480c4fb4cbd03528ce6196b8df9bedeb361a27f2cfd": 10,
+        "ab6f186f271f1c41ea57165beeb7c1daf08cfc40bfcacd5a03344625c57240bf": 2,
+        "f96515586d0c3054927aab551844a460b776b5eadbeaa1feb4df1f49b9c9eb3c": 1,
+        "c5bd64cb5c4b89c40f0fd2817441e0ef4def0076058526fda41eb94093d8a75c": 1,
+        "7e7501a2d6aa84f9cc4b918da457555a20e441cdb0617f9249e5d7dd66168ce4": 1,
+        "c7c9fc3a2ac70f30bb92f8fbe7ada57936dba232ccaa13e2ff701229ad1960ed": 1,
+        "7d3700f94d6d0dbe6a8edf0ead7cd56c77932220e797c0a9c32b576081bd8be1": 1,
+        "157579a83cd94133750c21e8c442b0e96f81b5b1e955433d61e31c11927e7145": 1,
+        "7c7a702ffb8ee276b9a766bfbb157b098962dcec6b911ffd11052554f0f2c1e6": 2,
+        "d6032eef5e06ab0597b63bc3ea46212d8e51d63bf1d9df599c67cbbef486a247": 1,
+        "27b4d045e26de80668342952060c7d9a66b37840945cbef23f49a7b47627bf36": 1,
+        "fec269e79de829085f645608aec2eb6ec23158756f43d32aae2541e8a624e56c": 1,
+        "d2cf3aa96340fe696a4f84c4263ac02d56f9714c6c7fa839569f76a10a6f9c4e": 1,
+        "804f62a499a2ad3dbaf6f93f89c979952b105096028c748d99cef10f8988405c": 1,
     },
     "ALICE-SDF": {
+        # the Agent Skills format word "skill" in the product's own skill (each file of
+        # skills/implicit-cad/, at the lines it is on; "skills" there is the directory entry below)
+        "0d1cd546472a1c5eee45984723451b0408d436c6d843b38f26dac9e7eb0a4343": 14,
+        "9a8f57102826f398f994cbb920815580d78399b352dc1ea9b38af5844286b729": 1,
+        "1ae9c10dce04f534d3a998d5cb41bc0f4c48ce949a8cd0cc97ccf083c94b757f": 2,
+        "0964b7a889f85fb027d2847cae7950483969456ac826fd6000b1f37cb76163de": 2,
         "659c5bd1c20fad2d50a9b52724b150d9ff941865275154a9c463afd40d66e7c3": 2,
         "8b580e67b172f24cf9b96fae3fa28b61c797d845d7b6a361c99f910307261a69": 2,
         "2315a2794fe699f753409a368e78d5cb110e6bca06075307e9450adff7a35475": 7,
@@ -247,7 +270,7 @@ ALLOWED: dict[str, dict[str, int]] = {
         "c9bcfb4989c30783679258347fd0b88a3671780d1d3ef2e045042d3352a59d3a": 1,
         "a2ca05f4d55ca8dde59e831dcdf400e2785a129dbac2f89ec54dc28ee4bf9e47": 1,
         "04f5e1ffb8f5f13d28b764f887e3e99bfacbf07c0e425796a46711b3ac09fdd9": 1,
-        "ab6f260bbe48e591409dcd53d07c2044e0a4da028ef1d51bc2ae01ff4009ba58": 9,
+        "ab6f260bbe48e591409dcd53d07c2044e0a4da028ef1d51bc2ae01ff4009ba58": 10,
         "2d5c1dc549cf7601676a0cb7f5452d20be3fa5f1d0f55140305152ca6be22625": 1,
         "e7fc9e6005c1c2d4cad2be2070cced19d2ce2874f93d046f0cabe7194671d81c": 2,
         "43e6578d81a78bd7891d1c713ab9d4dacae113f6ca20b2c38db6ed8133c68f1a": 1,
