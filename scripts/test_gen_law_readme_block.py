@@ -351,6 +351,16 @@ class Claims(unittest.TestCase):
             self.assertEqual(glrb.outside_claims(line), [1], line)
         self.assertEqual(glrb.outside_claims("```\nG3 passes\n```\n"), [])  # a code fence stays skipped
 
+    def test_claims_in_a_line_that_names_the_law_or_its_gate_definitions(self):
+        for line in ("This crate passes every ALICE-Law conformance gate.", "Fully conformant (docs/CONFORMANCE.md)",
+                     "[Fully conformant](docs/CONFORMANCE.md)", "[x](docs/CONFORMANCE.md) passes every gate",
+                     "<a href='docs/CONFORMANCE.md'>passes every gate</a>", "ALICE-Law: all gates pass",
+                     "Law-compliant build", "passed the Law gates"):
+            self.assertEqual(glrb.outside_claims(line), [1], line)
+        for line in ("passes every test gate", "fully conformant to IEEE 754", "all gates of the FPGA pass",
+                     "See [the gate definitions](docs/CONFORMANCE.md)", "a law of cooling gate passes", "the Law's scope"):
+            self.assertEqual(glrb.outside_claims(line), [], line)
+
 
 class Check(Base):
     def test_a_current_block_passes(self):
