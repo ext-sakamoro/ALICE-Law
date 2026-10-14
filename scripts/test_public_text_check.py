@@ -215,6 +215,43 @@ class SessionIds(Base):
 
 
 
+class AllowSkillWord(Base):
+    """a product's own Agent Skills files: the format word is allowed per file, word and line count;
+    any other process word there, a new file and a changed count stay findings"""
+
+    SK = "the " + "ski" + "ll format, see the guide\n"  # the word split so this file's own text stays clean
+
+    def setUp(self):
+        super().setUp()
+        self.saved_allowed = ptc.ALLOWED
+        self.addCleanup(lambda: setattr(ptc, "ALLOWED", self.saved_allowed))
+        commit(self.repo, {"pkg/a.md": self.SK * 2})
+        word = "ski" + "ll"
+        ptc.ALLOWED = {"r": {ptc.allow_hash("pkg/a.md", word): 2}}
+
+    def test_the_word_at_its_count_passes(self):
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 0, out)
+
+    def test_another_process_word_on_an_allowed_line_is_a_finding(self):
+        commit(self.repo, {"pkg/a.md": self.SK + "a " + "wor" + "ker runs the " + "ski" + "ll\n"})
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("pkg/a.md:2: agent process", out)
+
+    def test_a_new_file_with_the_word_is_a_finding(self):
+        commit(self.repo, {"pkg/b.md": self.SK})
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("pkg/b.md:1: agent process", out)
+
+    def test_a_changed_count_is_a_finding(self):
+        commit(self.repo, {"pkg/a.md": self.SK * 3})
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("allows 3 lines", out)
+
+
 class AllowList(Base):
     """a product's mention of a name, allowed per repository, file and name"""
 
