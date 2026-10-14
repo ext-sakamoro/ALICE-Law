@@ -360,10 +360,43 @@ class Claims(unittest.TestCase):
                      "Passes all of the Law's checks."):
             self.assertEqual(glrb.outside_claims(line), [1], line)
         for line in ("passes every test gate", "fully conformant to IEEE 754", "all gates of the FPGA pass",
-                     "See [the gate definitions](docs/CONFORMANCE.md)", "a law of cooling gate passes", "the Law's scope",
-                     "meets every timing requirement", "all green LEDs", "\u2705 tests pass", "passes the type checks",
-                     "the Law's requirements are listed in docs/CONFORMANCE.md"):
+                     "a law of cooling gate passes", "the Law's scope",
+                     "meets every timing requirement", "all green LEDs", "\u2705 tests pass", "passes the type checks"):
             self.assertEqual(glrb.outside_claims(line), [], line)
+
+
+class NamingTheLaw(unittest.TestCase):
+    """A': outside the block, naming ALICE-Law or CONFORMANCE.md is a finding by itself"""
+    URL = "https://github.com/ext-sakamoro/ALICE-Law/blob/main/docs/CONFORMANCE.md"
+
+    def test_findings(self):
+        for line in ("ALICE-Law \u2714 everything passes", "No Law violations.", "Zero ALICE-Law findings.",
+                     "Law status: green", "This crate follows ALICE-Law.", "See the ALICE-Law notes",
+                     "Fully conformant (docs/CONFORMANCE.md)", "details in CONFORMANCE.md",
+                     "built for alice law", "Built on https://github.com/ext-sakamoro/ALICE-Law",
+                     f"[ALICE-Law]({self.URL})",                      # a link-only line naming ALICE-Law in its text
+                     # earlier allowed, findings under A' (they name the gate definitions outside a link-only line)
+                     "See [the gate definitions](docs/CONFORMANCE.md)",
+                     "the Law's requirements are listed in docs/CONFORMANCE.md"):
+            self.assertEqual(glrb.outside_claims(line), [1], line)
+
+    def test_each_bare_law_claim_word(self):
+        # ALICE-Law is not named, so each line is a finding only through its claim word
+        for line in ("No Law violations.", "Zero Law findings.", "Law status: green", "Law status: passing",
+                     "Law status: OK", "Law \u2714", "Law \u2713", "Law \u2705"):
+            self.assertEqual(glrb.outside_claims(line), [1], line)
+
+    def test_clean(self):
+        for line in (f"[gate definitions]({self.URL})", f"- [Conformance]({self.URL}#g12)",
+                     "## Law identity (`law_id`)", "保存した Law と評価する Law が同じものだと言えるのは",
+                     "| Data type | Law parameters only | Ratio |", "Law の残差分布", "## 研究 Law (`research_law`)",
+                     # the crate's own manifest is a file name, not a status
+                     "`alice-law-conformance.toml` holds the manifest",
+                     "[`alice-law-conformance.toml`](alice-law-conformance.toml).",
+                     'records under the reserved key prefix `"\\0alice-law\\0"`',
+                     "no violations in the parser", "status: green"):
+            self.assertEqual(glrb.outside_claims(line), [], line)
+        self.assertEqual(glrb.outside_claims("```\nALICE-Law: no Law violations, see CONFORMANCE.md\n```\n"), [])
 
 
 class Check(Base):
