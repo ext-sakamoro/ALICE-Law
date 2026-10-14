@@ -355,10 +355,14 @@ class Claims(unittest.TestCase):
         for line in ("This crate passes every ALICE-Law conformance gate.", "Fully conformant (docs/CONFORMANCE.md)",
                      "[Fully conformant](docs/CONFORMANCE.md)", "[x](docs/CONFORMANCE.md) passes every gate",
                      "<a href='docs/CONFORMANCE.md'>passes every gate</a>", "ALICE-Law: all gates pass",
-                     "Law-compliant build", "passed the Law gates"):
+                     "Law-compliant build", "passed the Law gates",
+                     "Meets every Law requirement.", "100% Law-clean.", "Law: \u2705 all green",
+                     "Passes all of the Law's checks."):
             self.assertEqual(glrb.outside_claims(line), [1], line)
         for line in ("passes every test gate", "fully conformant to IEEE 754", "all gates of the FPGA pass",
-                     "See [the gate definitions](docs/CONFORMANCE.md)", "a law of cooling gate passes", "the Law's scope"):
+                     "See [the gate definitions](docs/CONFORMANCE.md)", "a law of cooling gate passes", "the Law's scope",
+                     "meets every timing requirement", "all green LEDs", "\u2705 tests pass", "passes the type checks",
+                     "the Law's requirements are listed in docs/CONFORMANCE.md"):
             self.assertEqual(glrb.outside_claims(line), [], line)
 
 
