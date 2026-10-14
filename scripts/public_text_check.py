@@ -190,6 +190,12 @@ def ledger_labels(line: str) -> bool:
     return bool(LEDGER_LABEL_RE.search(line))
 
 
+# a commit subject that ends with an id-like token in brackets ("… the oracle (70)") credits the change to
+# whoever goes by that id; 1 such subject among the 4,214 of the 8 release-train repositories, and it was
+# one ("(#70)", "(v0.7)", "(x2)" are not id-like)
+SUBJECT_ID_RE = re.compile(r"\(\s*" + ID + r"\s*\)\s*$")
+
+
 def session_ids(line: str) -> bool:
     """an id-like token next to a word that names a review or a session"""
     return bool(SESSION_ID_RE.search(line))
@@ -1069,6 +1075,9 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
         findings += scan_text(f"commit {short} message", message)
         findings += [f"commit {short} message:{n}: session id" for n, line in enumerate(message.splitlines(), 1)
                      if commit_session_tokens(line) and not session_ids(line)]
+        subject = message.split("\n", 1)[0]
+        if SUBJECT_ID_RE.search(subject) and not session_ids(subject) and not commit_session_tokens(subject):
+            findings.append(f"commit {short} message:1: session id")
         findings += [f"commit {short} message:{n}: agent process (disguised)" for n, line in enumerate(message.splitlines(), 1)
                      if folded_agent_word(line) and "agent process" not in kinds(line)]
         # the paths the commit adds or changes, from a NUL-separated listing (not the diff headers,
