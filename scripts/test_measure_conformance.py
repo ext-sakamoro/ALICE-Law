@@ -62,7 +62,7 @@ class Measure(unittest.TestCase):
     def test_g1_reports_a_pending_method_banned_by_default_apart_from_the_banned_ones(self):
         repo = make(self.root, "rp", {"clippy.toml": CLIPPY.replace('{ path = "f32::cos" }, ', '') + "", "src/lib.rs": ""})
         c = mc.measure(mc.Repo(repo, "HEAD"), BANNED, {"powi"})
-        self.assertIn("not banned powi (pending, banned by default", c["G1"])
+        self.assertIn("not banned powi (pending, banned by default: allowed only if", c["G1"])
         listed = make(self.root, "rq", {"clippy.toml": CLIPPY.replace("]\n", '  { path = "f32::powi" }, { path = "f64::powi" },\n]\n', 1),
                                         "src/lib.rs": ""})
         self.assertNotIn("not banned powi", mc.measure(mc.Repo(listed, "HEAD"), BANNED, {"powi"})["G1"])

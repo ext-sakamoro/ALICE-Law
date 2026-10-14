@@ -37,10 +37,10 @@ allowed (IEEE 754 requires both correctly rounded; on a target without a
 hardware fma, `mul_add` calls the platform library's `fma`, which must be
 correctly rounded, and the cross-target measurement below includes it). `powi` is pending: whether an integer power gives the same
 bits on every target is being measured, and its default is banned: a crate
-bans it, or allows it with the reason in its manifest (or uses alice-det-math's
-`powi`). A probe of 11,352 points found no difference between aarch64 and
-x86_64 under Rosetta, which runs on the same floating-point unit, so it does
-not settle real x86_64 hardware.
+bans it, or allows it with the reason in its manifest (alice-det-math's
+`powi` covers `f32` only). A probe of 11,352 points found no difference between
+aarch64 and x86_64 code translated to run on the same arm64 floating-point
+unit, so it does not settle real x86_64 hardware.
 
 **Claim.** No code of the crate calls an `f32` / `f64` method the G1 list in `conformance/gates.toml` marks `banned` except through alice-det-math, in every target and feature combination the crate builds.
 

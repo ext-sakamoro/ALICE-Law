@@ -112,7 +112,7 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
             parts.append(f"{f}: " + ("all banned listed" if not miss else f"missing {', '.join(miss)}"))
             pend = sorted((default_banned - d["methods"]["f32"]) | (default_banned - d["methods"]["f64"]))
             if pend:
-                parts.append(f"{f}: not banned {', '.join(pend)} (pending, banned by default: the manifest states the reason)")
+                parts.append(f"{f}: not banned {', '.join(pend)} (pending, banned by default: allowed only if the manifest states a reason; not checked here)")
         ci = "clippy" in wf_text and ("-D warnings" in wf_text or "disallowed_methods" in wf_text)
         cells["G1"] = "; ".join(parts) + ("; CI clippy -D found" if ci else "; CI clippy -D not found")
 
