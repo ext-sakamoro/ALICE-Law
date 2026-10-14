@@ -104,12 +104,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+      # the digest jobs skip their test when the resolution fails as the roster expects;
+      # then there is nothing to compare, and the same check (not a skip of its own) says so
+      - name: Resolve against crates.io as it is today
+        id: resolve
+        working-directory: e2e
+        run: python3 ../scripts/expected_failure.py e2e-published-resolve -- cargo generate-lockfile
+      - if: steps.resolve.outputs.expected != 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           pattern: digest-*
           path: digests
           merge-multiple: true
       - name: Compare
+        if: steps.resolve.outputs.expected != 'true'
         run: |
           n=$(ls digests | wc -l)
           test "$n" -eq 2 || { echo "expected 2 digests, found $n"; exit 1; }
