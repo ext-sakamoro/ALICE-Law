@@ -97,13 +97,38 @@ def workflows(repo: Repo) -> dict[str, str]:
 SCRIPT_CALL = re.compile(r"(?:^|&&|\|\||[;|(]|\b(?:then|else|do)\s)\s*(?:(?:bash|sh|python3?)\s+)?(?:\./)?(scripts/[\w./-]+\.(?:sh|py))(?![\w.-])")
 
 
-def run_texts(text: str) -> list[str]:
-    """the commands of each `run:` of a workflow (inline, or a | / > block by indentation)"""
+# a step condition that is literally false: `if: false` / `if: ${{ false }}` (any spacing)
+FALSE_IF = re.compile(r"^\s*(?:-\s+)?if:\s*(?:false|\$\{\{\s*false\s*\}\})\s*$")
+
+
+def disabled_lines(lines: list[str]) -> set[int]:
+    """indexes of the lines of the steps (`- …` list items) whose `if:` is literally false"""
+    out: set[int] = set()
+    for i, line in enumerate(lines):
+        m = re.match(r"^(\s*)-\s+\S", line)
+        if not m:
+            continue
+        dash = len(m.group(1))
+        j = i + 1
+        while j < len(lines) and (not lines[j].strip() or len(lines[j]) - len(lines[j].lstrip()) > dash):
+            j += 1
+        # the step's own keys: the dash line and the lines one level in (not a nested list or block)
+        keys = [lines[i]] + [lines[k] for k in range(i + 1, j)
+                             if lines[k].strip() and len(lines[k]) - len(lines[k].lstrip()) == dash + 2]
+        if any(FALSE_IF.match(k) for k in keys):
+            out.update(range(i, j))
+    return out
+
+
+def run_texts(text: str, skip_disabled: bool = False) -> list[str]:
+    """the commands of each `run:` of a workflow (inline, or a | / > block by indentation);
+    with skip_disabled, not those of a step whose `if:` is literally false"""
     out, lines, i = [], text.splitlines(), 0
+    off = disabled_lines(lines) if skip_disabled else set()
     while i < len(lines):
         m = re.match(r"^(\s*)(?:-\s+)?run:\s*(.*)$", lines[i])
         i += 1
-        if not m:
+        if not m or i - 1 in off:
             continue
         indent, value = len(m.group(1)), m.group(2).strip()
         if not re.fullmatch(r"[|>][-+0-9]*", value):
@@ -114,6 +139,52 @@ def run_texts(text: str) -> list[str]:
             block.append(lines[i].strip())
             i += 1
         out.extend(block)
+    return out
+
+
+RELEASE_TEST = re.compile(r"^cargo\b[^\n;&|]*?\b(?:test|nextest\s+run)\b")
+# what may stand before `cargo` in command position: env assignments, `env`, `time`, `nice [-n N]`
+ASSIGN = r"[A-Za-z_]\w*=(?:\"[^\"]*\"|'[^']*'|\S*)\s+"
+CMD_PREFIX = re.compile(r"^(?:" + ASSIGN + r"|(?:env|time|nice(?:\s+-n\s*-?\d+)?)\s+)*")
+
+
+def strip_comment(line: str) -> str:
+    """the line without a shell comment: from a `#` outside quotes, at line start or after whitespace"""
+    quote = ""
+    for i, c in enumerate(line):
+        if quote:
+            if c == quote:
+                quote = ""
+        elif c in "'\"":
+            quote = c
+        elif c == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i].rstrip()
+    return line
+
+
+def cargo_command(part: str) -> str | None:
+    """the part from `cargo` on, with quoted text blanked, when `cargo` is in command position"""
+    part = part.strip()
+    rest = part[CMD_PREFIX.match(part).end():]
+    if not re.match(r"cargo\b", rest):
+        return None
+    return re.sub(r"\"[^\"]*\"|'[^']*'", '""', rest)
+
+
+def commands(wf: dict[str, str]) -> list[str]:
+    """the commands of all run steps (not of a step whose `if:` is literally false), without shell
+    comments, with backslash-continued lines joined"""
+    out: list[str] = []
+    for text in wf.values():
+        pending = ""
+        for line in map(strip_comment, run_texts(text, skip_disabled=True)):
+            if line.endswith("\\"):
+                pending += line[:-1] + " "
+                continue
+            out.append(pending + line)
+            pending = ""
+        if pending:
+            out.append(pending)
     return out
 
 
@@ -159,7 +230,22 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
 
     # G4 / G5: the release profile on an aarch64 runner
     arm = re.search(r"(macos-latest|macos-1[45]\b|ubuntu-24\.04-arm|ubuntu-22\.04-arm)", wf_text)
-    rel = re.search(r"--release(?![\w-])", wf_text) is not None
+    # a test command with the release profile: `cargo test` / `cargo nextest run` (also through
+    # `cargo hack` or a toolchain `+…`) and `--release` in the same command; `cargo build --release`
+    # builds, it does not test
+    # the flag may come from a matrix value (`profile: ["", " --release"]` with `${{ matrix.profile }}`)
+    release_keys = {m.group(1) for text in wf.values()
+                    for m in re.finditer(r"(?m)^\s*([\w-]+):\s*\[[^\]\n]*?(?:--release(?![\w-])|--profile[= ]release\b)", text)}
+
+    def release_flag(part: str) -> bool:
+        return bool(re.search(r"--release(?![\w-])|--profile[= ]release\b", part)
+                    or any(re.search(r"\$\{\{\s*matrix\." + re.escape(k) + r"\s*\}\}", part) for k in release_keys))
+
+    # `cargo` in command position (not inside an echo; a command substitution `$(…)` or a subshell
+    # starts a new command), and not `--no-run` (compiles, runs no test)
+    tests = [c for cmd in commands(wf) for part in re.split(r"&&|\|\||\$\(|[;|(`]", cmd)
+             if (c := cargo_command(part)) is not None and RELEASE_TEST.search(c) and "--no-run" not in c]
+    rel = any(release_flag(c) for c in tests)
     cells["G5"] = ("release test found" if rel else "release test not found") + \
                   (f", aarch64 runner {arm.group(1)}" if arm else ", aarch64 runner not found")
     cells["G4"] = "needs the test names (audit): " + cells["G5"]

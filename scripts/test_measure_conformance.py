@@ -146,6 +146,52 @@ class Measure(unittest.TestCase):
                                   "scripts/public_text.sh": script, "src/lib.rs": ""})
         self.assertEqual("not found", only_a_path["G12"])
 
+    def test_g5_needs_the_release_flag_on_a_test_command(self):
+        def g5(run):
+            return self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n"
+                               f"    steps:\n      - run: {run}\n", "src/lib.rs": ""})["G5"]
+        for run in ("cargo build --release", "cargo build --release --features x && cargo test",
+                    "cargo bench --release"):
+            self.assertIn("release test not found", g5(run), run)
+        for run in ("cargo test --release", "cargo +1.90 test --release --all-features",
+                    "cargo nextest run --release", "cargo hack --feature-powerset test --release"):
+            self.assertIn("release test found", g5(run), run)
+            self.assertNotIn("not found,", g5(run).split(", aarch64")[0], run)
+        matrix = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n    strategy:\n"
+                             "      matrix:\n        profile: [\"\", \" --release\"]\n    steps:\n"
+                             "      - run: cargo test -p foo${{ matrix.profile }}\n", "src/lib.rs": ""})["G5"]
+        self.assertIn("release test found", matrix)
+        self.assertNotIn("not found,", matrix.split(", aarch64")[0])
+        other = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n    strategy:\n"
+                            "      matrix:\n        profile: [\"\", \" --release\"]\n    steps:\n"
+                            "      - run: cargo test ${{ matrix.features }}\n", "src/lib.rs": ""})["G5"]
+        self.assertIn("release test not found", other)  # the release value is not used by the test command
+        self.assertIn("release test found", g5("cargo test --profile release"))
+        multi = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n    steps:\n"
+                            "      - run: |\n          cargo test \\\n            --release --workspace\n",
+                            "src/lib.rs": ""})["G5"]
+        self.assertIn("release test found", multi)
+        self.assertIn("release test found", g5("RUSTFLAGS=-Dwarnings nice -n 10 cargo test --release"))
+        self.assertIn("release test found", g5("out=$(cargo test -p foo --release 2>&1) || exit 1"))
+
+    def test_g5_does_not_count_a_comment_a_disabled_step_an_echo_or_no_run(self):
+        def g5(steps):
+            return self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n"
+                               f"    steps:\n{steps}", "src/lib.rs": ""})["G5"]
+        comment = "      - run: |\n          cargo build\n          # cargo test --release (disabled)\n"
+        # a comment after a command: only the comment holds the test / the flag
+        trailing = "      - run: cargo build  # cargo test --release (disabled)\n"
+        trailing_flag = "      - run: cargo test --workspace  # --release (disabled)\n"
+        disabled = "      - if: false\n        run: cargo test --release\n"
+        disabled_expr = "      - name: t\n        if: ${{  false }}\n        run: cargo test --release\n"
+        echo = "      - run: echo \"try cargo test --release locally\"\n"
+        no_run = "      - run: cargo test --no-run --release\n"
+        for steps in (comment, trailing, trailing_flag, disabled, disabled_expr, echo, no_run):
+            self.assertIn("release test not found", g5(steps), steps)
+        # the same steps enabled / uncommented are counted
+        self.assertIn("release test found", g5("      - if: true\n        run: cargo test --release\n"))
+        self.assertIn("release test found", g5("      - run: cargo test --release  # profile check\n"))
+
     def test_a_gate_list_without_banned_methods_measures_nothing(self):
         law = self.root / "law"
         (law / "conformance").mkdir(parents=True)
