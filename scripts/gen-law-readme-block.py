@@ -353,12 +353,25 @@ CONTEXT_RE = re.compile(r"\bLaw\b|CONFORMANCE\.md", re.I)
 CONTEXT_CLAIM_RE = re.compile(r"\b(?:conformant|conforming|compliant)\b"
                               r"|\bpass(?:es|ed|ing)?\b[^.]{0,60}?\b(?:gates?|checks?)\b"
                               r"|\b(?:meets?|satisf(?:y|ies))\b[^.]{0,40}?\brequirements?\b"
-                              r"|\bLaw-clean\b|\ball\s+green\b|\u2705"
-                              r"|\b(?:all|every|each)\s+(?:\w+\s+){0,3}gates?\b[^.]{0,30}?\bpass", re.I)
+                              r"|\bLaw-clean\b|\ball\s+green\b|[\u2705\u2714\u2713]"
+                              r"|\b(?:all|every|each)\s+(?:\w+\s+){0,3}gates?\b[^.]{0,30}?\bpass"
+                              r"|\bviolations?\b|\bfindings?\b"
+                              r"|\bstatus\b[^.]{0,20}?\b(?:green|passing|ok)\b", re.I)
 
 
 def claim(text: str, context: str) -> bool:
     return bool(CLAIM_RE.search(text) or (CONTEXT_RE.search(context) and CONTEXT_CLAIM_RE.search(text)))
+
+
+# A': the block is the only place a README states its ALICE-Law status, so outside it a line that names
+# ALICE-Law ("ALICE-Law", "ALICE Law", "alice-law", any case, as a whole word) or names the gate definitions
+# (CONFORMANCE.md) is a finding by itself, whatever the wording. Bare "Law" is a domain noun in these crates
+# ("Law identity", "研究 Law", "Law parameters only") and only counts with a claim word (CONTEXT_CLAIM_RE).
+# Not ALICE-Law: a longer name it is part of (the crate's own manifest `alice-law-conformance.toml`, which
+# names a file, not a status; a key such as "\0alice-law\0"). A URL path to the ALICE-Law repository does name
+# it, except as the target of a link-only line (below), whose target is never read
+ALICE_LAW_RE = re.compile(r"(?<![\w.-])ALICE[- ]Law(?![\w-])", re.I)
+GATE_DEFS_RE = re.compile(r"CONFORMANCE\.md", re.I)
 
 
 # a line that is only a link to the gate definitions ("- [Conformance](…/docs/CONFORMANCE.md#g12)"):
@@ -367,8 +380,9 @@ LINK_ONLY_RE = re.compile(r"\s*(?:[-*+]\s+)?\[([^\]]*)\]\([^)\s]*CONFORMANCE\.md
 
 
 def outside_claims(text: str) -> list[int]:
-    """line numbers of claims outside the markers (code fences ignored; on a line that is only a link to
-    docs/CONFORMANCE.md, only the link text is read)"""
+    """line numbers of claims outside the markers (code fences ignored): a claim word, or any naming of
+    ALICE-Law or of CONFORMANCE.md (A'); on a line that is only a link to docs/CONFORMANCE.md, only the link
+    text is read, and naming the file there is allowed"""
     hits, inside, fence = [], False, False
     for n, line in enumerate(text.splitlines(), 1):
         if BEGIN_RE.match(line):
@@ -378,7 +392,11 @@ def outside_claims(text: str) -> list[int]:
                 fence = not fence
             elif not fence:
                 link = LINK_ONLY_RE.fullmatch(line)
-                if claim(link.group(1) if link else line, line):
+                if link:
+                    hit = claim(link.group(1), line) or ALICE_LAW_RE.search(link.group(1))
+                else:
+                    hit = claim(line, line) or ALICE_LAW_RE.search(line) or GATE_DEFS_RE.search(line)
+                if hit:
                     hits.append(n)
         if line == END:
             inside = False
