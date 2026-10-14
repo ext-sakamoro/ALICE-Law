@@ -155,6 +155,33 @@ class Range(Base):
         self.assertEqual(run(self.repo, "--range", "nope..HEAD")[0], 2)
 
 
+class LedgerLabels(Base):
+    """a row label of an internal list (F11, R2, C3, A1, B4) next to a word naming the list or its row"""
+
+    DETMATH_SUBJECT = "tracked_binaries: ALICE-SDF の検査を移植 (test は F11 canonical = symlink + submodule 両ケースに統一)"
+
+    def test_a_label_next_to_a_list_word_is_found(self):
+        for line in (self.DETMATH_SUBJECT, "R10 ledger row", "C2 行", "台帳の A3", "F7 行目を直した", "項目 B12 は未対応",
+                     "see tracker R4", "canonical F1", "A9 の行を更新"):
+            self.assertIn("internal tracker", ptc.kinds(line), line)
+
+    def test_public_uses_pass(self):
+        lines = [f"G{n} {w}" for n in range(1, 15) for w in ("canonical", "ledger row", "行", "台帳", "tracker", "pass")]
+        lines += [f"台帳の G{n}" for n in range(1, 15)]
+        lines += ["F1 score", "R2 value", "R² value", "C2 symmetry", "C2 continuity", "B3 tree", "A4 paper",
+                  "R10 resistor", "F16 jet", "R36.4.3", "F32 canonical NaN", "canonical F64 bits", "B2 行列の剪断行",
+                  "実行 R2", "the C2 row of the table in §1.3", "item R2 of the plan", "F1. A canonical form",
+                  "AVX2 canonical", "x86 B1 stepping"]
+        for line in lines:
+            self.assertNotIn("internal tracker", ptc.kinds(line), line)
+
+    def test_a_commit_message_with_the_label_fails_the_range(self):
+        commit(self.repo, {"a.txt": "x\n"}, message=self.DETMATH_SUBJECT)
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("message:1: internal tracker", out)
+
+
 class Vocabulary(unittest.TestCase):
     def test_every_hash_is_a_sha256(self):
         self.assertTrue(ptc.PRIVATE_NAME_HASHES)
