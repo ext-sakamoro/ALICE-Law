@@ -65,10 +65,15 @@ order = 4
 repo = "ALICE-Analytics"
 
 [crate.alice-db]
-version = "0.4.0"
-state = "published"
+# 0.5.0 は created_at を時計から読まず入力にした版 (DataSegment::new / StorageConfig の created_at、
+# main dec7eb5 まで) 未公開 本 repository の end to end は main mode で 0.5 を受け、published mode は
+# 0.5.0 の公開まで expected-failure.e2e-db-0-5 で解決できない (下) 公開の前に CHANGELOG に日付つきの
+# 見出しを入れ、consumer-expected-failure (until 0.4.1) が 0.5.0 で解消したかを測って直す
+version = "0.5.0"
+state = "planned"
 order = 5
 repo = "ALICE-DB"
+must-contain = ["dec7eb5120f909d7d61f5b0477196e4063bfe29c"]
 consumer-features = [["analytics", "crypto", "ffi", "fs", "open-file-audit", "sdf"]]
 consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["python"]]
@@ -368,6 +373,13 @@ required-ci = [
     { workflow = "CI", job = "actionlint (workflow YAML 検証)" },
     { workflow = "rerun-viz example", job = "build-example" },
 ]
+
+[expected-failure.e2e-db-0-5]
+step = "e2e-published-resolve"
+until = "alice-db 0.5.0"
+expect = ["failed to select a version for the requirement `alice-db = \"^0.5\"`"]
+why = "the end to end check requires alice-db 0.5 (main), which is not on crates.io until its release"
+exit = 101
 
 # The Actions secrets of each repository in the train, by name, with what they are for:
 # publish-gate reads the repository's secrets and refuses a secret that is not listed here, a

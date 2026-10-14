@@ -13,7 +13,7 @@ description = "End to end check across the core ALICE crates: read a law, comput
 alice-lol = { version = "0.4", features = ["physics"] }
 alice-physics = { version = "3", default-features = false, features = ["std"] }
 alice-sdf = "6"
-alice-db = "0.4"
+alice-db = "0.5"
 alice-zip = "0.10"
 alice-crypto = "0.4.1"
 alice-analytics = { version = "0.5", features = ["law"] }
