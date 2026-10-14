@@ -767,6 +767,10 @@ class Verify(unittest.TestCase):
         with self.assertRaises(rt.RosterError):
             rt.mark_published(ROSTER, "alice-analytics")  # prepared-local, not prepared
 
+    def test_the_tag_of_the_entry_names_the_tag(self):
+        self.assertEqual(rt.tag_name({"version": "1.2.3", "tag": "alice-foo-v{version}"}), "alice-foo-v1.2.3")
+        self.assertEqual(rt.tag_name({"version": "1.2.3"}), "v1.2.3")
+
 
 FOLLOW_ROSTER = """
 [crate.alice-zip]

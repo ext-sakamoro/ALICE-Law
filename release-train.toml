@@ -290,6 +290,8 @@ required-ci = [
 version = "0.2.1"
 state = "published"
 order = 11
+# tag は v{version} (0.2.0 から正) 旧書式の alice-edge-v0.1.0 (d3506b9) と、v0.2.1 と同じ commit を指す alice-edge-v0.2.1 も remote に残す
+tag = "v{version}"
 # 0.2.0 は alice-sdf 6 を要求して公開する (optional でも: publish-gate は roster の版を受けない要求を
 # 拒否する、test_an_optional_requirement_on_an_older_major_is_refused)
 repo = "ALICE-Edge"
