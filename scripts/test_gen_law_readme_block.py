@@ -53,7 +53,9 @@ name = "no-outer-fneg-of-fma"
 """
 E2E_TOML = '[package]\nname = "e2e"\n[dependencies]\nalice-foo = { version = "1", features = ["x"] }\nalice-det-math = "0.5"\n'
 E2E_TEST = f'const SEMANTICS_HEX: &str = "{SID}";\n'
-WORKFLOW = "jobs:\n  digest:\n    runs-on: macos-15\n  other:\n    runs-on: macos-15-intel\n"
+WORKFLOW = ("jobs:\n  digest:\n    strategy:\n      matrix:\n        include:\n          - runner: macos-15\n"
+            "            arch: arm64\n          - runner: macos-15-intel\n            arch: x86_64\n"
+            "  digest-compare:\n    needs: digest\n")
 CARGO = '[package]\nname = "alice-foo"\nversion = "1.2.0"\n[features]\ndefault = ["std"]\nstd = []\nsimd = []\n[dependencies]\nalice-det-math = { version = "0.5" }\n'
 README_EN = "# alice-foo\n\nIntro.\n\n## Usage\n\ntext\n\n## License\n\nMIT\n"
 README_JA = "# alice-foo\n\n概要\n\n## 使い方\n\n本文\n\n## ライセンス\n\nMIT\n"
@@ -107,7 +109,8 @@ class Base(unittest.TestCase):
         self.sha = commit(self.law, {"release-train.toml": ROSTER, "conformance/gates.toml": GATES,
                                      "e2e/Cargo.toml": E2E_TOML, "e2e/tests/law_to_storage_roundtrip.rs": E2E_TEST,
                                      "e2e/golden/run.digest": DIGEST + "\n", ".github/workflows/e2e.yml": WORKFLOW})
-        commit(self.crate, {"Cargo.toml": CARGO, "README.md": README_EN, "README_JP.md": README_JA})
+        commit(self.crate, {"Cargo.toml": CARGO, "README.md": README_EN, "README_JP.md": README_JA,
+                            "clippy.toml": "", "tests/oracle.rs": ""})
 
     def render(self, lang="en", crate="alice-foo"):
         return run("render", "--law", str(self.law), "--law-ref", self.sha, "--crate", crate,
@@ -121,7 +124,8 @@ class Base(unittest.TestCase):
         git(self.crate, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "block")
 
     def check(self, *extra, crate="alice-foo"):
-        return run("check", "--law", str(self.law), "--crate", crate, "--crate-repo", str(self.crate), *extra)
+        return run("check", "--law", str(self.law), "--crate", crate, "--crate-repo", str(self.crate),
+                   "--law-main", "HEAD", *extra)
 
 
 class Render(Base):
@@ -172,10 +176,13 @@ class Render(Base):
         self.assertIn("| End to end check | not part of the end to end check |", out)
 
     def test_the_two_architectures_are_stated_only_when_the_workflow_compares_them(self):
-        self.sha = commit(self.law, {".github/workflows/e2e.yml": "jobs:\n  a:\n    runs-on: ubuntu-24.04\n"})
-        out = self.render()[1]
-        self.assertIn(f"digest `{DIGEST}` |", out)
-        self.assertNotIn("aarch64", out)
+        for wf in ("jobs:\n  a:\n    runs-on: ubuntu-24.04\n",
+                   WORKFLOW.replace("          - runner: macos-15\n            arch: arm64\n", ""),  # Intel leg only
+                   WORKFLOW.replace("  digest-compare:\n    needs: digest\n", "")):              # no compare job
+            self.sha = commit(self.law, {".github/workflows/e2e.yml": wf})
+            out = self.render()[1]
+            self.assertIn(f"digest `{DIGEST}` |", out, wf)
+            self.assertNotIn("aarch64", out, wf)
 
     def test_the_block_is_deterministic_and_carries_no_date(self):
         commit(self.crate, {"alice-law-conformance.toml": MANIFEST})
@@ -197,9 +204,34 @@ class Render(Base):
                     '[G1]\nstatus = "missing"\n',                                    # missing without a note
                     '[G1]\nstatus = "done"\nnote = "x"\n',                           # unknown status
                     '[features.std]\nguarantee = "inside"\nnote = "x"\n',            # inside without evidence
-                    '[features.gpu]\nguarantee = "outside"\nnote = "x"\n'):          # not a feature of the crate
+                    '[features.gpu]\nguarantee = "outside"\nnote = "x"\n',           # not a feature of the crate
+                    '[G1]\nstatus = "pass"\nevidence = ["tests/gone.rs"]\n',          # evidence path not in the crate
+                    '[features.std]\nguarantee = "inside"\nevidence = ["src/none/"]\nnote = "x"\n'):
             commit(self.crate, {"alice-law-conformance.toml": bad})
             self.assertEqual(self.render()[0], 2, bad)
+
+    def test_free_text_evidence_and_existing_paths_are_accepted(self):
+        commit(self.crate, {"alice-law-conformance.toml":
+                            '[G1]\nstatus = "pass"\nevidence = ["clippy.toml (repository root)", "tests/", '
+                            '"the determinism job in ci"]\n'})
+        self.assertEqual(self.render()[0], 0)
+
+    def test_renamed_and_target_dependencies_and_implicit_features(self):
+        commit(self.crate, {"Cargo.toml": '[package]\nname = "alice-foo"\n[features]\nfast = ["dep:extra"]\n'
+                                          '[dependencies]\nextra = { version = "1", optional = true }\n'
+                                          'plot = { version = "1", optional = true }\n'
+                                          '[target.\'cfg(unix)\'.dependencies]\n'
+                                          'dm = { package = "alice-det-math", version = "0.5.1" }\n'})
+        out = self.render()[1]
+        self.assertIn('this crate requires `alice-det-math = "0.5.1"`', out)
+        self.assertIn("| `plot` | not declared |  |", out)   # an optional dependency is a feature of its own
+        self.assertIn("| `fast` | not declared |  |", out)
+        self.assertNotIn("| `extra` |", out)                  # named as dep:extra, so no implicit feature
+
+    def test_raw_html_in_a_note_is_removed(self):
+        commit(self.crate, {"alice-law-conformance.toml": '[G2]\nstatus = "missing"\nnote = "a <b>bold</b> <img src=x> b"\n'})
+        line = next(l for l in self.render()[1].splitlines() if l.startswith("| G2"))
+        self.assertIn("| a bold b |", line)
 
     def test_a_long_note_is_cut_and_a_pipe_escaped(self):
         commit(self.crate, {"alice-law-conformance.toml":
@@ -229,6 +261,11 @@ class Write(Base):
         self.assertEqual(rc, 0)
         self.assertEqual((self.crate / "README.md").read_text(encoding="utf-8"), en)
 
+    def test_write_refuses_uncommitted_inputs(self):
+        (self.crate / "Cargo.toml").write_text(CARGO + "# edit\n", encoding="utf-8")
+        self.assertEqual(run("write", "--law", str(self.law), "--law-ref", self.sha, "--crate", "alice-foo",
+                             "--crate-repo", str(self.crate))[0], 2)
+
     def test_a_missing_japanese_readme_is_refused(self):
         (self.crate / "README_JP.md").unlink()
         self.assertEqual(run("write", "--law", str(self.law), "--law-ref", self.sha, "--crate", "alice-foo",
@@ -238,9 +275,12 @@ class Write(Base):
 class Claims(unittest.TestCase):
     def test_the_closed_list(self):
         for claim in ("passes G7", "G14 is met", "Law-conformant", "ALICE-Law compliant", "conforms to the Law",
-                      "conforming with ALICE-Law", "Law に準拠する", "ALICE-Law 適合"):
+                      "conforming with ALICE-Law", "Law に準拠する", "ALICE-Law 適合",
+                      "fully conformant with ALICE Law", "complies with the Law", "satisfies every Law gate",
+                      "in compliance with the ALICE-Law", "Law 準拠済み"):
             self.assertEqual(glrb.outside_claims(claim), [1], claim)
         for prose in ("IEEE 準拠", "メモリ適合性", "a conformance claim", "`alice-law-conformance.toml`",
+                      "IEEE compliant", "complies with IEEE 754", "conforms to the spec", "a law of cooling gate",
                       "G15", "G0", "G21", "law of cooling"):
             self.assertEqual(glrb.outside_claims(prose), [], prose)
 
@@ -275,6 +315,15 @@ class Check(Base):
         self.write_and_commit()
         commit(self.law, {"e2e/golden/run.digest": "ef" * 32 + "\n"})  # the next revision re-blesses
         self.assertEqual(self.check()[0], 0)
+
+    def test_a_pin_off_the_law_main_line_is_red(self):
+        git(self.law, "checkout", "-q", "-b", "side")
+        self.sha = commit(self.law, {"e2e/golden/run.digest": "ef" * 32 + "\n"})
+        git(self.law, "checkout", "-q", "-")
+        self.write_and_commit()
+        rc, out = self.check()
+        self.assertEqual(rc, 1, out)
+        self.assertIn(f"the pinned ALICE-Law revision {self.sha[:12]} is not on HEAD", out)
 
     def test_an_unknown_pin_is_an_input_error(self):
         self.write_and_commit()

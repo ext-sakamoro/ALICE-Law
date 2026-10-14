@@ -30,7 +30,10 @@ crate with no manifest, is shown as not declared, never as pass.
 
 Outside the markers, `check` also reports conformance claims written by hand (a
 closed list of words, code fences and links to docs/CONFORMANCE.md ignored); with
-`--lint error` they fail the check.
+`--lint error` they fail the check. `write` refuses a README without a License
+heading to place a new block before (nothing is written), and refuses while the
+crate's Cargo.toml or manifest have uncommitted changes. Python 3.11 or later
+(tomllib).
 """
 from __future__ import annotations
 
@@ -116,7 +119,7 @@ def resolve(repo: str, rev: str) -> str:
 
 def cell(text: str) -> str:
     """one table cell: one line, `|` escaped, cut at a word boundary"""
-    t = " ".join(str(text).split()).replace("|", "\\|")
+    t = " ".join(re.sub(r"<[^<>]*>", " ", str(text)).split()).replace("|", "\\|")  # one inert line
     if len(t) > NOTE_LEN:
         t = t[:NOTE_LEN].rsplit(" ", 1)[0] + " …"
     return t
@@ -150,7 +153,10 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
         "version": entry.get("version", "?"), "state": entry.get("state", "?"),
         "law_dependency": entry.get("law-dependency", True), "det_math": dm, "semantics": sid.group(1),
         "e2e_req": req, "digest": golden.strip(), "manifest_path": entry.get("manifest-path", "Cargo.toml"),
-        "arches": "macos-15-intel" in workflow and "macos-15" in workflow,
+        # the job that requires the two digests to be equal, and both runners named whole
+        "arches": (bool(re.search(r"^\s+digest-compare:\s*$", workflow, re.M))
+                   and bool(re.search(r"runner:\s*macos-15\s*$", workflow, re.M))
+                   and bool(re.search(r"runner:\s*macos-15-intel\s*$", workflow, re.M))),
         "gates": [(g["id"], g["name"]) for g in gates],
     }
 
@@ -162,19 +168,53 @@ def crate_facts(repo: str, rev: str, manifest_path: str = "Cargo.toml") -> dict:
     if cargo is None:
         raise InputError(f"{repo}: no {manifest_path} at {rev}")
     data = tomllib.loads(cargo)
-    dm = data.get("dependencies", {}).get("alice-det-math")
+    tables = [data.get("dependencies", {})] + [t.get("dependencies", {}) for t in data.get("target", {}).values()]
+    dm = None
+    for table in tables:
+        for key, spec in table.items():
+            package = spec.get("package", key) if isinstance(spec, dict) else key
+            if package == "alice-det-math":  # also a renamed or target-specific dependency
+                dm = spec
+                break
+        if dm is not None:
+            break
     if isinstance(dm, dict) and dm.get("workspace"):
         root = show(repo, rev, "Cargo.toml")
         dm = tomllib.loads(root or "").get("workspace", {}).get("dependencies", {}).get("alice-det-math")
     if isinstance(dm, dict):
         dm = dm.get("version")
-    features = sorted(k for k in data.get("features", {}) if k != "default")
+    declared = data.get("features", {})
+    features = {k for k in declared if k != "default"}
+    # an optional dependency is a feature of its own unless a feature names it as `dep:<name>`
+    named = {v[4:] for values in declared.values() for v in values if isinstance(v, str) and v.startswith("dep:")}
+    for table in tables:
+        for key, spec in table.items():
+            if isinstance(spec, dict) and spec.get("optional") and key not in named:
+                features.add(key)
+    features = sorted(features)
     text = show(repo, rev, MANIFEST)
     manifest = tomllib.loads(text) if text is not None else None
     return {"det_math": dm, "features": features, "manifest": manifest}
 
 
-def gate_rows(manifest: dict | None, gates: list) -> list[tuple[str, str, str]]:
+PATH_TOKEN_RE = re.compile(r"^[\w.\-/]*(?:/|\.(?:rs|toml|py|yml|yaml|md|sh|txt|json))$")
+
+
+def missing_evidence(repo: str, rev: str, evidence: list) -> list[str]:
+    """the evidence entries that name a path (their first word has a `/` or a file extension) not at rev"""
+    out = []
+    for e in evidence:
+        token = str(e).split(" ", 1)[0]
+        if PATH_TOKEN_RE.match(token) and show_exists(repo, rev, token.rstrip("/")) is False:
+            out.append(token)
+    return out
+
+
+def show_exists(repo: str, rev: str, path: str) -> bool:
+    return subprocess.run(["git", "-C", repo, "cat-file", "-e", f"{rev}:{path}"], capture_output=True).returncode == 0
+
+
+def gate_rows(manifest: dict | None, gates: list, repo: str = "", rev: str = "") -> list[tuple[str, str, str]]:
     rows = []
     for gid, name in gates:
         e = (manifest or {}).get(gid)
@@ -186,13 +226,16 @@ def gate_rows(manifest: dict | None, gates: list) -> list[tuple[str, str, str]]:
             raise InputError(f"{MANIFEST} {gid}: status {status!r} is not one of {STATUSES}")
         if status == "pass" and not e.get("evidence"):
             raise InputError(f"{MANIFEST} {gid}: pass without evidence")
+        gone = missing_evidence(repo, rev, e.get("evidence", [])) if repo else []
+        if gone:
+            raise InputError(f"{MANIFEST} {gid}: evidence names paths that are not in the crate: {gone}")
         if status != "pass" and not str(e.get("note", "")).strip():
             raise InputError(f"{MANIFEST} {gid}: {status} without a note")
         rows.append((f"{gid} {name}", status, cell(e.get("note", ""))))
     return rows
 
 
-def feature_rows(manifest: dict | None, features: list[str]) -> list[tuple[str, str, str]]:
+def feature_rows(manifest: dict | None, features: list[str], repo: str = "", rev: str = "") -> list[tuple[str, str, str]]:
     declared = (manifest or {}).get("features", {})
     rows = []
     for f in features:
@@ -202,6 +245,9 @@ def feature_rows(manifest: dict | None, features: list[str]) -> list[tuple[str, 
             continue
         if e["guarantee"] == "inside" and not e.get("evidence"):
             raise InputError(f"{MANIFEST} features.{f}: inside the guarantee without evidence")
+        gone = missing_evidence(repo, rev, e.get("evidence", [])) if repo else []
+        if gone:
+            raise InputError(f"{MANIFEST} features.{f}: evidence names paths that are not in the crate: {gone}")
         rows.append((f"`{f}`", e["guarantee"], cell(e.get("note", ""))))
     unknown = sorted(set(declared) - set(features))
     if unknown:
@@ -227,9 +273,9 @@ def render(law: str, law_rev: str, crate: str, repo: str, crate_rev: str, lang: 
     if cf["manifest"] is None:
         out += [t["no_manifest"], ""]
     out += [t["gate_h"], "|---|---|---|"]
-    out += [f"| {g} | {st[s]} | {n} |" for g, s, n in gate_rows(cf["manifest"], lf["gates"])]
+    out += [f"| {g} | {st[s]} | {n} |" for g, s, n in gate_rows(cf["manifest"], lf["gates"], repo, crate_rev)]
     out += ["", t["feat"], ""]
-    frows = feature_rows(cf["manifest"], cf["features"])
+    frows = feature_rows(cf["manifest"], cf["features"], repo, crate_rev)
     if frows:
         out += [t["feat_h"], "|---|---|---|"] + [f"| {f} | {st[s]} | {n} |" for f, s, n in frows]
     else:
@@ -252,10 +298,13 @@ def blocks(text: str) -> list[tuple[str, str]]:
 # hand-written conformance claims outside the block: a closed list (a gate id, "Law-conformant" and its forms,
 # "conforms to the Law", "Law に準拠 / 適合"); the words alone are not claims ("IEEE 準拠", "a conformance
 # claim", a file named alice-law-conformance.toml), measured on the chain READMEs before this list was fixed
+_LAW = r"(?:the\s+)?(?:ALICE[- ])?Law\b"
 CLAIM_RE = re.compile(r"\bG(?:1[0-4]|[1-9])\b"
-                      r"|\b(?:ALICE-)?Law[- ](?:conformant|conforming|compliant)\b"
-                      r"|\bconform(?:s|ing|ant)? (?:to|with) (?:the )?(?:ALICE-)?Law\b"
-                      r"|(?:ALICE-)?Law\s*(?:に|へ)?\s*(?:準拠|適合)", re.I)
+                      r"|\b(?:ALICE[- ])?Law[- ](?:conformant|conforming|compliant)\b"
+                      r"|\bLaw\s+gates?\b"
+                      r"|\bconform(?:s|ing|ant)?\s+(?:to|with)\s+" + _LAW +
+                      r"|\bcompl(?:y|ies|iant|iance)\s+with\s+" + _LAW +
+                      r"|(?:ALICE[- ])?Law\s*(?:に|へ)?\s*(?:準拠|適合)", re.I)
 
 
 def outside_claims(text: str) -> list[int]:
@@ -274,8 +323,14 @@ def outside_claims(text: str) -> list[int]:
     return hits
 
 
-def check(law: str, crate: str, repo: str, crate_rev: str, lint: str) -> int:
+def on_main(law: str, sha: str, main: str) -> bool:
+    return subprocess.run(["git", "-C", law, "merge-base", "--is-ancestor", sha, main],
+                          capture_output=True).returncode == 0
+
+
+def check(law: str, crate: str, repo: str, crate_rev: str, lint: str, law_main: str = "origin/main") -> int:
     compared, problems, pins = 0, [], set()
+    resolve(law, law_main)
     for lang, name in README.items():
         text = show(repo, crate_rev, name)
         if text is None:
@@ -287,6 +342,8 @@ def check(law: str, crate: str, repo: str, crate_rev: str, lint: str) -> int:
             continue
         pin, got = found[0]
         pins.add(pin)
+        if not on_main(law, resolve(law, pin), law_main):
+            problems.append(f"{name}: the pinned ALICE-Law revision {pin[:12]} is not on {law_main}")
         want = render(law, pin, crate, repo, crate_rev, lang)
         compared += 1
         if got != want:
@@ -311,6 +368,12 @@ def check(law: str, crate: str, repo: str, crate_rev: str, lint: str) -> int:
 
 
 def write(law: str, law_rev: str, crate: str, repo: str) -> int:
+    # the block is rendered from the committed inputs: refuse while they have uncommitted changes
+    inputs = [law_facts(law, resolve(law, law_rev), crate)["manifest_path"], MANIFEST]
+    dirty = subprocess.run(["git", "-C", repo, "status", "--porcelain", "--", *inputs], capture_output=True,
+                           text=True).stdout.strip()
+    if dirty:
+        raise InputError(f"{repo}: commit {', '.join(inputs)} first (the block is generated from the commit)")
     for lang, name in README.items():
         path = Path(repo, name)
         if not path.exists():
@@ -349,6 +412,7 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--lang", choices=sorted(README), required=True)
         if name == "check":
             p.add_argument("--lint", choices=("warn", "error"), default="warn")
+            p.add_argument("--law-main", default="origin/main", help="the pin must be on this ALICE-Law ref")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "render":
@@ -356,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.cmd == "write":
             return write(a.law, a.law_ref, a.crate, a.crate_repo)
-        return check(a.law, a.crate, a.crate_repo, a.crate_ref, a.lint)
+        return check(a.law, a.crate, a.crate_repo, a.crate_ref, a.lint, a.law_main)
     except (InputError, tomllib.TOMLDecodeError, UnicodeDecodeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
