@@ -76,7 +76,7 @@ consumer-expected-failure = [{ features = ["python"], expect = { code = "E0308",
 
 [crate.alice-physics]
 version = "3.0.1"
-state = "planned"
+state = "prepared"
 order = 6
 repo = "ALICE-Physics"
 consumer-features = [["analytics", "ffi", "gpu-solver-bridge", "neural", "parallel", "privacy-crypto", "replay", "simd", "std"], ["std", "wasm"]]
@@ -353,7 +353,7 @@ law-dependency = false
 # (1cc1b09 まで) 公開済みの 0.1.0 は alice-lol ^0.3 を要求するので、alice-lol 0.3.0 の yank の前に
 # 公開する この repository は alice-kinematics を引かない
 version = "0.2.1"
-state = "planned"
+state = "prepared"
 order = 14
 repo = "ALICE-Kinematics"
 law-dependency = false
