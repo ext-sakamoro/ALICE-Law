@@ -893,6 +893,7 @@ def git_binaries(repo: str, ref: str, paths: list[str]) -> set[str]:
 
 
 SKIPPED: list[str] = []
+APPROVALS: list[str] = []  # reviewed settings changes and the commit that approved each
 
 
 def scan_tree(repo: str, ref: str) -> tuple[list[str], int]:
@@ -973,7 +974,7 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                     ["git", "-C", repo, "merge-base", "--is-ancestor", commit, approver],
                     capture_output=True).returncode == 0:
                 # reviewed: named in the run's output, so a reader sees which commit approved which change
-                SKIPPED.append(f"config change {short} ({', '.join(keys) or 'file'}) approved by {approver[:12]}")
+                APPROVALS.append(f"config change {short} ({', '.join(keys) or 'file'}) approved by {approver[:12]}")
             else:
                 findings.append(f"commit {short} {REPO_CONFIG}: policy config changed ({', '.join(keys) or 'file'})")
         gitlinks = {l.split("\t", 1)[1] for l in git(repo, "diff-tree", "--root", "--no-commit-id", "-r",
@@ -1073,6 +1074,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     CLASS_USED.clear()
     SKIPPED.clear()
+    APPROVALS.clear()
     if a.suggest_allow is not None:
         return suggest_allow(a.repo, a.suggest_allow[0], a.suggest_allow[1])
     name = a.repo_name or repo_name(a.repo)
@@ -1115,12 +1117,10 @@ def main(argv: list[str] | None = None) -> int:
         settings.append(f"upstream fork at {CONFIG['upstream-base'][:12]}")
     if settings:
         print(f"public text: {REPO_CONFIG}: " + "; ".join(settings))
-    approvals = [x for x in SKIPPED if x.startswith("config change ")]
-    unread = [x for x in SKIPPED if not x.startswith("config change ")]
-    for a_line in approvals:
+    for a_line in APPROVALS:
         print(f"public text: {a_line}")
-    if unread:
-        print(f"public text: not read: {len(unread)} entries (first: {unread[0]})")
+    if SKIPPED:
+        print(f"public text: not read: {len(SKIPPED)} entries (first: {SKIPPED[0]})")
     if not zstd_available():
         print(f"public text: Python {sys.version_info.major}.{sys.version_info.minor} has no zstd reader: "
               f"a zstd stream is an unscanned container (Python 3.14 reads it)")
