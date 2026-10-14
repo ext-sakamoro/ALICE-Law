@@ -783,6 +783,57 @@ class Fork(Base):
 
 
 
+class ConfigApproval(Base):
+    """a change of the settings file is reviewed when a later, separate commit records its hash in
+    the pin file; the change alone, or with its approval in the same commit, is a finding"""
+
+    CONFIG = '[public-text]\ntechnical-paths = ["tools/"]\n'
+
+    def pin(self, text: str) -> str:
+        return ("rev " + "0" * 40 + "\nsha256 " + "1" * 64 + "\nconfig-sha256 "
+                + hashlib.sha256(text.encode()).hexdigest() + "\n")
+
+    def head(self) -> str:
+        return git(self.repo, "rev-parse", "HEAD").strip()
+
+    def test_a_config_change_alone_is_a_finding(self):
+        commit(self.repo, {".public-text.toml": self.CONFIG})
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("policy config changed (technical-paths)", out)
+
+    def test_a_later_approval_makes_the_change_reviewed_in_every_range(self):
+        commit(self.repo, {".public-text.toml": self.CONFIG})
+        config_commit = self.head()
+        commit(self.repo, {".github/public-text-pin": self.pin(self.CONFIG)})
+        self.assertEqual(run(self.repo, "--range", f"{self.base}..HEAD")[0], 0)      # both commits
+        self.assertEqual(run(self.repo, "--range", f"{config_commit}..HEAD")[0], 0)  # the approval alone
+        self.assertEqual(run(self.repo, "--tree")[0], 0)
+
+    def test_a_change_and_its_approval_in_one_commit_is_a_finding(self):
+        commit(self.repo, {".public-text.toml": self.CONFIG, ".github/public-text-pin": self.pin(self.CONFIG)})
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("approved in the same commit", out)
+
+    def test_a_change_after_the_approval_needs_a_new_one(self):
+        commit(self.repo, {".public-text.toml": self.CONFIG})
+        commit(self.repo, {".github/public-text-pin": self.pin(self.CONFIG)})
+        commit(self.repo, {".public-text.toml": '[public-text]\ntechnical-paths = ["tools/", "x/"]\n'})
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("policy config changed", out)
+        self.assertIn("config-sha256 does not match", run(self.repo, "--tree")[1])
+
+    def test_an_approval_of_other_settings_does_not_count(self):
+        commit(self.repo, {".public-text.toml": self.CONFIG})
+        commit(self.repo, {".github/public-text-pin": self.pin("[public-text]\n")})
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("policy config changed", out)
+        self.assertIn("config-sha256 does not match", run(self.repo, "--tree")[1])
+
+
 class ClassAllow(Base):
     """a kind of finding allowed in a scope by the repository's settings, at a pinned count"""
 
