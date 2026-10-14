@@ -212,7 +212,7 @@ the result those gates protect, not a substitute for them.
 ### G7 — handshake-carries-id
 
 Whenever one Law-bearing crate's output is consumed as another's input over
-a boundary such as a saved file or a network call, the producer's G6
+a boundary within one exchange (a network call, a message, an FFI call, a file written and read in the same run), the producer's G6
 identifier travels with the value, and the consumer compares it against its
 own. A mismatch is a distinct, explicit error (not a silent fallback, not a
 generic parse failure) carrying both identifiers, so the two sides of a
@@ -235,7 +235,11 @@ compiles as a separate instance for the host, possibly with other features,
 and which reaches the target binary as source text) still carries the
 per-value identifier and returns the distinct error.
 
-**Claim.** A Law-bearing value crossing a crate boundary is checked against the producer's identifier: at every boundary that erases the Rust type (serialized bytes, a file, a network message, FFI / C ABI, wasm and JavaScript, Python bindings, `dyn Any`, a registry of trait objects, a value computed at build time by `build.rs` or a procedural macro) the value carries the producer's G6 identifier and the receiving function compares it, returning a dedicated error variant that names both identifiers; a value passed in memory as a concrete Rust type needs no per-value identifier (see the reason above).
+A durable form read back later, possibly by another release of the reader (a saved file, a database
+row, a wire format meant to be stored), is G8's, not G7's: there the reader compares against the
+identifier recorded when the value was written, by G8's rule, not by equality with its own G6.
+
+**Claim.** A Law-bearing value crossing a crate boundary is checked against the producer's identifier: at every boundary that erases the Rust type (serialized bytes or a file within one exchange, a network message, FFI / C ABI, wasm and JavaScript, Python bindings, `dyn Any`, a registry of trait objects, a value computed at build time by `build.rs` or a procedural macro) the value carries the producer's G6 identifier and the receiving function compares it, returning a dedicated error variant that names both identifiers; a value passed in memory as a concrete Rust type needs no per-value identifier (see the reason above).
 
 **Evidence for `pass`.** the list of the crate's type-erasing boundaries that receive another Law-bearing crate's values (an empty list is the evidence that this part does not apply); for each, the error variant (two identifiers) and a test feeding a mismatched identifier.
 
@@ -252,10 +256,16 @@ format, a database row, a wire format meant to be read back later), that
 persisted form carries its own identifier, separate from G6's in-process one:
 a value read back after a crate upgrade is compared against the identifier
 recorded when it was written, not against the identifier of whichever crate
-version happens to be reading it now. This identifier is about the meaning
+version happens to be reading it now. The reader accepts the stored
+identifier when it is the reader's own or one the reader can verify as an
+earlier identifier with the same bits on everything it covered (for the
+arithmetic: `alice_det_math::check_semantics` returning `Verified` or
+`VerifiedPrevious`); any other identifier is the explicit error naming both.
+This is the rule for a saved file read back later; G7's equality applies only
+within one exchange. This identifier is about the meaning
 of the stored bytes, not about which platform produced them.
 
-**Claim.** Every durable format the crate writes Law-bearing values in carries an identifier of the meaning of the stored bytes, and the reader compares the stored identifier, not its own build's.
+**Claim.** Every durable format the crate writes Law-bearing values in carries an identifier of the meaning of the stored bytes, and the reader compares the stored identifier, not its own build's: it accepts its own identifier or a verified earlier one (`check_semantics`), and returns the explicit error for any other.
 
 **Evidence for `pass`.** the list of the crate's encode / write functions; the identifier field in each format; a round-trip test that reads a value written with another identifier and gets the mismatch.
 
@@ -484,6 +494,14 @@ neutral wording included ("not yet checked against ALICE-Law"), except a line
 that is only a link to this file whose link text makes no claim; the word "Law"
 alone is the crate's own noun and is a finding only next to a claim word. The
 check reads every line outside the block and the code fences.
+
+### G7 and G8 for stored files (2026-10-15)
+
+G7 named "a saved file" as a boundary where the consumer compares against its own G6 identifier, and
+G8 required a value read back later to be compared against the identifier recorded when it was
+written; for a file read back by another release the two disagreed. G7 now covers boundaries within
+one exchange, and a durable form read back later is G8's, whose reader accepts its own identifier or a
+verified earlier one (`check_semantics`).
 
 ## Definition changes (2026-10-14)
 
