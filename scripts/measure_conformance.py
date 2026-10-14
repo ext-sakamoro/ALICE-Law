@@ -24,7 +24,11 @@ from pathlib import Path
 
 CHAIN = ["ALICE-DetMath", "ALICE-Zip", "ALICE-Analytics", "ALICE-DB", "ALICE-Physics", "ALICE-SDF",
          "ALICE-Edge", "ALICE-LOL"]
-CLOCK_RNG = ("SystemTime::now", "Instant::now", "Uuid::new_v4", "thread_rng", "rand::random", "from_entropy")
+# run-varying sources, matched as text (a lexical list: a source spelled another way is not seen,
+# so "no use" means none of these forms, not none at all)
+CLOCK_RNG = ("SystemTime::now", "Instant::now", "Utc::now", "Local::now", "Uuid::new_v4", "Uuid::now_v7",
+             "thread_rng", "rand::rng()", "rand::random", "from_entropy", "from_os_rng", "OsRng", "getrandom",
+             "fastrand::", "RandomState")
 
 
 class Repo:
@@ -145,12 +149,13 @@ def measure(repo: Repo, banned: set[str]) -> dict[str, str]:
 
     # G10: clock / RNG banned in a clippy list, or present in library code
     banned_paths = set().union(*[d.get("paths", set()) for d in lists.values()]) if lists else set()
-    lint = sorted(p for p in banned_paths if any(c.split("::")[-1] in p for c in CLOCK_RNG))
+    lint = sorted(p for p in banned_paths if any(c.split("::")[-1].rstrip("()") in p for c in CLOCK_RNG if c.split("::")[-1]))
     lib = [f for f in src if "/bin/" not in f"/{f}" and not f.endswith("/main.rs")]
     uses = [hit for c in CLOCK_RNG for hit in repo.grep(c, lib)]
+    scan = f"lexical scan of {len(CLOCK_RNG)} forms"
     cells["G10"] = (f"lint bans {', '.join(lint)}" if lint else "no lint") + \
-                   (f"; {len(uses)} uses in library sources, cfg(test) included, audit (first {uses[0]})" if uses
-                    else "; no use in library sources")
+                   (f"; {len(uses)} uses in library sources ({scan}, cfg(test) included, audit; first {uses[0]})"
+                    if uses else f"; none of the forms in library sources ({scan})")
 
     # G12: CI runs ALICE-Law's public_text_check
     cells["G12"] = "public_text_check in CI" if "public_text_check" in wf_text else "not found"

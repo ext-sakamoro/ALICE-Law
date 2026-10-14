@@ -72,6 +72,15 @@ class Measure(unittest.TestCase):
         self.assertIn("1 uses in library sources", c["G10"])
         self.assertIn("lint bans std::time::SystemTime::now", self.cells({"clippy.toml": CLIPPY, "src/lib.rs": ""})["G10"])
 
+    def test_g10_sees_each_listed_form_in_a_workspace_member(self):
+        for form in mc.CLOCK_RNG:
+            c = self.cells({"member/src/key.rs": f"fn f() {{ let _ = {form}; }}\n"})
+            self.assertIn("1 uses in library sources", c["G10"], form)
+        none = self.cells({"src/lib.rs": "fn f() {}\n"})["G10"]
+        self.assertIn(f"none of the forms in library sources (lexical scan of {len(mc.CLOCK_RNG)} forms)", none)
+        for form in ("Utc::now", "OsRng", "rand::rng()", "getrandom", "Uuid::now_v7"):
+            self.assertIn(form, mc.CLOCK_RNG)
+
     def test_g14_tells_build_configuration_from_a_workflow_leg(self):
         c = self.cells({".cargo/config.toml": '[build]\nrustflags = ["-C", "target-cpu=native"]\n', "src/lib.rs": ""})
         self.assertIn("flag in build configuration .cargo/config.toml", c["G14"])
