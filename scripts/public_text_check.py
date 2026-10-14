@@ -43,10 +43,14 @@ def words(*alts: str) -> str:
 
 FORBIDDEN = [
     ("agent process", re.compile(
-                                 # a programming term is not the process: an identifier (`max_workers`,
-                                 # `worker_id`) and a thread ("worker thread", "worker threads")
-                                 r"(?<![A-Za-z_])workers?(?![A-Za-z_])(?!\s+threads?(?![A-Za-z]))|"
-                                 + words(r"subagents?", r"multi[- ]?agents?", r"skills?")
+                                 # a programming term is not the process: the pool-size arguments of
+                                 # Python's executors and data loaders (a closed list) and a thread
+                                 # ("worker thread(s)"); any other identifier stays a finding
+                                 # (any case, as a word; not inside an identifier such as `SKILL_DIR`, not
+                                 # the Agent Skills file name `SKILL.md`, not the product "Cloudflare Workers")
+                                 r"(?<![A-Za-z])(?<!max_)(?<!num_)(?<!n_)(?<!Cloudflare )(?i:workers?)(?![A-Za-z])"
+                                 r"(?!\s+(?i:threads?)(?![A-Za-z]))|"
+                                 r"(?<![A-Za-z_])(?i:subagents?|multi[- ]?agents?|skills?)(?![A-Za-z_])(?<!SKILL(?=\.md))"
                                  # `git worktree add` is a command, not a description of how the work was done; so is
                                  # the same subcommand as an argument list (`[*git_argv, "worktree", "add", ...]`): the
                                  # quoted word followed by a quoted worktree subcommand
@@ -54,7 +58,7 @@ FORBIDDEN = [
                                  + r"(?:add|list|lock|move|prune|remove|repair|unlock)[\"'])" + r"(?:worktrees?)" + Z
                                  + r"|ワーカー|マルチエージェント|エージェント|調停役|並走\s*session|他\s*session|session\s*名|この\s*(?:session|セッション)"
                                  # the same in English prose ("This session's tooling", "asked in chat")
-                                 + r"|(?<![A-Za-z])(?:[Tt]his\s+session|in\s+chat)(?![A-Za-z])")),
+                                 + r"|(?<![A-Za-z])(?i:this\s+session|in\s+chat)(?![A-Za-z])")),
     # "session" as a unit of the work: glued after Japanese ("次 session", "別 session" in a
     # table cell), at the start of a line or heading followed by Japanese ("Session 分割案"),
     # "multi-session", and a lettered session ("Session A (~1h)"); "checkout session 作成" or
