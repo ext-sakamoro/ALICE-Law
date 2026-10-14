@@ -346,6 +346,18 @@ CLAIM_RE = re.compile(r"\bG(?:1[0-4]|[1-9])\b"
                       r"|(?:ALICE[- ])?Law\s*(?:に|へ)?\s*(?:準拠|適合)", re.I)
 
 
+# in a line that names the Law or the gate definitions, these are claims too ("Fully conformant",
+# "passes every ALICE-Law conformance gate", "all gates pass")
+CONTEXT_RE = re.compile(r"\bLaw\b|CONFORMANCE\.md", re.I)
+CONTEXT_CLAIM_RE = re.compile(r"\b(?:conformant|conforming|compliant)\b"
+                              r"|\bpass(?:es|ed|ing)?\b[^.]{0,60}?\bgates?\b"
+                              r"|\b(?:all|every|each)\s+(?:\w+\s+){0,3}gates?\b[^.]{0,30}?\bpass", re.I)
+
+
+def claim(text: str, context: str) -> bool:
+    return bool(CLAIM_RE.search(text) or (CONTEXT_RE.search(context) and CONTEXT_CLAIM_RE.search(text)))
+
+
 # a line that is only a link to the gate definitions ("- [Conformance](…/docs/CONFORMANCE.md#g12)"):
 # its target (an anchor such as #g12) is not a claim, its text still is checked
 LINK_ONLY_RE = re.compile(r"\s*(?:[-*+]\s+)?\[([^\]]*)\]\([^)\s]*CONFORMANCE\.md(?:#[^)\s]*)?\)\s*")
@@ -363,7 +375,7 @@ def outside_claims(text: str) -> list[int]:
                 fence = not fence
             elif not fence:
                 link = LINK_ONLY_RE.fullmatch(line)
-                if CLAIM_RE.search(link.group(1) if link else line):
+                if claim(link.group(1) if link else line, line):
                     hits.append(n)
         if line == END:
             inside = False
