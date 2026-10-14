@@ -43,8 +43,11 @@ def words(*alts: str) -> str:
 
 FORBIDDEN = [
     ("agent process", re.compile(words(r"workers?", r"subagents?", r"multi[- ]?agents?", r"skills?")
-                                 # `git worktree add` is a command, not a description of how the work was done
-                                 + r"|(?<!git )" + words(r"worktrees?")
+                                 # `git worktree add` is a command, not a description of how the work was done; so is
+                                 # the same subcommand as an argument list (`[*git_argv, "worktree", "add", ...]`): the
+                                 # quoted word followed by a quoted worktree subcommand
+                                 + r"|(?<!git )" + A + r"(?!(?<=[\"'])worktree[\"']\s*,\s*[\"']"
+                                 + r"(?:add|list|lock|move|prune|remove|repair|unlock)[\"'])" + r"(?:worktrees?)" + Z
                                  + r"|ワーカー|マルチエージェント|エージェント|調停役|並走\s*session|他\s*session|session\s*名|この\s*(?:session|セッション)")),
     # "session" as a unit of the work: glued after Japanese ("次 session", "別 session" in a
     # table cell), at the start of a line or heading followed by Japanese ("Session 分割案"),

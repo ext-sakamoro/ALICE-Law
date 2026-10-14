@@ -109,6 +109,19 @@ class Tree(Base):
         commit(self.repo, {"ci.yml": "run: git worktree add /tmp/base main\n", "b.md": "the memory footprint\n"})
         self.assertEqual(run(self.repo, "--tree")[0], 0)
 
+    def test_the_git_subcommand_as_an_argument_list_is_not_a_finding(self):
+        for line in ('subprocess.run([*self.git_argv, "worktree", "remove", "--force", wt])',
+                     "checkout_git('worktree', 'add', '-q', '--detach', wt, sha)",
+                     'git(self.r.work, "worktree", "list", "--porcelain")'):
+            self.assertEqual(ptc.kinds(line), [], line)
+        for line in ('msg = "found by the worker"',               # another word in a string
+                     'note = "the worktree", "was removed"',      # not followed by a subcommand
+                     'args = [worktree, "add"]',                  # not quoted
+                     'labels = ["worktree", "branch"]',           # followed by a word that is no subcommand
+                     'title = "a worktree", "add"',               # a phrase, not the bare argument
+                     'subprocess.run(["git", "worktree", "add"]); msg = "a worker did it"'):
+            self.assertIn("agent process", ptc.kinds(line), line)
+
     def test_the_checker_and_its_tests_are_exempt(self):
         commit(self.repo, {"scripts/public_text_check.py": "worker Backlog\n",
                            "scripts/test_public_text_check.py": "worker\n"})
