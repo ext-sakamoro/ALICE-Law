@@ -338,6 +338,19 @@ class Claims(unittest.TestCase):
                       "G15", "G0", "G21", "law of cooling"):
             self.assertEqual(glrb.outside_claims(prose), [], prose)
 
+    def test_only_a_link_only_line_to_the_gate_definitions_has_its_target_ignored(self):
+        url = "https://github.com/ext-sakamoro/ALICE-Law/blob/main/docs/CONFORMANCE.md"
+        for line in (f"[Conformance]({url}#g12)", f"- [gate definitions]({url})", f"* [docs/CONFORMANCE.md]({url}#g1)  "):
+            self.assertEqual(glrb.outside_claims(line), [], line)
+        for line in (f"[passes every Law gate]({url})",       # the link text is a claim
+                     f"- [G12]({url}#g12)",                   # so is a gate as link text
+                     f"See [the gates]({url}) for G1.",       # text outside the link
+                     f"G12 pass, see CONFORMANCE.md",         # a plain mention is no link
+                     f"[Conformance]({url}#g12) and [more]({url})",
+                     f"[Conformance](https://example.org/g12#G12)"):  # not the gate definitions
+            self.assertEqual(glrb.outside_claims(line), [1], line)
+        self.assertEqual(glrb.outside_claims("```\nG3 passes\n```\n"), [])  # a code fence stays skipped
+
 
 class Check(Base):
     def test_a_current_block_passes(self):
@@ -425,7 +438,8 @@ class Check(Base):
         commit(self.crate, {})
         rc, out = self.check()
         self.assertEqual(rc, 0, out)
-        self.assertIn("warning: README.md: conformance wording outside the block on lines [3, 13]", out)
+        # line 9 links the gate definitions but also says "for G1" outside the link: a claim
+        self.assertIn("warning: README.md: conformance wording outside the block on lines [3, 9, 13]", out)
         rc, out = self.check("--lint", "error")
         self.assertEqual(rc, 1, out)
 
