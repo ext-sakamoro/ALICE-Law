@@ -245,21 +245,19 @@ required-ci = [
 ]
 
 [crate.alice-lol]
-version = "0.4.0"
-state = "published"
+version = "0.4.1"
+state = "planned"
 order = 10
 repo = "ALICE-LOL"
 tag = "alice-lol-v{version}"
 manifest-path = "alice-lol/Cargo.toml"
-# 0.4.0 は macro 0.3.0 の公開の後 llm-bridge は alice-llm 2.0.0 の API (llama3::GrammarPrefix 等) を使い、
-# 要求を "2" に上げた版 (64a904b) と CHANGELOG に日付を入れた版 (4c86842) を含める (consumer build の
-# 全 feature は crates.io の alice-llm 2.0.0 で build する)
-# 公開済みの 0.3.0 の llm-bridge は crate の外の lol.gbnf を include_str! で読み、
-# package に無いので build できない (yank するかは 0.4.0 の公開後に判断する)
-must-contain = ["4c8684237d764272a4e11cd8384a3f60a9adf6a5"]
+# 0.4.1 は 0.4.0 に研究 Law の識別子 (ResearchLaw::law_id) を足した版で、CHANGELOG に日付を入れた
+# commit (c6d2efd) から公開する (互換、semver の検査は版の更新を要しない) consumer build の全 feature は
+# crates.io の alice-lol-macro 0.3.0 と alice-llm 2.0.0 で build する
+must-contain = ["c6d2efdf2472d335eff227f8fca07f42773bf31e"]
 changelog-has = [
-    "**破壊的変更:** `gridfinity_bin` / `gridfinity_bin_ex`",
-    "**識別子の変更:** `AuditLaw::law_id` は `x-metric` の式",
+    "`ResearchLaw::law_id(&semantics_id)` と `law_id::RESEARCH_LAW_KIND`",
+    "`alice-lol` の版を 0.4.1 にし",
 ]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-latest physics)", "Test (ubuntu-latest llm-bridge)", "Test (ubuntu-latest backend-parity)", "Test (ubuntu-latest roblox)"] },
