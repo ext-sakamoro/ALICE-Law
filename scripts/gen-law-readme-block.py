@@ -18,7 +18,8 @@ stale on its own; how far the pin is behind is reported here, not by the crate.
     gen-law-readme-block.py write  --law DIR --law-ref REV --crate NAME --crate-repo DIR
     gen-law-readme-block.py check  --law DIR --crate NAME --crate-repo DIR [--crate-ref REV] [--lint warn|error]
 
-`write` puts the block into README.md and README_JP.md of the crate checkout
+The Japanese README is README_JP.md or README_ja.md, whichever the repository has (both is an error).
+`write` puts the block into README.md and the Japanese README of the crate checkout
 (replacing the one there, or placing it before the License section). `check` reads
 both files at the crate ref: exit 0 when each has exactly one block equal to the
 block generated at its pinned revision, 1 when one is missing, differs or the files
@@ -50,6 +51,17 @@ MANIFEST = "alice-law-conformance.toml"
 STATUSES = ("pass", "fail-known", "unverified", "n/a")
 LEGACY = {"missing": "unverified"}  # read with a warning until the release-train manifests are rewritten
 README = {"en": "README.md", "ja": "README_JP.md"}
+# the Japanese README goes by one of these names in the release-train repositories
+JA_NAMES = ("README_JP.md", "README_ja.md")
+
+
+def readme_names(exists) -> dict[str, str]:
+    """{lang: file name}: README.md, and the one Japanese README present (README_JP.md when none is);
+    both Japanese names present is an input error"""
+    ja = [n for n in JA_NAMES if exists(n)]
+    if len(ja) > 1:
+        raise InputError(f"both {' and '.join(ja)} are present: keep one Japanese README")
+    return {"en": "README.md", "ja": ja[0] if ja else JA_NAMES[0]}
 LICENSE_HEADING = {"en": re.compile(r"^## License\b", re.M), "ja": re.compile(r"^## ライセンス", re.M)}
 NOTE_LEN = 160
 
@@ -358,7 +370,7 @@ def on_main(law: str, sha: str, main: str) -> bool:
 def check(law: str, crate: str, repo: str, crate_rev: str, lint: str, law_main: str = "origin/main") -> int:
     compared, problems, pins = 0, [], set()
     resolve(law, law_main)
-    for lang, name in README.items():
+    for lang, name in readme_names(lambda n: show(repo, crate_rev, n) is not None).items():
         text = show(repo, crate_rev, name)
         if text is None:
             problems.append(f"{name}: missing")
@@ -401,7 +413,7 @@ def write(law: str, law_rev: str, crate: str, repo: str) -> int:
                            text=True).stdout.strip()
     if dirty:
         raise InputError(f"{repo}: commit {', '.join(inputs)} first (the block is generated from the commit)")
-    for lang, name in README.items():
+    for lang, name in readme_names(lambda n: Path(repo, n).exists()).items():
         path = Path(repo, name)
         if not path.exists():
             raise InputError(f"{path}: missing (create it first)")

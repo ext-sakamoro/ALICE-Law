@@ -304,6 +304,22 @@ class Write(Base):
         self.assertEqual(run("write", "--law", str(self.law), "--law-ref", self.sha, "--crate", "alice-foo",
                              "--crate-repo", str(self.crate))[0], 2)
 
+    def test_the_japanese_readme_may_be_named_readme_ja(self):
+        git(self.crate, "mv", "README_JP.md", "README_ja.md")
+        git(self.crate, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "rename")
+        self.write_and_commit()
+        self.assertIn("## ALICE-Law との統合", (self.crate / "README_ja.md").read_text(encoding="utf-8"))
+        self.assertFalse((self.crate / "README_JP.md").exists())
+        rc, out = self.check()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("2 blocks compared", out)
+
+    def test_two_japanese_readmes_are_refused(self):
+        commit(self.crate, {"README_ja.md": README_JA})
+        self.assertEqual(run("write", "--law", str(self.law), "--law-ref", self.sha, "--crate", "alice-foo",
+                             "--crate-repo", str(self.crate))[0], 2)
+        self.assertEqual(self.check()[0], 2)
+
     def test_a_missing_japanese_readme_is_refused(self):
         (self.crate / "README_JP.md").unlink()
         self.assertEqual(run("write", "--law", str(self.law), "--law-ref", self.sha, "--crate", "alice-foo",
