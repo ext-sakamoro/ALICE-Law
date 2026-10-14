@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `release-train.toml`: alice-sync 0.6.1 (published) with `law-dependency = false`: the end-to-end workspace does not link it (it reaches the arithmetic only through its optional alice-physics feature); its next version must accept alice-physics 3; README.md names ALICE-Sync
 - `conformance/gates.toml` G1: `powi` stays pending and is banned by default (`default = "banned"`): a crate allowing it states the reason in its manifest (alice-det-math's `powi` covers `f32` only); the reason records the probe (11,352 points, 0 differences between aarch64 and x86_64 code translated to run on the same arm64 floating-point unit, so not evidence for real x86_64 hardware); a pending method must say its default; `scripts/measure_conformance.py` reports a default-banned method a clippy list does not ban apart from the banned ones
 - `scripts/public_text_check.py`: the process word for a background job is not counted inside an identifier (`max_` + its plural, an `_id` suffix) or before the word "thread(s)"; in prose ("a … did", "… 3", "found by the …") it stays a finding
 - `scripts/public_text_check.py`: two English phrases that refer to the current conversation ("[Tt]his" + the word for a work session, and "in" + "chat") are agent-process words (0 hits in the tracked files of the 8 release-train repositories before the change)
