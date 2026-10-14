@@ -8,6 +8,7 @@ import importlib.util
 import io
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -537,9 +538,74 @@ class Shapes(unittest.TestCase):
         for line in ("see ~/ALICE-LOL/README.md", "/Users/runner/work/x", "zorblat-notes alone", "~/zorblat-notes2/x"):
             self.assertNotIn("private path", ptc.kinds(line), line)
 
-    def test_the_private_repository_list_is_loaded_and_holds_only_hashes(self):
-        self.assertGreater(len(ptc.PRIVATE_REPO_HASHES), 0)
+    # the set as committed: its size and the SHA-256 of its sorted lines (a change of the set is a
+    # change of these two numbers)
+    PRIVATE_REPO_COUNT = 309
+    PRIVATE_REPO_DIGEST = "7a9cd0fba91b99ad95369451cc6b64e1406c15e640c7615723ce6d0981193167"
+
+    def standalone(self, source: str | None = None) -> Path:
+        """this checker copied alone into an empty directory (as a repository's CI fetches it)"""
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, True)
+        src = Path(ptc.__file__).read_text(encoding="utf-8")
+        (d / "public_text_check.py").write_text(src if source is None else source(src), encoding="utf-8")
+        self.assertEqual(sorted(x.name for x in d.iterdir()), ["public_text_check.py"])
+        return d
+
+    def fixture_repo(self, line: str) -> Path:
+        r = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, r, True)
+        (r / "NOTES.md").write_text(line + "\n", encoding="utf-8")
+        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+               "GIT_COMMITTER_EMAIL": "t@t"}
+        for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "fixture"]):
+            subprocess.run(["git", "-C", str(r), *cmd], check=True, env=env, capture_output=True)
+        return r
+
+    def run_standalone(self, d: Path, repo: Path) -> subprocess.CompletedProcess:
+        return subprocess.run([sys.executable, str(d / "public_text_check.py"), "--repo", str(repo),
+                               "--repo-name", "fixture", "--tree", "HEAD"], capture_output=True, text=True)
+
+    def test_the_private_repository_set_is_held_in_the_checker_itself(self):
+        d = self.standalone()
+        got = subprocess.run([sys.executable, "-c",
+                              "import hashlib, sys; sys.path.insert(0, sys.argv[1]); import public_text_check as p; "
+                              "h = sorted(p.PRIVATE_REPO_HASHES); "
+                              "print(len(h), hashlib.sha256('\\n'.join(h).encode()).hexdigest())", str(d)],
+                             capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(got, [str(self.PRIVATE_REPO_COUNT), self.PRIVATE_REPO_DIGEST])
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in ptc.PRIVATE_REPO_HASHES))
+        self.assertFalse((Path(ptc.__file__).parent / "public_text_private_repos.txt").exists())
+
+    def test_a_private_path_is_found_by_the_checker_copied_alone(self):
+        # the canary: one more name in the committed set, and a line with its home path, read by
+        # the checker copied alone (no file beside it)
+        h = hashlib.sha256(b"zorblat-notes").hexdigest()
+        marker = "PRIVATE_REPO_HASHES: frozenset[str] = frozenset({\n"
+        d = self.standalone(lambda s: s.replace(marker, marker + f'    "{h}",\n', 1))
+        r = self.run_standalone(d, self.fixture_repo("see ~/zorblat-notes/plan.md"))
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("NOTES.md:1: private path", r.stdout)
+        r = self.run_standalone(d, self.fixture_repo("see ~/ALICE-LOL/README.md"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_an_empty_private_set_is_refused(self):
+        # the mutant: the set emptied, so the private path check compares nothing
+        def empty(s: str) -> str:
+            start = s.index("PRIVATE_REPO_HASHES: frozenset[str] = frozenset({\n")
+            end = s.index("})\n", start)
+            return s[:start] + "PRIVATE_REPO_HASHES: frozenset[str] = frozenset({\n" + s[end:]
+        d = self.standalone(empty)
+        r = self.run_standalone(d, self.fixture_repo("see ~/zorblat-notes/plan.md"))
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("private-repository set of this check is empty", r.stderr)
+        saved = ptc.PRIVATE_REPO_HASHES
+        self.addCleanup(lambda: setattr(ptc, "PRIVATE_REPO_HASHES", saved))
+        ptc.PRIVATE_REPO_HASHES = frozenset()
+        repo = self.fixture_repo("x")
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(ptc.main(["--repo", str(repo), "--repo-name", "fixture", "--tree"]), 2)
+        self.assertIn("private-repository set of this check is empty", err.getvalue())
 
 
 class Binary(Base):

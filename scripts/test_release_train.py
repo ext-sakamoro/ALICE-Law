@@ -1399,6 +1399,21 @@ class PackageText(unittest.TestCase):
         self.assertEqual(n, 0)
         self.assertTrue(any("compared nothing" in p for p in problems))
 
+    def test_a_package_read_with_an_empty_private_set_is_refused(self):
+        load = rt.load_public_text
+
+        def emptied():
+            m = load()
+            m.PRIVATE_REPO_HASHES = frozenset()
+            return m
+        self.addCleanup(setattr, rt, "load_public_text", load)
+        rt.load_public_text = emptied
+        problems, n = rt.package_text_problems(crate_bytes("alice-zip", "0.10.0", {"Cargo.toml": b"x"}), "alice-zip",
+                                               "0.10.0", Path("."), "HEAD", None, "")
+        self.assertEqual(n, 0)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("private-repository set of this check is empty", problems[0])
+
 
 class WorkflowPublisher(unittest.TestCase):
     def problems(self, workflow: str, reviewers=lambda o, n: 0, owner_repo="o/r"):

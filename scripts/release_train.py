@@ -1204,6 +1204,9 @@ def package_text_problems(body: bytes, name: str, version: str, repo: Path, ref:
     repository's settings and allow-list (paths taken back to the repository: <manifest dir>/<path
     in the crate>); (problems, files read)"""
     ptc = load_public_text()
+    problem = ptc.private_sets_problem()
+    if problem:
+        return [f"{name} {version}: the package text check: {problem}"], 0
     ptc.CONFIG.update(ptc.load_config(str(repo), ref))
     ptc.ALLOW_STATE["allowed"] = dict(ptc.ALLOWED.get(repo_name, {})) if repo_name else {}
     ptc.ALLOW_STATE["used"] = {}
