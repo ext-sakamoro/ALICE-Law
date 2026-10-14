@@ -33,8 +33,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-main
-  cancel-in-progress: false
+  group: e2e-main-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   REPOSITORIES: ALICE-DetMath ALICE-Crypto ALICE-Zip ALICE-Analytics ALICE-DB ALICE-Physics ALICE-SDF ALICE-LOL ALICE-Edge ALICE-LLM
