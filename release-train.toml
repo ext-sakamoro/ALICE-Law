@@ -356,6 +356,7 @@ version = "0.2.1"
 state = "prepared"
 order = 14
 repo = "ALICE-Kinematics"
+tag = "alice-kinematics-v{version}"
 law-dependency = false
 must-contain = ["1cc1b09e085a2ff76f75fc3a49edb33a14d200cf"]
 changelog-has = [
