@@ -92,15 +92,40 @@ order = 4
 repo = "ALICE-Analytics"
 
 [crate.alice-db]
-# 0.5.0 は created_at を時計から読まず入力にした版 (DataSegment::new / StorageConfig の created_at、
-# main dec7eb5 まで) 未公開 本 repository の end to end は main mode で 0.5 を受け、published mode は
-# 0.5.0 の公開まで expected-failure.e2e-db-0-5 で解決できない (下) 公開の前に CHANGELOG に日付つきの
-# 見出しを入れ、consumer-expected-failure (until 0.4.1) が 0.5.0 で解消したかを測って直す
+# 0.5.0 は created_at を時計から読まず入力にし (DataSegment::new / StorageConfig の created_at)、読み戻す
+# 算術の識別子を check_semantics で受け (以前の検証済みの識別子を含む)、G13 / G10 の穴と law の索引を直した版
+# CHANGELOG に日付つきの [0.5.0] - 2026-10-14 を入れ、publish する .crate を include で限定し、設計メモの相互参照からローカル path を除いた DB main 9c83c07 から公開する 本 repository の
+# end to end は main mode で 0.5 を受け、published mode は 0.5.0 の公開まで expected-failure.e2e-db-0-5
+# で解決できない (下) consumer-expected-failure (until 0.4.1) は 0.5.0 の gate で測り直して直す
 version = "0.5.0"
-state = "planned"
+state = "prepared"
 order = 5
 repo = "ALICE-DB"
-must-contain = ["dec7eb5120f909d7d61f5b0477196e4063bfe29c"]
+must-contain = ["9c83c07ece2abce174d307d5a3c807a425894cda"]
+changelog-has = [
+    "`DataSegment::new` に 7 番目の引数 `created_at: u64` を追加",
+    "`scripts/tracked_binaries.py`",
+]
+required-ci = [
+    { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-24.04-arm)", "Test (ubuntu-latest)", "Test (windows-latest)"] },
+    { workflow = "CI", job = "Clippy (pedantic, -D warnings)" },
+    { workflow = "CI", job = "MSRV (rust-version = 1.87)" },
+    { workflow = "CI", job = "Feature powerset (cargo-hack, depth 2)" },
+    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
+    { workflow = "CI", job = "Python (maturin build + README example test)" },
+    { workflow = "CI", job = "Format" },
+    { workflow = "CI", job = "actionlint (workflow YAML)" },
+    { workflow = "Security & Hygiene", job = "cargo audit (RustSec advisories)" },
+    { workflow = "Security & Hygiene", job = "cargo-deny (licenses + advisories + bans + sources)" },
+    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
+    { workflow = "Security & Hygiene", job = "Stub / dbg guard (grep)" },
+    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_query_parse" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_serialize_roundtrip" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_index_lookup" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_law_record" },
+    { workflow = "Release profile", job = "Release goldens", legs = ["Release goldens (ubuntu-latest)", "Release goldens (macos-latest)"] },
+]
 consumer-features = [["analytics", "crypto", "ffi", "fs", "open-file-audit", "sdf"]]
 consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["python"]]
