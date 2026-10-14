@@ -473,6 +473,18 @@ meet. A feature the table does not list is not declared, and the README block
 generator refuses a feature marked `inside` without evidence, and a listed
 feature the crate does not have.
 
+### The README block
+
+A crate states its ALICE-Law status in one place: the block between
+`<!-- law-integration:begin law=<sha> -->` and `<!-- law-integration:end -->` in
+README.md and in the Japanese README, which `scripts/gen-law-readme-block.py`
+writes from the pinned revision of this repository and checks in the crate's
+CI. Outside the block a README does not name ALICE-Law or this file at all,
+neutral wording included ("not yet checked against ALICE-Law"), except a line
+that is only a link to this file whose link text makes no claim; the word "Law"
+alone is the crate's own noun and is a finding only next to a claim word. The
+check reads every line outside the block and the code fences.
+
 ## Definition changes (2026-10-14)
 
 Each gate above gained **Claim**, **Evidence for `pass`**, **Mutant**, **Look
