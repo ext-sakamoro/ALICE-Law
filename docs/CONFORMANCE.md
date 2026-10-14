@@ -432,6 +432,13 @@ The four statuses keep "not looked at" apart from "looked and unmet":
 A `pass` or `n/a` entry without `evidence` or without `mutant` is read as
 `unverified`: a generated view never shows it as met.
 
+A gate whose checker cannot see a form (a checker hole: a spelling, a path or
+a construct the check does not read) leaves the cell `unverified` for what it
+cannot see, not `pass`. `fail-known` requires a located violation: the file and
+line of the offending code; a suspicion without a site is `unverified`. A cell
+moves to `pass` when the missing check lands together with its canary (the
+mutant that the new check turns red).
+
 Transition: the earlier vocabulary had `missing` in place of the split between
 `fail-known` and `unverified`. Until the release-train crates' manifests are
 rewritten, `missing` is read as `unverified` with a warning; after that it is
