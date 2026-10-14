@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/measure_conformance.py`: G12 also follows a workflow's call of a repository script (one level) and counts it when that script runs ALICE-Law's text check (ALICE-Edge calls `scripts/public_text.sh`)
 - `scripts/measure_conformance.py`: the cargo `--release` flag is matched as a whole flag (not inside `--release-type`), so a semver-checks step is no longer read as a release test leg (G4/G5)
 - `conformance/gates.toml` G1: `powi` stays pending and is banned by default (`default = "banned"`): a crate allowing it states the reason in its manifest (alice-det-math's `powi` covers `f32` only); the reason records the probe (11,352 points, 0 differences between aarch64 and x86_64 code translated to run on the same arm64 floating-point unit, so not evidence for real x86_64 hardware); a pending method must say its default; `scripts/measure_conformance.py` reports a default-banned method a clippy list does not ban apart from the banned ones
 - `scripts/public_text_check.py`: the process word for a background job is not counted inside an identifier (`max_` + its plural, an `_id` suffix) or before the word "thread(s)"; in prose ("a … did", "… 3", "found by the …") it stays a finding
