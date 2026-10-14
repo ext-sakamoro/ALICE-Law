@@ -155,6 +155,28 @@ class Range(Base):
         self.assertEqual(run(self.repo, "--range", "nope..HEAD")[0], 2)
 
 
+class SubjectId(Base):
+    """an id-like token in brackets at the end of a commit subject"""
+
+    def test_a_bracketed_id_at_the_end_of_the_subject_is_a_finding(self):
+        for subject in ("fix: tighten the byte-identity oracle (70)", "docs: wording (fb)", "ci: gate ( 6e )"):
+            with self.subTest(subject=subject):
+                commit(self.repo, {"a.md": subject + "\n"}, message=subject)
+                code, out = run(self.repo, "--range", "HEAD~1..HEAD")
+                self.assertEqual(code, 1, out)
+                self.assertIn("message:1: session id", out)
+
+    def test_other_bracketed_endings_pass(self):
+        for subject in ("fix: the issue (#70)", "release (v0.7)", "speed up (x2)", "fix (700)", "note (70) in the middle"):
+            with self.subTest(subject=subject):
+                commit(self.repo, {"a.md": subject + "\n"}, message=subject)
+                self.assertEqual(run(self.repo, "--range", "HEAD~1..HEAD")[0], 0, subject)
+
+    def test_only_the_subject_line_is_read_for_this(self):
+        commit(self.repo, {"a.md": "y\n"}, message="fix: a\n\nmeasured 3 runs (70)")
+        self.assertEqual(run(self.repo, "--range", "HEAD~1..HEAD")[0], 0)
+
+
 class LedgerLabels(Base):
     """a row label of an internal list (F11, R2, C3, A1, B4) next to a word naming the list or its row"""
 
