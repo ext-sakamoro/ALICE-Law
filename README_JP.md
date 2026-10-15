@@ -152,8 +152,8 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-zip | 0.10.0 | published | 2 | ALICE-Zip | v0.10.0 |
 | alice-zip-cli | 3.1.0 | published | 3 | ALICE-Zip | alice-zip-cli-v3.1.0 |
 | alice-analytics | 0.6.0 | published | 4 | ALICE-Analytics | v0.6.0 |
-| alice-db | 0.5.1 | prepared | 5 | ALICE-DB | v0.5.1 |
-| alice-physics | 3.0.1 | published | 6 | ALICE-Physics | v3.0.1 |
+| alice-db | 0.5.1 | published | 5 | ALICE-DB | v0.5.1 |
+| alice-physics | 3.1.0 | planned | 6 | ALICE-Physics | v3.1.0 |
 | alice-sdf | 6.0.0 | published | 7 | ALICE-SDF | v6.0.0 |
 | alice-llm | 2.0.0 | published | 8 | ALICE-LLM | v2.0.0 |
 | alice-lol-macro | 0.3.0 | published | 9 | ALICE-LOL | alice-lol-macro-v0.3.0 |
@@ -168,7 +168,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 | step | 期限 | 理由 |
 |---|---|---|
-| dependency-consistency | alice-db 0.5.1 | alice-db 0.5.0 and alice-analytics 0.6.0 are published, while alice-physics 3.0.1 and alice-db 0.5.0 on crates.io accept only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). alice-edge 0.3.0 links alice-db 0.5.0 through its db feature; this repository and alice-physics 3.0.1 link alice-db 0.4.0. The release that retires each line: alice-db 0.5.0 requiring alice-analytics ^0.5 = alice-db 0.5.1 (DB main accepts >=0.5, <0.7); the two alice-physics 3.0.1 lines = the next Physics release (main accepts alice-db 0.5 and alice-analytics >=0.5, <0.7); this repository requiring alice-db 0.4 = moving this repository to alice-db 0.5; the two linked-at-2-versions lines and the alice-db 0.4.0 line = the next Physics release together with that move. Any other line still fails. |
+| dependency-consistency | alice-physics 3.1.0 | alice-db 0.5.1 and alice-analytics 0.6.0 are published, while alice-physics 3.0.1 on crates.io accepts only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). alice-edge 0.3.0 links alice-db 0.5.1 through its db feature; this repository and alice-physics 3.0.1 link alice-db 0.4.0, which links alice-analytics 0.5.0. The release that retires each line: the two alice-physics 3.0.1 lines = alice-physics 3.1.0 (main accepts alice-db 0.5 and alice-analytics >=0.5, <0.7); this repository requiring alice-db 0.4 = moving this repository to alice-db 0.5, in its own change right after alice-physics 3.1.0; the two linked-at-2-versions lines and the alice-db 0.4.0 line = alice-physics 3.1.0 together with that move. Any other line still fails. |
 
 ### alice-det-math の版ごとの end to end の run digest
 
