@@ -80,7 +80,8 @@ FORBIDDEN = [
                                  + r"(?:add|list|lock|move|prune|remove|repair|unlock)[\"'])" + r"(?:worktrees?)" + Z
                                  + r"|ワーカー|マルチエージェント|エージェント|調停役|並走\s*session|他\s*session|session\s*名|この\s*(?:session|セッション)"
                                  # the same in English prose ("This session's tooling", "asked in chat")
-                                 + r"|(?<![A-Za-z])(?i:this\s+session|in\s+chat)(?![A-Za-z])")),
+                                 # (not the start of an identifier: `chat_template`, `session_id`, `chat2`)
+                                 + r"|(?<![A-Za-z0-9_])(?i:this\s+session|in\s+chat)(?![A-Za-z0-9_])")),
     # "session" as a unit of the work: glued after Japanese ("次 session", "別 session" in a
     # table cell), at the start of a line or heading followed by Japanese ("Session 分割案"),
     # "multi-session", and a lettered session ("Session A (~1h)"); "checkout session 作成" or

@@ -77,6 +77,12 @@ jobs:
       - name: The README Status section is the generated one
         run: python3 scripts/gen_law_status.py --check
 
+      - name: Test the README parity checker
+        run: python3 scripts/test_readme_parity_check.py
+
+      - name: README.md and README_JP.md agree where a translation must not differ
+        run: python3 scripts/readme_parity_check.py
+
       - name: Test the README integration block generator
         run: python3 scripts/test_gen_law_readme_block.py
 

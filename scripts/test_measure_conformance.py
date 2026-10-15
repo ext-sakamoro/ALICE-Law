@@ -95,6 +95,16 @@ class Measure(unittest.TestCase):
         w = self.cells({".github/workflows/ci.yml": "env:\n  RUSTFLAGS: -C target-cpu=native\n", "src/lib.rs": ""})
         self.assertIn("no flag in build configuration", w["G14"])
         self.assertIn("(test leg or shipped build: audit)", w["G14"])
+        # a flag in a comment is not a flag: TOML and YAML `#`, Rust `//` and `/* */`
+        for files in ({".cargo/config.toml": '[build]\n# rustflags = ["-C", "target-cpu=native"]\n'},
+                      {"build.rs": 'fn main() {\n    // println!("cargo:rustc-env=X=-C target-cpu=native");\n}\n'},
+                      {"build.rs": 'fn main() {\n    /* fast-math was tried\n       here */\n}\n'}):
+            c = self.cells({**files, "src/lib.rs": ""})
+            self.assertIn("no flag in build configuration", c["G14"], files)
+        c = self.cells({".cargo/config.toml": '[build]\nrustflags = ["-C", "target-cpu=native"]  # for speed\n', "src/lib.rs": ""})
+        self.assertIn("flag in build configuration .cargo/config.toml", c["G14"])
+        w = self.cells({".github/workflows/ci.yml": "env:\n  # RUSTFLAGS: -C target-cpu=native\n", "src/lib.rs": ""})
+        self.assertNotIn("flag in workflow", w["G14"])
 
     def test_g5_finds_the_release_leg_on_an_aarch64_runner(self):
         self.assertIn("release test found, aarch64 runner macos-latest",

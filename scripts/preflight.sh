@@ -18,6 +18,7 @@ python3 scripts/test_readme_roster_check.py
 python3 scripts/test_conformance_docs_schema_check.py
 python3 scripts/test_conformance_roster_check.py
 python3 scripts/test_gen_law_status.py
+python3 scripts/test_readme_parity_check.py
 python3 scripts/test_gen_law_readme_block.py
 python3 scripts/test_workflow_concurrency.py
 python3 scripts/workflow_concurrency.py
@@ -34,6 +35,9 @@ python3 scripts/conformance_roster_check.py
 
 echo "== the README Status section is the generated one"
 python3 scripts/gen_law_status.py --check
+
+echo "== README.md and README_JP.md agree"
+python3 scripts/readme_parity_check.py
 
 echo "== public text: the tree"
 python3 scripts/public_text_check.py --tree HEAD

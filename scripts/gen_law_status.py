@@ -44,7 +44,7 @@ LABELS = {
         "expected_none": "None.",
         "golden": "End to end run digest per alice-det-math release",
         "golden_h": "| alice-det-math | run digest |",
-        "conformance": "Conformance manifests (status counts of the 14 gates at each crate's main)",
+        "conformance": "Conformance manifests (status counts of the {gates} gates at each crate's main)",
         "conformance_h": "| crate | pass | fail-known | unverified | n/a |",
         "missing": "Crates whose manifest is not written yet",
         "missing_h": "| crate | added in | why |",
@@ -61,7 +61,7 @@ LABELS = {
         "expected_none": "なし",
         "golden": "alice-det-math の版ごとの end to end の run digest",
         "golden_h": "| alice-det-math | run digest |",
-        "conformance": "Conformance manifest (各 crate の main における 14 gate の状態の件数)",
+        "conformance": "Conformance manifest (各 crate の main における {gates} gate の状態の件数)",
         "conformance_h": "| crate | pass | fail-known | unverified | n/a |",
         "missing": "manifest がまだ無い crate",
         "missing_h": "| crate | 追加する repository | 理由 |",
@@ -108,28 +108,32 @@ def render(lang: str, root: Path = ROOT) -> str:
         # roster gives another form); an exempt crate is not released
         tag = c.get("tag", "v{version}").replace("{version}", c["version"]) if c.get("state") != "exempt" \
             else L["tag_default"]
-        out.append(f"| {name} | {c['version']} | {c['state']} | {c.get('order', '')} | {c.get('repo', '')} | {cell(tag)} |")
+        out.append("| " + " | ".join(cell(v) for v in (name, c["version"], c["state"], c.get("order", ""),
+                                                        c.get("repo", ""), tag)) + " |")
     out += ["", f"### {L['expected']}", ""]
     ef = roster.get("expected-failure", {})
     if ef:
         out += [L["expected_h"], "|---|---|---|"]
         for name in sorted(ef):
             e = ef[name]
-            out.append(f"| {e['step']} | {e['until']} | {cell(e['why'])} |")
+            out.append("| " + " | ".join(cell(v) for v in (e["step"], e["until"], e["why"])) + " |")
     else:
         out.append(L["expected_none"])
     out += ["", f"### {L['golden']}", "", L["golden_h"], "|---|---|"]
     for version, digest in golden:
-        out.append(f"| {version} | `{digest}` |")
-    out += ["", f"### {L['conformance']}", "", L["conformance_h"], "|---|---|---|---|---|"]
+        out.append(f"| {cell(version)} | `{cell(digest)}` |")
+    gates = load(root / "conformance" / "gates.toml").get("gate", [])
+    if not gates:
+        raise InputError("conformance/gates.toml lists no gate")
+    out += ["", f"### {L['conformance'].format(gates=len(gates))}", "", L["conformance_h"], "|---|---|---|---|---|"]
     for name in sorted(state):
         c = state[name]
-        out.append(f"| {name} | " + " | ".join(str(c.get(s, 0)) for s in STATUSES) + " |")
+        out.append(f"| {cell(name)} | " + " | ".join(cell(c.get(s, 0)) for s in STATUSES) + " |")
     out += ["", f"### {L['missing']}", ""]
     if missing:
         out += [L["missing_h"], "|---|---|---|"]
         for name in sorted(missing):
-            out.append(f"| {name} | {missing[name]['fixed-in']} | {cell(missing[name]['why'])} |")
+            out.append("| " + " | ".join(cell(v) for v in (name, missing[name]["fixed-in"], missing[name]["why"])) + " |")
     else:
         out.append(L["missing_none"])
     out += ["", END]
