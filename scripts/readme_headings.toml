@@ -65,8 +65,8 @@ ja = "alice-det-math の版ごとの end to end の run digest"
 
 [[heading]]
 level = 3
-en = "Conformance manifests (status counts of the 14 gates at each crate's main)"
-ja = "Conformance manifest (各 crate の main における 14 gate の状態の件数)"
+en = "Conformance manifests (status counts of the 14 gates in each repository's manifest at main)"
+ja = "Conformance manifest (各 repository の main の manifest における 14 gate の状態の件数)"
 
 [[heading]]
 level = 3

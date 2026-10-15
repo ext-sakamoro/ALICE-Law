@@ -44,8 +44,8 @@ LABELS = {
         "expected_none": "None.",
         "golden": "End to end run digest per alice-det-math release",
         "golden_h": "| alice-det-math | run digest |",
-        "conformance": "Conformance manifests (status counts of the {gates} gates at each crate's main)",
-        "conformance_h": "| crate | pass | fail-known | unverified | n/a |",
+        "conformance": "Conformance manifests (status counts of the {gates} gates in each repository's manifest at main)",
+        "conformance_h": "| repository | read for | pass | fail-known | unverified | n/a |",
         "missing": "Crates whose manifest is not written yet",
         "missing_h": "| crate | added in | why |",
         "missing_none": "None.",
@@ -61,8 +61,8 @@ LABELS = {
         "expected_none": "なし",
         "golden": "alice-det-math の版ごとの end to end の run digest",
         "golden_h": "| alice-det-math | run digest |",
-        "conformance": "Conformance manifest (各 crate の main における {gates} gate の状態の件数)",
-        "conformance_h": "| crate | pass | fail-known | unverified | n/a |",
+        "conformance": "Conformance manifest (各 repository の main の manifest における {gates} gate の状態の件数)",
+        "conformance_h": "| repository | 読む crate | pass | fail-known | unverified | n/a |",
         "missing": "manifest がまだ無い crate",
         "missing_h": "| crate | 追加する repository | 理由 |",
         "missing_none": "なし",
@@ -96,9 +96,9 @@ def render(lang: str, root: Path = ROOT) -> str:
               if ln.strip() and not ln.startswith("#")]
     if not golden or any(len(g) != 2 for g in golden):
         raise InputError("e2e/golden/run.digest: expected lines of `<alice-det-math version> <digest>`")
-    state = load(root / "conformance" / "manifest-state.toml").get("crate", {})
+    state = load(root / "conformance" / "manifest-state.toml").get("manifest", {})
     if not state:
-        raise InputError("conformance/manifest-state.toml lists no crate")
+        raise InputError("conformance/manifest-state.toml lists no manifest")
     missing_path = root / "conformance" / "missing-manifests.toml"
     missing = load(missing_path).get("missing", {}) if missing_path.exists() else {}
 
@@ -125,10 +125,11 @@ def render(lang: str, root: Path = ROOT) -> str:
     gates = load(root / "conformance" / "gates.toml").get("gate", [])
     if not gates:
         raise InputError("conformance/gates.toml lists no gate")
-    out += ["", f"### {L['conformance'].format(gates=len(gates))}", "", L["conformance_h"], "|---|---|---|---|---|"]
+    out += ["", f"### {L['conformance'].format(gates=len(gates))}", "", L["conformance_h"], "|---|---|---|---|---|---|"]
     for name in sorted(state):
         c = state[name]
-        out.append(f"| {cell(name)} | " + " | ".join(cell(c.get(s, 0)) for s in STATUSES) + " |")
+        out.append(f"| {cell(name)} | {cell(', '.join(c.get('crates', [])))} | "
+                   + " | ".join(cell(c.get(s, 0)) for s in STATUSES) + " |")
     out += ["", f"### {L['missing']}", ""]
     if missing:
         out += [L["missing_h"], "|---|---|---|"]

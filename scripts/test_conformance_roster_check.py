@@ -84,10 +84,22 @@ class Check(unittest.TestCase):
     def test_every_manifest_complete_passes_and_the_state_is_pinned(self):
         repos = {"Alpha": manifest(), "Beta": manifest()}
         state = self.green_state(repos)
-        self.assertIn('[crate."alpha"]\n"pass" = 1\n"fail-known" = 1\n"unverified" = 1\n"n/a" = 0', state)
+        self.assertIn('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 1\n"fail-known" = 1\n"unverified" = 1\n"n/a" = 0', state)
         code, out, _ = self.run_check(repos, state=state, write=False)
         self.assertEqual(code, 0, out)
-        self.assertIn("2 manifests (2 files: crates that share a repository share its manifest), 6 gates compared, 0 findings", out)
+        self.assertIn("2 manifests read for 2 crates (crates that share a repository share its manifest), 6 gates compared, 0 findings", out)
+
+    def test_crates_that_share_a_repository_share_one_manifest_checked_once(self):
+        roster = ROSTER + '\n[crate.gamma]\nversion = "1.0.0"\nstate = "published"\norder = 4\nrepo = "Alpha"\n'
+        code, out, state = self.run_check({"Alpha": manifest(), "Beta": manifest()}, roster=roster)
+        self.assertEqual(code, 0, out)
+        self.assertIn('[manifest."Alpha"]\ncrates = ["alpha", "gamma"]\n"pass" = 1', state)
+        self.assertEqual(state.count("[manifest."), 2)
+        self.assertIn("2 manifests read for 3 crates", out)
+        self.assertIn("6 gates compared", out)  # Alpha's 3 gates once, not once per crate
+        code, out, state = self.run_check({"Alpha": manifest(G3=None), "Beta": manifest()}, roster=roster)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.count("gate G3 has no entry"), 1)
 
     def test_a_state_file_that_differs_from_main_is_a_finding(self):
         repos = {"Alpha": manifest(), "Beta": manifest()}
@@ -110,6 +122,7 @@ class Check(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("note: beta: no alice-law-conformance.toml at main, as missing-manifests.toml expects", out)
         self.assertNotIn('"beta"', state)
+        self.assertNotIn('"Beta"', state)
         code, out, _ = self.run_check({"Alpha": manifest(), "Beta": manifest()}, missing=listed)
         self.assertEqual(code, 1, out)
         self.assertIn("beta: alice-law-conformance.toml is at main, so its missing-manifests.toml entry is stale", out)
@@ -123,7 +136,7 @@ class Check(unittest.TestCase):
     def test_a_dropped_or_unknown_gate_fails(self):
         code, out, _ = self.run_check({"Alpha": manifest(G3=None), "Beta": manifest()})
         self.assertEqual(code, 1, out)
-        self.assertIn("alpha: alice-law-conformance.toml: gate G3 has no entry", out)
+        self.assertIn("Alpha: alice-law-conformance.toml: gate G3 has no entry", out)
         code, out, _ = self.run_check({"Alpha": manifest(G4='status = "unverified"'), "Beta": manifest()})
         self.assertEqual(code, 1, out)
         self.assertIn("G4 is not a gate of conformance/gates.toml", out)
@@ -161,7 +174,7 @@ class Check(unittest.TestCase):
         code, out, state = self.run_check(repos, write=True)
         self.assertEqual(code, 0, out)
         self.assertIn("G1 pass without a mutant, read as unverified", out)
-        self.assertIn('[crate."alpha"]\n"pass" = 0\n"fail-known" = 1\n"unverified" = 2', state)
+        self.assertIn('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 0\n"fail-known" = 1\n"unverified" = 2', state)
 
     def test_an_evidence_path_in_any_written_form_must_be_at_main(self):
         # the first word of an entry, after backticks, a `label:`, `:<line>`, `::<name>` and `./`
@@ -176,7 +189,7 @@ class Check(unittest.TestCase):
             g1 = f'status = "pass"\nevidence = ["{entry}"]\nmutant = "m"'
             code, out, state = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()}, write=True)
             self.assertEqual(code, 0, (entry, out))
-            self.assertIn('[crate."alpha"]\n"pass" = 1', state)
+            self.assertIn('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 1', state)
 
     def test_pass_with_meaningless_evidence_or_mutant_is_not_counted_as_pass(self):
         for g1 in ('status = "pass"\nevidence = [""]\nmutant = "m"',
@@ -185,7 +198,7 @@ class Check(unittest.TestCase):
                    'status = "n/a"\nevidence = ["it does not apply"]\nmutant = "m"\nnote = "none here"'):
             code, out, state = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()}, write=True)
             self.assertEqual(code, 0, (g1, out))
-            self.assertIn('[crate."alpha"]\n"pass" = 0', state, g1)
+            self.assertIn('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 0', state, g1)
             self.assertIn("read as unverified", out)
         code, out, _ = self.run_check({"Alpha": manifest(G1='status = "pass"\nevidence = ["src/lib.rs"]\nmutant = 0'),
                                        "Beta": manifest()})

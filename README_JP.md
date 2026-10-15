@@ -103,7 +103,7 @@ CI (`.github/workflows/public-text.yml`) はすべての push と pull request �
 
 `docs/CONFORMANCE.md` は、Law を担う crate の算術が保証すべきことを人が読む形で書いた仕様 — 14 の gate があり、platform の超越関数を直接呼ぶことの禁止 (G1) から、浮動小数点の意味論を変える build の flag の禁止 (G14) まで `conformance/gates.toml` は同じ 14 の gate を生成器が読む形で持つ: id、名前、1 行の定義、通る crate が挙げるべき証拠の種類
 
-release train の各 crate は自分の `alice-law-conformance.toml` を repository の根に持ち、gate ごとに 1 entry (`status`: `pass` / `fail-known` / `unverified` / `n/a`、`evidence`、`mutant`、`since`、`note`、`reference_repo`); この repository はそれらの manifest を持たず、それらが答える gate だけを持つ `scripts/conformance_roster_check.py` は release train のすべての crate の manifest をその main で読み (`gh api` で: file の tree と manifest)、次の時に失敗する: manifest の無い crate、entry の無い gate、未知の gate か別の形で gate のように綴った key (`g15`、`G01`)、gate の語彙の外の status (大文字小文字を区別)、先頭の語が main に無い path である evidence の entry (backtick、`label:` の接頭辞、先頭の `./`、`:<line>` / `::<name>` の接尾辞を外した後; 裸の file 名はちょうど 1 つの file に当たること)、文字列でない mutant、場所を示さない `fail-known` の entry: その note か evidence が、main にある file を path で (directory でも、`Cargo.toml` や `README.md` のような crate を説明する根の file でもなく)、または 1 つの file にだけ当たり後ろに行番号のある裸の名前で、または 1 つの workflow を名指す裸の名前で (step や leg が欠けている場所) 名指すこと; 別の repository のものとして書いた path (`ALICE-Law's scripts/...`) は数えず、行番号を file の長さと照らすことはしない `pass` / `n/a` の entry は、evidence の entry が main にある path を名指し、mutant が空でない文字列である時だけ通り、そうでなければ `unverified` に数える manifest がまだ書かれていない crate は `conformance/missing-manifests.toml` に名前で (manifest を足す repository とともに) 載せ、manifest が入った entry は古いものとして失敗する crate ごとの status の件数は `conformance/manifest-state.toml` にあり、`--write` で作り直す; main と違えば検査が失敗する 何も比べなければ exit 2
+release train の各 crate は自分の `alice-law-conformance.toml` を repository の根に持ち、gate ごとに 1 entry (`status`: `pass` / `fail-known` / `unverified` / `n/a`、`evidence`、`mutant`、`since`、`note`、`reference_repo`); この repository はそれらの manifest を持たず、それらが答える gate だけを持つ `scripts/conformance_roster_check.py` は release train のすべての crate の manifest をその main で読み (`gh api` で: file の tree と manifest)、次の時に失敗する: manifest の無い crate、entry の無い gate、未知の gate か別の形で gate のように綴った key (`g15`、`G01`)、gate の語彙の外の status (大文字小文字を区別)、先頭の語が main に無い path である evidence の entry (backtick、`label:` の接頭辞、先頭の `./`、`:<line>` / `::<name>` の接尾辞を外した後; 裸の file 名はちょうど 1 つの file に当たること)、文字列でない mutant、場所を示さない `fail-known` の entry: その note か evidence が、main にある file を path で (directory でも、`Cargo.toml` や `README.md` のような crate を説明する根の file でもなく)、または 1 つの file にだけ当たり後ろに行番号のある裸の名前で、または 1 つの workflow を名指す裸の名前で (step や leg が欠けている場所) 名指すこと; 別の repository のものとして書いた path (`ALICE-Law's scripts/...`) は数えず、行番号を file の長さと照らすことはしない `pass` / `n/a` の entry は、evidence の entry が main にある path を名指し、mutant が空でない文字列である時だけ通り、そうでなければ `unverified` に数える manifest がまだ書かれていない crate は `conformance/missing-manifests.toml` に名前で (manifest を足す repository とともに) 載せ、manifest が入った entry は古いものとして失敗する 各 repository の manifest の status の件数と、それを読む crate (repository を共有する crate はその 1 つの manifest を共有する) は `conformance/manifest-state.toml` にあり、`--write` で作り直す; main と違えば検査が失敗する 何も比べなければ exit 2
 
 ## End to end
 
@@ -178,25 +178,23 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | 0.5.0 | `966a78784bb4e3341ac6627d519db896f398176b71c2402b188294db6c8e3728` |
 | 0.5.1 | `9f7cf676708a272e3817ebbf0727c610f391e1547747af4307ee44d5523267c2` |
 
-### Conformance manifest (各 crate の main における 14 gate の状態の件数)
+### Conformance manifest (各 repository の main の manifest における 14 gate の状態の件数)
 
-| crate | pass | fail-known | unverified | n/a |
-|---|---|---|---|---|
-| alice-analytics | 3 | 7 | 4 | 0 |
-| alice-crypto | 0 | 10 | 4 | 0 |
-| alice-db | 3 | 7 | 4 | 0 |
-| alice-det-math | 5 | 7 | 0 | 2 |
-| alice-edge | 3 | 5 | 6 | 0 |
-| alice-kinematics | 0 | 11 | 3 | 0 |
-| alice-llm | 0 | 12 | 2 | 0 |
-| alice-lol | 0 | 0 | 14 | 0 |
-| alice-lol-macro | 0 | 0 | 14 | 0 |
-| alice-ml | 0 | 10 | 4 | 0 |
-| alice-physics | 7 | 6 | 1 | 0 |
-| alice-sdf | 1 | 8 | 5 | 0 |
-| alice-sync | 6 | 4 | 4 | 0 |
-| alice-zip | 4 | 10 | 0 | 0 |
-| alice-zip-cli | 4 | 10 | 0 | 0 |
+| repository | 読む crate | pass | fail-known | unverified | n/a |
+|---|---|---|---|---|---|
+| ALICE-Analytics | alice-analytics | 3 | 7 | 4 | 0 |
+| ALICE-Crypto | alice-crypto | 0 | 10 | 4 | 0 |
+| ALICE-DB | alice-db | 3 | 7 | 4 | 0 |
+| ALICE-DetMath | alice-det-math | 5 | 7 | 0 | 2 |
+| ALICE-Edge | alice-edge | 3 | 5 | 6 | 0 |
+| ALICE-Kinematics | alice-kinematics | 0 | 11 | 3 | 0 |
+| ALICE-LLM | alice-llm | 0 | 12 | 2 | 0 |
+| ALICE-LOL | alice-lol, alice-lol-macro | 4 | 6 | 4 | 0 |
+| ALICE-ML | alice-ml | 0 | 10 | 4 | 0 |
+| ALICE-Physics | alice-physics | 7 | 6 | 1 | 0 |
+| ALICE-SDF | alice-sdf | 1 | 9 | 4 | 0 |
+| ALICE-Sync | alice-sync | 6 | 4 | 4 | 0 |
+| ALICE-Zip | alice-zip, alice-zip-cli | 4 | 10 | 0 | 0 |
 
 ### manifest がまだ無い crate
 

@@ -40,7 +40,7 @@ expect = ["e"]
 why = "beta is | not out"
 exit = 1
 '''
-STATE = '[crate."alpha"]\n"pass" = 3\n"fail-known" = 1\n"unverified" = 10\n"n/a" = 0\n'
+STATE = '[manifest."Alpha"]\ncrates = ["alpha", "alpha-cli"]\n"pass" = 3\n"fail-known" = 1\n"unverified" = 10\n"n/a" = 0\n'
 MISSING = '[missing."beta"]\nfixed-in = "Beta"\nwhy = "not written"\n'
 GOLDEN = "0.5.0 aaaa\n0.5.1 bbbb\n"
 README = "# T\n\n## Status\n\n<!-- law-status:begin -->\nold text\n<!-- law-status:end -->\n\n## License\n"
@@ -82,10 +82,10 @@ class Gen(unittest.TestCase):
         self.assertIn("| law | 0.0.0 | exempt | 2 | Law | (none) |", text)
         self.assertIn("| some-step | beta 0.3.0 | beta is \\| not out |", text)
         self.assertIn("| 0.5.1 | `bbbb` |", text)
-        self.assertIn("| alpha | 3 | 1 | 10 | 0 |", text)
+        self.assertIn("| Alpha | alpha, alpha-cli | 3 | 1 | 10 | 0 |", text)
         self.assertIn("| beta | Beta | not written |", text)
         self.assertNotRegex(text, r"20\d\d-\d\d-\d\d")
-        self.assertIn("### Conformance manifests (status counts of the 2 gates at each crate's main)", text)
+        self.assertIn("### Conformance manifests (status counts of the 2 gates in each repository's manifest at main)", text)
         self.assertEqual(self.run_main("--check"), (0, "law-status: 1 README(s) compared, 0 differ\n"))
 
     def test_a_roster_change_without_regenerating_fails_the_check(self):
