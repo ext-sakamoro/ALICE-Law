@@ -51,7 +51,7 @@ class Gen(unittest.TestCase):
         self.d = Path(tempfile.mkdtemp())
         (self.d / "conformance").mkdir()
         (self.d / "e2e" / "golden").mkdir(parents=True)
-        self.files = {"release-train.toml": ROSTER, "conformance/manifest-state.toml": STATE,
+        self.files = {"conformance/gates.toml": '[[gate]]\nid = "G1"\n\n[[gate]]\nid = "G2"\n', "release-train.toml": ROSTER, "conformance/manifest-state.toml": STATE,
                       "conformance/missing-manifests.toml": MISSING, "e2e/golden/run.digest": GOLDEN,
                       "README.md": README}
         for k, v in self.files.items():
@@ -85,6 +85,7 @@ class Gen(unittest.TestCase):
         self.assertIn("| alpha | 3 | 1 | 10 | 0 |", text)
         self.assertIn("| beta | Beta | not written |", text)
         self.assertNotRegex(text, r"20\d\d-\d\d-\d\d")
+        self.assertIn("### Conformance manifests (status counts of the 2 gates at each crate's main)", text)
         self.assertEqual(self.run_main("--check"), (0, "law-status: 1 README(s) compared, 0 differ\n"))
 
     def test_a_roster_change_without_regenerating_fails_the_check(self):
@@ -102,6 +103,18 @@ class Gen(unittest.TestCase):
             self.run_main()
             (self.d / name).write_text(text, encoding="utf-8")
             self.assertEqual(self.run_main("--check")[0], 1, name)
+
+    def test_every_cell_is_escaped(self):
+        (self.d / "release-train.toml").write_text(ROSTER.replace('repo = "Alpha"', 'repo = "Al|pha"'), encoding="utf-8")
+        (self.d / "conformance/missing-manifests.toml").write_text(MISSING.replace('"Beta"', '"Be|ta"'), encoding="utf-8")
+        self.run_main()
+        text = self.readme()
+        self.assertIn("| Al\\|pha |", text)
+        self.assertIn("| beta | Be\\|ta |", text)
+
+    def test_a_gates_file_with_no_gate_exits_2(self):
+        (self.d / "conformance/gates.toml").write_text("", encoding="utf-8")
+        self.assertEqual(self.run_main("--check")[0], 2)
 
     def test_a_hand_edit_inside_the_markers_fails_the_check(self):
         self.run_main()

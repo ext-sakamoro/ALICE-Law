@@ -2,6 +2,8 @@
 
 Integration checks across the crates in the release train (`release-train.toml`): ALICE-LOL, ALICE-DetMath, ALICE-SDF, ALICE-Physics, ALICE-DB, ALICE-Zip, ALICE-Crypto, ALICE-Analytics, ALICE-Edge, ALICE-ML, ALICE-LLM, ALICE-Kinematics and ALICE-Sync. `scripts/readme_roster_check.py` fails this file's own check if this sentence falls behind the roster.
 
+[日本語](README_JP.md)
+
 Everything here is built from the versions published on crates.io, with no path dependencies. Two kinds of check:
 
 - dependency consistency (in place): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, every crate `scripts/dep_consistency.py`'s own `CORE` list names is present, and each `alice-*` requirement accepts the latest published version of the crate it names
@@ -94,6 +96,8 @@ scripts/preflight.sh                                            # the script tes
 ```
 
 CI (`.github/workflows/public-text.yml`) runs the tests and both scans on every push and pull request. A scan that compared nothing (no file, no commit) fails.
+
+`README_JP.md` is the Japanese text of `README.md`. The prose is translated by hand; `scripts/readme_parity_check.py` fails when the two differ in what a translation must keep (the sections, the code blocks, the inline code, the values, the names and the links).
 
 ## Conformance
 
