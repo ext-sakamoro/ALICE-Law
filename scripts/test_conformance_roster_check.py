@@ -37,7 +37,7 @@ state = "exempt"
 order = 3
 repo = "Law"
 '''
-PATHS = {"src/lib.rs", "src/geom/mod.rs", "tests/golden.rs", ".github/workflows/ci.yml", "Cargo.toml", "README.md",
+PATHS = {"alice-law-conformance.toml", "src/lib.rs", "src/geom/mod.rs", "tests/golden.rs", ".github/workflows/ci.yml", "Cargo.toml", "README.md",
          "scripts/lib.rs", "docs/notes.md"}
 
 
@@ -194,7 +194,8 @@ class Check(unittest.TestCase):
 
     def test_fail_known_is_not_located_by_a_root_file_a_directory_or_an_unanchored_name(self):
         for note in ("see Cargo.toml", "tracked in README.md", "the helper in lib.rs is missing", "under src/geom",
-                     "no step in ALICE-Law's .github/workflows/ci.yml", "see notes.md for the plan", "lib.rs:4"):
+                     "no step in ALICE-Law's .github/workflows/ci.yml", "see notes.md for the plan", "lib.rs:4",
+                     "see alice-law-conformance.toml", "alice-law-conformance.toml:3"):
             code, out, _ = self.run_check({"Alpha": manifest(G2=f'status = "fail-known"\nnote = "{note}"'),
                                            "Beta": manifest()}, write=True)
             self.assertEqual(code, 1, (note, out))
