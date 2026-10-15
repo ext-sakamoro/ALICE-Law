@@ -3,6 +3,13 @@
 
     next                                 the crate to publish now: the first in `order`
                                          that is not published (or exempt)
+    feature-coverage --repos-root DIR [--at REF]
+                                         every crate that declares consumer feature sets:
+                                         each non-default feature of its manifest (read in
+                                         DIR/<repo> at REF, default origin/main) is in a set
+                                         or in `exclude-features` with a reason, and the sets
+                                         name only features the manifest defines; no crate
+                                         compared exits 2
     publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]
                                          run right before `cargo publish` of <crate> from
                                          the checkout DIR; the manifest (P, default
@@ -42,6 +49,10 @@
         .github/, scripts/, docs/ or logs/, or a file or directory of private notes (named by
         hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
         crate; a package that lists no file exits 2
+      - the roster declares consumer feature sets for <crate> and a non-default feature of
+        the manifest at SHA is in none of them nor in `exclude-features`, or a set names a
+        feature the manifest does not define (a declared set does not grow with the
+        manifest: a feature added later would be neither built nor semver-checked)
       - after those pass, the crate `cargo package` built is unpacked into a fresh
         directory with no Cargo.lock or Cargo.toml above it and built as a dependency of
         an empty crate there, as a crates.io consumer builds it (`cargo package` verifies
@@ -193,6 +204,18 @@ def load_roster(text: str) -> dict[str, dict]:
                                   f"built and why)")
         elif "consumer-features-why" in c:
             raise RosterError(f"{name}: `consumer-features-why` without `consumer-features`")
+        if "exclude-features" in c:
+            ex = c["exclude-features"]
+            if not declared:
+                raise RosterError(f"{name}: `exclude-features` without `consumer-features` (with no declared set "
+                                  f"every feature is built at once, so there is nothing to exclude from)")
+            if not isinstance(ex, dict) or not ex or not all(
+                    isinstance(k, str) and k.strip() and isinstance(v, str) and v.strip() for k, v in ex.items()):
+                raise RosterError(f"{name}: `exclude-features` must be a table of feature = \"why it is not built\"")
+            in_sets = set().union(*(set(x) for x in c.get("consumer-features", []) + c.get("consumer-check-features", [])))
+            both = sorted(set(ex) & in_sets)
+            if both:
+                raise RosterError(f"{name}: {both} are both excluded and in a declared set")
         if "consumer-expected-failure" in c:
             sets = [sorted(x) for x in c.get("consumer-features", []) + c.get("consumer-check-features", [])]
             efs = c["consumer-expected-failure"]
@@ -1402,6 +1425,57 @@ def requirements_on(text: str, crate: str) -> list[tuple[str, str | None]]:
     return out
 
 
+def feature_coverage_problems(name: str, entry: dict, manifest: dict) -> tuple[list[str], int]:
+    """(problems, 1 when compared): a crate that declares consumer feature sets builds and
+    semver-checks only those, so every non-default feature of its manifest must be in a set
+    or in `exclude-features` (with the reason); a crate that declares none builds every
+    feature at once and is not compared (0)"""
+    sets = entry.get("consumer-features", []) + entry.get("consumer-check-features", [])
+    if not sets:
+        return [], 0
+    feats = {f for f in manifest.get("features", {}) if f != "default"}
+    declared = set().union(*(set(s) for s in sets))
+    excluded = set(entry.get("exclude-features", {}))
+    problems = []
+    missing = sorted(feats - declared - excluded)
+    if missing:
+        problems.append(f"{name}: the manifest's feature(s) {missing} are in no consumer set and not in "
+                        f"exclude-features: a declared set does not grow with the manifest, so they would be "
+                        f"neither built nor semver-checked")
+    unknown = sorted((declared | excluded) - feats)
+    if unknown:
+        problems.append(f"{name}: the consumer sets or exclude-features name {unknown}, which the manifest "
+                        f"does not define")
+    return problems, 1
+
+
+def feature_coverage(roster: dict[str, dict], repos_root: Path, at: str) -> tuple[list[str], list[str], int]:
+    """(problems, crates covered, crates compared) of feature_coverage_problems for every roster
+    crate that declares consumer sets, each read from its repository's checkout at `at`"""
+    problems, ok, compared = [], [], 0
+    for name, c in sorted(roster.items()):
+        if not (c.get("consumer-features") or c.get("consumer-check-features")):
+            continue
+        if "repo" not in c:
+            problems.append(f"{name}: declares consumer sets but names no repository")
+            continue
+        repo = repos_root / c["repo"]
+        if not (repo / ".git").exists():
+            problems.append(f"{name}: {repo} is not a checkout")
+            continue
+        path = c.get("manifest-path", "Cargo.toml")
+        manifest = tomllib.loads(git(repo, "show", f"{at}:{path}"))
+        if manifest.get("package", {}).get("name") != name:
+            problems.append(f"{name}: {c['repo']}/{path} at {at} is not {name}")
+            continue
+        p, n = feature_coverage_problems(name, c, manifest)
+        problems += p
+        compared += n
+        if not p:
+            ok.append(f"{name}: {c['repo']}/{path}")
+    return problems, ok, compared
+
+
 def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) -> tuple[list[str], list[str], int]:
     """(to bump, already accept, manifests read): every Cargo.toml at `at` in the
     repositories of the roster that requires `crate` without accepting its roster version"""
@@ -1463,6 +1537,10 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
     f.add_argument("crate")
     f.add_argument("--repos-root", type=Path, required=True, help="the directory holding a checkout of every roster repository")
     f.add_argument("--at", default="origin/main", help="the commit read in each checkout (fetch first)")
+    fc = sub.add_parser("feature-coverage")
+    fc.add_argument("--repos-root", type=Path, required=True,
+                    help="the directory holding a checkout of the repository of every crate with consumer sets")
+    fc.add_argument("--at", default="origin/main", help="the commit read in each checkout (fetch first)")
     a = ap.parse_args(argv)
     try:
         roster_text = a.roster.read_text(encoding="utf-8")
@@ -1477,6 +1555,22 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             return 1
         print(f"next: {name} {roster[name]['version']} (state {roster[name]['state']}, {pending} unpublished)")
         return 0
+    if a.cmd == "feature-coverage":
+        try:
+            problems, ok, compared = feature_coverage(roster, a.repos_root, a.at)
+        except (OSError, ValueError, subprocess.CalledProcessError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        for line in ok:
+            print(f"covered: {line}")
+        for p in problems:
+            print(f"refused: {p}")
+        print(f"feature-coverage: {compared} crate(s) with consumer sets compared at {a.at}, "
+              f"{len(problems)} problem(s)")
+        if compared == 0 and not problems:
+            print("error: no crate with consumer sets was compared", file=sys.stderr)
+            return 2
+        return 1 if problems else 0
     if a.cmd != "followups" and a.crate not in roster:
         print(f"refused: {a.crate} is not in the roster")
         return 1
@@ -1545,6 +1639,9 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
                 compared += n
             problems += package_problems(a.crate, lister(a.repo, a.manifest_path))
             compared += 1
+            cov, n = feature_coverage_problems(a.crate, roster[a.crate], tomllib.loads(manifest_text))
+            problems += cov
+            compared += n
             for p in problems:
                 print(f"refused: {p}")
             if problems:

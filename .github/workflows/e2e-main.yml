@@ -27,6 +27,7 @@ on:
       - "scripts/e2e_teeth.py"
       - "scripts/expected_failure.py"
       - "release-train.toml"
+      - "scripts/release_train.py"
       - ".github/workflows/e2e-main.yml"
 
 permissions:
@@ -59,6 +60,10 @@ jobs:
             git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
             echo "| $r | $(git -C "$RUNNER_TEMP/core/$r" rev-parse --short HEAD) |" >> "$GITHUB_STEP_SUMMARY"
           done
+      # a crate that declares consumer feature sets builds and semver-checks only those:
+      # each feature of its manifest on main is in a set or excluded with a reason
+      - name: Consumer feature sets cover every feature (main)
+        run: python3 scripts/release_train.py feature-coverage --repos-root "$RUNNER_TEMP/core" --at HEAD | tee -a "$GITHUB_STEP_SUMMARY"
       # a failure the roster lists under [expected-failure.*] (named, explained, until a
       # release) is reported as expected and skips the steps that need it; any other is red
       - &patch

@@ -1337,7 +1337,7 @@ class GateConsumer(unittest.TestCase):
     def test_the_roster_feature_sets_reach_the_consumer_build(self):
         seen = []
         with tempfile.TemporaryDirectory() as d:
-            repo, ref = make_repo(d, {"Cargo.toml": ZIP})
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP + "\n[features]\nsvo = []\n"})
             p = Path(d, "r.toml")
             p.write_text(ROSTER.replace('order = 1\n', 'order = 1\nconsumer-features = [["svo"]]\nconsumer-features-why = "x"\n', 1), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
@@ -1751,6 +1751,110 @@ class GateSemver(unittest.TestCase):
         self.assertNotIn("go for", out.getvalue())
 
 
+
+
+COVERED = ROSTER.replace('order = 1\n', 'order = 1\nrepo = "ALICE-Zip"\nconsumer-features = [["fft", "std"]]\n'
+                         'consumer-features-why = "w"\nexclude-features = { hw = "a board-only feature" }\n', 1)
+ZIP_FEATURES = ZIP + '\n[features]\ndefault = ["std"]\nstd = []\nfft = []\nhw = []\n'
+
+
+def named_repo(root: Path, name: str, files: dict[str, str]) -> Path:
+    """a git repository root/name holding `files`, committed"""
+    repo = root / name
+    repo.mkdir(parents=True)
+    git(repo, "init", "-q")
+    for rel, text in files.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(text, encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x")
+    return repo
+
+
+class FeatureCoverage(unittest.TestCase):
+    def test_the_roster_validates_exclude_features(self):
+        rt.load_roster(COVERED)
+        for bad in ('exclude-features = { hw = "" }', 'exclude-features = ["hw"]', 'exclude-features = {}',
+                    'exclude-features = { fft = "in a set too" }'):
+            with self.assertRaises(rt.RosterError, msg=bad):
+                rt.load_roster(COVERED.replace('exclude-features = { hw = "a board-only feature" }', bad, 1))
+        with self.assertRaises(rt.RosterError):
+            rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\nexclude-features = { hw = "x" }\n', 1))
+
+    def test_every_feature_must_be_in_a_set_or_excluded(self):
+        entry = rt.load_roster(COVERED)["alice-zip"]
+        m = {"features": {"default": ["std"], "std": [], "fft": [], "hw": []}}
+        self.assertEqual(rt.feature_coverage_problems("alice-zip", entry, m), ([], 1))
+        # a feature added to the manifest later, in no set and not excluded
+        p, n = rt.feature_coverage_problems("alice-zip", entry, {"features": {**m["features"], "foo": []}})
+        self.assertEqual(n, 1)
+        self.assertEqual(len(p), 1)
+        self.assertIn("['foo'] are in no consumer set and not in exclude-features", p[0])
+        # names the manifest does not define: a set member, or an exclude left behind
+        p, _ = rt.feature_coverage_problems("alice-zip", entry, {"features": {"std": [], "hw": []}})
+        self.assertIn("['fft']", p[0])
+        p, _ = rt.feature_coverage_problems("alice-zip", entry, {"features": {"std": [], "fft": []}})
+        self.assertIn("['hw']", p[0])
+        # check sets count as covered
+        e2 = {**entry, "consumer-check-features": [["foo"]]}
+        self.assertEqual(rt.feature_coverage_problems("alice-zip", e2, {"features": {**m["features"], "foo": []}}),
+                         ([], 1))
+
+    def test_a_crate_without_declared_sets_is_not_compared(self):
+        entry = rt.load_roster(ROSTER)["alice-zip"]
+        self.assertEqual(rt.feature_coverage_problems("alice-zip", entry, {"features": {"anything": []}}), ([], 0))
+
+    def run_cov(self, roster_text: str, repos: dict[str, dict[str, str]]):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d, "repos")
+            root.mkdir()
+            for name, files in repos.items():
+                named_repo(root, name, files)
+            p = Path(d, "r.toml")
+            p.write_text(roster_text, encoding="utf-8")
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = rt.main(["--roster", str(p), "feature-coverage", "--repos-root", str(root), "--at", "HEAD"])
+        return code, out.getvalue() + err.getvalue()
+
+    def test_the_command_reads_each_manifest_at_the_ref(self):
+        code, out = self.run_cov(COVERED, {"ALICE-Zip": {"Cargo.toml": ZIP_FEATURES}})
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 crate(s) with consumer sets compared", out)
+        # the mutant of the requirement: a feature added outside every set and exclude
+        code, out = self.run_cov(COVERED, {"ALICE-Zip": {"Cargo.toml": ZIP_FEATURES + "foo = []\n"}})
+        self.assertEqual(code, 1, out)
+        self.assertIn("refused: alice-zip: the manifest's feature(s) ['foo']", out)
+
+    def test_the_manifest_path_is_honoured(self):
+        text = COVERED.replace('repo = "ALICE-Zip"\n', 'repo = "ALICE-Zip"\nmanifest-path = "lib/Cargo.toml"\n', 1)
+        code, out = self.run_cov(text, {"ALICE-Zip": {"Cargo.toml": "[workspace]\n", "lib/Cargo.toml": ZIP_FEATURES}})
+        self.assertEqual(code, 0, out)
+
+    def test_a_missing_checkout_or_another_package_is_refused(self):
+        code, out = self.run_cov(COVERED, {"Other": {"Cargo.toml": ZIP_FEATURES}})
+        self.assertEqual(code, 1, out)
+        self.assertIn("is not a checkout", out)
+        code, out = self.run_cov(COVERED, {"ALICE-Zip": {"Cargo.toml": ZIP_FEATURES.replace('"alice-zip"', '"other"', 1)}})
+        self.assertEqual(code, 1, out)
+        self.assertIn("is not alice-zip", out)
+
+    def test_no_crate_with_sets_compared_exits_2(self):
+        code, out = self.run_cov(ROSTER, {})
+        self.assertEqual(code, 2, out)
+        self.assertIn("no crate with consumer sets was compared", out)
+
+    def test_the_gate_refuses_a_feature_outside_the_sets(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP_FEATURES + "foo = []\n"})
+            p = Path(d, "r.toml")
+            p.write_text(COVERED, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager)
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertIn("refused: alice-zip: the manifest's feature(s) ['foo']", out.getvalue())
 
 
 class GateGoOutput(unittest.TestCase):

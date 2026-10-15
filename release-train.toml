@@ -380,6 +380,7 @@ tag = "v{version}"
 repo = "ALICE-Edge"
 consumer-features = [["asp", "codec", "dashboard", "db", "depth-camera", "edge-pipeline", "ffi", "law", "ml", "mqtt", "pyo3", "sdf", "sensors", "std", "zip"]]
 consumer-features-why = "外す feature: sensors-hw (rppal は特定の Linux board の GPIO 専用で他の target では build できない)"
+exclude-features = { sensors-hw = "rppal は特定の Linux board の GPIO 専用で、他の target では build できない" }
 # 0.3.0 は alice-db 0.5 を受ける版 (db feature が alice_db::ResidualPolicy を再公開するので、alice-db の版を
 # 上げるのは互換でない変更) dashboard の alice-analytics の要求は >=0.5, <0.7 に広げた CHANGELOG に日付つきの
 # [0.3.0] - 2026-10-15 を入れた Edge main 2ddf8be から公開する
