@@ -122,14 +122,18 @@ required-ci = [
 
 [crate.alice-db]
 # 0.5.1 は analytics feature の alice-analytics の要求を >=0.5, <0.7 に広げ、0.6.0 を受ける版 (公開済みの 0.5.0 は ^0.5
-# のままで、alice-edge 0.3.0 の db feature 経由で link されると alice-analytics が 2 版になる) DB main 00ca3cc にその
-# 広げがある 公開する commit は DB main で日付つきの [0.5.1] を入れて決め、prepared にする
+# のままで、alice-edge 0.3.0 の db feature 経由で link されると alice-analytics が 2 版になる) CHANGELOG に日付つきの
+# [0.5.1] - 2026-10-15 を入れた DB main e9c1729 から公開する
 # 公開済みの 0.5.0 は DB main 153e6fe から (created_at を入力にし、check_semantics で識別子を受ける版)
 version = "0.5.1"
-state = "planned"
+state = "prepared"
 order = 5
 repo = "ALICE-DB"
-must-contain = ["00ca3ccdb791321fde52dc7f8f5992c124f66c20"]
+must-contain = ["e9c172940f7111d300ce7062ccdf811d7fac7d92"]
+changelog-has = [
+    "`analytics` feature の `alice-analytics` の要求を `0.5` から `>=0.5, <0.7` に広げ、0.6 も解決できるようにした",
+    "- 版を 0.5.1 にした",
+]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-24.04-arm)", "Test (ubuntu-latest)", "Test (windows-latest)"] },
     { workflow = "CI", job = "Clippy (pedantic, -D warnings)" },
