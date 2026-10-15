@@ -210,6 +210,15 @@ class Vocabulary(unittest.TestCase):
         self.assertTrue(ptc.PRIVATE_NAME_HASHES)
         self.assertTrue(all(len(h) == 64 and int(h, 16) >= 0 for h in ptc.PRIVATE_NAME_HASHES))
 
+    def test_the_private_name_set_is_pinned(self):
+        # its size and the SHA-256 of its sorted lines: removing or changing a name changes them
+        spec = importlib.util.spec_from_file_location("ptc_fresh", HERE / "public_text_check.py")
+        fresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fresh)  # (other tests swap ptc's set)
+        h = sorted(fresh.PRIVATE_NAME_HASHES)
+        self.assertEqual((len(h), hashlib.sha256("\n".join(h).encode()).hexdigest()),
+                         (48, "324204d07160abe230e73b824cbf06344d15f6257153ef29067f149436c643de"))
+
     def test_the_repository_is_clean(self):
         code, out = run(HERE.parent, "--tree")
         self.assertEqual(code, 0, out)
@@ -1100,6 +1109,40 @@ class Terms(unittest.TestCase):
             self.assertIn("agent process", ptc.kinds(line), line)
         for line in ("see SKILL.md", "SKILL_PACKAGE_DIR = PACKAGE_ROOT", "def test_a_skills_path_segment(self):"):
             self.assertNotIn("agent process", ptc.kinds(line), line)
+
+    def in_repo(self, repo):
+        saved = ptc.ALLOW_STATE.get("repo")
+        self.addCleanup(ptc.ALLOW_STATE.__setitem__, "repo", saved)
+        ptc.ALLOW_STATE["repo"] = repo
+
+    def test_only_the_repositorys_own_skill_directory_is_a_path_not_the_process_word(self):
+        internal = ("Checks follow skills/karikari-review/SKILL.md before every release.",
+                    "The skills/public-comm-style/ rules apply to commit text.",
+                    "See skills/context-handoff.md for the handoff.",
+                    "everything under `skills/` is the package", "the skills used here", "Skills/lol-sdf/x",
+                    "plugin/skills/lol-sdf/x.md", "plugin/skills/implicit-cad/x.md", "x./skills/lol-sdf/y",
+                    "skills used, see `skills/lol-sdf/SKILL.md`")
+        own = {"ALICE-LOL": ("- `skills/lol-sdf/x.md` is copied", "// grammar: skills/lol-sdf/references/lol.gbnf",
+                             "see `skills/lol-sdf/SKILL.md` and (skills/lol-sdf/scripts/print.sh)"),
+               "ALICE-SDF": ("- `skills/implicit-cad/SKILL.md` is updated",
+                             "See [the guide](../skills/implicit-cad/SKILL.md) or ./skills/implicit-cad/x.sh")}
+        for repo, lines in own.items():
+            self.in_repo(repo)
+            for line in lines:  # must not catch: the repository's own skill directory as a path
+                self.assertNotIn("agent process", ptc.kinds(line), (repo, line))
+                self.assertFalse(ptc.folded_agent_word(line), (repo, line))
+            for line in internal:  # must catch: any other skills/ path and the word in prose
+                self.assertIn("agent process", ptc.kinds(line), (repo, line))
+            self.assertTrue(ptc.folded_agent_word(lines[0] + " by a w0rker"), repo)
+        # the same lines in another repository (or none): findings
+        for repo in ("ALICE-SDF", "ALICE-Physics", None):
+            self.in_repo(repo)
+            for line in own["ALICE-LOL"] + internal:
+                self.assertIn("agent process", ptc.kinds(line), (repo, line))
+        self.in_repo("ALICE-LOL")
+        self.assertIn("agent process", ptc.kinds(own["ALICE-SDF"][0]))
+        self.assertTrue(ptc.folded_agent_word("see SKILL.md, by a w0rker"))
+        self.assertFalse(ptc.folded_agent_word("see SKILL.md"))
 
     def test_this_session_and_in_chat_are_process_words(self):
         for line in ("This session's simulator tooling", "as decided in this session", "asked in chat",

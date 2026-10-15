@@ -1222,6 +1222,7 @@ def package_text_problems(body: bytes, name: str, version: str, repo: Path, ref:
         return [f"{name} {version}: the package text check: {problem}"], 0
     ptc.CONFIG.update(ptc.load_config(str(repo), ref))
     ptc.ALLOW_STATE["allowed"] = dict(ptc.ALLOWED.get(repo_name, {})) if repo_name else {}
+    ptc.ALLOW_STATE["repo"] = repo_name
     ptc.ALLOW_STATE["used"] = {}
     ptc.CLASS_USED.clear()
     problems, files = [], 0
