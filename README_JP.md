@@ -152,13 +152,13 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-zip | 0.10.0 | published | 2 | ALICE-Zip | v0.10.0 |
 | alice-zip-cli | 3.1.0 | published | 3 | ALICE-Zip | alice-zip-cli-v3.1.0 |
 | alice-analytics | 0.6.0 | published | 4 | ALICE-Analytics | v0.6.0 |
-| alice-db | 0.5.0 | published | 5 | ALICE-DB | v0.5.0 |
+| alice-db | 0.5.1 | planned | 5 | ALICE-DB | v0.5.1 |
 | alice-physics | 3.0.1 | published | 6 | ALICE-Physics | v3.0.1 |
 | alice-sdf | 6.0.0 | published | 7 | ALICE-SDF | v6.0.0 |
 | alice-llm | 2.0.0 | published | 8 | ALICE-LLM | v2.0.0 |
 | alice-lol-macro | 0.3.0 | published | 9 | ALICE-LOL | alice-lol-macro-v0.3.0 |
 | alice-lol | 0.4.2 | published | 10 | ALICE-LOL | alice-lol-v0.4.2 |
-| alice-edge | 0.3.0 | prepared | 11 | ALICE-Edge | v0.3.0 |
+| alice-edge | 0.3.0 | published | 11 | ALICE-Edge | v0.3.0 |
 | alice-law-integration | 0.0.0 | exempt | 12 | ALICE-Law | (なし) |
 | alice-ml | 0.2.0 | published | 13 | ALICE-ML | v0.2.0 |
 | alice-kinematics | 0.2.1 | published | 14 | ALICE-Kinematics | alice-kinematics-v0.2.1 |
@@ -168,7 +168,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 | step | 期限 | 理由 |
 |---|---|---|
-| dependency-consistency | alice-edge 0.3.0 | alice-db 0.5.0 and alice-analytics 0.6.0 are published, while the alice-physics and alice-edge releases on crates.io accept only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). The two alice-physics 3.0.1 lines are retired by the alice-physics release with alice-db 0.5 and alice-analytics >=0.5, <0.7; the two alice-edge 0.2.1 lines by alice-edge 0.3.0 (the same requirements); the remaining three (two alice-analytics versions linked, this repository on alice-db 0.4, and alice-db 0.4.0 requiring alice-analytics ^0.5) when this repository moves to alice-db 0.5 after both releases. Re-cut when each release ships |
+| dependency-consistency | alice-db 0.5.1 | alice-db 0.5.0 and alice-analytics 0.6.0 are published, while alice-physics 3.0.1 and alice-db 0.5.0 on crates.io accept only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). alice-edge 0.3.0 links alice-db 0.5.0 through its db feature; this repository and alice-physics 3.0.1 link alice-db 0.4.0. The release that retires each line: alice-db 0.5.0 requiring alice-analytics ^0.5 = alice-db 0.5.1 (DB main accepts >=0.5, <0.7); the two alice-physics 3.0.1 lines = the next Physics release (main accepts alice-db 0.5 and alice-analytics >=0.5, <0.7); this repository requiring alice-db 0.4 = moving this repository to alice-db 0.5; the two linked-at-2-versions lines and the alice-db 0.4.0 line = the next Physics release together with that move. Any other line still fails. |
 
 ### alice-det-math の版ごとの end to end の run digest
 

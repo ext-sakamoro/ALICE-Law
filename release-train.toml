@@ -121,19 +121,15 @@ required-ci = [
 ]
 
 [crate.alice-db]
-# 0.5.0 は created_at を時計から読まず入力にし (DataSegment::new / StorageConfig の created_at)、読み戻す
-# 算術の識別子を check_semantics で受け (以前の検証済みの識別子を含む)、G13 / G10 の穴と law の索引を直した版
-# CHANGELOG に日付つきの [0.5.0] - 2026-10-14 を入れ、publish する .crate を include で限定し、設計メモの相互参照からローカル path を除き、python の ndarray を numpy の再公開に揃えた DB main 153e6fe から公開する 本 repository の
-# end to end は main mode でも published mode でも 0.5.0 を受ける python feature の消費側 build は ndarray を numpy の再公開に揃えて通るので、0.4.0 の expected failure は外した
-version = "0.5.0"
-state = "published"
+# 0.5.1 は analytics feature の alice-analytics の要求を >=0.5, <0.7 に広げ、0.6.0 を受ける版 (公開済みの 0.5.0 は ^0.5
+# のままで、alice-edge 0.3.0 の db feature 経由で link されると alice-analytics が 2 版になる) DB main 00ca3cc にその
+# 広げがある 公開する commit は DB main で日付つきの [0.5.1] を入れて決め、prepared にする
+# 公開済みの 0.5.0 は DB main 153e6fe から (created_at を入力にし、check_semantics で識別子を受ける版)
+version = "0.5.1"
+state = "planned"
 order = 5
 repo = "ALICE-DB"
-must-contain = ["153e6fe84281edd5b67f01af619e27bd09e1cb87"]
-changelog-has = [
-    "`DataSegment::new` に 7 番目の引数 `created_at: u64` を追加",
-    "`scripts/tracked_binaries.py`",
-]
+must-contain = ["00ca3ccdb791321fde52dc7f8f5992c124f66c20"]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-24.04-arm)", "Test (ubuntu-latest)", "Test (windows-latest)"] },
     { workflow = "CI", job = "Clippy (pedantic, -D warnings)" },
@@ -374,7 +370,7 @@ required-ci = [
 
 [crate.alice-edge]
 version = "0.3.0"
-state = "prepared"
+state = "published"
 order = 11
 # tag は v{version} (0.2.0 から正) 旧書式の alice-edge-v0.1.0 (d3506b9) と、v0.2.1 と同じ commit を指す alice-edge-v0.2.1 も remote に残す
 tag = "v{version}"
@@ -485,18 +481,18 @@ required-ci = [
 
 [expected-failure.dep-db-0-5]
 step = "dependency-consistency"
-until = "alice-edge 0.3.0"
+until = "alice-db 0.5.1"
 expect = [
     "alice-analytics is linked at 2 versions: 0.5.0, 0.6.0",
+    "alice-db is linked at 2 versions: 0.4.0, 0.5.0",
     "this repository requires alice-db 0.4, which does not accept the latest release 0.5.0",
     "alice-physics 3.0.1 requires alice-analytics ^0.5 (optional), which does not accept the latest release 0.6.0",
     "alice-physics 3.0.1 requires alice-db ^0.4 (optional), which does not accept the latest release 0.5.0",
     "alice-db 0.4.0 requires alice-analytics ^0.5 (optional), which does not accept the latest release 0.6.0",
-    "alice-edge 0.2.1 requires alice-analytics ^0.5 (optional), which does not accept the latest release 0.6.0",
-    "alice-edge 0.2.1 requires alice-db ^0.4 (optional), which does not accept the latest release 0.5.0",
+    "alice-db 0.5.0 requires alice-analytics ^0.5 (optional), which does not accept the latest release 0.6.0",
 ]
-why = "alice-db 0.5.0 and alice-analytics 0.6.0 are published, while the alice-physics and alice-edge releases on crates.io accept only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). The two alice-physics 3.0.1 lines are retired by the alice-physics release with alice-db 0.5 and alice-analytics >=0.5, <0.7; the two alice-edge 0.2.1 lines by alice-edge 0.3.0 (the same requirements); the remaining three (two alice-analytics versions linked, this repository on alice-db 0.4, and alice-db 0.4.0 requiring alice-analytics ^0.5) when this repository moves to alice-db 0.5 after both releases. Re-cut when each release ships"
 exit = 1
+why = "alice-db 0.5.0 and alice-analytics 0.6.0 are published, while alice-physics 3.0.1 and alice-db 0.5.0 on crates.io accept only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). alice-edge 0.3.0 links alice-db 0.5.0 through its db feature; this repository and alice-physics 3.0.1 link alice-db 0.4.0. The release that retires each line: alice-db 0.5.0 requiring alice-analytics ^0.5 = alice-db 0.5.1 (DB main accepts >=0.5, <0.7); the two alice-physics 3.0.1 lines = the next Physics release (main accepts alice-db 0.5 and alice-analytics >=0.5, <0.7); this repository requiring alice-db 0.4 = moving this repository to alice-db 0.5; the two linked-at-2-versions lines and the alice-db 0.4.0 line = the next Physics release together with that move. Any other line still fails."
 
 # The Actions secrets of each repository in the train, by name, with what they are for:
 # publish-gate reads the repository's secrets and refuses a secret that is not listed here, a
