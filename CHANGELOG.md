@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/conformance_roster_check.py` (CI `Dependency consistency`, preflight): every release-train crate's `alice-law-conformance.toml` at its main is checked against `conformance/gates.toml` (all gates, status vocabulary, evidence paths at main, `fail-known` located in a file at main); a crate without a manifest fails unless `conformance/missing-manifests.toml` lists it, and a listed crate whose manifest has landed fails as stale; the status counts are pinned in `conformance/manifest-state.toml`. Five crates are listed as missing (alice-crypto, alice-kinematics, alice-llm, alice-ml, alice-physics)
 - `release-train.toml`: alice-lol 0.4.2 prepared from LOL main b166a75 (dated `[0.4.2] - 2026-10-15`), with its required CI jobs
 - `release-train.toml`: alice-db 0.5.0 published (DB main 153e6fe, tag `v0.5.0`); the expected failure that waited for it is removed
 - `release-train.toml`, `.github/workflows/e2e.yml`: the published end to end test is wrapped as an expected failure until alice-lol 0.4.2 (alice-lol 0.4.1 on crates.io records its semantics identifier as a constant folded over the alice-det-math 0.5.0 identifier, so with alice-det-math 0.5.1 it disagrees with its own pins); alice-lol is listed at 0.4.2, planned. The digest comparison skips when the test fails as expected

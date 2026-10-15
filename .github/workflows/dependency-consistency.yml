@@ -23,7 +23,7 @@ on:
       - "release-train.toml"
       - "README.md"
       - "docs/CONFORMANCE.md"
-      - "conformance/gates.toml"
+      - "conformance/**"
       - "scripts/**"
       - ".github/workflows/**"
       - "tools/**"
@@ -58,6 +58,16 @@ jobs:
 
       - name: Conformance docs and schema agree
         run: python3 scripts/conformance_docs_schema_check.py
+
+      - name: Test the conformance roster checker
+        run: python3 scripts/test_conformance_roster_check.py
+
+      # every release-train crate's alice-law-conformance.toml at its main: all gates, valid
+      # statuses, located fail-known entries, the missing-manifests list and the state file
+      - name: Every release-train crate declares its conformance at main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/conformance_roster_check.py
 
       - name: Test the README integration block generator
         run: python3 scripts/test_gen_law_readme_block.py
