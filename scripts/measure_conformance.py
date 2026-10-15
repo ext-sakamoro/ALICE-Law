@@ -193,6 +193,80 @@ def invoked_scripts(wf: dict[str, str]) -> set[str]:
     return {m.group(1) for text in wf.values() for cmd in run_texts(text) for m in SCRIPT_CALL.finditer(cmd)}
 
 
+def rust_uncommented(text: str) -> str:
+    """Rust source without its comments: `//` to the end of the line and `/* */` (nested), outside
+    string, raw string, byte string and character literals (a lifetime `'a` is not a literal)"""
+    out, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif text.startswith("/*", i):
+            depth, i = 1, i + 2
+            while i < n and depth:
+                if text.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif text.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+            out.append(" ")
+        elif c in "rb" and re.match(r"(?:br|r)#*\"", text[i:]) and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")):
+            m = re.match(r"(?:br|r)(#*)\"", text[i:])
+            end = text.find('"' + m.group(1), i + len(m.group(0)))
+            end = n if end < 0 else end + 1 + len(m.group(1))
+            out.append(text[i:end])
+            i = end
+        elif c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        elif c == "'":
+            m = re.match(r"'(?:\\(?:[^u]|u\{[0-9a-fA-F]+\})|[^\\'\n])'", text[i:])
+            if m:  # a character literal; otherwise a lifetime or a label
+                out.append(m.group(0))
+                i += len(m.group(0))
+            else:
+                out.append(c)
+                i += 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def hash_uncommented(text: str) -> str:
+    """TOML or YAML without its comments: a `#` at the start of a line or after whitespace,
+    outside a quoted string, starts a comment (a `#` inside a word such as a URL fragment does not)"""
+    out = []
+    for line in text.splitlines():
+        quote, k = None, 0
+        while k < len(line):
+            ch = line[k]
+            if quote:
+                if ch == "\\" and quote == '"':
+                    k += 2  # an escaped character inside a double-quoted string
+                    continue
+                if ch == quote:
+                    quote = None
+            elif ch in "\"'":
+                quote = ch
+            elif ch == "#" and (k == 0 or line[k - 1] in " \t"):
+                line = line[:k]
+                break
+            k += 1
+        out.append(line)
+    return "\n".join(out)
+
+
+def uncommented(path: str, text: str) -> str:
+    """the text without comments, read by the file's language"""
+    return rust_uncommented(text) if path.endswith(".rs") else hash_uncommented(text)
+
+
 def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()) -> dict[str, str]:
     cells: dict[str, str] = {}
     lists = clippy_lists(repo)
@@ -287,8 +361,8 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
     # G14: flags that change float semantics, and the tests that assert the environment
     flag_re = re.compile(r"target-cpu=native|fast-math")
     cfg = [f for f in repo.files if re.search(r"(^|/)\.cargo/config(\.toml)?$", f) or f.endswith("build.rs")]
-    in_cfg = [f for f in cfg if flag_re.search(repo.show(f))]          # applies to every build: a finding
-    in_wf = [f for f in wf if flag_re.search(wf[f])]                  # a job: a test leg or a shipped build, audit
+    in_cfg = [f for f in cfg if flag_re.search(uncommented(f, repo.show(f)))]   # applies to every build: a finding
+    in_wf = [f for f in wf if flag_re.search(uncommented(f, wf[f]))]           # a job: a test leg or a shipped build, audit
     ftz = [f for f in tests if re.search(r"subnormal|denormal|flush.to.zero", repo.show(f), re.I)]
     cells["G14"] = (f"flag in build configuration {', '.join(in_cfg)}" if in_cfg else "no flag in build configuration") + \
                    (f"; flag in workflow {', '.join(in_wf)} (test leg or shipped build: audit)" if in_wf else "") + \

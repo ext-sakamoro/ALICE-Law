@@ -95,6 +95,42 @@ class Measure(unittest.TestCase):
         w = self.cells({".github/workflows/ci.yml": "env:\n  RUSTFLAGS: -C target-cpu=native\n", "src/lib.rs": ""})
         self.assertIn("no flag in build configuration", w["G14"])
         self.assertIn("(test leg or shipped build: audit)", w["G14"])
+        # a flag in a comment is not a flag: TOML and YAML `#`, Rust `//` and `/* */`
+        for files in ({".cargo/config.toml": '[build]\n# rustflags = ["-C", "target-cpu=native"]\n'},
+                      {"build.rs": 'fn main() {\n    // println!("cargo:rustc-env=X=-C target-cpu=native");\n}\n'},
+                      {"build.rs": 'fn main() {\n    /* fast-math was tried\n       here */\n}\n'}):
+            c = self.cells({**files, "src/lib.rs": ""})
+            self.assertIn("no flag in build configuration", c["G14"], files)
+        c = self.cells({".cargo/config.toml": '[build]\nrustflags = ["-C", "target-cpu=native"]  # for speed\n', "src/lib.rs": ""})
+        self.assertIn("flag in build configuration .cargo/config.toml", c["G14"])
+        w = self.cells({".github/workflows/ci.yml": "env:\n  # RUSTFLAGS: -C target-cpu=native\n", "src/lib.rs": ""})
+        self.assertNotIn("flag in workflow", w["G14"])
+        # comment markers inside strings, raw strings, characters and URL fragments do not hide a flag
+        for files in ({"build.rs": 'fn main() { println!("cargo:rustc-env=U=http://x"); '
+                                   'println!("cargo:rustc-flags=-C target-cpu=native"); }\n'},
+                      {"build.rs": 'fn main() { let g = "src/*"; let f = "target-cpu=native"; let h = "*/"; }\n'},
+                      {"build.rs": 'fn main() { let r = r#"a // b"#; let f = "fast-math"; let c = \'/\'; }\n'},
+                      {"build.rs": 'fn main() { let r = r#"a "// "#; let f = "target-cpu=native"; }\n'},
+                      {".cargo/config.toml": '[env]\nRUSTFLAGS = "-C opt #2 -C target-cpu=native"\n'},
+                      {".cargo/config.toml": '[env]\nURL = "http://x/#a"\nRUSTFLAGS = "-C target-cpu=native"\n'}):
+            c = self.cells({**files, "src/lib.rs": ""})
+            self.assertIn("flag in build configuration", c["G14"], files)
+            self.assertNotIn("no flag in build configuration", c["G14"], files)
+        w = self.cells({".github/workflows/ci.yml":
+                        "jobs:\n  b:\n    steps:\n      - run: curl http://x/#a; RUSTFLAGS=-Ctarget-cpu=native cargo b\n",
+                        "src/lib.rs": ""})
+        self.assertIn("flag in workflow", w["G14"])
+        # a quote inside a character literal or escaped in a string does not start a string: the
+        # comment after it is still a comment
+        for files in ({"build.rs": "fn main() { let q = '\"'; } // fast-math\n"},
+                      {".cargo/config.toml": '[env]\nX = "a \\" b" # target-cpu=native\n'}):
+            c = self.cells({**files, "src/lib.rs": ""})
+            self.assertIn("no flag in build configuration", c["G14"], files)
+        # a lifetime is not a character literal: a comment after it is still a comment
+        c = self.cells({"build.rs": "fn f<'a>(x: &'a str) {} // target-cpu=native\n", "src/lib.rs": ""})
+        self.assertIn("no flag in build configuration", c["G14"])
+        c = self.cells({"build.rs": "fn f<'a>() { // target-cpu=native\n    let x: &'a str = \"\"; }\n", "src/lib.rs": ""})
+        self.assertIn("no flag in build configuration", c["G14"])
 
     def test_g5_finds_the_release_leg_on_an_aarch64_runner(self):
         self.assertIn("release test found, aarch64 runner macos-latest",
