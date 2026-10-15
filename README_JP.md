@@ -188,6 +188,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-det-math | 5 | 7 | 0 | 2 |
 | alice-edge | 3 | 5 | 6 | 0 |
 | alice-kinematics | 0 | 11 | 3 | 0 |
+| alice-llm | 0 | 12 | 2 | 0 |
 | alice-lol | 0 | 0 | 14 | 0 |
 | alice-lol-macro | 0 | 0 | 14 | 0 |
 | alice-ml | 0 | 10 | 4 | 0 |
@@ -200,7 +201,6 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 | crate | 追加する repository | 理由 |
 |---|---|---|
-| alice-llm | ALICE-LLM | the manifest has not been written yet |
 | alice-physics | ALICE-Physics | the manifest has not been written yet |
 
 <!-- law-status:end -->
