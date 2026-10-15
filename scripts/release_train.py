@@ -1057,6 +1057,17 @@ def version_step(previous: str, version: str) -> str:
     return "patch"
 
 
+def version_precedence(version: str) -> tuple:
+    """a sort key of SemVer 2.0 precedence (build metadata ignored): 1.0.0-rc.1 < 1.0.0,
+    1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-beta, numeric identifiers below alphanumeric ones"""
+    core, _, pre = version.split("+")[0].partition("-")
+    nums = tuple(int(x) for x in core.split("."))
+    if not pre:
+        return nums, 1, ()
+    ids = tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in pre.split("."))
+    return nums, 0, ids
+
+
 def semver_feature_args(features: list[str] | None) -> list[str]:
     """None: the default features; a list (possibly empty): exactly those"""
     if features is None:
@@ -1123,8 +1134,7 @@ def semver_problems(repo: Path, manifest_path: str, crate: str, version: str, ma
     if previous is None:
         return [], 0, f"{crate} has no release on crates.io: nothing to compare"
     step = version_step(previous, version)
-    if previous == version or [int(x) for x in previous.split("-")[0].split(".")] > \
-            [int(x) for x in version.split("-")[0].split(".")]:
+    if version_precedence(previous) >= version_precedence(version):
         return [f"{crate}: the latest release {previous} is not older than {version}"], 0, ""
     if step == "major":
         return [], 0, f"{previous} -> {version} is a major step: any change is allowed, not compared"
@@ -1694,7 +1704,7 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             print("  consumer:      the unpacked .crate built as a crates.io consumer builds it (empty CARGO_HOME, "
                   "minimal environment, no Cargo.lock or configuration above it, each feature set)")
             print(f"  semver:        {semver_note}")
-            print(f"  publish:     {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")
+            print(f"  publish:       {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")
             print(f"  then:          python3 scripts/release_train.py roster-mark published {a.crate} "
                   f"--repo {a.repo} --ref {commit} --expect-sha256 {digest}"
                   + (f" --manifest-path {a.manifest_path}" if manifest_dir else ""))

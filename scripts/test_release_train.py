@@ -1781,10 +1781,25 @@ class Semver(unittest.TestCase):
         self.assertIn("no release", note)
 
     def test_a_version_not_newer_than_the_latest_is_refused(self):
-        for latest_v in ("1.1.0", "1.2.0"):
-            p, _, _ = rt.semver_problems(Path("."), "Cargo.toml", "x", "1.1.0", {}, None, latest_fixture("x", latest_v),
+        for latest_v, version in (("1.1.0", "1.1.0"), ("1.2.0", "1.1.0"), ("1.0.0", "1.0.0-rc.1"),
+                                  ("1.0.0-rc.2", "1.0.0-rc.1"), ("1.0.0+build.2", "1.0.0+build.1")):
+            p, _, _ = rt.semver_problems(Path("."), "Cargo.toml", "x", version, {}, None, latest_fixture("x", latest_v),
                                          run=lambda *a: self.fail("ran"))
-            self.assertEqual(len(p), 1, latest_v)
+            self.assertEqual(len(p), 1, (latest_v, version))
+
+    def test_a_pre_release_of_a_later_version_is_compared(self):
+        p, n, note = rt.semver_problems(Path("."), "Cargo.toml", "x", "1.1.0-rc.1", {}, None, latest_fixture("x", "1.0.0"),
+                                        run=lambda *a: (0, semver_output("minor", 5, 0)))
+        self.assertEqual((p, n), ([], 2))
+        self.assertIn("(minor)", note)
+
+    def test_precedence_follows_semver(self):
+        order = ["0.9.9", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2",
+                 "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.0.1", "1.10.0"]
+        keys = [rt.version_precedence(v) for v in order]
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual(len(set(keys)), len(keys))
+        self.assertEqual(rt.version_precedence("1.0.0+a"), rt.version_precedence("1.0.0"))
 
     def test_every_feature_set_of_the_consumer_build_is_compared(self):
         seen = []
@@ -1827,6 +1842,26 @@ class Semver(unittest.TestCase):
         self.assertIn("refused: alice-zip 0.10.1 (default features): a minor version does not allow inherent_method_missing",
                       out.getvalue())
         self.assertNotIn("go for", out.getvalue())
+
+
+class GateGoOutput(unittest.TestCase):
+    def test_the_go_lines_name_every_step_in_one_column(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP})
+            p = Path(d, "r.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
+                               semver=lambda *a: ([], 3, "0.9.0 -> 0.10.0 (major step)"))
+        text = out.getvalue()
+        self.assertEqual(code, 0, text)
+        labels = re.findall(r"^  ([a-z. 0-9]+):( +)\S", text, re.M)
+        self.assertEqual([name for name, _ in labels],
+                         ["commit", ".crate sha256", "text", "consumer", "semver", "publish", "then"])
+        self.assertEqual({len(name) + len(gap) for name, gap in labels}, {14}, labels)
+        self.assertIn("  semver:        0.9.0 -> 0.10.0 (major step)", text)
 
 
 class SemverEndToEnd(unittest.TestCase):
