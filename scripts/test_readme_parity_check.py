@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Tests for readme_parity_check.py (two small README pairs in a temporary directory)."""
+"""Tests for readme_parity_check.py (two small README pairs in a temporary directory).
+
+Each test writes README.md and a Japanese file (README_JP.md by default, README_ja.md where the
+name is the point) and runs the checker on them; a mutant of a faithful pair must be found."""
 from __future__ import annotations
 
 import contextlib
@@ -29,7 +32,11 @@ run --check   # a comment
 
 ### Details
 
-Values over 2000 lines.
+Values over 2000 lines, from https://example.org/data.
+
+| Kind | Count |
+|------|-------|
+| a | 1 |
 
 - first item
 - second item
@@ -53,7 +60,11 @@ run --check   # a comment
 
 ### 詳細
 
-2000 行を超える値
+2000 行を超える値 出典は https://example.org/data
+
+| 種類 | 数 |
+|------|----|
+| a | 1 |
 
 - 1 つ目
 - 2 つ目
@@ -69,15 +80,21 @@ HEADINGS = "".join(f'[[heading]]\nlevel = {lv}\nen = "{e}"\nja = "{j}"\n\n' for 
 
 
 class Parity(unittest.TestCase):
-    def run_pair(self, en=EN, ja=JA, headings=HEADINGS):
+    def run_pair(self, en=EN, ja=JA, headings=HEADINGS, ja_name="README_JP.md", pass_ja=True,
+                 extra=()):
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "en.md").write_text(en, encoding="utf-8")
-            (Path(d) / "ja.md").write_text(ja, encoding="utf-8")
+            (Path(d) / "README.md").write_text(en, encoding="utf-8")
+            if ja is not None:
+                (Path(d) / ja_name).write_text(ja, encoding="utf-8")
+            for name in extra:
+                (Path(d) / name).write_text(ja, encoding="utf-8")
             (Path(d) / "h.toml").write_text(headings, encoding="utf-8")
+            args = ["--en", str(Path(d) / "README.md"), "--headings", str(Path(d) / "h.toml")]
+            if pass_ja:
+                args += ["--ja", str(Path(d) / ja_name)]
             out = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-                code = rpc.main(["--en", str(Path(d) / "en.md"), "--ja", str(Path(d) / "ja.md"),
-                                 "--headings", str(Path(d) / "h.toml")])
+                code = rpc.main(args)
         return code, out.getvalue()
 
     def test_a_faithful_translation_agrees(self):
@@ -94,6 +111,7 @@ class Parity(unittest.TestCase):
             "hashes": JA.replace("9f7cf676708a", "9f7cf676708b"),
             "names": JA.replace("ALICE-DB", "ALICE-Zip"),
             "links": JA.replace("https://crates.io/crates/semver", "https://docs.rs/semver"),
+            "urls": JA.replace("https://example.org/data", "https://example.org/other"),
         }
         for kind, ja in cases.items():
             code, out = self.run_pair(ja=ja)
@@ -150,6 +168,54 @@ class Parity(unittest.TestCase):
             self.assertEqual(code, 1, out)
             self.assertIn("found: sections:", out)
 
+    def test_two_sections_swapped_are_found(self):
+        usage = "## 使い方\n\n```sh\nrun --check   # a comment\n```\n\n"
+        details_start = JA.index("### 詳細")
+        details_end = JA.index("## 使い方", details_start)
+        details = JA[details_start:details_end]
+        swapped = JA.replace(usage + details, details + usage, 1)
+        self.assertNotEqual(swapped, JA)
+        code, out = self.run_pair(ja=swapped)
+        self.assertEqual(code, 1, out)
+        self.assertIn("found: headings: heading 2", out)
+        self.assertIn("found: headings: heading 3", out)
+
+    def test_a_table_row_or_a_code_block_moved_out_of_its_section_is_found(self):
+        code, out = self.run_pair(ja=JA.replace("| a | 1 |\n", ""))
+        self.assertEqual(code, 1, out)
+        self.assertIn("found: sections: section 3 (Details)", out)
+        # the same code block, moved from "Usage" into the section before it (glued to a paragraph
+        # there, and a paragraph put in its place): the paragraph counts and the blocks themselves
+        # agree, only the code block count of each section tells
+        fence = "```sh\nrun --check   # a comment\n```\n"
+        moved = JA.replace(fence, "ここに例\n", 1).replace("を見る 2 つの物体が落ちる\n",
+                                                         "を見る 2 つの物体が落ちる\n" + fence, 1)
+        code, out = self.run_pair(ja=moved)
+        self.assertEqual(code, 1, out)
+        self.assertIn("found: sections: section 1 (Tool)", out)
+        self.assertIn("found: sections: section 2 (Usage)", out)
+        self.assertNotIn("found: code blocks", out)
+
+    def test_the_japanese_file_may_be_named_README_ja(self):
+        ja = JA
+        en = EN.replace("(README_JP.md)", "(README_ja.md)")
+        code, out = self.run_pair(en=en, ja=ja, ja_name="README_ja.md", pass_ja=False)
+        self.assertEqual(code, 0, out)
+        # the language link names the file that exists
+        code, out = self.run_pair(ja=ja, ja_name="README_ja.md", pass_ja=False)
+        self.assertEqual(code, 1, out)
+        self.assertIn("README.md: no link to README_ja.md before the first section", out)
+
+    def test_the_default_japanese_file_must_be_exactly_one(self):
+        code, out = self.run_pair(ja=None, pass_ja=False)
+        self.assertEqual(code, 2, out)
+        self.assertIn("found none", out)
+        code, out = self.run_pair(pass_ja=False, extra=("README_ja.md",))
+        self.assertEqual(code, 2, out)
+        self.assertIn("['README_JP.md', 'README_ja.md']", out)
+        code, out = self.run_pair(pass_ja=False)
+        self.assertEqual(code, 0, out)
+
     def test_a_heading_added_at_the_end_of_one_file_is_found(self):
         code, out = self.run_pair(ja=JA + "\n## 付録\n\n追加の節\n")
         self.assertEqual(code, 1, out)
@@ -170,7 +236,9 @@ class Parity(unittest.TestCase):
         self.assertIn("README.md: the link #usage-2 names no heading", out)
 
     def test_nothing_compared_or_an_unreadable_file_exits_2(self):
+        # no section, value, code block or link at all: nothing compared
         self.assertEqual(self.run_pair(en="plain\n", ja="plain\n")[0], 2)
+        self.assertEqual(self.run_pair(en="", ja="")[0], 2)
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
             self.assertEqual(rpc.main(["--en", "/nonexistent/a.md", "--ja", "/nonexistent/b.md"]), 2)
