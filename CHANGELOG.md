@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `release-train.toml`: alice-analytics 0.6.0 prepared from Analytics main b1b5031 (dated `[0.6.0] - 2026-10-15`), with its required CI jobs
 - `release-train.toml`: alice-analytics 0.6.0 planned (seeds are inputs of the privacy constructors; not compatible with 0.5.0), with its required CI jobs
 - `release-train.toml`: alice-lol 0.4.2 published (LOL main b166a75, tag `alice-lol-v0.4.2`); the expected failure of the published end to end test that waited for it is removed (the test passes with the crates.io releases, run digest = the golden line for alice-det-math 0.5.1)
 - `README_JP.md`: the Japanese README, with the same sections and the generated Status section; `scripts/readme_parity_check.py` (CI `Dependency consistency`, preflight) fails when README.md and README_JP.md differ in the headings (level, text and order, paired in `scripts/readme_headings.toml`), the paragraph and list-item counts of a section, a fenced code block, the inline code spans, the versions and numbers of two or more digits, the hex hashes, the `alice-*` names or the link targets, when an in-page anchor names no heading, or when either file does not link to the other at the top; the meaning of the prose is not compared

@@ -87,13 +87,17 @@ law-dependency = false
 
 [crate.alice-analytics]
 version = "0.6.0"
-state = "planned"
+state = "prepared"
 order = 4
 repo = "ALICE-Analytics"
 # 0.6.0 は privacy module の時計から seed を取る constructor を外し、RandomizedResponse::new(ε, seed) で seed を
-# 入力にする版 (互換でない) 公開済みの 0.5.0 の消費側の要求を広げてから出す CHANGELOG に日付つきの [0.6.0] が
-# 入ったら、その commit を must-contain にし changelog-has を足して prepared にする
-must-contain = ["3b153930fc7000e29f04a4da58e1d49712d16bf9"]
+# 入力にする版 (互換でない) CHANGELOG に日付つきの [0.6.0] - 2026-10-15 を入れ、README の privacy の行を実際に
+# 合わせ、include で package を crate の file に限った Analytics main b1b5031 から公開する
+must-contain = ["b1b5031a4a8b01026c719e36d7ad256a9fc566ce"]
+changelog-has = [
+    "**破壊的変更:** deprecated な `privacy` module から時刻で seed する constructor を削除した",
+    "`alice-det-math` の要求を 0.5.1 に上げた",
+]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-24.04-arm)", "Test (ubuntu-latest)", "Test (windows-latest)"] },
     { workflow = "CI", job = "Build (no_std, host + thumbv7em-none-eabihf)" },
