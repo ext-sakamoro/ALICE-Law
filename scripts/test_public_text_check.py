@@ -210,6 +210,15 @@ class Vocabulary(unittest.TestCase):
         self.assertTrue(ptc.PRIVATE_NAME_HASHES)
         self.assertTrue(all(len(h) == 64 and int(h, 16) >= 0 for h in ptc.PRIVATE_NAME_HASHES))
 
+    def test_the_private_name_set_is_pinned(self):
+        # its size and the SHA-256 of its sorted lines: removing or changing a name changes them
+        spec = importlib.util.spec_from_file_location("ptc_fresh", HERE / "public_text_check.py")
+        fresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fresh)  # (other tests swap ptc's set)
+        h = sorted(fresh.PRIVATE_NAME_HASHES)
+        self.assertEqual((len(h), hashlib.sha256("\n".join(h).encode()).hexdigest()),
+                         (48, "324204d07160abe230e73b824cbf06344d15f6257153ef29067f149436c643de"))
+
     def test_the_repository_is_clean(self):
         code, out = run(HERE.parent, "--tree")
         self.assertEqual(code, 0, out)
@@ -402,8 +411,8 @@ class AllowList(Base):
 
     def test_an_agent_word_or_a_note_link_can_be_allowed_too(self):
         commit(self.repo, {"skills/x/SKILL.md": "the skills entry [[kv_namespaces]]\n"})
-        # (the path names the word too: the path line is one of the entry's lines)
-        ptc.ALLOWED = {"r": {self.entry("skills/x/SKILL.md", "skills"): 2, self.entry("skills/x/SKILL.md", "[[kv_namespaces]]"): 1,
+        # (the file's path is the skills/ directory as a path, not the word: only the text line counts)
+        ptc.ALLOWED = {"r": {self.entry("skills/x/SKILL.md", "skills"): 1, self.entry("skills/x/SKILL.md", "[[kv_namespaces]]"): 1,
                              self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 0, out)
@@ -1100,6 +1109,20 @@ class Terms(unittest.TestCase):
             self.assertIn("agent process", ptc.kinds(line), line)
         for line in ("see SKILL.md", "SKILL_PACKAGE_DIR = PACKAGE_ROOT", "def test_a_skills_path_segment(self):"):
             self.assertNotIn("agent process", ptc.kinds(line), line)
+
+    def test_the_skills_directory_as_a_path_is_not_the_process_word(self):
+        # must not catch: the package directory, as a path in code or prose
+        for line in ("`skills/lol-sdf/LICENSE` is copied", "// grammar: skills/lol-sdf/references/lol.gbnf",
+                     "see `skills/lol-sdf/SKILL.md`", "everything under `skills/` is the package",
+                     "plugin/skills/implicit-cad/README.md", "open('skills/notes.md')", "(skills/)"):
+            self.assertNotIn("agent process", ptc.kinds(line), line)
+            self.assertFalse(ptc.folded_agent_word(line), line)
+        # must catch: the word in prose, also next to a path
+        for line in ("the skills used here", "skills/abilities of the team", "skills/ then text",
+                     "Skills/lol-sdf/x", "skills used, see `skills/lol-sdf/SKILL.md`", "skill/lol-sdf/x",
+                     "skills/x"):
+            self.assertIn("agent process", ptc.kinds(line), line)
+        self.assertTrue(ptc.folded_agent_word("`skills/lol-sdf/x` by a w0rker"))
 
     def test_this_session_and_in_chat_are_process_words(self):
         for line in ("This session's simulator tooling", "as decided in this session", "asked in chat",

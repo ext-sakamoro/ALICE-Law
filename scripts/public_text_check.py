@@ -38,6 +38,12 @@ A = r"(?<![A-Za-z])"
 Z = r"(?![A-Za-z])"
 
 
+# `skills/` as a directory path (`skills/<dir>/...`, `skills/<file>.<ext>`, or `skills/` itself closed by a
+# backtick, a quote or a bracket) is the package directory of the "skill" format, not the process word;
+# the word in prose ("skills used", "skills/abilities") stays a finding
+SKILLS_PATH = r"skills/(?:[A-Za-z0-9._-]+/|[A-Za-z0-9_-]+\.[A-Za-z0-9]+(?![A-Za-z0-9_/])|(?=[`'\")\]>]|$))"
+
+
 def words(*alts: str) -> str:
     return A + "(?:" + "|".join(alts) + ")" + Z
 
@@ -52,6 +58,7 @@ FORBIDDEN = [
                                  r"(?<![A-Za-z])(?<!max_)(?<!num_)(?<!n_)(?<!Cloudflare )(?i:workers?)(?![A-Za-z])"
                                  r"(?!\s+(?i:threads?)(?![A-Za-z]))|"
                                  r"(?<![A-Za-z_])(?i:subagents?|multi[- ]?agents?|skills?)(?![A-Za-z_])(?<!SKILL(?=\.md))"
+                                 r"(?<!skills(?=" + SKILLS_PATH[6:] + r"))"
                                  # `git worktree add` is a command, not a description of how the work was done; so is
                                  # the same subcommand as an argument list (`[*git_argv, "worktree", "add", ...]`): the
                                  # quoted word followed by a quoted worktree subcommand
@@ -149,6 +156,19 @@ PRIVATE_NAME_HASHES = DEVICE_NAME_HASHES | {
     "d44eb131a9fc729aae3aed377733d242c0796290775259142e0bd8d26e1e3132",
     "9330fafbe2c0a50b50ab63cbc545e79f87b76394b7efa9b6f1dc90f4ce76bfb1",
     "3834bde4d50c16031f0b0c9ff9371cd8aaa10155dbbf964f199a5b965e369925",
+    # unpublished sibling repository and crate names (one word each)
+    "0357cdb2e625fd39d77f689fb7f66857751043f1989408b4f7ee4782269f45e8",
+    "0fde6f882c8c655fc05d2d7beedc92995c9338a5c85e616234161783f7138b4e",
+    "18eaed5cd72e74361e9c620a5b1df3f93cc34007f9c288abf27802d52d101506",
+    "48d644e12fa5826c48ff2a8cef316a8b3a52dbc4d418d77f0698eb84abdda0da",
+    "7564f199eba942a04c0cb9e4c2b89ce7a3c1ad43899e715f96218ed83eae5c75",
+    "8e2774e9aafc847145a806227a80c6a51d91abade45a6220e0519c39f3f567bd",
+    "c379346cda6119421f42651914a8871e340094d8f5b7980335354e8b70028c28",
+    "c750b7d2a5ab98430cc013a51fa56a60cbe6640840fadc1bd764575cf216618d",
+    "c96267f290f76ac40a777ee9d90bc6d2198bb4a1632a987d8411f112d5e42286",
+    "dca96b6d3e181f2c0ab4b1c3ba764e847a49ec988aada9d18a11160d68ed549c",
+    "de735c5c8d8ee5f8ba0468a624fd847d37591b8f112579e7fc5216760088221c",
+    "f082e4292686ac18af2580b58bc82a7e858174c173316f540158216ed1c445cb",
 }
 # The short ids the work sessions go by are two hex digits ("6e"-like). Alone they are
 # ordinary numbers and words, and a list of them, even hashed, would be public (256 values
@@ -241,6 +261,7 @@ CONFUSABLE = str.maketrans({"а": "a", "е": "e", "о": "o", "р": "p", "с": "c
 
 def folded_agent_word(line: str) -> bool:
     """an agent word that appears only after the fold (a word in plain letters is left to kinds())"""
+    line = re.sub(r"(?<![A-Za-z_])(?=" + SKILLS_PATH + r")skills", " ", line)
     if FOLDED_AGENT_RE.search(line.lower()):
         return False
     base = unicodedata.normalize("NFKC", line).lower()
@@ -302,35 +323,24 @@ def private_names(line: str) -> list[str]:
 # check (a new mention under a prefix, a removed one, or a mistyped entry).
 ALLOWED: dict[str, dict[str, int]] = {
     "ALICE-LOL": {
-        "fd9a9d9abcdb50151ee94eb1e9e162ca570d43fc68c7a6c23ea42f57436871ab": 2,
-        # the Agent Skills format word in the product's own skill (each file of skills/lol-sdf/ and its
-        # path, per word, at the lines it is on)
-        "a74d6fb638cfb8c9fee16e3112f683ea2a2ae9d860b7eddc5c4c918ae63334dc": 1,
+        # the Agent Skills format word in the product's own skill (each file of skills/lol-sdf/, per word,
+        # at the lines it is on; the skills/ directory as a path is not the word)
         "512ad23a184edef1a5d78480c4fb4cbd03528ce6196b8df9bedeb361a27f2cfd": 10,
-        "ab6f186f271f1c41ea57165beeb7c1daf08cfc40bfcacd5a03344625c57240bf": 2,
-        "f96515586d0c3054927aab551844a460b776b5eadbeaa1feb4df1f49b9c9eb3c": 1,
-        "c5bd64cb5c4b89c40f0fd2817441e0ef4def0076058526fda41eb94093d8a75c": 1,
+        "ab6f186f271f1c41ea57165beeb7c1daf08cfc40bfcacd5a03344625c57240bf": 1,
         "7e7501a2d6aa84f9cc4b918da457555a20e441cdb0617f9249e5d7dd66168ce4": 1,
-        "c7c9fc3a2ac70f30bb92f8fbe7ada57936dba232ccaa13e2ff701229ad1960ed": 1,
         "7d3700f94d6d0dbe6a8edf0ead7cd56c77932220e797c0a9c32b576081bd8be1": 1,
-        "157579a83cd94133750c21e8c442b0e96f81b5b1e955433d61e31c11927e7145": 1,
         "7c7a702ffb8ee276b9a766bfbb157b098962dcec6b911ffd11052554f0f2c1e6": 2,
-        "d6032eef5e06ab0597b63bc3ea46212d8e51d63bf1d9df599c67cbbef486a247": 1,
         "27b4d045e26de80668342952060c7d9a66b37840945cbef23f49a7b47627bf36": 1,
-        "fec269e79de829085f645608aec2eb6ec23158756f43d32aae2541e8a624e56c": 1,
         "d2cf3aa96340fe696a4f84c4263ac02d56f9714c6c7fa839569f76a10a6f9c4e": 1,
-        "804f62a499a2ad3dbaf6f93f89c979952b105096028c748d99cef10f8988405c": 1,
     },
     "ALICE-SDF": {
         # the getting-started guides name the product's own agent skill and the tools that install it
-        # (the heading and the paragraph under it, in English and Japanese): "skill" on 2 lines and
-        # "skills" (the skills/implicit-cad/ path) on 1 line of each
+        # (the heading and the paragraph under it, in English and Japanese): "skill" on 2 lines of each
+        # (the skills/implicit-cad/ path there is the directory, not the word)
         "e8ffe091255705a39a10c1476cdadfcf856f4025fd7ee763e37862f5e31c1de6": 2,
-        "18d022074ad61fa06d0a4ee4805dd416a0a4b467231d70c421dec612688a6be0": 1,
         "662e9ad920561c66b0c9dbc9424ef1a918ac25b0bb7961f6c2ffa024c24dece1": 2,
-        "c8e5037f53918dad1b24dec6ffc0b53f3f3efc820074dc935b935bedb2719e20": 1,
         # the Agent Skills format word "skill" in the product's own skill (each file of
-        # skills/implicit-cad/, at the lines it is on; "skills" there is the directory entry below)
+        # skills/implicit-cad/, at the lines it is on)
         "0d1cd546472a1c5eee45984723451b0408d436c6d843b38f26dac9e7eb0a4343": 14,
         "9a8f57102826f398f994cbb920815580d78399b352dc1ea9b38af5844286b729": 1,
         "1ae9c10dce04f534d3a998d5cb41bc0f4c48ce949a8cd0cc97ccf083c94b757f": 2,
@@ -346,7 +356,7 @@ ALLOWED: dict[str, dict[str, int]] = {
         "c9bcfb4989c30783679258347fd0b88a3671780d1d3ef2e045042d3352a59d3a": 1,
         "a2ca05f4d55ca8dde59e831dcdf400e2785a129dbac2f89ec54dc28ee4bf9e47": 1,
         "04f5e1ffb8f5f13d28b764f887e3e99bfacbf07c0e425796a46711b3ac09fdd9": 1,
-        "ab6f260bbe48e591409dcd53d07c2044e0a4da028ef1d51bc2ae01ff4009ba58": 10,
+        "ab6f260bbe48e591409dcd53d07c2044e0a4da028ef1d51bc2ae01ff4009ba58": 2,
         "2d5c1dc549cf7601676a0cb7f5452d20be3fa5f1d0f55140305152ca6be22625": 1,
         "e7fc9e6005c1c2d4cad2be2070cced19d2ce2874f93d046f0cabe7194671d81c": 2,
         "43e6578d81a78bd7891d1c713ab9d4dacae113f6ca20b2c38db6ed8133c68f1a": 1,
