@@ -86,6 +86,21 @@ _spec = importlib.util.spec_from_file_location("dep_consistency", HERE / "dep_co
 dc = importlib.util.module_from_spec(_spec)
 sys.modules["dep_consistency"] = dc
 _spec.loader.exec_module(dc)
+_sg_spec = importlib.util.spec_from_file_location("semver_gate", HERE / "semver_gate.py")
+sg = importlib.util.module_from_spec(_sg_spec)
+sys.modules["semver_gate"] = sg
+_sg_spec.loader.exec_module(sg)
+# the feature sets and the semver step are shared with the crates' own CI (scripts/semver_gate.py,
+# byte-identical in each repository): one definition, read here under the same names
+feature_specs = sg.feature_specs
+ANSI = sg.ANSI
+version_step = sg.version_step
+version_precedence = sg.version_precedence
+semver_feature_args = sg.semver_feature_args
+run_semver_checks = sg.run_semver_checks
+semver_verdict = sg.semver_verdict
+previous_release = sg.previous_release
+semver_problems = sg.semver_problems
 
 # what the published package must not carry: the repository's CI, tools and notes
 PACKAGE_EXCLUDED_DIRS = (".github/", "scripts/", "docs/", "logs/")
@@ -1022,135 +1037,6 @@ def consumer_env(home: Path, registry: Path) -> dict[str, str]:
     return env
 
 
-def feature_specs(manifest: dict, entry: dict | None) -> list[tuple[str, str, list[str] | None, str]]:
-    """(label, dependency spec, features, cargo command) of each build: the default features,
-    none, and either the roster's `consumer-features` sets (`cargo build`) and
-    `consumer-check-features` sets (`cargo check`: compiled but not linked, for a feature whose
-    library another tool links, such as a Python extension) or every feature at once"""
-    entry = entry or {}
-    specs = [("default features", "", None, "build"), ("no default features", ", default-features = false", [], "build")]
-    declared = [(fs, "build") for fs in entry.get("consumer-features", [])] + \
-               [(fs, "check") for fs in entry.get("consumer-check-features", [])]
-    if declared:
-        for fs, cmd in declared:
-            specs.append((f"features {fs}" + (" (cargo check)" if cmd == "check" else ""),
-                          ", default-features = false, features = " + json.dumps(fs), fs, cmd))
-    elif [f for f in manifest.get("features", {}) if f != "default"]:
-        every = sorted(f for f in manifest["features"] if f != "default")
-        specs.append(("all features", ", features = " + json.dumps(every), every, "build"))
-    return specs
-
-
-ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-
-
-def version_step(previous: str, version: str) -> str:
-    """the step from one release to the next as cargo-semver-checks names it: a change of
-    the leftmost non-zero part is "major", of the next one "minor", of the last "patch"
-    (Cargo's compatibility: 0.4 -> 0.5 is major, 0.4.1 -> 0.4.2 is minor)"""
-    old = [int(x) for x in re.match(r"(\d+)\.(\d+)\.(\d+)", previous).groups()]
-    new = [int(x) for x in re.match(r"(\d+)\.(\d+)\.(\d+)", version).groups()]
-    first = next((i for i, x in enumerate(old) if x), 2)
-    for i in range(3):
-        if old[i] != new[i]:
-            return "major" if i <= first else ("minor" if i == first + 1 else "patch")
-    return "patch"
-
-
-def version_precedence(version: str) -> tuple:
-    """a sort key of SemVer 2.0 precedence (build metadata ignored): 1.0.0-rc.1 < 1.0.0,
-    1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-beta, numeric identifiers below alphanumeric ones"""
-    core, _, pre = version.split("+")[0].partition("-")
-    nums = tuple(int(x) for x in core.split("."))
-    if not pre:
-        return nums, 1, ()
-    ids = tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in pre.split("."))
-    return nums, 0, ids
-
-
-def semver_feature_args(features: list[str] | None) -> list[str]:
-    """None: the default features; a list (possibly empty): exactly those"""
-    if features is None:
-        return ["--default-features"]
-    return ["--only-explicit-features"] + (["--features", ",".join(features)] if features else [])
-
-
-def run_semver_checks(repo: Path, manifest_path: str, baseline: list[str], features: list[str] | None,
-                      target_dir: Path) -> tuple[int, str]:
-    """(exit code, stdout + stderr) of `cargo semver-checks check-release` for one feature set"""
-    cmd = ["cargo", "semver-checks", "check-release", "--manifest-path", str(repo / manifest_path),
-           *baseline, *semver_feature_args(features)]
-    env = {**os.environ, "CARGO_TERM_COLOR": "never", "CARGO_TARGET_DIR": str(target_dir)}
-    try:
-        r = subprocess.run(cmd, cwd=repo, env=env, capture_output=True, text=True)
-    except FileNotFoundError as e:
-        return 127, str(e)
-    return r.returncode, r.stdout + r.stderr
-
-
-def semver_verdict(code: int, output: str, step: str, label: str) -> tuple[str | None, int]:
-    """(problem or None, checks counted) of one cargo-semver-checks run whose two versions
-    make `step`"""
-    text = ANSI.sub("", output)
-    claim = re.search(r"Checking \S+ v\S+ -> v\S+ \((?:assume )?(major|minor|patch) change\)", text)
-    if claim is None:
-        tail = " / ".join(line.strip() for line in text.strip().splitlines()[-3:])
-        return f"{label}: cargo semver-checks did not run (exit {code}): {tail}", 0
-    if claim.group(1) != step:
-        return f"{label}: cargo semver-checks compared a {claim.group(1)} step, the versions make a {step} step", 0
-    if step == "major":
-        return None, 0
-    # "223 checks: 223 pass, 31 skip" when every check passed, "196 checks: 195 pass, 1 fail, ..." otherwise
-    checked = re.search(r"Checked \[[^\]]*\]\s+(\d+) checks?: (\d+) pass(?:, (\d+) fail)?", text)
-    if checked is None:
-        return f"{label}: cargo semver-checks printed no count of checks (exit {code})", 0
-    total, failed = int(checked.group(1)), int(checked.group(3) or 0)
-    if total == 0:
-        return f"{label}: cargo semver-checks compared 0 checks for a {step} step", 0
-    lints = re.findall(r"--- failure ([A-Za-z0-9_]+):", text)
-    summary = re.search(r"Summary (.+)", text)
-    if failed or lints or code != 0:
-        return (f"{label}: a {step} version does not allow {', '.join(lints) or f'{failed} failed check(s)'}"
-                f" ({summary.group(1).strip() if summary else f'exit {code}'})"), 0
-    return None, 1
-
-
-def previous_release(fetch: dc.Fetch, crate: str) -> str | None:
-    """the latest release on crates.io, None when the crate has none"""
-    try:
-        return latest(fetch, crate)
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return None
-        raise
-
-
-def semver_problems(repo: Path, manifest_path: str, crate: str, version: str, manifest: dict, entry: dict | None,
-                    fetch: dc.Fetch, run=run_semver_checks, target_dir: Path | None = None
-                    ) -> tuple[list[str], int, str]:
-    """(problems, runs compared, what was compared) of cargo semver-checks against the latest
-    release, once per feature set of the consumer build"""
-    previous = previous_release(fetch, crate)
-    if previous is None:
-        return [], 0, f"{crate} has no release on crates.io: nothing to compare"
-    step = version_step(previous, version)
-    if version_precedence(previous) >= version_precedence(version):
-        return [f"{crate}: the latest release {previous} is not older than {version}"], 0, ""
-    if step == "major":
-        return [], 0, f"{previous} -> {version} is a major step: any change is allowed, not compared"
-    problems, compared = [], 0
-    with tempfile.TemporaryDirectory() as tmp:
-        for label, _, features, _ in feature_specs(manifest, entry):
-            code, out = run(repo, manifest_path, ["--baseline-version", previous], features,
-                            target_dir or Path(tmp))
-            p, n = semver_verdict(code, out, step, f"{crate} {version} ({label})")
-            if p:
-                problems.append(p)
-            compared += n
-    # every run either counts or is a problem (a run that compared 0 checks is refused above)
-    return problems, compared, f"{previous} -> {version} ({step}), {compared} feature set(s) compared"
-
-
 def expected_failure(entry: dict | None, name: str, version: str, features: list[str] | None,
                      cmd: str) -> dict | None:
     """the roster's `consumer-expected-failure` entry for this feature set (and command, when
@@ -1728,7 +1614,7 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
     except subprocess.CalledProcessError as e:
         print(f"error: {Path(str(e.cmd[0])).name}: {(e.stderr or '').strip()}", file=sys.stderr)
         return 2
-    except (OSError, ValueError, RegistryError, urllib.error.URLError, TimeoutError, json.JSONDecodeError,
+    except (OSError, ValueError, RegistryError, sg.RegistryError, urllib.error.URLError, TimeoutError, json.JSONDecodeError,
             tarfile.TarError) as e:
         # OSError covers a reset connection and a missing checkout; ValueError covers a
         # malformed manifest, requirement or version, and an unreadable JSON body

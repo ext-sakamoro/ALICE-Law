@@ -1179,14 +1179,6 @@ class ConsumerBuild(unittest.TestCase):
         broken = self.build(tiny_crate("gate-probe", "0.1.0", main='compile_error!("x");\nfn main() {}\n'))
         self.assertEqual(len(broken), 1, broken)
 
-    def test_feature_specs(self):
-        self.assertEqual([l for l, *_ in rt.feature_specs({}, None)], ["default features", "no default features"])
-        self.assertEqual([l for l, *_ in rt.feature_specs({"features": {"default": [], "x": []}}, None)][-1],
-                         "all features")
-        specs = rt.feature_specs({"features": {"x": []}}, {"consumer-features": [["x"], []],
-                                                           "consumer-check-features": [["py"]]})
-        self.assertEqual([(fs, cmd) for _, _, fs, cmd in specs][2:], [(["x"], "build"), ([], "build"), (["py"], "check")])
-
     def test_a_check_set_is_compiled_but_not_linked(self):
         # a cdylib whose symbol only another tool provides at link time: build fails, check passes
         # (a native library that does not exist: linking fails on every platform, while a cdylib with
@@ -1731,99 +1723,14 @@ def semver_output(step: str, total: int, failed: int, lints=(), from_v="1.0.0", 
     return "\n".join(out)
 
 
-def latest_fixture(crate: str, version: str | None):
-    def fetch(path: str) -> dict:
-        if version is None:
-            raise urllib.error.HTTPError(path, 404, "Not Found", None, None)
-        assert path == crate, path
-        return {"crate": {"max_stable_version": version, "max_version": version}}
-    return fetch
 
-
-class Semver(unittest.TestCase):
-    def test_the_step_follows_cargo_compatibility(self):
-        for old, new, step in (("3.0.1", "3.1.0", "minor"), ("3.0.1", "3.0.2", "patch"), ("3.0.1", "4.0.0", "major"),
-                               ("0.5.0", "0.5.1", "minor"), ("0.5.1", "0.6.0", "major"), ("0.0.1", "0.0.2", "major"),
-                               ("1.9.9", "1.10.0", "minor")):
-            self.assertEqual(rt.version_step(old, new), step, (old, new))
-
-    def test_a_clean_minor_run_counts_and_a_breaking_one_is_refused(self):
-        self.assertEqual(rt.semver_verdict(0, semver_output("minor", 196, 0), "minor", "l"), (None, 1))
-        p, n = rt.semver_verdict(1, semver_output("minor", 196, 1, ["enum_discriminants_undefined_non_unit_variant"]),
-                                 "minor", "alice-physics 3.1.0 (default features)")
-        self.assertEqual(n, 0)
-        self.assertIn("a minor version does not allow enum_discriminants_undefined_non_unit_variant", p)
-        self.assertIn("semver requires new major version", p)
-
-    def test_zero_checks_a_wrong_step_a_silent_failure_and_no_run_are_refused(self):
-        self.assertIn("compared 0 checks", rt.semver_verdict(0, semver_output("minor", 0, 0), "minor", "l")[0])
-        self.assertIn("compared a patch step, the versions make a minor step",
-                      rt.semver_verdict(0, semver_output("patch", 10, 0), "minor", "l")[0])
-        # a nonzero exit with no failed check counted is still refused
-        self.assertIsNotNone(rt.semver_verdict(1, semver_output("minor", 10, 0), "minor", "l")[0])
-        self.assertIn("did not run (exit 127)", rt.semver_verdict(127, "No such file: cargo", "minor", "l")[0])
-        self.assertIn("printed no count", rt.semver_verdict(0, "    Checking x v1.0.0 -> v1.1.0 (minor change)", "minor", "l")[0])
-        # colour codes do not hide the lines the gate reads
-        coloured = semver_output("minor", 5, 0).replace("Checking", "\x1b[1m\x1b[32mChecking\x1b[0m")
-        self.assertEqual(rt.semver_verdict(0, coloured, "minor", "l"), (None, 1))
-
-    def test_a_major_step_is_not_compared(self):
-        calls = []
-        p, n, note = rt.semver_problems(Path("."), "Cargo.toml", "x", "2.0.0", {}, None, latest_fixture("x", "1.4.0"),
-                                        run=lambda *a: calls.append(a) or (0, ""))
-        self.assertEqual((p, n, calls), ([], 0, []))
-        self.assertIn("major step", note)
-
-    def test_a_crate_with_no_release_has_nothing_to_compare(self):
-        p, n, note = rt.semver_problems(Path("."), "Cargo.toml", "x", "0.1.0", {}, None, latest_fixture("x", None),
-                                        run=lambda *a: self.fail("ran"))
-        self.assertEqual((p, n), ([], 0))
-        self.assertIn("no release", note)
-
-    def test_a_version_not_newer_than_the_latest_is_refused(self):
-        for latest_v, version in (("1.1.0", "1.1.0"), ("1.2.0", "1.1.0"), ("1.0.0", "1.0.0-rc.1"),
-                                  ("1.0.0-rc.2", "1.0.0-rc.1"), ("1.0.0+build.2", "1.0.0+build.1")):
-            p, _, _ = rt.semver_problems(Path("."), "Cargo.toml", "x", version, {}, None, latest_fixture("x", latest_v),
-                                         run=lambda *a: self.fail("ran"))
-            self.assertEqual(len(p), 1, (latest_v, version))
-
-    def test_a_pre_release_of_a_later_version_is_compared(self):
-        p, n, note = rt.semver_problems(Path("."), "Cargo.toml", "x", "1.1.0-rc.1", {}, None, latest_fixture("x", "1.0.0"),
-                                        run=lambda *a: (0, semver_output("minor", 5, 0)))
-        self.assertEqual((p, n), ([], 2))
-        self.assertIn("(minor)", note)
-
-    def test_precedence_follows_semver(self):
-        order = ["0.9.9", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2",
-                 "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.0.1", "1.10.0"]
-        keys = [rt.version_precedence(v) for v in order]
-        self.assertEqual(keys, sorted(keys))
-        self.assertEqual(len(set(keys)), len(keys))
-        self.assertEqual(rt.version_precedence("1.0.0+a"), rt.version_precedence("1.0.0"))
-
-    def test_every_feature_set_of_the_consumer_build_is_compared(self):
-        seen = []
-
-        def run(repo, manifest_path, baseline, features, target_dir):
-            seen.append((tuple(baseline), None if features is None else tuple(features)))
-            return 0, semver_output("minor", 50, 0)
-        entry = {"consumer-features": [["a", "std"]], "consumer-check-features": [["py"]]}
-        p, n, note = rt.semver_problems(Path("."), "Cargo.toml", "x", "1.1.0", {"features": {"a": [], "py": []}}, entry,
-                                        latest_fixture("x", "1.0.0"), run=run)
-        self.assertEqual((p, n), ([], 4))
-        base = ("--baseline-version", "1.0.0")
-        self.assertEqual(seen, [(base, None), (base, ()), (base, ("a", "std")), (base, ("py",))])
-        self.assertEqual(rt.semver_feature_args(None), ["--default-features"])
-        self.assertEqual(rt.semver_feature_args([]), ["--only-explicit-features"])
-        self.assertEqual(rt.semver_feature_args(["a", "b"]), ["--only-explicit-features", "--features", "a,b"])
-
-    def test_one_refused_feature_set_refuses_the_release(self):
-        runs = iter([(0, semver_output("minor", 50, 0)),
-                     (1, semver_output("minor", 50, 1, ["enum_variant_added"]))])
-        p, n, _ = rt.semver_problems(Path("."), "Cargo.toml", "x", "1.1.0", {}, None, latest_fixture("x", "1.0.0"),
-                                     run=lambda *a: next(runs))
-        self.assertEqual((len(p), n), (1, 1), p)
-        self.assertIn("(no default features)", p[0])
+class GateSemver(unittest.TestCase):
+    def test_the_names_are_semver_gates_own(self):
+        # one definition (scripts/semver_gate.py) read by the gate under the same names
+        for name in ("feature_specs", "version_step", "version_precedence", "semver_feature_args",
+                     "run_semver_checks", "semver_verdict", "previous_release", "semver_problems"):
+            self.assertIs(getattr(rt, name), getattr(rt.sg, name), name)
+        self.assertIs(_REAL_MAIN.__defaults__[-1], rt.sg.semver_problems)
 
     def test_the_gate_refuses_a_breaking_change_under_a_minor_version(self):
         roster_text = ROSTER.replace('version = "0.10.0"', 'version = "0.10.1"', 1)
@@ -1836,12 +1743,14 @@ class Semver(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fetch, lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
-                               semver=lambda *a: rt.semver_problems(*a, run=lambda *r: (
+                               semver=lambda *a: rt.sg.semver_problems(*a, run=lambda *r: (
                                    1, semver_output("minor", 9, 1, ["inherent_method_missing"], "0.10.0", "0.10.1"))))
         self.assertEqual(code, 1, out.getvalue())
         self.assertIn("refused: alice-zip 0.10.1 (default features): a minor version does not allow inherent_method_missing",
                       out.getvalue())
         self.assertNotIn("go for", out.getvalue())
+
+
 
 
 class GateGoOutput(unittest.TestCase):
@@ -1862,54 +1771,6 @@ class GateGoOutput(unittest.TestCase):
                          ["commit", ".crate sha256", "text", "consumer", "semver", "publish", "then"])
         self.assertEqual({len(name) + len(gap) for name, gap in labels}, {14}, labels)
         self.assertIn("  semver:        0.9.0 -> 0.10.0 (major step)", text)
-
-
-class SemverEndToEnd(unittest.TestCase):
-    """the real cargo semver-checks on two small crates: the baseline 1.0.0 has a
-    #[non_exhaustive] unit-only enum, as alice-physics 3.0.1's LawCheck has"""
-
-    BASE = "#[derive(Clone, Copy, Debug)]\n#[non_exhaustive]\npub enum Check {\n    A,\n    B,\n}\n"
-
-    def crate(self, root: Path, name: str, version: str, src: str) -> Path:
-        d = root / name
-        (d / "src").mkdir(parents=True)
-        (d / "Cargo.toml").write_text(f'[package]\nname = "semverprobe"\nversion = "{version}"\nedition = "2021"\n'
-                                      f'publish = false\n\n[workspace]\n', encoding="utf-8")
-        (d / "src" / "lib.rs").write_text(src, encoding="utf-8")
-        return d
-
-    def gate(self, version: str, src: str) -> tuple[list[str], int, str]:
-        if shutil.which("cargo-semver-checks") is None:
-            self.fail("cargo-semver-checks is not installed (CI installs it; locally: cargo install cargo-semver-checks)")
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            base = self.crate(root, "base", "1.0.0", self.BASE)
-            new = self.crate(root, "new", version, src)
-            return rt.semver_problems(
-                new, "Cargo.toml", "semverprobe", version, {}, None, latest_fixture("semverprobe", "1.0.0"),
-                run=lambda repo, mp, baseline, features, td: rt.run_semver_checks(
-                    repo, mp, ["--baseline-root", str(base)], features, td),
-                target_dir=root / "target")
-
-    def test_a_field_variant_under_a_minor_version_is_refused(self):
-        src = self.BASE.replace("    B,\n", "    B,\n    C { id: [u8; 32] },\n")
-        p, n, _ = self.gate("1.1.0", src)
-        self.assertEqual(n, 0)
-        self.assertEqual(len(p), 2, p)  # default features and none
-        self.assertIn("enum_discriminants_undefined_non_unit_variant", p[0])
-
-    def test_a_unit_variant_under_a_minor_version_passes(self):
-        p, n, note = self.gate("1.1.0", self.BASE.replace("    B,\n", "    B,\n    C,\n"))
-        self.assertEqual((p, n), ([], 2), p)
-        self.assertIn("1.0.0 -> 1.1.0 (minor)", note)
-
-    def test_an_unchanged_api_under_a_patch_version_passes(self):
-        self.assertEqual(self.gate("1.0.1", self.BASE)[:2], ([], 2))
-
-    def test_the_same_change_under_a_major_version_is_not_compared(self):
-        p, n, note = self.gate("2.0.0", self.BASE.replace("    B,\n", "    B,\n    C { id: [u8; 32] },\n"))
-        self.assertEqual((p, n), ([], 0))
-        self.assertIn("major step", note)
 
 
 if __name__ == "__main__":

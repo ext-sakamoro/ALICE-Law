@@ -34,6 +34,8 @@ version = "0.5.1"
 state = "published"
 order = 0
 repo = "ALICE-DetMath"
+consumer-features = [["simd", "std"]]
+consumer-features-why = "every feature at once: simd and std are not exclusive, and the build without std is the no-default build"
 must-contain = ["e42216e669dd7f05ddd1bd40a9af9195365bde02"]
 changelog-has = [
     "`max` / `min` / `max64` / `min64` を追加",
@@ -69,6 +71,8 @@ version = "0.10.0"
 state = "published"
 order = 2
 repo = "ALICE-Zip"
+consumer-features = [["fft", "lzma", "parallel", "std"]]
+consumer-features-why = "every feature at once: none is exclusive; each needs std, and the build without std is the no-default build"
 
 [crate.alice-zip-cli]
 # libalice: the CLI / FFI crate in ALICE-Zip/libalice, released with alice-zip
@@ -90,6 +94,8 @@ version = "0.6.0"
 state = "published"
 order = 4
 repo = "ALICE-Analytics"
+consumer-features = [["law", "simd", "std"]]
+consumer-features-why = "every feature at once: none is exclusive (law pulls alice-zip without std; simd adds no code and is kept so the feature name stays)"
 # 0.6.0 は privacy module の時計から seed を取る constructor を外し、RandomizedResponse::new(ε, seed) で seed を
 # 入力にする版 (互換でない) CHANGELOG に日付つきの [0.6.0] - 2026-10-15 を入れ、README の privacy の行を実際に
 # 合わせ、include で package を crate の file に限った Analytics main b1b5031 から公開する
@@ -456,13 +462,15 @@ required-ci = [
 [crate.alice-sync]
 # Law に早く載せる crate (README の ALICE-Law 統合の節を置くため) 0.6.1 は公開済み (tag v0.6.1 = 4e15f2e)
 # license は AGPL-3.0-or-later OR LicenseRef-Commercial で、この repository (AGPL) との向きの問題は無い
-# alice-det-math を直接は引かず、physics feature の alice-physics を通す main (0d15202) は
-# alice-physics "2.0" を要求する: 次の版は alice-physics の最新 (3) を受ける要求にしてから prepared にする
+# alice-det-math を直接は引かず、physics feature の alice-physics を通す 公開済みの 0.6.1 は alice-physics ^1.4 を
+# 要求し、main (a3305fd) は "3.0" (最新の 3 系) を要求するので、次の版は main から prepared にできる
 # (publish-gate は最新でない版を受ける要求を拒否する) この repository は alice-sync を引かない
 version = "0.6.1"
 state = "published"
 order = 15
 repo = "ALICE-Sync"
+consumer-features = [["all-bridges", "analytics", "async", "auth", "cache", "cloud", "codec", "ffi", "mdns", "physics", "python", "simd", "std", "telemetry"]]
+consumer-features-why = "every feature at once: none is exclusive; python builds the PyO3 module into the rlib (no cdylib), so the build needs a Python interpreter on the host"
 law-dependency = false
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test — ubuntu-latest", "Test — macos-latest", "Test — windows-latest"] },
