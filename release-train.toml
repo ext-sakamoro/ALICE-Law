@@ -301,7 +301,7 @@ required-ci = [
 
 [crate.alice-lol]
 version = "0.4.2"
-state = "prepared"
+state = "published"
 order = 10
 repo = "ALICE-LOL"
 tag = "alice-lol-v{version}"
@@ -459,13 +459,6 @@ expect = [
 ]
 why = "alice-db 0.5.0 is published, while alice-physics 3.0.1 and alice-edge 0.2.1 on crates.io accept only alice-db 0.4 (optional, enabled here), so this repository stays on 0.4 until both are released with 0.5; re-cut when the first of them ships"
 exit = 1
-
-[expected-failure.e2e-lol-0-4-2]
-step = "e2e-published-test"
-until = "alice-lol 0.4.2"
-expect = ["panicked at tests/law_to_storage_roundtrip.rs:473:", "test failed, to rerun pass `--test law_to_storage_roundtrip`"]
-why = "alice-lol 0.4.1 on crates.io records LOL_SEMANTICS_ID as a constant folded over the alice-det-math 0.5.0 identifier, while its pins read the alice-det-math in the build; resolved with alice-det-math 0.5.1 the two disagree (0.4.2 computes the identifier from the build)"
-exit = 101
 
 # The Actions secrets of each repository in the train, by name, with what they are for:
 # publish-gate reads the repository's secrets and refuses a secret that is not listed here, a
