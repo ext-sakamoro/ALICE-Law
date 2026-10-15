@@ -374,7 +374,7 @@ required-ci = [
 
 [crate.alice-edge]
 version = "0.3.0"
-state = "planned"
+state = "prepared"
 order = 11
 # tag は v{version} (0.2.0 から正) 旧書式の alice-edge-v0.1.0 (d3506b9) と、v0.2.1 と同じ commit を指す alice-edge-v0.2.1 も remote に残す
 tag = "v{version}"
@@ -382,8 +382,13 @@ repo = "ALICE-Edge"
 consumer-features = [["asp", "codec", "dashboard", "db", "depth-camera", "edge-pipeline", "ffi", "law", "ml", "mqtt", "pyo3", "sdf", "sensors", "std", "zip"]]
 consumer-features-why = "外す feature: sensors-hw (rppal は特定の Linux board の GPIO 専用で他の target では build できない)"
 # 0.3.0 は alice-db 0.5 を受ける版 (db feature が alice_db::ResidualPolicy を再公開するので、alice-db の版を
-# 上げるのは互換でない変更) 公開済みの 0.2.1 は ebf65d8 から 公開する commit は Edge main で決めて prepared にする
-must-contain = ["ebf65d850a3d036bab908ff6a6bc7e1113a84ca9"]
+# 上げるのは互換でない変更) dashboard の alice-analytics の要求は >=0.5, <0.7 に広げた CHANGELOG に日付つきの
+# [0.3.0] - 2026-10-15 を入れた Edge main 2ddf8be から公開する
+must-contain = ["2ddf8be021d8ec9a49de278f36a0245249a656f5"]
+changelog-has = [
+    "**破壊的:** `db` feature の alice-db の要求を 0.4 から 0.5 に上げた",
+    "`dashboard` feature の alice-analytics の要求を `\"0.5\"` から `\">=0.5, <0.7\"` に広げた",
+]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (ubuntu-latest)", "Test (macos-latest)", "Test (windows-latest)", "Test (ubuntu-24.04-arm)"] },
     { workflow = "CI", job = "MSRV (rust-version = 1.87)" },
