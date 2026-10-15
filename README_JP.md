@@ -151,7 +151,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-crypto | 0.4.1 | published | 1 | ALICE-Crypto | v0.4.1 |
 | alice-zip | 0.10.0 | published | 2 | ALICE-Zip | v0.10.0 |
 | alice-zip-cli | 3.1.0 | published | 3 | ALICE-Zip | alice-zip-cli-v3.1.0 |
-| alice-analytics | 0.6.0 | prepared | 4 | ALICE-Analytics | v0.6.0 |
+| alice-analytics | 0.6.0 | published | 4 | ALICE-Analytics | v0.6.0 |
 | alice-db | 0.5.0 | published | 5 | ALICE-DB | v0.5.0 |
 | alice-physics | 3.0.1 | published | 6 | ALICE-Physics | v3.0.1 |
 | alice-sdf | 6.0.0 | published | 7 | ALICE-SDF | v6.0.0 |
@@ -168,7 +168,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 | step | 期限 | 理由 |
 |---|---|---|
-| dependency-consistency | alice-edge 0.3.0 | alice-db 0.5.0 is published, while alice-physics 3.0.1 and alice-edge 0.2.1 on crates.io accept only alice-db 0.4 (optional, enabled here), so this repository stays on 0.4 until both are released with 0.5; re-cut when the first of them ships |
+| dependency-consistency | alice-edge 0.3.0 | alice-db 0.5.0 and alice-analytics 0.6.0 are published, while the alice-physics and alice-edge releases on crates.io accept only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). The two alice-physics 3.0.1 lines are retired by the alice-physics release with alice-db 0.5 and alice-analytics >=0.5, <0.7; the two alice-edge 0.2.1 lines by alice-edge 0.3.0 (the same requirements); the remaining three (two alice-analytics versions linked, this repository on alice-db 0.4, and alice-db 0.4.0 requiring alice-analytics ^0.5) when this repository moves to alice-db 0.5 after both releases. Re-cut when each release ships |
 
 ### alice-det-math の版ごとの end to end の run digest
 

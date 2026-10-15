@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `release-train.toml`: alice-analytics 0.6.0 published (Analytics main b1b5031, tag `v0.6.0`). The dependency check's expected failure is re-cut to the seven exact error lines it now has (alice-analytics 0.6.0 is refused by the published alice-physics 3.0.1, alice-edge 0.2.1 and alice-db 0.4.0, and this repository's alice-db 0.4 links a second alice-analytics), each with the release that retires it; any other line still fails
 - `release-train.toml`: alice-analytics 0.6.0 prepared from Analytics main b1b5031 (dated `[0.6.0] - 2026-10-15`), with its required CI jobs
 - `release-train.toml`: alice-analytics 0.6.0 planned (seeds are inputs of the privacy constructors; not compatible with 0.5.0), with its required CI jobs
 - `release-train.toml`: alice-lol 0.4.2 published (LOL main b166a75, tag `alice-lol-v0.4.2`); the expected failure of the published end to end test that waited for it is removed (the test passes with the crates.io releases, run digest = the golden line for alice-det-math 0.5.1)

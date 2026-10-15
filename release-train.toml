@@ -87,7 +87,7 @@ law-dependency = false
 
 [crate.alice-analytics]
 version = "0.6.0"
-state = "prepared"
+state = "published"
 order = 4
 repo = "ALICE-Analytics"
 # 0.6.0 は privacy module の時計から seed を取る constructor を外し、RandomizedResponse::new(ε, seed) で seed を
@@ -482,11 +482,15 @@ required-ci = [
 step = "dependency-consistency"
 until = "alice-edge 0.3.0"
 expect = [
+    "alice-analytics is linked at 2 versions: 0.5.0, 0.6.0",
     "this repository requires alice-db 0.4, which does not accept the latest release 0.5.0",
+    "alice-physics 3.0.1 requires alice-analytics ^0.5 (optional), which does not accept the latest release 0.6.0",
     "alice-physics 3.0.1 requires alice-db ^0.4 (optional), which does not accept the latest release 0.5.0",
+    "alice-db 0.4.0 requires alice-analytics ^0.5 (optional), which does not accept the latest release 0.6.0",
+    "alice-edge 0.2.1 requires alice-analytics ^0.5 (optional), which does not accept the latest release 0.6.0",
     "alice-edge 0.2.1 requires alice-db ^0.4 (optional), which does not accept the latest release 0.5.0",
 ]
-why = "alice-db 0.5.0 is published, while alice-physics 3.0.1 and alice-edge 0.2.1 on crates.io accept only alice-db 0.4 (optional, enabled here), so this repository stays on 0.4 until both are released with 0.5; re-cut when the first of them ships"
+why = "alice-db 0.5.0 and alice-analytics 0.6.0 are published, while the alice-physics and alice-edge releases on crates.io accept only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). The two alice-physics 3.0.1 lines are retired by the alice-physics release with alice-db 0.5 and alice-analytics >=0.5, <0.7; the two alice-edge 0.2.1 lines by alice-edge 0.3.0 (the same requirements); the remaining three (two alice-analytics versions linked, this repository on alice-db 0.4, and alice-db 0.4.0 requiring alice-analytics ^0.5) when this repository moves to alice-db 0.5 after both releases. Re-cut when each release ships"
 exit = 1
 
 # The Actions secrets of each repository in the train, by name, with what they are for:
