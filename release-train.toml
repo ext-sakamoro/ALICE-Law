@@ -86,10 +86,35 @@ tag = "alice-zip-cli-v{version}"
 law-dependency = false
 
 [crate.alice-analytics]
-version = "0.5.0"
-state = "published"
+version = "0.6.0"
+state = "planned"
 order = 4
 repo = "ALICE-Analytics"
+# 0.6.0 は privacy module の時計から seed を取る constructor を外し、RandomizedResponse::new(ε, seed) で seed を
+# 入力にする版 (互換でない) 公開済みの 0.5.0 の消費側の要求を広げてから出す CHANGELOG に日付つきの [0.6.0] が
+# 入ったら、その commit を must-contain にし changelog-has を足して prepared にする
+must-contain = ["3b153930fc7000e29f04a4da58e1d49712d16bf9"]
+required-ci = [
+    { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-24.04-arm)", "Test (ubuntu-latest)", "Test (windows-latest)"] },
+    { workflow = "CI", job = "Build (no_std, host + thumbv7em-none-eabihf)" },
+    { workflow = "CI", job = "Clippy (pedantic, -D warnings)" },
+    { workflow = "CI", job = "MSRV (rust-version = 1.87)" },
+    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
+    { workflow = "CI", job = "Docs lint", legs = ["Docs lint (macos-latest)", "Docs lint (ubuntu-latest)", "Docs lint (windows-latest)"] },
+    { workflow = "CI", job = "Feature powerset (cargo-hack, depth 2)" },
+    { workflow = "CI", job = "Format" },
+    { workflow = "CI", job = "actionlint (workflow YAML)" },
+    { workflow = "Security & Hygiene", job = "cargo audit (RustSec advisories)" },
+    { workflow = "Security & Hygiene", job = "cargo-deny (licenses + advisories + bans + sources)" },
+    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
+    { workflow = "Security & Hygiene", job = "cargo-semver-checks (API compatibility)" },
+    { workflow = "Security & Hygiene", job = "Stub / dbg guard (grep)" },
+    { workflow = "Security & Hygiene", job = "Package integrity (the published .crate builds on its own)" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_event_parse" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_metric_aggregate" },
+    { workflow = "Fuzz", job = "Fuzz — fuzz_sketch_insert" },
+    { workflow = "Release profile", job = "Golden tests, release profile", legs = ["Golden tests, release profile (macos-latest)", "Golden tests, release profile (ubuntu-latest)"] },
+]
 
 [crate.alice-db]
 # 0.5.0 は created_at を時計から読まず入力にし (DataSegment::new / StorageConfig の created_at)、読み戻す
