@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `release-train.toml`: alice-lol 0.4.2 prepared from LOL main b166a75 (dated `[0.4.2] - 2026-10-15`), with its required CI jobs
 - `release-train.toml`: alice-db 0.5.0 published (DB main 153e6fe, tag `v0.5.0`); the expected failure that waited for it is removed
 - `release-train.toml`, `.github/workflows/e2e.yml`: the published end to end test is wrapped as an expected failure until alice-lol 0.4.2 (alice-lol 0.4.1 on crates.io records its semantics identifier as a constant folded over the alice-det-math 0.5.0 identifier, so with alice-det-math 0.5.1 it disagrees with its own pins); alice-lol is listed at 0.4.2, planned. The digest comparison skips when the test fails as expected
 - `release-train.toml`, `.github/workflows/dependency-consistency.yml`: the dependency check is wrapped as an expected failure until alice-edge 0.3.0 (alice-physics 3.0.1 and alice-edge 0.2.1 on crates.io accept only alice-db 0.4, so this repository stays on 0.4 until both are released with 0.5); alice-edge is listed at 0.3.0, planned (its db feature re-exports an alice-db type)

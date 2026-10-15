@@ -301,15 +301,19 @@ required-ci = [
 
 [crate.alice-lol]
 version = "0.4.2"
-state = "planned"
+state = "prepared"
 order = 10
 repo = "ALICE-LOL"
 tag = "alice-lol-v{version}"
 manifest-path = "alice-lol/Cargo.toml"
-# 0.4.2 は LOL_SEMANTICS_ID を build に入った alice-det-math の識別子から計算する版 (0.4.1 は
-# alice-det-math 0.5.0 の識別子で畳んだ定数を持ち、alice-det-math 0.5.1 で解決すると自分の pin の fold と
-# 一致しない) public text の検査を通した LOL main (9a9a51c) を公開候補にし、gate の前に prepared にする
-must-contain = ["9a9a51c69996411e2d9a0def444383c3cc08829d"]
+# 0.4.2 は LOL_SEMANTICS_ID を build に入った alice-det-math の識別子の表 (LOL_SEMANTICS_BY_DET_MATH) から
+# 選ぶ版 (0.4.1 は alice-det-math 0.5.0 の識別子で畳んだ定数を持ち、alice-det-math 0.5.1 で解決すると自分の
+# pin の fold と一致しない) CHANGELOG に日付つきの [0.4.2] を入れた LOL main b166a75 から公開する
+must-contain = ["b166a75d51cd80cbfc8735bffbe9f1ef39fe595b"]
+changelog-has = [
+    "`LOL_SEMANTICS_ID` が alice-det-math の版に追従していなかった",
+    "`alice-lol` の版を 0.4.2 にし",
+]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-latest physics)", "Test (ubuntu-latest llm-bridge)", "Test (ubuntu-latest backend-parity)", "Test (ubuntu-latest roblox)"] },
     { workflow = "CI", job = "Clippy" },
@@ -325,6 +329,8 @@ required-ci = [
     { workflow = "CI", job = "Registry consumer" },
     { workflow = "CI", job = "GPU parity (lavapipe)" },
     { workflow = "CI", job = "Degenerate-parameter grid (ubuntu)" },
+    { workflow = "CI", job = "Programs in the documents export (ubuntu, release)" },
+    { workflow = "CI", job = "actionlint (workflow YAML 検証)" },
     { workflow = "Fuzz", job = "Fuzz — fuzz_lol_parse" },
     { workflow = "Fuzz", job = "Fuzz — fuzz_lol_to_wgsl" },
     { workflow = "Fuzz", job = "Fuzz — fuzz_lol_eval" },
