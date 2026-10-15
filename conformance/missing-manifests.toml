@@ -4,10 +4,6 @@
 # change that lands it); a crate missing from main and from this list fails with its name.
 # `fixed-in` is the repository whose change adds the manifest.
 
-[missing."alice-llm"]
-fixed-in = "ALICE-LLM"
-why = "the manifest has not been written yet"
-
 [missing."alice-physics"]
 fixed-in = "ALICE-Physics"
 why = "the manifest has not been written yet"

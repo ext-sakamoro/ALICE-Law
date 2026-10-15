@@ -37,6 +37,12 @@
 "unverified" = 3
 "n/a" = 0
 
+[crate."alice-llm"]
+"pass" = 0
+"fail-known" = 12
+"unverified" = 2
+"n/a" = 0
+
 [crate."alice-lol"]
 "pass" = 0
 "fail-known" = 0
