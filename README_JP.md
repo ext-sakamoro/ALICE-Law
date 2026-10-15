@@ -182,7 +182,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 | crate | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|
-| alice-analytics | 2 | 8 | 4 | 0 |
+| alice-analytics | 3 | 7 | 4 | 0 |
 | alice-crypto | 0 | 10 | 4 | 0 |
 | alice-db | 3 | 7 | 4 | 0 |
 | alice-det-math | 5 | 7 | 0 | 2 |
@@ -192,6 +192,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-lol | 0 | 0 | 14 | 0 |
 | alice-lol-macro | 0 | 0 | 14 | 0 |
 | alice-ml | 0 | 10 | 4 | 0 |
+| alice-physics | 7 | 6 | 1 | 0 |
 | alice-sdf | 1 | 8 | 5 | 0 |
 | alice-sync | 6 | 4 | 4 | 0 |
 | alice-zip | 4 | 10 | 0 | 0 |
@@ -199,9 +200,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 ### manifest がまだ無い crate
 
-| crate | 追加する repository | 理由 |
-|---|---|---|
-| alice-physics | ALICE-Physics | the manifest has not been written yet |
+なし
 
 <!-- law-status:end -->
 

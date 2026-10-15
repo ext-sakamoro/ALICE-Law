@@ -2,8 +2,8 @@
 # release-train crate's alice-law-conformance.toml at its main (do not edit by hand)
 
 [crate."alice-analytics"]
-"pass" = 2
-"fail-known" = 8
+"pass" = 3
+"fail-known" = 7
 "unverified" = 4
 "n/a" = 0
 
@@ -59,6 +59,12 @@
 "pass" = 0
 "fail-known" = 10
 "unverified" = 4
+"n/a" = 0
+
+[crate."alice-physics"]
+"pass" = 7
+"fail-known" = 6
+"unverified" = 1
 "n/a" = 0
 
 [crate."alice-sdf"]
