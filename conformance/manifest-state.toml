@@ -7,6 +7,12 @@
 "unverified" = 4
 "n/a" = 0
 
+[crate."alice-crypto"]
+"pass" = 0
+"fail-known" = 10
+"unverified" = 4
+"n/a" = 0
+
 [crate."alice-db"]
 "pass" = 3
 "fail-known" = 7
@@ -27,8 +33,8 @@
 
 [crate."alice-kinematics"]
 "pass" = 0
-"fail-known" = 10
-"unverified" = 4
+"fail-known" = 11
+"unverified" = 3
 "n/a" = 0
 
 [crate."alice-lol"]
@@ -43,9 +49,15 @@
 "unverified" = 14
 "n/a" = 0
 
-[crate."alice-sdf"]
+[crate."alice-ml"]
 "pass" = 0
-"fail-known" = 9
+"fail-known" = 10
+"unverified" = 4
+"n/a" = 0
+
+[crate."alice-sdf"]
+"pass" = 1
+"fail-known" = 8
 "unverified" = 5
 "n/a" = 0
 
