@@ -3,13 +3,15 @@
 
     next                                 the crate to publish now: the first in `order`
                                          that is not published (or exempt)
-    feature-coverage --repos-root DIR [--at REF]
+    feature-coverage --repos-root DIR
                                          every crate that declares consumer feature sets:
-                                         each non-default feature of its manifest (read in
-                                         DIR/<repo> at REF, default origin/main) is in a set
-                                         or in `exclude-features` with a reason, and the sets
-                                         name only features the manifest defines; no crate
-                                         compared exits 2
+                                         each feature Cargo has for it (cargo metadata of the
+                                         checkout DIR/<repo>, implicit ones included) is
+                                         enabled by a set, directly or through another
+                                         feature, or is in `exclude-features` with a reason,
+                                         and the sets name only its features; the working
+                                         tree is read (no change to a tracked file); no
+                                         crate compared or cargo metadata failing exits 2
     publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]
                                          run right before `cargo publish` of <crate> from
                                          the checkout DIR; the manifest (P, default
@@ -49,10 +51,12 @@
         .github/, scripts/, docs/ or logs/, or a file or directory of private notes (named by
         hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
         crate; a package that lists no file exits 2
-      - the roster declares consumer feature sets for <crate> and a non-default feature of
-        the manifest at SHA is in none of them nor in `exclude-features`, or a set names a
-        feature the manifest does not define (a declared set does not grow with the
-        manifest: a feature added later would be neither built nor semver-checked)
+      - the roster declares consumer feature sets for <crate> and a feature Cargo has for it
+        at SHA (cargo metadata of DIR, the implicit feature of an optional dependency
+        included) is enabled by none of them, directly or through another feature, nor in
+        `exclude-features`, or a set names a feature it does not have (a declared set does
+        not grow with the manifest: a feature added later would be neither built nor
+        semver-checked); cargo metadata failing exits 2
       - after those pass, the crate `cargo package` built is unpacked into a fresh
         directory with no Cargo.lock or Cargo.toml above it and built as a dependency of
         an empty crate there, as a crates.io consumer builds it (`cargo package` verifies
@@ -212,6 +216,8 @@ def load_roster(text: str) -> dict[str, dict]:
             if not isinstance(ex, dict) or not ex or not all(
                     isinstance(k, str) and k.strip() and isinstance(v, str) and v.strip() for k, v in ex.items()):
                 raise RosterError(f"{name}: `exclude-features` must be a table of feature = \"why it is not built\"")
+            if "default" in ex:
+                raise RosterError(f"{name}: `exclude-features` may not name `default` (it is not in the feature universe)")
             in_sets = set().union(*(set(x) for x in c.get("consumer-features", []) + c.get("consumer-check-features", [])))
             both = sorted(set(ex) & in_sets)
             if both:
@@ -1134,7 +1140,7 @@ def first_errors(r) -> str:
 
 
 def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None,
-                   entry: dict | None = None) -> list[str]:
+                   entry: dict | None = None, universe: list[str] | None = None) -> list[str]:
     """build the packaged crate the way a crates.io consumer does: unpacked into a fresh
     directory with no Cargo.lock, Cargo.toml or Cargo configuration above it, with an empty
     CARGO_HOME and a minimal environment, as the path dependency of an empty crate, once per
@@ -1156,6 +1162,9 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
             return [f"{name} {version}: the .crate carries {shipped[0]} (Cargo configuration of the repository, "
                     f"which a consumer never reads; set `include` or `exclude`)"]
         manifest = tomllib.loads((pkg / "Cargo.toml").read_text(encoding="utf-8"))
+        if universe is None and not ((entry or {}).get("consumer-features") or (entry or {}).get("consumer-check-features")):
+            # the every-feature set of the package as Cargo defines it (implicit features included)
+            universe = sg.feature_universe(pkg / "Cargo.toml")
         has_lib = "lib" in manifest or (pkg / "src" / "lib.rs").is_file()
         cache = (target_dir or root) / "consumer-cache"
         env = consumer_env(root / "home", cache / "registry")
@@ -1176,7 +1185,7 @@ def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None
             # every feature at once fails when some features cannot be on together: that is
             # a refusal (a consumer enabling them breaks) unless the roster names the feature
             # sets to build instead (`consumer-features`, with the reason)
-            runs = [(label, build(spec, cmd), fs, cmd) for label, spec, fs, cmd in feature_specs(manifest, entry)]
+            runs = [(label, build(spec, cmd), fs, cmd) for label, spec, fs, cmd in feature_specs(manifest, entry, universe)]
         else:
             # from a directory outside the package: Cargo reads configuration from the working
             # directory up, and `cargo install` of a published crate does not start inside it
@@ -1425,33 +1434,44 @@ def requirements_on(text: str, crate: str) -> list[tuple[str, str | None]]:
     return out
 
 
-def feature_coverage_problems(name: str, entry: dict, manifest: dict) -> tuple[list[str], int]:
+def package_features(metadata, checkout: Path, manifest_path: str, name: str) -> dict:
+    """the `features` map Cargo has for the crate `name` of the manifest in a checkout (the
+    [features] table and the implicit feature of each optional dependency no feature names as
+    `dep:`), from `cargo metadata --no-deps` through `metadata` (scripts/semver_gate.py
+    cargo_metadata); semver_gate.MetadataError when it cannot be read (never a fallback to the
+    [features] keys)"""
+    return sg.features_from_metadata(metadata(checkout / manifest_path), name)
+
+
+def feature_coverage_problems(name: str, entry: dict, features: dict) -> tuple[list[str], int]:
     """(problems, 1 when compared): a crate that declares consumer feature sets builds and
-    semver-checks only those, so every non-default feature of its manifest must be in a set
-    or in `exclude-features` (with the reason); a crate that declares none builds every
-    feature at once and is not compared (0)"""
+    semver-checks only those, so every feature of its universe (cargo metadata, implicit ones
+    included, `default` aside) must be enabled by a set, directly or through another feature
+    (semver_gate.feature_closure), or be in `exclude-features` (with the reason), and the sets
+    may name only features the crate has; a crate that declares none builds every feature at
+    once and is not compared (0)"""
     sets = entry.get("consumer-features", []) + entry.get("consumer-check-features", [])
     if not sets:
         return [], 0
-    feats = {f for f in manifest.get("features", {}) if f != "default"}
-    declared = set().union(*(set(s) for s in sets))
     excluded = set(entry.get("exclude-features", {}))
+    declared = set().union(*(set(s) for s in sets))
     problems = []
-    missing = sorted(feats - declared - excluded)
+    missing = sg.uncovered_features(sg.universe_from_features(features), features, sets, excluded)
     if missing:
-        problems.append(f"{name}: the manifest's feature(s) {missing} are in no consumer set and not in "
+        problems.append(f"{name}: the crate's feature(s) {missing} are enabled by no consumer set and not in "
                         f"exclude-features: a declared set does not grow with the manifest, so they would be "
                         f"neither built nor semver-checked")
-    unknown = sorted((declared | excluded) - feats)
+    unknown = sg.unknown_features(features, declared | excluded)
     if unknown:
-        problems.append(f"{name}: the consumer sets or exclude-features name {unknown}, which the manifest "
-                        f"does not define")
+        problems.append(f"{name}: the consumer sets or exclude-features name {unknown}, which the crate "
+                        f"does not have")
     return problems, 1
 
 
-def feature_coverage(roster: dict[str, dict], repos_root: Path, at: str) -> tuple[list[str], list[str], int]:
+def feature_coverage(roster: dict[str, dict], repos_root: Path, metadata) -> tuple[list[str], list[str], int]:
     """(problems, crates covered, crates compared) of feature_coverage_problems for every roster
-    crate that declares consumer sets, each read from its repository's checkout at `at`"""
+    crate that declares consumer sets, read from the working tree of its repository's checkout
+    (cargo metadata reads files, so the tree must have no change to a tracked file)"""
     problems, ok, compared = [], [], 0
     for name, c in sorted(roster.items()):
         if not (c.get("consumer-features") or c.get("consumer-check-features")):
@@ -1463,16 +1483,16 @@ def feature_coverage(roster: dict[str, dict], repos_root: Path, at: str) -> tupl
         if not (repo / ".git").exists():
             problems.append(f"{name}: {repo} is not a checkout")
             continue
-        path = c.get("manifest-path", "Cargo.toml")
-        manifest = tomllib.loads(git(repo, "show", f"{at}:{path}"))
-        if manifest.get("package", {}).get("name") != name:
-            problems.append(f"{name}: {c['repo']}/{path} at {at} is not {name}")
+        if git(repo, "status", "--porcelain", "--untracked-files=no").strip():
+            problems.append(f"{name}: {repo} has changes to tracked files (the commit is what is checked)")
             continue
-        p, n = feature_coverage_problems(name, c, manifest)
+        path = c.get("manifest-path", "Cargo.toml")
+        head = git(repo, "rev-parse", "--short", "HEAD").strip()
+        p, n = feature_coverage_problems(name, c, package_features(metadata, repo, path, name))
         problems += p
         compared += n
         if not p:
-            ok.append(f"{name}: {c['repo']}/{path}")
+            ok.append(f"{name}: {c['repo']}/{path} at {head}")
     return problems, ok, compared
 
 
@@ -1511,7 +1531,8 @@ def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) ->
 def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
          docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None,
-         reviewers=environment_reviewers, inventory=secret_inventory, semver=semver_problems) -> int:
+         reviewers=environment_reviewers, inventory=secret_inventory, semver=semver_problems,
+         metadata=sg.cargo_metadata) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1539,8 +1560,8 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
     f.add_argument("--at", default="origin/main", help="the commit read in each checkout (fetch first)")
     fc = sub.add_parser("feature-coverage")
     fc.add_argument("--repos-root", type=Path, required=True,
-                    help="the directory holding a checkout of the repository of every crate with consumer sets")
-    fc.add_argument("--at", default="origin/main", help="the commit read in each checkout (fetch first)")
+                    help="the directory holding a checkout of the repository of every crate with consumer sets "
+                         "(its working tree is read: check out the commit to check)")
     a = ap.parse_args(argv)
     try:
         roster_text = a.roster.read_text(encoding="utf-8")
@@ -1557,16 +1578,15 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
         return 0
     if a.cmd == "feature-coverage":
         try:
-            problems, ok, compared = feature_coverage(roster, a.repos_root, a.at)
-        except (OSError, ValueError, subprocess.CalledProcessError) as e:
+            problems, ok, compared = feature_coverage(roster, a.repos_root, metadata)
+        except (OSError, ValueError, sg.MetadataError, subprocess.CalledProcessError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
         for line in ok:
             print(f"covered: {line}")
         for p in problems:
             print(f"refused: {p}")
-        print(f"feature-coverage: {compared} crate(s) with consumer sets compared at {a.at}, "
-              f"{len(problems)} problem(s)")
+        print(f"feature-coverage: {compared} crate(s) with consumer sets compared, {len(problems)} problem(s)")
         if compared == 0 and not problems:
             print("error: no crate with consumer sets was compared", file=sys.stderr)
             return 2
@@ -1639,7 +1659,9 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
                 compared += n
             problems += package_problems(a.crate, lister(a.repo, a.manifest_path))
             compared += 1
-            cov, n = feature_coverage_problems(a.crate, roster[a.crate], tomllib.loads(manifest_text))
+            features = package_features(metadata, a.repo, a.manifest_path, a.crate)
+            universe = sg.universe_from_features(features)
+            cov, n = feature_coverage_problems(a.crate, roster[a.crate], features)
             problems += cov
             compared += n
             for p in problems:
@@ -1664,14 +1686,16 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
                     print(f"refused: {p}")
                 return 1
             compared += 1
-            consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir, roster[a.crate])
+            consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir, roster[a.crate],
+                                                             universe=universe)
             for p in consumer_problems:
                 print(f"refused: {p}")
             if consumer_problems:
                 return 1
             compared += 1
             semver_found, n, semver_note = semver(a.repo, a.manifest_path, a.crate, version,
-                                                  tomllib.loads(manifest_text), roster[a.crate], fetch)
+                                                  tomllib.loads(manifest_text), roster[a.crate], fetch,
+                                                  universe=universe)
             for p in semver_found:
                 print(f"refused: {p}")
             if semver_found:
@@ -1711,7 +1735,7 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
     except subprocess.CalledProcessError as e:
         print(f"error: {Path(str(e.cmd[0])).name}: {(e.stderr or '').strip()}", file=sys.stderr)
         return 2
-    except (OSError, ValueError, RegistryError, sg.RegistryError, urllib.error.URLError, TimeoutError, json.JSONDecodeError,
+    except (OSError, ValueError, RegistryError, sg.RegistryError, sg.MetadataError, urllib.error.URLError, TimeoutError, json.JSONDecodeError,
             tarfile.TarError) as e:
         # OSError covers a reset connection and a missing checkout; ValueError covers a
         # malformed manifest, requirement or version, and an unreadable JSON body

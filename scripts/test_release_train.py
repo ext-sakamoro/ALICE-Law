@@ -10,6 +10,7 @@ import contextlib
 import gzip
 import hashlib
 import importlib.util
+import inspect
 import io
 import json
 import re
@@ -18,6 +19,7 @@ import sys
 import tarfile
 import shutil
 import tempfile
+import tomllib
 import unittest
 import urllib.error
 from pathlib import Path
@@ -41,11 +43,21 @@ def _main(argv=None, **kw):
     kw.setdefault("inventory", lambda owner_repo: EMPTY_INVENTORY)
     # the gate's own tests do not run cargo semver-checks (class Semver tests that step)
     kw.setdefault("semver", lambda *a, **k: ([], 1, "not run in these tests"))
+    # and read the features from the fixture's [features] table instead of cargo metadata
+    # (class FeatureCoverage runs the real cargo metadata)
+    kw.setdefault("metadata", fixture_metadata)
     return _REAL_MAIN(argv, **kw)
 
 
 rt.main = _main
-rt.consumer_build = lambda body, name, version, target_dir, entry=None: []
+rt.consumer_build = lambda body, name, version, target_dir, entry=None, universe=None: []
+
+
+def fixture_metadata(manifest_path):
+    """`cargo metadata --no-deps` of a fixture manifest, its [features] table taken as is"""
+    m = tomllib.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    return {"packages": [{"name": m["package"]["name"], "manifest_path": str(manifest_path),
+                          "features": m.get("features", {})}]}
 
 ROSTER = """
 [crate.alice-det-math]
@@ -1329,7 +1341,7 @@ class GateConsumer(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
-                               consumer=lambda body, name, version, t, entry=None: [f"{name} {version}: does not build"])
+                               consumer=lambda body, name, version, t, entry=None, universe=None: [f"{name} {version}: does not build"])
         self.assertEqual(code, 1)
         self.assertIn("refused: alice-zip 0.10.0: does not build", out.getvalue())
         self.assertNotIn("go for", out.getvalue())
@@ -1343,7 +1355,7 @@ class GateConsumer(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
-                               consumer=lambda body, name, version, t, entry=None: seen.append(entry["consumer-features"]) or [])
+                               consumer=lambda body, name, version, t, entry=None, universe=None: seen.append(entry["consumer-features"]) or [])
         self.assertEqual((code, seen), (0, [[["svo"]]]))
 
 
@@ -1730,7 +1742,9 @@ class GateSemver(unittest.TestCase):
         for name in ("feature_specs", "version_step", "version_precedence", "semver_feature_args",
                      "run_semver_checks", "semver_verdict", "previous_release", "semver_problems"):
             self.assertIs(getattr(rt, name), getattr(rt.sg, name), name)
-        self.assertIs(_REAL_MAIN.__defaults__[-1], rt.sg.semver_problems)
+        params = inspect.signature(_REAL_MAIN).parameters
+        self.assertIs(params["semver"].default, rt.sg.semver_problems)
+        self.assertIs(params["metadata"].default, rt.sg.cargo_metadata)
 
     def test_the_gate_refuses_a_breaking_change_under_a_minor_version(self):
         roster_text = ROSTER.replace('version = "0.10.0"', 'version = "0.10.1"', 1)
@@ -1743,7 +1757,7 @@ class GateSemver(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fetch, lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
-                               semver=lambda *a: rt.sg.semver_problems(*a, run=lambda *r: (
+                               semver=lambda *a, **k: rt.sg.semver_problems(*a, **k, run=lambda *r: (
                                    1, semver_output("minor", 9, 1, ["inherent_method_missing"], "0.10.0", "0.10.1"))))
         self.assertEqual(code, 1, out.getvalue())
         self.assertIn("refused: alice-zip 0.10.1 (default features): a minor version does not allow inherent_method_missing",
@@ -1772,89 +1786,149 @@ def named_repo(root: Path, name: str, files: dict[str, str]) -> Path:
 
 
 class FeatureCoverage(unittest.TestCase):
+    """the coverage of the declared consumer sets; the features are the `features` map of
+    cargo metadata (the command and gate tests run the real cargo metadata on fixture crates)"""
+
     def test_the_roster_validates_exclude_features(self):
         rt.load_roster(COVERED)
         for bad in ('exclude-features = { hw = "" }', 'exclude-features = ["hw"]', 'exclude-features = {}',
-                    'exclude-features = { fft = "in a set too" }'):
+                    'exclude-features = { fft = "in a set too" }', 'exclude-features = { default = "not a feature" }'):
             with self.assertRaises(rt.RosterError, msg=bad):
                 rt.load_roster(COVERED.replace('exclude-features = { hw = "a board-only feature" }', bad, 1))
         with self.assertRaises(rt.RosterError):
             rt.load_roster(ROSTER.replace('order = 1\n', 'order = 1\nexclude-features = { hw = "x" }\n', 1))
 
-    def test_every_feature_must_be_in_a_set_or_excluded(self):
+    def test_every_feature_must_be_enabled_by_a_set_or_excluded(self):
         entry = rt.load_roster(COVERED)["alice-zip"]
-        m = {"features": {"default": ["std"], "std": [], "fft": [], "hw": []}}
-        self.assertEqual(rt.feature_coverage_problems("alice-zip", entry, m), ([], 1))
+        f = {"default": ["std"], "std": [], "fft": [], "hw": []}
+        self.assertEqual(rt.feature_coverage_problems("alice-zip", entry, f), ([], 1))
         # a feature added to the manifest later, in no set and not excluded
-        p, n = rt.feature_coverage_problems("alice-zip", entry, {"features": {**m["features"], "foo": []}})
-        self.assertEqual(n, 1)
-        self.assertEqual(len(p), 1)
-        self.assertIn("['foo'] are in no consumer set and not in exclude-features", p[0])
-        # names the manifest does not define: a set member, or an exclude left behind
-        p, _ = rt.feature_coverage_problems("alice-zip", entry, {"features": {"std": [], "hw": []}})
+        p, n = rt.feature_coverage_problems("alice-zip", entry, {**f, "foo": []})
+        self.assertEqual((n, len(p)), (1, 1))
+        self.assertIn("['foo'] are enabled by no consumer set and not in exclude-features", p[0])
+        # names the crate does not have: a set member, or an exclude left behind
+        p, _ = rt.feature_coverage_problems("alice-zip", entry, {"std": [], "hw": []})
         self.assertIn("['fft']", p[0])
-        p, _ = rt.feature_coverage_problems("alice-zip", entry, {"features": {"std": [], "fft": []}})
+        p, _ = rt.feature_coverage_problems("alice-zip", entry, {"std": [], "fft": []})
         self.assertIn("['hw']", p[0])
         # check sets count as covered
         e2 = {**entry, "consumer-check-features": [["foo"]]}
-        self.assertEqual(rt.feature_coverage_problems("alice-zip", e2, {"features": {**m["features"], "foo": []}}),
-                         ([], 1))
+        self.assertEqual(rt.feature_coverage_problems("alice-zip", e2, {**f, "foo": []}), ([], 1))
+
+    def test_an_implicit_feature_counts_and_is_covered_through_the_feature_that_enables_it(self):
+        entry = {"consumer-features": [["std", "python"]]}
+        # cargo metadata: serde and pyo3 are optional dependencies; python enables pyo3 (its
+        # implicit feature) and nothing enables serde
+        f = {"std": [], "python": ["pyo3", "numpy/extra"], "pyo3": ["dep:pyo3"], "numpy": ["dep:numpy"],
+             "serde": ["dep:serde"], "weak": ["serde?/derive"]}
+        p, _ = rt.feature_coverage_problems("x", entry, f)
+        self.assertEqual(len(p), 1, p)
+        self.assertIn("['serde', 'weak']", p[0])
+        # "serde?/derive" does not enable serde
+        p, _ = rt.feature_coverage_problems("x", {"consumer-features": [["std", "python", "weak"]]}, f)
+        self.assertIn("['serde']", p[0])
+        self.assertEqual(rt.feature_coverage_problems("x", {"consumer-features": [["std", "python", "weak"], ["serde"]]},
+                                                      f), ([], 1))
 
     def test_a_crate_without_declared_sets_is_not_compared(self):
         entry = rt.load_roster(ROSTER)["alice-zip"]
-        self.assertEqual(rt.feature_coverage_problems("alice-zip", entry, {"features": {"anything": []}}), ([], 0))
+        self.assertEqual(rt.feature_coverage_problems("alice-zip", entry, {"anything": []}), ([], 0))
 
-    def run_cov(self, roster_text: str, repos: dict[str, dict[str, str]]):
+    def run_cov(self, roster_text: str, repos: dict[str, dict[str, str]], dirty: str | None = None):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d, "repos")
             root.mkdir()
             for name, files in repos.items():
                 named_repo(root, name, files)
+            if dirty:
+                (root / dirty / "Cargo.toml").write_text("x", encoding="utf-8")
             p = Path(d, "r.toml")
             p.write_text(roster_text, encoding="utf-8")
             out, err = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                code = rt.main(["--roster", str(p), "feature-coverage", "--repos-root", str(root), "--at", "HEAD"])
+                code = rt.main(["--roster", str(p), "feature-coverage", "--repos-root", str(root)],
+                               metadata=rt.sg.cargo_metadata)
         return code, out.getvalue() + err.getvalue()
 
-    def test_the_command_reads_each_manifest_at_the_ref(self):
-        code, out = self.run_cov(COVERED, {"ALICE-Zip": {"Cargo.toml": ZIP_FEATURES}})
+    def test_the_command_reads_each_checkout_with_cargo_metadata(self):
+        crate = {"Cargo.toml": ZIP_FEATURES, "src/lib.rs": ""}
+        code, out = self.run_cov(COVERED, {"ALICE-Zip": crate})
         self.assertEqual(code, 0, out)
         self.assertIn("1 crate(s) with consumer sets compared", out)
         # the mutant of the requirement: a feature added outside every set and exclude
-        code, out = self.run_cov(COVERED, {"ALICE-Zip": {"Cargo.toml": ZIP_FEATURES + "foo = []\n"}})
+        code, out = self.run_cov(COVERED, {"ALICE-Zip": {**crate, "Cargo.toml": ZIP_FEATURES + "foo = []\n"}})
         self.assertEqual(code, 1, out)
-        self.assertIn("refused: alice-zip: the manifest's feature(s) ['foo']", out)
+        self.assertIn("refused: alice-zip: the crate's feature(s) ['foo']", out)
+        # an optional dependency no feature names as dep: is a feature cargo metadata reports
+        opt = ZIP_FEATURES.replace('serde = "1"', 'serde = { version = "1", optional = true }', 1)
+        code, out = self.run_cov(COVERED, {"ALICE-Zip": {**crate, "Cargo.toml": opt}})
+        self.assertEqual(code, 1, out)
+        self.assertIn("['serde']", out)
 
     def test_the_manifest_path_is_honoured(self):
         text = COVERED.replace('repo = "ALICE-Zip"\n', 'repo = "ALICE-Zip"\nmanifest-path = "lib/Cargo.toml"\n', 1)
-        code, out = self.run_cov(text, {"ALICE-Zip": {"Cargo.toml": "[workspace]\n", "lib/Cargo.toml": ZIP_FEATURES}})
+        # the root manifest is another package: reading it instead finds no alice-zip
+        outer = '[package]\nname = "outer"\nversion = "0.1.0"\nedition = "2021"\n'
+        code, out = self.run_cov(text, {"ALICE-Zip": {"Cargo.toml": outer, "src/lib.rs": "",
+                                                      "lib/Cargo.toml": ZIP_FEATURES, "lib/src/lib.rs": ""}})
         self.assertEqual(code, 0, out)
+        self.assertIn("covered: alice-zip: ALICE-Zip/lib/Cargo.toml", out)
 
-    def test_a_missing_checkout_or_another_package_is_refused(self):
-        code, out = self.run_cov(COVERED, {"Other": {"Cargo.toml": ZIP_FEATURES}})
+    def test_a_missing_or_changed_checkout_is_refused(self):
+        crate = {"Cargo.toml": ZIP_FEATURES, "src/lib.rs": ""}
+        code, out = self.run_cov(COVERED, {"Other": crate})
         self.assertEqual(code, 1, out)
         self.assertIn("is not a checkout", out)
-        code, out = self.run_cov(COVERED, {"ALICE-Zip": {"Cargo.toml": ZIP_FEATURES.replace('"alice-zip"', '"other"', 1)}})
+        code, out = self.run_cov(COVERED, {"ALICE-Zip": crate}, dirty="ALICE-Zip")
         self.assertEqual(code, 1, out)
-        self.assertIn("is not alice-zip", out)
+        self.assertIn("has changes to tracked files", out)
+
+    def test_cargo_metadata_failing_exits_2_and_never_falls_back(self):
+        # another package at the path, and a manifest cargo cannot read
+        for files, needle in (({"Cargo.toml": ZIP_FEATURES.replace('"alice-zip"', '"other"', 1), "src/lib.rs": ""},
+                               "0 package(s) named alice-zip"),
+                              ({"Cargo.toml": ZIP_FEATURES + "[[[", "src/lib.rs": ""}, "cargo metadata failed")):
+            code, out = self.run_cov(COVERED, {"ALICE-Zip": files})
+            self.assertEqual(code, 2, out)
+            self.assertIn(needle, out)
+            self.assertNotIn("covered:", out)
 
     def test_no_crate_with_sets_compared_exits_2(self):
         code, out = self.run_cov(ROSTER, {})
         self.assertEqual(code, 2, out)
         self.assertIn("no crate with consumer sets was compared", out)
 
-    def test_the_gate_refuses_a_feature_outside_the_sets(self):
+    def gate(self, manifest: str, metadata=None):
         with tempfile.TemporaryDirectory() as d:
-            repo, ref = make_repo(d, {"Cargo.toml": ZIP_FEATURES + "foo = []\n"})
+            repo, ref = make_repo(d, {"Cargo.toml": manifest, "src/lib.rs": ""})
             p = Path(d, "r.toml")
             p.write_text(COVERED, encoding="utf-8")
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
+            out, err = io.StringIO(), io.StringIO()
+            seen = []
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
-                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager)
-        self.assertEqual(code, 1, out.getvalue())
-        self.assertIn("refused: alice-zip: the manifest's feature(s) ['foo']", out.getvalue())
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
+                               metadata=metadata or rt.sg.cargo_metadata,
+                               semver=lambda *a, **k: seen.append(k.get("universe")) or ([], 1, "x"))
+        return code, out.getvalue() + err.getvalue(), seen
+
+    def test_the_gate_refuses_a_feature_outside_the_sets(self):
+        code, out, _ = self.gate(ZIP_FEATURES + "foo = []\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("refused: alice-zip: the crate's feature(s) ['foo']", out)
+
+    def test_the_gate_passes_the_universe_to_the_semver_step(self):
+        code, out, seen = self.gate(ZIP_FEATURES)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(seen, [["fft", "hw", "std"]])
+
+    def test_the_gate_exits_2_when_cargo_metadata_fails(self):
+        def broken(path):
+            raise rt.sg.MetadataError("cargo metadata failed for x (exit 101): boom")
+        code, out, _ = self.gate(ZIP_FEATURES, broken)
+        self.assertEqual(code, 2, out)
+        self.assertIn("cargo metadata failed", out)
+        self.assertNotIn("go for", out)
 
 
 class GateGoOutput(unittest.TestCase):
@@ -1867,7 +1941,7 @@ class GateGoOutput(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref],
                                fetch=fixture(PUBLISHED_DM), lister=lambda r, m: ["Cargo.toml"], packager=fake_packager,
-                               semver=lambda *a: ([], 3, "0.9.0 -> 0.10.0 (major step)"))
+                               semver=lambda *a, **k: ([], 3, "0.9.0 -> 0.10.0 (major step)"))
         text = out.getvalue()
         self.assertEqual(code, 0, text)
         labels = re.findall(r"^  ([a-z. 0-9]+):( +)\S", text, re.M)

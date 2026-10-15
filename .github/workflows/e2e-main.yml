@@ -63,7 +63,7 @@ jobs:
       # a crate that declares consumer feature sets builds and semver-checks only those:
       # each feature of its manifest on main is in a set or excluded with a reason
       - name: Consumer feature sets cover every feature (main)
-        run: python3 scripts/release_train.py feature-coverage --repos-root "$RUNNER_TEMP/core" --at HEAD | tee -a "$GITHUB_STEP_SUMMARY"
+        run: python3 scripts/release_train.py feature-coverage --repos-root "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
       # a failure the roster lists under [expected-failure.*] (named, explained, until a
       # release) is reported as expected and skips the steps that need it; any other is red
       - &patch
