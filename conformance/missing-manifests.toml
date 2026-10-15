@@ -1,0 +1,21 @@
+# Release-train crates whose repository has no alice-law-conformance.toml at main yet.
+# scripts/conformance_roster_check.py reports a listed crate as expected while its manifest
+# is missing, and fails on an entry whose manifest has landed (remove the entry in the
+# change that lands it); a crate missing from main and from this list fails with its name.
+# `fixed-in` is the repository whose change adds the manifest.
+
+[missing."alice-crypto"]
+fixed-in = "ALICE-Crypto"
+why = "the manifest has not been written yet"
+
+[missing."alice-llm"]
+fixed-in = "ALICE-LLM"
+why = "the manifest has not been written yet"
+
+[missing."alice-ml"]
+fixed-in = "ALICE-ML"
+why = "the manifest has not been written yet"
+
+[missing."alice-physics"]
+fixed-in = "ALICE-Physics"
+why = "the manifest has not been written yet"
