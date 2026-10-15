@@ -1,0 +1,79 @@
+# The headings of README.md and README_JP.md, in order, as pairs: scripts/readme_parity_check.py
+# requires each file's headings to be exactly this list (level, text and order), so a section
+# moved, dropped, added or renamed in one file only is a finding. Change both READMEs and this
+# list together.
+
+[[heading]]
+level = 1
+en = "ALICE-Law"
+ja = "ALICE-Law"
+
+[[heading]]
+level = 2
+en = "Dependency consistency"
+ja = "依存の整合"
+
+[[heading]]
+level = 2
+en = "Release train"
+ja = "Release train"
+
+[[heading]]
+level = 3
+en = "Runbook: one crate"
+ja = "Runbook: crate ごと"
+
+[[heading]]
+level = 2
+en = "Public text"
+ja = "公開する text"
+
+[[heading]]
+level = 2
+en = "Conformance"
+ja = "Conformance"
+
+[[heading]]
+level = 2
+en = "End to end"
+ja = "End to end"
+
+[[heading]]
+level = 2
+en = "Steps that fail until a release"
+ja = "公開まで失敗する step"
+
+[[heading]]
+level = 2
+en = "Status"
+ja = "状態"
+
+[[heading]]
+level = 3
+en = "Release train"
+ja = "Release train"
+
+[[heading]]
+level = 3
+en = "Steps expected to fail until a release"
+ja = "公開まで失敗を予期する step"
+
+[[heading]]
+level = 3
+en = "End to end run digest per alice-det-math release"
+ja = "alice-det-math の版ごとの end to end の run digest"
+
+[[heading]]
+level = 3
+en = "Conformance manifests (status counts of the 14 gates at each crate's main)"
+ja = "Conformance manifest (各 crate の main における 14 gate の状態の件数)"
+
+[[heading]]
+level = 3
+en = "Crates whose manifest is not written yet"
+ja = "manifest がまだ無い crate"
+
+[[heading]]
+level = 2
+en = "License"
+ja = "ライセンス"
