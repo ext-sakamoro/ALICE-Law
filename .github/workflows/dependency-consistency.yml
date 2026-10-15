@@ -24,6 +24,8 @@ on:
       - "README.md"
       - "docs/CONFORMANCE.md"
       - "conformance/**"
+      - "e2e/golden/run.digest"
+      - "README_JP.md"
       - "scripts/**"
       - ".github/workflows/**"
       - "tools/**"
@@ -68,6 +70,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/conformance_roster_check.py
+
+      - name: Test the README Status generator
+        run: python3 scripts/test_gen_law_status.py
+
+      - name: The README Status section is the generated one
+        run: python3 scripts/gen_law_status.py --check
 
       - name: Test the README integration block generator
         run: python3 scripts/test_gen_law_readme_block.py
