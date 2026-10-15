@@ -83,6 +83,7 @@ class Gen(unittest.TestCase):
         self.assertIn("| some-step | beta 0.3.0 | beta is \\| not out |", text)
         self.assertIn("| 0.5.1 | `bbbb` |", text)
         self.assertIn("| Alpha | alpha, alpha-cli | 3 | 1 | 10 | 0 |", text)
+        self.assertIn("so each manifest is counted once; 1 manifests × 2 gates = 2 gate entries.", text)
         self.assertIn("| beta | Beta | not written |", text)
         self.assertNotRegex(text, r"20\d\d-\d\d-\d\d")
         self.assertIn("### Conformance manifests (status counts of the 2 gates in each repository's manifest at main)", text)

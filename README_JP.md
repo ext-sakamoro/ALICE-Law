@@ -180,6 +180,8 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 ### Conformance manifest (各 repository の main の manifest における 14 gate の状態の件数)
 
+repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 13 の manifest × 14 の gate = 182 の gate の entry
+
 | repository | 読む crate | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
 | ALICE-Analytics | alice-analytics | 3 | 7 | 4 | 0 |

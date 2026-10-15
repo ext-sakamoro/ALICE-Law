@@ -45,6 +45,9 @@ LABELS = {
         "golden": "End to end run digest per alice-det-math release",
         "golden_h": "| alice-det-math | run digest |",
         "conformance": "Conformance manifests (status counts of the {gates} gates in each repository's manifest at main)",
+        "conformance_note": "One row per repository: crates that share a repository share its one manifest at the root "
+                            "(the \"read for\" column), so each manifest is counted once; {repos} manifests × {gates} gates "
+                            "= {total} gate entries.",
         "conformance_h": "| repository | read for | pass | fail-known | unverified | n/a |",
         "missing": "Crates whose manifest is not written yet",
         "missing_h": "| crate | added in | why |",
@@ -62,6 +65,9 @@ LABELS = {
         "golden": "alice-det-math の版ごとの end to end の run digest",
         "golden_h": "| alice-det-math | run digest |",
         "conformance": "Conformance manifest (各 repository の main の manifest における {gates} gate の状態の件数)",
+        "conformance_note": "repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する "
+                            "(「読む crate」の列) ので、各 manifest は 1 回だけ数える; {repos} の manifest × {gates} の gate "
+                            "= {total} の gate の entry",
         "conformance_h": "| repository | 読む crate | pass | fail-known | unverified | n/a |",
         "missing": "manifest がまだ無い crate",
         "missing_h": "| crate | 追加する repository | 理由 |",
@@ -125,7 +131,9 @@ def render(lang: str, root: Path = ROOT) -> str:
     gates = load(root / "conformance" / "gates.toml").get("gate", [])
     if not gates:
         raise InputError("conformance/gates.toml lists no gate")
-    out += ["", f"### {L['conformance'].format(gates=len(gates))}", "", L["conformance_h"], "|---|---|---|---|---|---|"]
+    out += ["", f"### {L['conformance'].format(gates=len(gates))}", "",
+            L["conformance_note"].format(repos=len(state), gates=len(gates), total=len(state) * len(gates)), "",
+            L["conformance_h"], "|---|---|---|---|---|---|"]
     for name in sorted(state):
         c = state[name]
         out.append(f"| {cell(name)} | {cell(', '.join(c.get('crates', [])))} | "
