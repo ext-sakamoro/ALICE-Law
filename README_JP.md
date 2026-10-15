@@ -157,7 +157,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-sdf | 6.0.0 | published | 7 | ALICE-SDF | v6.0.0 |
 | alice-llm | 2.0.0 | published | 8 | ALICE-LLM | v2.0.0 |
 | alice-lol-macro | 0.3.0 | published | 9 | ALICE-LOL | alice-lol-macro-v0.3.0 |
-| alice-lol | 0.4.2 | prepared | 10 | ALICE-LOL | alice-lol-v0.4.2 |
+| alice-lol | 0.4.2 | published | 10 | ALICE-LOL | alice-lol-v0.4.2 |
 | alice-edge | 0.3.0 | planned | 11 | ALICE-Edge | v0.3.0 |
 | alice-law-integration | 0.0.0 | exempt | 12 | ALICE-Law | (なし) |
 | alice-ml | 0.2.0 | published | 13 | ALICE-ML | v0.2.0 |
@@ -169,7 +169,6 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | step | 期限 | 理由 |
 |---|---|---|
 | dependency-consistency | alice-edge 0.3.0 | alice-db 0.5.0 is published, while alice-physics 3.0.1 and alice-edge 0.2.1 on crates.io accept only alice-db 0.4 (optional, enabled here), so this repository stays on 0.4 until both are released with 0.5; re-cut when the first of them ships |
-| e2e-published-test | alice-lol 0.4.2 | alice-lol 0.4.1 on crates.io records LOL_SEMANTICS_ID as a constant folded over the alice-det-math 0.5.0 identifier, while its pins read the alice-det-math in the build; resolved with alice-det-math 0.5.1 the two disagree (0.4.2 computes the identifier from the build) |
 
 ### alice-det-math の版ごとの end to end の run digest
 
