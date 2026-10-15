@@ -193,6 +193,28 @@ def invoked_scripts(wf: dict[str, str]) -> set[str]:
     return {m.group(1) for text in wf.values() for cmd in run_texts(text) for m in SCRIPT_CALL.finditer(cmd)}
 
 
+def uncommented(path: str, text: str) -> str:
+    """the text without comments: `//` and `/* */` in a Rust file, `#` to the end of the line
+    elsewhere (TOML and YAML; a `#` inside a quoted string is kept)"""
+    if path.endswith(".rs"):
+        text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+        return re.sub(r"//[^\n]*", "", text)
+    out = []
+    for line in text.splitlines():
+        quote = None
+        for k, ch in enumerate(line):
+            if quote:
+                if ch == quote:
+                    quote = None
+            elif ch in "\"'":
+                quote = ch
+            elif ch == "#":
+                line = line[:k]
+                break
+        out.append(line)
+    return "\n".join(out)
+
+
 def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()) -> dict[str, str]:
     cells: dict[str, str] = {}
     lists = clippy_lists(repo)
@@ -287,8 +309,8 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
     # G14: flags that change float semantics, and the tests that assert the environment
     flag_re = re.compile(r"target-cpu=native|fast-math")
     cfg = [f for f in repo.files if re.search(r"(^|/)\.cargo/config(\.toml)?$", f) or f.endswith("build.rs")]
-    in_cfg = [f for f in cfg if flag_re.search(repo.show(f))]          # applies to every build: a finding
-    in_wf = [f for f in wf if flag_re.search(wf[f])]                  # a job: a test leg or a shipped build, audit
+    in_cfg = [f for f in cfg if flag_re.search(uncommented(f, repo.show(f)))]   # applies to every build: a finding
+    in_wf = [f for f in wf if flag_re.search(uncommented(f, wf[f]))]           # a job: a test leg or a shipped build, audit
     ftz = [f for f in tests if re.search(r"subnormal|denormal|flush.to.zero", repo.show(f), re.I)]
     cells["G14"] = (f"flag in build configuration {', '.join(in_cfg)}" if in_cfg else "no flag in build configuration") + \
                    (f"; flag in workflow {', '.join(in_wf)} (test leg or shipped build: audit)" if in_wf else "") + \

@@ -1148,7 +1148,9 @@ class Terms(unittest.TestCase):
         for line in ("This session's simulator tooling", "as decided in this session", "asked in chat",
                      "THIS SESSION", "In Chat"):
             self.assertIn("agent process", ptc.kinds(line), line)
-        for line in ("a netcode session", "the session ends", "chat in channels", "within chatter", "Thisession"):
+        for line in ("a netcode session", "the session ends", "chat in channels", "within chatter", "Thisession",
+                     "fn render(t: &str) -> String { /* fall back to the default in chat_template */ }",
+                     "key in chat_history", "the field this session_id holds", "in chat2"):
             self.assertNotIn("agent process", ptc.kinds(line), line)
 
     def test_the_verb_be_before_review_is_not_an_id(self):
