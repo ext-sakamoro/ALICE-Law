@@ -58,7 +58,7 @@ jobs:
 
       - name: Test
         if: steps.resolve.outputs.expected != 'true'
-        run: cargo test --release --locked -- --nocapture
+        run: python3 ../scripts/expected_failure.py e2e-published-test -- cargo test --release --locked -- --nocapture
 
   digest:
     # f32::max / f32::min leave the sign of an equal-zero result to the target, and
@@ -75,6 +75,9 @@ jobs:
             arch: x86_64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    # the test failing as the roster expects leaves no digest; the comparison reads this
+    outputs:
+      test-expected: ${{ steps.test.outputs.expected }}
     defaults:
       run:
         shell: bash
@@ -85,12 +88,13 @@ jobs:
         id: resolve
         run: python3 ../scripts/expected_failure.py e2e-published-resolve -- cargo generate-lockfile
       - name: Test and record the digest
+        id: test
         if: steps.resolve.outputs.expected != 'true'
         run: |
           test "$(uname -m)" = "${{ matrix.arch }}"
-          ALICE_LAW_E2E_DIGEST_OUT="$RUNNER_TEMP/digest-${{ matrix.arch }}" cargo test --release --locked -- --nocapture
-          cat "$RUNNER_TEMP/digest-${{ matrix.arch }}"
-      - if: steps.resolve.outputs.expected != 'true'
+          ALICE_LAW_E2E_DIGEST_OUT="$RUNNER_TEMP/digest-${{ matrix.arch }}" python3 ../scripts/expected_failure.py e2e-published-test -- cargo test --release --locked -- --nocapture
+          if [ -f "$RUNNER_TEMP/digest-${{ matrix.arch }}" ]; then cat "$RUNNER_TEMP/digest-${{ matrix.arch }}"; fi
+      - if: steps.resolve.outputs.expected != 'true' && steps.test.outputs.expected != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: digest-${{ matrix.arch }}
@@ -110,14 +114,14 @@ jobs:
         id: resolve
         working-directory: e2e
         run: python3 ../scripts/expected_failure.py e2e-published-resolve -- cargo generate-lockfile
-      - if: steps.resolve.outputs.expected != 'true'
+      - if: steps.resolve.outputs.expected != 'true' && needs.digest.outputs.test-expected != 'true'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           pattern: digest-*
           path: digests
           merge-multiple: true
       - name: Compare
-        if: steps.resolve.outputs.expected != 'true'
+        if: steps.resolve.outputs.expected != 'true' && needs.digest.outputs.test-expected != 'true'
         run: |
           n=$(ls digests | wc -l)
           test "$n" -eq 2 || { echo "expected 2 digests, found $n"; exit 1; }

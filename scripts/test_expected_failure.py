@@ -6,6 +6,7 @@ import contextlib
 import importlib.util
 import io
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -109,6 +110,16 @@ class ExpectedFailure(unittest.TestCase):
         self.assertIn("not explained by `expect`: thread 'main' panicked", out)
         self.assertIn("`expect` text in no error line", out)
 
+    def test_a_panic_with_the_thread_id_is_an_error_line(self):
+        # the form since Rust 1.86 names the thread id; an unexplained one is red, not ignored
+        out_text = FAILS + "thread 'a_test' (411095538) panicked at tests/x.rs:9:5:\nboom\n"
+        rc, out, gout, _ = self.run_step(ROSTER + ENTRY, 101, out_text)
+        self.assertEqual(rc, 1)
+        self.assertIn("not explained by `expect`: thread 'a_test' (411095538) panicked", out)
+        self.assertNotIn("expected=true", gout)
+        self.assertIn("thread 'main' (7) panicked at src/main.rs:1:1:",
+                      ef.error_lines("thread 'main' (7) panicked at src/main.rs:1:1:\n"))
+
     def test_a_failure_with_no_error_line_is_red(self):
         rc, out, _, _ = self.run_step(ROSTER + ENTRY, 1, "    " + FAILS)  # indented: not an error line
         self.assertEqual(rc, 1)
@@ -155,13 +166,19 @@ class ExpectedFailure(unittest.TestCase):
 
     def test_the_repository_entries_name_cargo_exit_101(self):
         # the rule: 0 entries is valid (every release one waited for is out), and a wrapped step
-        # that fails with no entry is red; with entries, each wrapping cargo names exit 101
+        # that fails with no entry is red; with entries, each wrapping cargo names exit 101 (one
+        # wrapping another command names that command's status)
         roster = (HERE.parent / "release-train.toml").read_text(encoding="utf-8")
         entries = ef.load_entries(roster)
+        wrapped = [(step, rest) for f in sorted((HERE.parent / ".github" / "workflows").glob("*.yml"))
+                   for step, rest in ef.WRAPPED_STEP.findall(f.read_text(encoding="utf-8"))]
+        cargo_steps = {step for step, rest in wrapped if re.search(r"(?<![\w-])cargo\s", rest)}
         for step, e in entries.items():
-            self.assertEqual(e["exit"], 101, step)
-        steps = {step for f in sorted((HERE.parent / ".github" / "workflows").glob("*.yml"))
-                 for step, _ in ef.WRAPPED_STEP.findall(f.read_text(encoding="utf-8"))}
+            if step in cargo_steps:
+                self.assertEqual(e["exit"], 101, step)
+            else:
+                self.assertNotEqual(e["exit"], 0, step)
+        steps = {step for step, _ in wrapped}
         self.assertTrue(steps, "no workflow step is wrapped in expected_failure.py")
         for step in sorted(steps - set(entries)):
             rc, _, gout, _ = self.run_step(roster, 101, FAILS, step=step)

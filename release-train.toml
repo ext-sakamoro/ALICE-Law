@@ -95,10 +95,9 @@ repo = "ALICE-Analytics"
 # 0.5.0 は created_at を時計から読まず入力にし (DataSegment::new / StorageConfig の created_at)、読み戻す
 # 算術の識別子を check_semantics で受け (以前の検証済みの識別子を含む)、G13 / G10 の穴と law の索引を直した版
 # CHANGELOG に日付つきの [0.5.0] - 2026-10-14 を入れ、publish する .crate を include で限定し、設計メモの相互参照からローカル path を除き、python の ndarray を numpy の再公開に揃えた DB main 153e6fe から公開する 本 repository の
-# end to end は main mode で 0.5 を受け、published mode は 0.5.0 の公開まで expected-failure.e2e-db-0-5
-# で解決できない (下) python feature の消費側 build は ndarray を numpy の再公開に揃えて通るので、0.4.0 の expected failure は外した
+# end to end は main mode でも published mode でも 0.5.0 を受ける python feature の消費側 build は ndarray を numpy の再公開に揃えて通るので、0.4.0 の expected failure は外した
 version = "0.5.0"
-state = "prepared"
+state = "published"
 order = 5
 repo = "ALICE-DB"
 must-contain = ["153e6fe84281edd5b67f01af619e27bd09e1cb87"]
@@ -301,20 +300,16 @@ required-ci = [
 ]
 
 [crate.alice-lol]
-version = "0.4.1"
-state = "published"
+version = "0.4.2"
+state = "planned"
 order = 10
 repo = "ALICE-LOL"
 tag = "alice-lol-v{version}"
 manifest-path = "alice-lol/Cargo.toml"
-# 0.4.1 は 0.4.0 に研究 Law の識別子 (ResearchLaw::law_id) を足した版で、CHANGELOG に日付を入れた
-# commit (c6d2efd) から公開する (互換、semver の検査は版の更新を要しない) consumer build の全 feature は
-# crates.io の alice-lol-macro 0.3.0 と alice-llm 2.0.0 で build する
-must-contain = ["c6d2efdf2472d335eff227f8fca07f42773bf31e"]
-changelog-has = [
-    "`ResearchLaw::law_id(&semantics_id)` と `law_id::RESEARCH_LAW_KIND`",
-    "`alice-lol` の版を 0.4.1 にし",
-]
+# 0.4.2 は LOL_SEMANTICS_ID を build に入った alice-det-math の識別子から計算する版 (0.4.1 は
+# alice-det-math 0.5.0 の識別子で畳んだ定数を持ち、alice-det-math 0.5.1 で解決すると自分の pin の fold と
+# 一致しない) public text の検査を通した LOL main (9a9a51c) を公開候補にし、gate の前に prepared にする
+must-contain = ["9a9a51c69996411e2d9a0def444383c3cc08829d"]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-latest physics)", "Test (ubuntu-latest llm-bridge)", "Test (ubuntu-latest backend-parity)", "Test (ubuntu-latest roblox)"] },
     { workflow = "CI", job = "Clippy" },
@@ -343,25 +338,17 @@ required-ci = [
 ]
 
 [crate.alice-edge]
-version = "0.2.1"
-state = "published"
+version = "0.3.0"
+state = "planned"
 order = 11
 # tag は v{version} (0.2.0 から正) 旧書式の alice-edge-v0.1.0 (d3506b9) と、v0.2.1 と同じ commit を指す alice-edge-v0.2.1 も remote に残す
 tag = "v{version}"
-# 0.2.0 は alice-sdf 6 を要求して公開する (optional でも: publish-gate は roster の版を受けない要求を
-# 拒否する、test_an_optional_requirement_on_an_older_major_is_refused)
 repo = "ALICE-Edge"
 consumer-features = [["asp", "codec", "dashboard", "db", "depth-camera", "edge-pipeline", "ffi", "law", "ml", "mqtt", "pyo3", "sdf", "sensors", "std", "zip"]]
 consumer-features-why = "外す feature: sensors-hw (rppal は特定の Linux board の GPIO 専用で他の target では build できない)"
-# 0.2.1 は線形 fit の正規方程式を i128 で解いて長い窓の桁あふれを直し、Python の evaluate_linear_batch が
-# 列が 2 でない係数を ValueError で断る版で、CHANGELOG に日付を入れた commit (5a6ba33) の上で job の上限を
-# CHANGELOG に書いた規則の値に直した commit (ebf65d8、ci.yml のみ) から公開する
-# (互換、公開済みの 0.2.0 と src が違うので版を上げる)
+# 0.3.0 は alice-db 0.5 を受ける版 (db feature が alice_db::ResidualPolicy を再公開するので、alice-db の版を
+# 上げるのは互換でない変更) 公開済みの 0.2.1 は ebf65d8 から 公開する commit は Edge main で決めて prepared にする
 must-contain = ["ebf65d850a3d036bab908ff6a6bc7e1113a84ca9"]
-changelog-has = [
-    "`fit_linear_fixed` / `fit_linear_simd` (SSE2 / NEON) が約 10 万点以上の窓で誤った直線を返していた",
-    "列が 2 でない時は `ValueError` を返す",
-]
 required-ci = [
     { workflow = "CI", job = "Test", legs = ["Test (ubuntu-latest)", "Test (macos-latest)", "Test (windows-latest)", "Test (ubuntu-24.04-arm)"] },
     { workflow = "CI", job = "MSRV (rust-version = 1.87)" },
@@ -456,11 +443,22 @@ required-ci = [
     { workflow = "Fuzz", job = "Fuzz — fuzz_crdt_merge" },
 ]
 
-[expected-failure.e2e-db-0-5]
-step = "e2e-published-resolve"
-until = "alice-db 0.5.0"
-expect = ["failed to select a version for the requirement `alice-db = \"^0.5\"`"]
-why = "the end to end check requires alice-db 0.5 (main), which is not on crates.io until its release"
+[expected-failure.dep-db-0-5]
+step = "dependency-consistency"
+until = "alice-edge 0.3.0"
+expect = [
+    "this repository requires alice-db 0.4, which does not accept the latest release 0.5.0",
+    "alice-physics 3.0.1 requires alice-db ^0.4 (optional), which does not accept the latest release 0.5.0",
+    "alice-edge 0.2.1 requires alice-db ^0.4 (optional), which does not accept the latest release 0.5.0",
+]
+why = "alice-db 0.5.0 is published, while alice-physics 3.0.1 and alice-edge 0.2.1 on crates.io accept only alice-db 0.4 (optional, enabled here), so this repository stays on 0.4 until both are released with 0.5; re-cut when the first of them ships"
+exit = 1
+
+[expected-failure.e2e-lol-0-4-2]
+step = "e2e-published-test"
+until = "alice-lol 0.4.2"
+expect = ["panicked at tests/law_to_storage_roundtrip.rs:473:", "test failed, to rerun pass `--test law_to_storage_roundtrip`"]
+why = "alice-lol 0.4.1 on crates.io records LOL_SEMANTICS_ID as a constant folded over the alice-det-math 0.5.0 identifier, while its pins read the alice-det-math in the build; resolved with alice-det-math 0.5.1 the two disagree (0.4.2 computes the identifier from the build)"
 exit = 101
 
 # The Actions secrets of each repository in the train, by name, with what they are for:

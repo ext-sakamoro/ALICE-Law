@@ -29,7 +29,7 @@ The command runs with its output shown as it comes. Then:
 The failure is read from its own error lines: a line that starts (at its first
 column, after terminal colour codes are removed) with `error` in any case followed by
 `:`, `[...]`, a space or the end of the line (`error:`, `Error: ...` from anyhow,
-`ERROR ...`), `fatal:`, or a `thread '...' panicked at`.
+`ERROR ...`), `fatal:`, or a `thread '...' panicked at` (with or without the thread id).
 Every such line must contain one of the `expect` texts, and every `expect` text must be
 in one of them; a failure with no error line is not one this can explain. A log line
 that quotes an error further in is not an error line.
@@ -57,7 +57,8 @@ from pathlib import Path
 
 DEFAULT_ROSTER = Path(__file__).resolve().parent.parent / "release-train.toml"
 DEFAULT_WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
-ERROR_LINE = re.compile(r"^(?:error(?:\[[A-Za-z0-9]+\])?(?::|\s|$)|fatal:|thread '[^']*' panicked at )", re.IGNORECASE)
+# (a panic names the thread, and since Rust 1.86 also its id: `thread 'main' (1234) panicked at`)
+ERROR_LINE = re.compile(r"^(?:error(?:\[[A-Za-z0-9]+\])?(?::|\s|$)|fatal:|thread '[^']*'(?: \(\d+\))? panicked at )", re.IGNORECASE)
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 WRAPPED_STEP = re.compile(r"(?<![A-Za-z0-9_])expected_failure\.py[ \t]+([A-Za-z][A-Za-z0-9_.-]*)([^\n]*)")
 
