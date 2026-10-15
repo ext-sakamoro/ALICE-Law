@@ -48,6 +48,13 @@
         inside the repository, where a build script that reads a Cargo.lock above the
         crate still finds the repository's); a failed build, or one that did not compile
         the crate's library, is refused
+      - then `cargo semver-checks` compares the checkout with the latest release on
+        crates.io, once per feature set of the consumer build (default features, none,
+        and the roster's sets or every feature): refused when it finds a change the
+        version step does not allow (a minor version with a breaking change), when a
+        minor or patch step compared 0 checks, when the step it reports is not the one
+        the two versions make, or when it did not run; a major step is not compared
+        (any change is allowed), and a crate with no release yet has nothing to compare
 
 usage: release_train.py [--roster release-train.toml] {next | publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]}
 Exit 0 when the answer is "go" (next: a crate was found), 1 when it is "no", 2 when the
@@ -1034,6 +1041,106 @@ def feature_specs(manifest: dict, entry: dict | None) -> list[tuple[str, str, li
     return specs
 
 
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def version_step(previous: str, version: str) -> str:
+    """the step from one release to the next as cargo-semver-checks names it: a change of
+    the leftmost non-zero part is "major", of the next one "minor", of the last "patch"
+    (Cargo's compatibility: 0.4 -> 0.5 is major, 0.4.1 -> 0.4.2 is minor)"""
+    old = [int(x) for x in re.match(r"(\d+)\.(\d+)\.(\d+)", previous).groups()]
+    new = [int(x) for x in re.match(r"(\d+)\.(\d+)\.(\d+)", version).groups()]
+    first = next((i for i, x in enumerate(old) if x), 2)
+    for i in range(3):
+        if old[i] != new[i]:
+            return "major" if i <= first else ("minor" if i == first + 1 else "patch")
+    return "patch"
+
+
+def semver_feature_args(features: list[str] | None) -> list[str]:
+    """None: the default features; a list (possibly empty): exactly those"""
+    if features is None:
+        return ["--default-features"]
+    return ["--only-explicit-features"] + (["--features", ",".join(features)] if features else [])
+
+
+def run_semver_checks(repo: Path, manifest_path: str, baseline: list[str], features: list[str] | None,
+                      target_dir: Path) -> tuple[int, str]:
+    """(exit code, stdout + stderr) of `cargo semver-checks check-release` for one feature set"""
+    cmd = ["cargo", "semver-checks", "check-release", "--manifest-path", str(repo / manifest_path),
+           *baseline, *semver_feature_args(features)]
+    env = {**os.environ, "CARGO_TERM_COLOR": "never", "CARGO_TARGET_DIR": str(target_dir)}
+    try:
+        r = subprocess.run(cmd, cwd=repo, env=env, capture_output=True, text=True)
+    except FileNotFoundError as e:
+        return 127, str(e)
+    return r.returncode, r.stdout + r.stderr
+
+
+def semver_verdict(code: int, output: str, step: str, label: str) -> tuple[str | None, int]:
+    """(problem or None, checks counted) of one cargo-semver-checks run whose two versions
+    make `step`"""
+    text = ANSI.sub("", output)
+    claim = re.search(r"Checking \S+ v\S+ -> v\S+ \((?:assume )?(major|minor|patch) change\)", text)
+    if claim is None:
+        tail = " / ".join(line.strip() for line in text.strip().splitlines()[-3:])
+        return f"{label}: cargo semver-checks did not run (exit {code}): {tail}", 0
+    if claim.group(1) != step:
+        return f"{label}: cargo semver-checks compared a {claim.group(1)} step, the versions make a {step} step", 0
+    if step == "major":
+        return None, 0
+    # "223 checks: 223 pass, 31 skip" when every check passed, "196 checks: 195 pass, 1 fail, ..." otherwise
+    checked = re.search(r"Checked \[[^\]]*\]\s+(\d+) checks?: (\d+) pass(?:, (\d+) fail)?", text)
+    if checked is None:
+        return f"{label}: cargo semver-checks printed no count of checks (exit {code})", 0
+    total, failed = int(checked.group(1)), int(checked.group(3) or 0)
+    if total == 0:
+        return f"{label}: cargo semver-checks compared 0 checks for a {step} step", 0
+    lints = re.findall(r"--- failure ([A-Za-z0-9_]+):", text)
+    summary = re.search(r"Summary (.+)", text)
+    if failed or lints or code != 0:
+        return (f"{label}: a {step} version does not allow {', '.join(lints) or f'{failed} failed check(s)'}"
+                f" ({summary.group(1).strip() if summary else f'exit {code}'})"), 0
+    return None, 1
+
+
+def previous_release(fetch: dc.Fetch, crate: str) -> str | None:
+    """the latest release on crates.io, None when the crate has none"""
+    try:
+        return latest(fetch, crate)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def semver_problems(repo: Path, manifest_path: str, crate: str, version: str, manifest: dict, entry: dict | None,
+                    fetch: dc.Fetch, run=run_semver_checks, target_dir: Path | None = None
+                    ) -> tuple[list[str], int, str]:
+    """(problems, runs compared, what was compared) of cargo semver-checks against the latest
+    release, once per feature set of the consumer build"""
+    previous = previous_release(fetch, crate)
+    if previous is None:
+        return [], 0, f"{crate} has no release on crates.io: nothing to compare"
+    step = version_step(previous, version)
+    if previous == version or [int(x) for x in previous.split("-")[0].split(".")] > \
+            [int(x) for x in version.split("-")[0].split(".")]:
+        return [f"{crate}: the latest release {previous} is not older than {version}"], 0, ""
+    if step == "major":
+        return [], 0, f"{previous} -> {version} is a major step: any change is allowed, not compared"
+    problems, compared = [], 0
+    with tempfile.TemporaryDirectory() as tmp:
+        for label, _, features, _ in feature_specs(manifest, entry):
+            code, out = run(repo, manifest_path, ["--baseline-version", previous], features,
+                            target_dir or Path(tmp))
+            p, n = semver_verdict(code, out, step, f"{crate} {version} ({label})")
+            if p:
+                problems.append(p)
+            compared += n
+    # every run either counts or is a problem (a run that compared 0 checks is refused above)
+    return problems, compared, f"{previous} -> {version} ({step}), {compared} feature set(s) compared"
+
+
 def expected_failure(entry: dict | None, name: str, version: str, features: list[str] | None,
                      cmd: str) -> dict | None:
     """the roster's `consumer-expected-failure` entry for this feature set (and command, when
@@ -1434,7 +1541,7 @@ def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) ->
 def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
          docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None,
-         reviewers=environment_reviewers, inventory=secret_inventory) -> int:
+         reviewers=environment_reviewers, inventory=secret_inventory, semver=semver_problems) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1570,6 +1677,13 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             if consumer_problems:
                 return 1
             compared += 1
+            semver_found, n, semver_note = semver(a.repo, a.manifest_path, a.crate, version,
+                                                  tomllib.loads(manifest_text), roster[a.crate], fetch)
+            for p in semver_found:
+                print(f"refused: {p}")
+            if semver_found:
+                return 1
+            compared += n
             digest = hashlib.sha256(body).hexdigest()
             print(f"publish-gate: go for {a.crate} {version} ({compared} checks)")
             print(f"  commit:        {commit}")
@@ -1579,7 +1693,8 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             print("  text:          every file of the package read by scripts/public_text_check.py")
             print("  consumer:      the unpacked .crate built as a crates.io consumer builds it (empty CARGO_HOME, "
                   "minimal environment, no Cargo.lock or configuration above it, each feature set)")
-            print(f"  publish:       {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")
+            print(f"  semver:        {semver_note}")
+            print(f"  publish:     {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")
             print(f"  then:          python3 scripts/release_train.py roster-mark published {a.crate} "
                   f"--repo {a.repo} --ref {commit} --expect-sha256 {digest}"
                   + (f" --manifest-path {a.manifest_path}" if manifest_dir else ""))

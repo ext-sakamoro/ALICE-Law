@@ -94,10 +94,27 @@ jobs:
       - name: Test the conformance measurement
         run: python3 scripts/test_measure_conformance.py
 
+      # the publish gate runs cargo semver-checks; its tests run the real tool on two
+      # small crates (a breaking change under a minor version must be refused). The
+      # release binary is pinned by version and SHA-256, and the toolchain is the one
+      # that version reads the rustdoc JSON of.
+      - name: Install cargo-semver-checks 0.50.0
+        env:
+          URL: https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v0.50.0/cargo-semver-checks-x86_64-unknown-linux-gnu.tar.gz
+          SHA256: 52a65dc88dc53fa8b57d6087954eb52cda149ca03bcfca78ce3fdecd23f893c4
+        run: |
+          curl -fsSL "$URL" -o "$RUNNER_TEMP/csc.tar.gz"
+          echo "$SHA256  $RUNNER_TEMP/csc.tar.gz" | sha256sum -c -
+          tar xzf "$RUNNER_TEMP/csc.tar.gz" -C "$HOME/.cargo/bin" cargo-semver-checks
+          rustup toolchain install 1.98.1 --profile minimal
+          RUSTUP_TOOLCHAIN=1.98.1 cargo semver-checks --version
+
       # the release train (release-train.toml): its tests, and what the roster says
       # is next (informational here; the publisher runs `publish-gate <crate>` right
       # before each `cargo publish`)
       - name: Test the release train
+        env:
+          RUSTUP_TOOLCHAIN: "1.98.1"
         run: python3 scripts/test_release_train.py
 
       - name: Test the expected-failure wrapper
