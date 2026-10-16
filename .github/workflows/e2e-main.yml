@@ -28,6 +28,7 @@ on:
       - "scripts/expected_failure.py"
       - "release-train.toml"
       - "scripts/release_train.py"
+      - "scripts/semver_gate.py"
       - ".github/workflows/e2e-main.yml"
 
 permissions:
