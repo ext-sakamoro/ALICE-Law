@@ -289,5 +289,75 @@ class Fetcher(unittest.TestCase):
             self.fetch_with({"git/trees": (1, "gh: Not Found (HTTP 404)")})
 
 
+class Internal(unittest.TestCase):
+    """--internal: the committed state file alone, no other repository read"""
+    GOOD = ('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 1\n"fail-known" = 1\n"unverified" = 1\n"n/a" = 0\n\n'
+            '[manifest."Beta"]\ncrates = ["beta"]\n"pass" = 0\n"fail-known" = 0\n"unverified" = 3\n"n/a" = 0\n')
+
+    def run_internal(self, state: str, missing: str = "", roster=ROSTER):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "r.toml").write_text(roster, encoding="utf-8")
+            (d / "g.toml").write_text(GATES, encoding="utf-8")
+            (d / "m.toml").write_text(missing, encoding="utf-8")
+            (d / "s.toml").write_text(state, encoding="utf-8")
+
+            def fetch(repo):
+                raise AssertionError(f"--internal read {repo}")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
+                                 str(d / "m.toml"), "--state", str(d / "s.toml"), "--internal"], fetch=fetch)
+            return code, out.getvalue()
+
+    def test_a_consistent_state_passes_without_reading_any_repository(self):
+        code, out = self.run_internal(self.GOOD)
+        self.assertEqual(code, 0, out)
+        self.assertIn("2 repositories, 0 findings", out)
+
+    def test_a_state_that_omits_a_crate_fails(self):
+        state = self.GOOD.split('\n\n[manifest."Beta"]')[0] + "\n"
+        code, out = self.run_internal(state)
+        self.assertEqual(code, 1, out)
+        self.assertIn("beta (Beta) has no entry", out)
+
+    def test_an_omitted_crate_listed_as_missing_is_expected(self):
+        state = self.GOOD.split('\n\n[manifest."Beta"]')[0] + "\n"
+        code, out = self.run_internal(state, missing='[missing.beta]\nfixed-in = "Beta"\nwhy = "not yet"\n')
+        self.assertEqual(code, 0, out)
+
+    def test_counts_that_do_not_sum_to_the_gates_fail(self):
+        code, out = self.run_internal(self.GOOD.replace('"n/a" = 0\n\n[manifest."Beta"]', '"n/a" = 1\n\n[manifest."Beta"]'))
+        self.assertEqual(code, 1, out)
+        self.assertIn("sum to 4, not to the 3 gates", out)
+
+    def test_a_negative_or_non_integer_count_fails(self):
+        for bad in ('"pass" = -1', '"pass" = "1"', '"pass" = true'):
+            code, out = self.run_internal(self.GOOD.replace('"pass" = 1', bad, 1))
+            self.assertEqual(code, 1, (bad, out))
+
+    def test_a_crate_under_the_wrong_repository_or_twice_or_unknown_fails(self):
+        for state, want in ((self.GOOD.replace('crates = ["beta"]', 'crates = ["alpha"]'), "listed under both"),
+                            (self.GOOD.replace('crates = ["beta"]', 'crates = ["beta", "gamma"]'), "gamma is not"),
+                            (self.GOOD.replace('[manifest."Beta"]', '[manifest."Other"]'), "belongs to Beta"),
+                            (self.GOOD.replace('crates = ["beta"]', 'crates = ["law"]'), "law is not")):
+            code, out = self.run_internal(state)
+            self.assertEqual(code, 1, (want, out))
+            self.assertIn(want, out)
+
+    def test_an_unparseable_or_empty_state_fails(self):
+        code, out = self.run_internal("[manifest.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("does not parse", out)
+        code, out = self.run_internal("")
+        self.assertNotEqual(code, 0, out)
+
+    def test_the_stale_message_names_the_regeneration_command(self):
+        check = Check()
+        code, out, _ = check.run_check({"Alpha": manifest(), "Beta": manifest()}, state="# stale\n", write=False)
+        self.assertEqual(code, 1, out)
+        self.assertIn("regenerate manifest-state: run python3 scripts/conformance_roster_check.py --write", out)
+
+
 if __name__ == "__main__":
     unittest.main()
