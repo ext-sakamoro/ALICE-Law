@@ -1516,42 +1516,54 @@ def feature_sets_key(sets: list) -> list:
     return sorted(sorted(s) for s in sets)
 
 
-def workflow_command_lines(text: str) -> list[str]:
-    """the shell commands of a workflow file as logical lines: a `run: |` block gives its
-    lines and a `run: >` block one folded line (YAML's two block styles), a line continued
-    with a backslash is joined to the next, and every other line is kept as it is"""
+def workflow_command_lines_at(text: str) -> list[tuple[str, int]]:
+    """(logical line, index of the physical line it starts on) of a workflow or script: a
+    `run: |` block gives its lines and a `run: >` block one folded line (YAML's two block
+    styles), a line continued with a backslash is joined to the next"""
     lines = text.splitlines()
     out, i = [], 0
     while i < len(lines):
         m = re.match(r"^(\s*)(?:-\s+)?run:\s*([|>])[-+]?\s*$", lines[i])
         if not m:
-            out.append(lines[i])
+            out.append((lines[i], i))
             i += 1
             continue
         base, style = len(m.group(1)), m.group(2)
         block = []
         i += 1
         while i < len(lines) and (not lines[i].strip() or len(lines[i]) - len(lines[i].lstrip()) > base):
-            block.append(lines[i].strip())
+            block.append((lines[i].strip(), i))
             i += 1
-        out += [" ".join(x for x in block if x)] if style == ">" else block
-    joined, cur = [], ""
-    for line in out:
+        if style == ">":
+            kept = [x for x in block if x[0]]
+            if kept:
+                out.append((" ".join(x for x, _ in kept), kept[0][1]))
+        else:
+            out += block
+    joined, cur, start = [], "", None
+    for line, k in out:
+        if start is None:
+            start = k
         if line.rstrip().endswith("\\"):
             cur += line.rstrip()[:-1] + " "
             continue
-        joined.append(cur + line)
-        cur = ""
+        joined.append((cur + line, start))
+        cur, start = "", None
     if cur:
-        joined.append(cur)
+        joined.append((cur, start))
     return joined
 
 
-SHELL_SEPARATORS = {"&&", "||", ";", "|", "&"}
+def workflow_command_lines(text: str) -> list[str]:
+    """the logical lines of workflow_command_lines_at, without their positions"""
+    return [line for line, _ in workflow_command_lines_at(text)]
 
 
-def semver_gate_invocations(repo: Path, at: str) -> tuple[list[tuple[str, str, str | None]], list[str]]:
-    """((workflow, manifest, config or None) of every run of scripts/semver_gate.py in the
+SHELL_SEPARATORS = {"&&", "||", ";", "|", "&", "|&", ";;", "(", ")"}
+
+
+def semver_gate_invocations(repo: Path, at: str) -> tuple[list[tuple[str, str, str | None, int]], list[str]]:
+    """((workflow, manifest, config or None, line) of every run of scripts/semver_gate.py in the
     repository's workflows at `at`, problems): a run is any command whose argv has an element
     named semver_gate.py, whatever the interpreter and its flags (--manifest defaults to
     Cargo.toml; no --config means the every-feature set); a --manifest or --config that is not
@@ -1560,7 +1572,7 @@ def semver_gate_invocations(repo: Path, at: str) -> tuple[list[tuple[str, str, s
     names = git(repo, "ls-tree", "--name-only", f"{at}:.github/workflows").split()
     found, problems = [], []
     for wf in sorted(n for n in names if n.endswith((".yml", ".yaml"))):
-        for line in workflow_command_lines(git(repo, "show", f"{at}:.github/workflows/{wf}")):
+        for line, pos in workflow_command_lines_at(git(repo, "show", f"{at}:.github/workflows/{wf}")):
             if not re.search(r"(?<![\w-])semver_gate\.py\b", line):
                 continue
             stripped = line.strip()
@@ -1569,7 +1581,10 @@ def semver_gate_invocations(repo: Path, at: str) -> tuple[list[tuple[str, str, s
                 continue
             where = f".github/workflows/{wf}: {stripped[:120]}"
             try:
-                argv = shlex.split(re.sub(r"^(?:-\s+)?run:\s*", "", stripped), comments=True)
+                lex = shlex.shlex(re.sub(r"^(?:-\s+)?run:\s*", "", stripped), posix=True, punctuation_chars=True)
+                lex.whitespace_split = True
+                lex.commenters = "#"
+                argv = list(lex)
             except ValueError as e:
                 problems.append(f"{where}: cannot split the command ({e})")
                 continue
@@ -1594,7 +1609,7 @@ def semver_gate_invocations(repo: Path, at: str) -> tuple[list[tuple[str, str, s
                 if literal:
                     problems.append(f"{where}: {literal} is not a literal path, so the config cannot be compared")
                     continue
-                found.append((wf, opts["--manifest"], opts["--config"]))
+                found.append((wf, opts["--manifest"], opts["--config"], pos))
     return found, problems
 
 
@@ -1625,6 +1640,296 @@ def semver_gate_wrappers(repo: Path, at: str) -> list[str]:
                 found.append(n)
                 break
     return found
+
+
+JOB_KEY_INDENT = 4
+
+
+def indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def yaml_scalar(value: str) -> str:
+    """a one-line YAML value without quotes, `${{ }}` and a trailing comment"""
+    v = re.sub(r"\s+#.*$", "", value).strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+        v = v[1:-1].strip()
+    m = re.fullmatch(r"\$\{\{\s*(.*?)\s*\}\}", v)
+    return m.group(1) if m else v
+
+
+def workflow_jobs(lines: list[str]) -> dict[str, tuple[int, int]]:
+    """job name -> (first line, end) of the jobs under `jobs:`"""
+    jobs_at = next((k for k, l in enumerate(lines) if l.rstrip() == "jobs:"), None)
+    if jobs_at is None:
+        return {}
+    starts = [k for k in range(jobs_at + 1, len(lines)) if JOB_RE.match(lines[k])]
+    return {JOB_RE.match(lines[a]).group(1): (a, b) for a, b in zip(starts, starts[1:] + [len(lines)])}
+
+
+def block_keys(lines: list[str], start: int, end: int, indent: int, first: str = "") -> dict[str, tuple[str, int]]:
+    """key -> (value, line) of the mapping at `indent` in lines[start:end] (`first` is the
+    rest of a `- ` line that opens a list item)"""
+    keys = {}
+    if first:
+        m = re.match(r"^([\w-]+):\s*(.*)$", first)
+        if m:
+            keys[m.group(1)] = (m.group(2), start)
+    for k in range(start + (1 if first else 0), end):
+        l = lines[k]
+        if l.strip() and not l.lstrip().startswith("#") and indent_of(l) == indent:
+            m = re.match(r"^\s*([\w-]+):\s*(.*)$", l)
+            if m:
+                keys[m.group(1)] = (m.group(2), k)
+    return keys
+
+
+def list_value(lines: list[str], value: str, at: int) -> list[str]:
+    """a YAML list given inline (`[a, b]`), as one scalar, or as `- x` lines below `at`"""
+    v = re.sub(r"\s+#.*$", "", value).strip()
+    if v.startswith("["):
+        return [x.strip().strip("'\"") for x in v.strip("[]").split(",") if x.strip()]
+    if v:
+        return [v.strip("'\"")]
+    out, base = [], indent_of(lines[at])
+    for l in lines[at + 1:]:
+        if not l.strip() or l.lstrip().startswith("#"):
+            continue
+        if indent_of(l) <= base:
+            break
+        m = re.match(r"^\s*-\s+(.*)$", l)
+        if m:
+            out.append(re.sub(r"\s+#.*$", "", m.group(1)).strip().strip("'\""))
+    return out
+
+
+def step_of(lines: list[str], job: tuple[int, int], k: int) -> tuple[int, int, int, str]:
+    """(first line, end, key indent, rest of the `- ` line) of the step holding line k"""
+    a, b = job
+    for s0 in range(k, a, -1):
+        m = re.match(r"^(\s*)-\s+(.*)$", lines[s0])
+        if m and (s0 == k or indent_of(lines[s0]) < indent_of(lines[k]) or lines[k].strip() == ""):
+            dash = len(m.group(1))
+            end = next((j for j in range(s0 + 1, b) if lines[j].strip() and not lines[j].lstrip().startswith("#")
+                        and indent_of(lines[j]) <= dash), b)
+            return s0, end, dash + 2, m.group(2)
+    return k, k + 1, indent_of(lines[k]), ""
+
+
+ALLOWED_EVENT_IFS = {"github.event_name == 'push'", "github.event_name == 'pull_request'"}
+CHANGES_IF = "needs.changes.outputs.run == 'true'"
+SOFT_AFTER = {"||", "|", "&"}
+SHELL_COMPOUND_WORDS = {"if", "elif", "while", "until", "!", "then", "do", "else", "case", "for", "select",
+                        "function", "{", "}", "(", ")"}
+
+
+def is_shell_operator(tok: str) -> bool:
+    """a control or redirection operator of a shlex token stream (punctuation_chars)"""
+    return bool(tok) and all(c in "|&;<>()" for c in tok)
+
+
+def is_redirection(tok: str) -> bool:
+    return is_shell_operator(tok) and ("<" in tok or ">" in tok) and not any(c in "|;()" for c in tok)
+
+
+def pattern_lines(text: str) -> list[str]:
+    return [l.strip() for l in text.splitlines() if l.strip() and not l.strip().startswith("#")]
+
+
+def on_section(lines: list[str]) -> tuple[int, int] | None:
+    k = next((i for i, l in enumerate(lines) if re.match(r"^(on|'on'|\"on\"|true):\s*$", l)), None)
+    if k is None:
+        return None
+    end = next((j for j in range(k + 1, len(lines)) if lines[j].strip() and not lines[j].startswith((" ", "#"))),
+               len(lines))
+    return k, end
+
+
+def semver_gate_block_problems(repo: Path, at: str, wf: str, text: str, pos: int, config: str) -> list[str]:
+    """problems that would let the run of the gate at line `pos` of workflow `wf` not block:
+    a soft run (`||`, `|` or `&` after it, `set +e` before it in its step, continue-on-error on
+    the step or the job, a shell other than bash / sh), an `if:` other than none, the push /
+    pull_request event conditions or the changed-paths decision (which needs a non-soft
+    `if: always()` gate job that needs both jobs and a decide step reading the patterns file),
+    and a workflow a push to main with a change to the gate does not reach"""
+    lines = text.splitlines()
+    where = f".github/workflows/{wf}:{pos + 1}"
+    problems = []
+    jobs = workflow_jobs(lines)
+    job = next((n for n, (a, b) in jobs.items() if a <= pos < b), None)
+    if job is None:
+        return [f"{where}: the run of semver_gate.py is not inside a job"]
+    ja, jb = jobs[job]
+    jkeys = block_keys(lines, ja, jb, JOB_KEY_INDENT)
+    sa, se, sind, first = step_of(lines, (ja, jb), pos)
+    skeys = block_keys(lines, sa, se, sind, first)
+    # the command
+    logical = next((l for l, k in workflow_command_lines_at(text) if k == pos), "")
+    lex = shlex.shlex(re.sub(r"^\s*(?:-\s+)?run:\s*", "", logical), posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    try:
+        toks = list(lex)
+    except ValueError:
+        toks = []
+    k = next((i for i, x in enumerate(toks) if Path(x).name == "semver_gate.py"), None)
+    if k is None:
+        problems.append(f"{where}: the run of semver_gate.py could not be read as a command")
+    else:
+        # a simple command: only redirections after it, and only assignments and the
+        # interpreter before it (errexit does not stop on a command left of `&&` or `||`,
+        # negated with `!`, or in an if / elif / while / until condition)
+        after = next((x for x in toks[k + 1:] if is_shell_operator(x) and not is_redirection(x)), None)
+        if after is not None:
+            problems.append(f"{where}: `{after}` after the run of semver_gate.py (the gate is a simple command, "
+                            f"on a line of its own)")
+        before = next((x for x in toks[:k] if is_shell_operator(x) or x in SHELL_COMPOUND_WORDS
+                       or "$(" in x or "`" in x), None)
+        if before is not None:
+            problems.append(f"{where}: `{before}` before the run of semver_gate.py (the gate is a simple command, "
+                            f"not in a condition, a negation or a list)")
+    in_condition = False
+    for j in range(sa, pos + 1):
+        words = re.sub(r"^\s*(?:-\s+)?run:\s*[|>]?[-+]?", "", lines[j]).split()
+        if j == pos:
+            if in_condition:
+                problems.append(f"{where}: the run of semver_gate.py is in an if / elif / while / until condition")
+            break
+        if re.search(r"\bset\s+(\+e\b|\+o\s+errexit\b)", lines[j]):
+            problems.append(f"{where}: `set +e` before the run of semver_gate.py lets a failure pass")
+        if words and words[0] in ("if", "elif", "while", "until"):
+            in_condition = True
+        if any(w.strip(";") in ("then", "do") for w in words):
+            in_condition = False
+    # continue-on-error and shell
+    for what, keys in (("step", skeys), (f"job {job}", jkeys)):
+        if "continue-on-error" in keys and yaml_scalar(keys["continue-on-error"][0]).lower() != "false":
+            problems.append(f"{where}: continue-on-error on the {what} lets a failure pass")
+    shell = yaml_scalar(skeys["shell"][0]) if "shell" in skeys else None
+    if shell is not None and shell not in ("bash", "sh"):
+        problems.append(f"{where}: shell {shell!r} on the step (only bash or sh, which stop on a failed command)")
+    # if:
+    if "if" in skeys and yaml_scalar(skeys["if"][0]) not in ALLOWED_EVENT_IFS:
+        problems.append(f"{where}: the step has `if: {yaml_scalar(skeys['if'][0])}`")
+    changes_gated = False
+    if "if" in jkeys:
+        cond = yaml_scalar(jkeys["if"][0])
+        if cond == CHANGES_IF:
+            changes_gated = True
+        elif cond not in ALLOWED_EVENT_IFS:
+            problems.append(f"{where}: job {job} has `if: {cond}`")
+    # reachability on a push to main
+    on = on_section(lines)
+    on_push = on_pr = None
+    if on is None:
+        flow = next((l for l in lines if re.match(r"^on:\s*\S", l)), None)
+        if flow is None or "push" not in flow:
+            problems.append(f"{where}: the workflow does not run on push")
+    else:
+        okeys = block_keys(lines, on[0] + 1, on[1], 2)
+        if "push" not in okeys:
+            problems.append(f"{where}: the workflow does not run on push")
+        else:
+            pa = okeys["push"][1]
+            pend = next((j for j in range(pa + 1, on[1]) if lines[j].strip() and not lines[j].lstrip().startswith("#")
+                         and indent_of(lines[j]) <= 2), on[1])
+            on_push = block_keys(lines, pa, pend, 4)
+        if "pull_request" in okeys:
+            pa = okeys["pull_request"][1]
+            pend = next((j for j in range(pa + 1, on[1]) if lines[j].strip() and not lines[j].lstrip().startswith("#")
+                         and indent_of(lines[j]) <= 2), on[1])
+            on_pr = block_keys(lines, pa, pend, 4)
+    gate_files = {SEMVER_GATE_FILE, config}
+    if on_push is not None:
+        if "branches" in on_push:
+            branches = list_value(lines, *on_push["branches"])
+            if "main" not in branches:
+                problems.append(f"{where}: on.push.branches {branches} does not include main")
+        if "paths-ignore" in on_push:
+            problems.append(f"{where}: on.push has paths-ignore (a change to the gate could be ignored)")
+        if "paths" in on_push:
+            paths = list_value(lines, *on_push["paths"])
+            missing = sorted(f for f in gate_files if f not in paths)
+            if missing:
+                problems.append(f"{where}: on.push.paths does not list {missing}")
+        elif changes_gated is False and False:
+            pass
+    if changes_gated:
+        problems += changes_gate_problems(repo, at, wf, lines, jobs, job, on_pr, gate_files, where)
+    return problems
+
+
+def changes_gate_problems(repo: Path, at: str, wf: str, lines: list[str], jobs: dict, job: str, on_pr: dict | None,
+                          gate_files: set, where: str) -> list[str]:
+    """a job gated by `needs.changes.outputs.run == 'true'` blocks only with a non-soft
+    `if: always()` job that needs `changes` and it and runs `changed_paths.py gate`, and a
+    `changes` job whose decide step reads a patterns file that lists the gate files (and
+    that on.pull_request.paths repeats)"""
+    problems = []
+    gates = []
+    for n, (a, b) in jobs.items():
+        keys = block_keys(lines, a, b, JOB_KEY_INDENT)
+        if "if" in keys and yaml_scalar(keys["if"][0]) == "always()":
+            gates.append((n, a, b, keys))
+    gate = None
+    for n, a, b, keys in gates:
+        needs = list_value(lines, *keys["needs"]) if "needs" in keys else []
+        if "changes" in needs and job in needs:
+            gate = (n, a, b, keys)
+    if gate is None:
+        return [f"{where}: job {job} runs only when the changes job says so, and no `if: always()` job that needs "
+                f"both changes and {job} checks the outcome"]
+    n, a, b, keys = gate
+    if "continue-on-error" in keys and yaml_scalar(keys["continue-on-error"][0]).lower() != "false":
+        problems.append(f"{where}: continue-on-error on the gate job {n}")
+    gate_runs = [l for l, k in workflow_command_lines_at("\n".join(lines)) if a <= k < b and "changed_paths.py" in l]
+    ran_gate = False
+    for l in gate_runs:
+        lex = shlex.shlex(re.sub(r"^\s*(?:-\s+)?run:\s*", "", l), posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        toks = list(lex)
+        for i, x in enumerate(toks):
+            if Path(x).name == "changed_paths.py" and i + 1 < len(toks) and toks[i + 1] == "gate":
+                ran_gate = True
+                after = next((y for y in toks[i + 2:] if y in SOFT_AFTER | {"&&", ";"}), None)
+                if after in SOFT_AFTER:
+                    problems.append(f"{where}: `{after}` after changed_paths.py gate in job {n}")
+    if not ran_gate:
+        problems.append(f"{where}: the gate job {n} does not run changed_paths.py gate")
+    for k in range(a, b):
+        m = re.match(r"^(\s*)(?:-\s+)?(if|continue-on-error):\s*(.*)$", lines[k])
+        if m and indent_of(lines[k]) > JOB_KEY_INDENT:
+            problems.append(f"{where}: a step of the gate job {n} has `{m.group(2)}: {yaml_scalar(m.group(3))}`")
+    if "changes" not in jobs:
+        return problems + [f"{where}: there is no changes job"]
+    ca, cb = jobs["changes"]
+    files = []
+    for l, k in workflow_command_lines_at("\n".join(lines)):
+        if ca <= k < cb and "changed_paths.py" in l:
+            lex = shlex.shlex(re.sub(r"^\s*(?:-\s+)?run:\s*", "", l), posix=True, punctuation_chars=True)
+            lex.whitespace_split = True
+            toks = list(lex)
+            if any(Path(x).name == "changed_paths.py" for x in toks) and "decide" in toks:
+                inline = [x for x in toks if x in ("--pattern", "--patterns") or x.startswith(("--pattern=", "--patterns="))]
+                if inline:
+                    problems.append(f"{where}: the decide step lists patterns inline (it must read the patterns file)")
+                for i, x in enumerate(toks):
+                    if x == "--patterns-file" and i + 1 < len(toks):
+                        files.append(toks[i + 1])
+                    elif x.startswith("--patterns-file="):
+                        files.append(x.split("=", 1)[1])
+    if len(files) != 1 or "$" in files[0] or "{{" in files[0]:
+        return problems + [f"{where}: the decide step of the changes job reads {files or 'no'} patterns file "
+                           f"(exactly one literal --patterns-file)"]
+    try:
+        patterns = pattern_lines(git(repo, "show", f"{at}:{files[0]}"))
+    except subprocess.CalledProcessError:
+        return problems + [f"{where}: the patterns file {files[0]} is not tracked"]
+    missing = sorted(f for f in gate_files if f not in patterns)
+    if missing:
+        problems.append(f"{where}: {files[0]} does not list {missing}")
+    if on_pr is not None and "paths" in on_pr and list_value(lines, *on_pr["paths"]) != patterns:
+        problems.append(f"{where}: on.pull_request.paths is not the patterns of {files[0]}")
+    return problems
 
 
 def semver_config_drift(roster: dict[str, dict], repos_root: Path, at: str) -> tuple[list[str], list[str], int]:
@@ -1659,15 +1964,15 @@ def semver_config_drift(roster: dict[str, dict], repos_root: Path, at: str) -> t
         tracked = git(repo, "ls-tree", "-r", "--name-only", at, "--", ".github").splitlines()
         configs = sorted(n for n in tracked if re.fullmatch(r"\.github/semver-gate[\w.-]*\.toml", n))
         for c in configs:
-            n_runs = sum(1 for _, _, cfg in runs if cfg == c)
+            n_runs = sum(1 for _, _, cfg, _ in runs if cfg == c)
             if n_runs != 1:
                 problems.append(f"{repo_name}/{c}: read by {n_runs} direct workflow run(s) (exactly one reads a config)")
-        untracked = [(wf, cfg) for wf, _, cfg in runs if cfg not in configs]
+        untracked = [(wf, cfg) for wf, _, cfg, _ in runs if cfg not in configs]
         for wf, cfg in untracked:
             problems.append(f"{repo_name}/.github/workflows/{wf}: a run of semver_gate.py reads "
                             f"{'no --config' if cfg is None else cfg}, which is not a tracked .github/semver-gate*.toml")
         runs = [r for r in runs if r[2] in configs]
-        for wf, manifest_path, config_path in runs:
+        for wf, manifest_path, config_path, pos in runs:
             where = f"{repo_name}/.github/workflows/{wf} (--manifest {manifest_path}, --config {config_path})"
             name = tomllib.loads(git(repo, "show", f"{at}:{manifest_path}")).get("package", {}).get("name")
             if name not in by_repo[repo_name]:
@@ -1675,6 +1980,8 @@ def semver_config_drift(roster: dict[str, dict], repos_root: Path, at: str) -> t
                                 f"({', '.join(sorted(by_repo[repo_name]))})")
                 continue
             config = tomllib.loads(git(repo, "show", f"{at}:{config_path}"))
+            problems += [f"{repo_name}/{p}" for p in semver_gate_block_problems(
+                repo, at, wf, git(repo, "show", f"{at}:.github/workflows/{wf}"), pos, config_path)]
             compared += 1
             entry = roster[name]
             diff = []
