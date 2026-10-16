@@ -382,8 +382,6 @@ ALLOWED: dict[str, dict[str, int]] = {
         "ab6f260bbe48e591409dcd53d07c2044e0a4da028ef1d51bc2ae01ff4009ba58": 3,
         "2d5c1dc549cf7601676a0cb7f5452d20be3fa5f1d0f55140305152ca6be22625": 1,
         "e7fc9e6005c1c2d4cad2be2070cced19d2ce2874f93d046f0cabe7194671d81c": 2,
-        "43e6578d81a78bd7891d1c713ab9d4dacae113f6ca20b2c38db6ed8133c68f1a": 1,
-        "f41eaca7cb84ee285cdb120649aeab70224ff4da7efde8f691abf381744bbc4e": 1,
     },
     "text-to-print": {
         "8e3dd0d012a2b0488d6e314c823c6db1fc86881986cf3597f9cd9f3365108bb7": 2,
