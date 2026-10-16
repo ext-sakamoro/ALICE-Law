@@ -160,20 +160,21 @@ consumer-check-features = [["python"]]
 
 [crate.alice-physics]
 version = "3.1.0"
-state = "planned"
+state = "prepared"
 order = 6
 repo = "ALICE-Physics"
 consumer-features = [["analytics", "ffi", "gpu-solver-bridge", "neural", "parallel", "privacy-crypto", "replay", "simd", "std"], ["std", "wasm"]]
 consumer-features-why = "python は std を有効にしない (no_std では compile できない) ので std と組にする wasm と ffi は互いに排他 (src/lib.rs の compile_error) なので別の組にする python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["std", "python"]]
 # 3.1.0 は alice-db の要求を 0.5、alice-analytics の要求を >=0.5, <0.7 にし、公開済みの alice-db 0.5.1 と
-# alice-analytics 0.6.0 を受ける版 (公開 API に alice_db / alice_analytics の型は無い) [Unreleased] は Added と Changed
-# だけ (参加者 / error / PREVIOUS_PHYSICS_SEMANTICS_IDS の追加、#[non_exhaustive] の variant の追加、依存の範囲) 識別子の
-# 移動は旧い識別子を PREVIOUS に残し golden は不変 公開する commit は Physics main で日付つきの [3.1.0] を入れて決め、
-# prepared にする must-contain は今の Physics main ec9bb1a で、min/max と G10 の elapsed の変更が入ったら付け替える
+# alice-analytics 0.6.0 を受け、alice-det-math 0.5.1 の算術の識別子を受ける版 (以前の識別子は
+# PREVIOUS_PHYSICS_SEMANTICS_IDS で受理) LawCheck は値を持たない enum のままで、以前の識別子は
+# PhysicsWorld::world_snapshot_ids で読む (cargo semver-checks は 3.0.1 に対して consumer の 5 組で互換でない変更 0 件)
+# CHANGELOG に日付つきの [3.1.0] - 2026-10-16 を入れた Physics main 3f83c86 から公開する Mac Intel の leg は main への
+# push で走る (ci/** の branch では走らない) ので、gate は main の CI が終わってから回す
 # 公開済みの 3.0.1 は 306d8d6f から ([lib] crate-type を rlib だけにした版) 3.0.0 から続く 2 commit と 3.0.1 の 4 commit を
 # patch id (git patch-id --stable) でも持つ
-must-contain = ["ec9bb1a704cd9a34bd734ae2cc522f3a411bd92e"]
+must-contain = ["3f83c8649f87177bc3dc426b00656454074739c2"]
 must-contain-patch = [
     "713407beaf620dcc766632eab58d414d13146230",  # fix: 等しいゼロを max / min にかけた時の符号を全 target で揃える
     "12181a10bfd8ab5d0dfc5003f4bacd151154e79e",  # ci: library の code で f32 / f64 の max と min を使えなくする (wasm / python の lib pass を含む版)
@@ -181,6 +182,10 @@ must-contain-patch = [
     "12480b7cacb010edfb6f1ad61429af52ae066d55",  # fix: binding を crate type の指定つきで build し、README の手順を CI で実行する
     "e63c33ec8ab397dd53c0214547c30b07c3c532c7",  # ci: full の preflight で Python の wheel を maturin で作り binding の試験を走らせる
     "73f6ceb903bd6958138f91b22d1d13e7d89d8205",  # test: no_std の依存 build で比較 0 件を exit 2 にする判定を試験で固定する
+]
+changelog-has = [
+    "- 版を 3.1.0 にした `alice-db` の要求を 0.5、`alice-analytics` の要求を `>=0.5, <0.7` にして",
+    "`world_participant::FieldLayout::Channels { count }`",
 ]
 # CI jobs that must be green on the published commit, with every leg named: the tests
 # on every OS and target (x86_64 and aarch64, wasm), clippy with the library gate (no
