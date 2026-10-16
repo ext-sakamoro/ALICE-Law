@@ -11,8 +11,8 @@ crates = ["alice-analytics"]
 
 [manifest."ALICE-Crypto"]
 crates = ["alice-crypto"]
-"pass" = 2
-"fail-known" = 9
+"pass" = 3
+"fail-known" = 8
 "unverified" = 3
 "n/a" = 0
 
@@ -60,8 +60,8 @@ crates = ["alice-lol", "alice-lol-macro"]
 
 [manifest."ALICE-ML"]
 crates = ["alice-ml"]
-"pass" = 2
-"fail-known" = 8
+"pass" = 3
+"fail-known" = 7
 "unverified" = 4
 "n/a" = 0
 
