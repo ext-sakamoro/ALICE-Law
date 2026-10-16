@@ -203,16 +203,20 @@ required-ci = [
 # main に入ったので、次の版の entry で足す
 
 [crate.alice-sdf]
-version = "6.0.0"
-state = "published"
+version = "6.1.0"
+state = "prepared"
 order = 7
 repo = "ALICE-SDF"
 consumer-features = [["aaa", "all-shaders", "asp", "blinkscript", "cli", "codec", "destruction", "ffi", "font", "gi", "glsl", "godot", "gpu", "gpu-mesh", "hlsl", "image", "jit", "msl", "openvdb", "physics", "rust", "sdf-cache", "svo", "svo-gpu", "terrain", "texture-fit", "unity", "unreal", "volume", "wasm"]]
 consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["python"]]
-# 6.0.0 は main の min / max の Law (77bcbaf まで) と、その上の det-math 0.5・physics 3・max / min の
-# 2 周目の変更を含めて公開する (後者は patch id で持つ: rebase された写しでも当たる)
-must-contain = ["77bcbaf1d3a318d660b93b9f32468f7d78b1bead"]
+# 6.1.0 は tight_aabb::analytic_aabb が扱う形を広げた版 (追加だけ、cargo semver-checks は 6.0.0 に対して
+# consumer の feature の組すべてで互換でない変更 0 件) CHANGELOG に日付つきの [6.1.0] - 2026-10-16 を入れた
+# SDF b3f02d2 の上の d3a0646 (self-hosted runner の 3 workflow から workflow_dispatch を外した) と 8b0eaed
+# (Cargo.toml のコメントの文言、公開する text の検査器の pin) を経た 8b0eaed から公開する Security & Hygiene
+# は ci/** の branch では走らず、Fuzz は path filter で飛ぶので、main に着地した後に dispatch して gate を回す
+# 6.0.0 の 77bcbaf と 2 周目の max / min の変更は 8b0eaed の祖先にあるので patch id も残す
+must-contain = ["8b0eaed533c83a9c61a2563b4ca15d1a01785bd3", "77bcbaf1d3a318d660b93b9f32468f7d78b1bead"]
 must-contain-patch = [
     "db667f3fc8beb9916c306c0a1e76709ebe5238a1",  # deps: alice-det-math 0.5、version 6.0.0
     "662232e39bd46ac984a62e121acb15946f2495e6",  # jit: simd_sincos_det を det-math 0.5 の範囲還元に
@@ -226,9 +230,8 @@ must-contain-patch = [
     "6c9b1d77801ac9340ebe3077ff7428c6d7e2c6ff",  # ci: raw max/min の manifest を default-deny に
 ]
 changelog-has = [
-    "**破壊的変更:** `alice-det-math` を 0.4 から 0.5 に更新",
-    "`alice-physics` の要求を 2.2 から 3 に上げた",
-    "**Behavior change:**",
+    "- 版を 6.1.0 にした `tight_aabb::analytic_aabb` が扱う形を広げた",
+    "`tight_aabb::analytic_aabb` が `PolarRepeat` / `Twist` / `Taper` / `IcosahedralSymmetry` / `OctantMirror`",
 ]
 required-ci = [
     { workflow = "CI", job = "Test — Linux (x86_64)" },
