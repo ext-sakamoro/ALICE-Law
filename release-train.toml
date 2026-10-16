@@ -160,7 +160,7 @@ consumer-check-features = [["python"]]
 
 [crate.alice-physics]
 version = "3.1.0"
-state = "prepared"
+state = "published"
 order = 6
 repo = "ALICE-Physics"
 consumer-features = [["analytics", "ffi", "gpu-solver-bridge", "neural", "parallel", "privacy-crypto", "replay", "simd", "std"], ["std", "wasm"]]
