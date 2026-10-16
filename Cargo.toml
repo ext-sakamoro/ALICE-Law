@@ -14,7 +14,7 @@ alice-lol = { version = "0.4", features = ["physics"] }
 alice-det-math = "0.5"
 alice-sdf = { version = "6", features = ["physics"] }
 alice-physics = { version = "3", features = ["analytics", "replay"] }
-alice-db = { version = "0.4", features = ["analytics", "crypto"] }
+alice-db = { version = "0.5", features = ["analytics", "crypto"] }
 alice-zip = "0.10"
 alice-crypto = "0.4"
 alice-analytics = { version = ">=0.5, <0.7", features = ["law"] }

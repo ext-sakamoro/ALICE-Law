@@ -166,9 +166,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 ### 公開まで失敗を予期する step
 
-| step | 期限 | 理由 |
-|---|---|---|
-| dependency-consistency | alice-physics 3.1.0 | alice-db 0.5.1 and alice-analytics 0.6.0 are published, while alice-physics 3.0.1 on crates.io accepts only alice-db 0.4 and alice-analytics 0.5 (optional, enabled here). alice-edge 0.3.0 links alice-db 0.5.1 through its db feature; this repository and alice-physics 3.0.1 link alice-db 0.4.0, which links alice-analytics 0.5.0. The release that retires each line: the two alice-physics 3.0.1 lines = alice-physics 3.1.0 (main accepts alice-db 0.5 and alice-analytics >=0.5, <0.7); this repository requiring alice-db 0.4 = moving this repository to alice-db 0.5, in its own change right after alice-physics 3.1.0; the two linked-at-2-versions lines and the alice-db 0.4.0 line = alice-physics 3.1.0 together with that move. Any other line still fails. |
+なし
 
 ### alice-det-math の版ごとの end to end の run digest
 

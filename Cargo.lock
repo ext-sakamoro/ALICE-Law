@@ -55,9 +55,9 @@ dependencies = [
 
 [[package]]
 name = "alice-db"
-version = "0.4.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0f23e5f99b21d7637e62fc92b627091fa436e569f9786d81be4ac5ce633af9f"
+checksum = "d6ed8d7045f31f8aff2d8097a414b72541af1cfa9cc7b059d85457fa08e6adc1"
 dependencies = [
  "alice-analytics",
  "alice-crypto",
@@ -68,7 +68,6 @@ dependencies = [
  "crossbeam-channel",
  "fs2",
  "getrandom",
- "js-sys",
  "log",
  "lzma-rs",
  "memmap2",
@@ -81,9 +80,9 @@ dependencies = [
 
 [[package]]
 name = "alice-det-math"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98c80b31a6e6751c58fd3f2794a12dbb5304946f1cd5bf791840b4df041444d2"
+checksum = "2857e06dcc3838a2138f4c8ed7b30cf8515a223eeb6d5fbd068dd13d45cb4ff4"
 dependencies = [
  "bytemuck",
  "wide",
@@ -91,9 +90,9 @@ dependencies = [
 
 [[package]]
 name = "alice-edge"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35c75e71a98a05eea8ff5d1e6007fe14dccf3ebd9bf7e663a1675dd0bc5b6284"
+checksum = "1453d5d71850796615c51fec5f26de6dd8d55da54ec9dc93d2accfcf05663963"
 dependencies = [
  "alice-analytics",
  "alice-db",
@@ -145,9 +144,9 @@ dependencies = [
 
 [[package]]
 name = "alice-physics"
-version = "3.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5ceef47d3ce1d17ac8dc3a873dca5e4b122f2299fc508fca52e90ea22da2992"
+checksum = "8eba6979667e41b02beb5048e29182bfc2270304300915d4d3790fa26a1df9e5"
 dependencies = [
  "alice-analytics",
  "alice-db",
