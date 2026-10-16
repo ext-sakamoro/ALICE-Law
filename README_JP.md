@@ -182,12 +182,12 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 | repository | 読む crate | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
 | ALICE-Analytics | alice-analytics | 4 | 6 | 4 | 0 |
-| ALICE-Crypto | alice-crypto | 0 | 11 | 3 | 0 |
+| ALICE-Crypto | alice-crypto | 1 | 10 | 3 | 0 |
 | ALICE-DB | alice-db | 4 | 7 | 3 | 0 |
 | ALICE-DetMath | alice-det-math | 6 | 6 | 0 | 2 |
 | ALICE-Edge | alice-edge | 4 | 5 | 5 | 0 |
-| ALICE-Kinematics | alice-kinematics | 1 | 10 | 3 | 0 |
-| ALICE-LLM | alice-llm | 0 | 12 | 2 | 0 |
+| ALICE-Kinematics | alice-kinematics | 2 | 9 | 3 | 0 |
+| ALICE-LLM | alice-llm | 1 | 11 | 2 | 0 |
 | ALICE-LOL | alice-lol, alice-lol-macro | 4 | 6 | 4 | 0 |
 | ALICE-ML | alice-ml | 2 | 8 | 4 | 0 |
 | ALICE-Physics | alice-physics | 7 | 6 | 1 | 0 |
