@@ -64,12 +64,11 @@ jobs:
       - name: Test the conformance roster checker
         run: python3 scripts/test_conformance_roster_check.py
 
-      # every release-train crate's alice-law-conformance.toml at its main: all gates, valid
-      # statuses, located fail-known entries, the missing-manifests list and the state file
-      - name: Every release-train crate declares its conformance at main
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/conformance_roster_check.py
+      # the committed conformance state alone (it parses, covers exactly the train's crates,
+      # counts sum to the gates); the comparison with the members' mains is conformance-live.yml,
+      # so a manifest landing in another repository does not fail this repository's change
+      - name: The committed conformance state is consistent
+        run: python3 scripts/conformance_roster_check.py --internal
 
       - name: Test the README Status generator
         run: python3 scripts/test_gen_law_status.py

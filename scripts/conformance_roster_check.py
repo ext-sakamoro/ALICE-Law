@@ -26,7 +26,16 @@ it, the committed file must equal what main shows (a manifest changed upstream i
 the file is regenerated), which keeps the README tables generated from it deterministic.
 
     conformance_roster_check.py [--roster FILE] [--gates FILE] [--missing FILE] [--state FILE]
-                                [--owner OWNER] [--write]
+                                [--owner OWNER] [--write | --internal]
+
+`--internal` reads nothing from the other repositories: it checks only that the committed state
+file is consistent with this repository (it parses, it covers exactly the release-train crates
+that are not exempt and not listed in missing-manifests.toml, each crate under its own repository,
+once, and each repository's counts sum to the number of gates). That is what the pre-push gate
+and the branch / pull request CI run, so a manifest landing in another repository does not make
+this repository's own change fail. The comparison with the members' mains (the default mode) is
+unchanged and runs on every push to main and daily (.github/workflows/conformance-live.yml); when
+it finds the state stale it says how to regenerate it.
 
 Exit 0 when every crate passes, 1 on a finding, 2 when nothing was compared (no crate, no gate,
 no manifest read) or an input cannot be read. Reads each repository through `gh api`
@@ -309,6 +318,55 @@ def check(roster: dict, gates: dict, missing: dict, fetch) -> tuple[list[str], l
     return findings, notes, states, read, compared, files
 
 
+def check_state(roster: dict, gates: dict, missing: dict, text: str) -> tuple[list[str], int]:
+    """(findings, repositories read) for the committed state file alone (--internal)"""
+    crates = roster_crates(roster)
+    vocab = gate_vocabulary(gates)
+    if not crates:
+        raise InputError("release-train.toml lists no crate to check")
+    if not vocab:
+        raise InputError("conformance/gates.toml lists no gate")
+    try:
+        state = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        return [f"the state file does not parse: {e}"], 0
+    entries = state.get("manifest", {})
+    if set(state) - {"manifest"}:
+        return [f"the state file has unknown tables: {sorted(set(state) - {'manifest'})}"], 0
+    listed = set(missing.get("missing", {}))
+    findings: list[str] = []
+    seen: dict[str, str] = {}
+    for repo, e in sorted(entries.items()):
+        if not isinstance(e, dict):
+            findings.append(f"{repo}: not a table")
+            continue
+        unknown = set(e) - {"crates", *STATUSES}
+        if unknown:
+            findings.append(f"{repo}: unknown keys {sorted(unknown)}")
+        counts = [e.get(st) for st in STATUSES]
+        if not all(isinstance(c, int) and not isinstance(c, bool) and c >= 0 for c in counts):
+            findings.append(f"{repo}: each of {', '.join(STATUSES)} must be a count (an integer >= 0)")
+        elif sum(counts) != len(vocab):
+            findings.append(f"{repo}: the counts sum to {sum(counts)}, not to the {len(vocab)} gates")
+        names = e.get("crates")
+        if not isinstance(names, list) or not names or not all(isinstance(n, str) for n in names):
+            findings.append(f"{repo}: crates must be a non-empty list of names")
+            continue
+        for n in names:
+            if n not in crates:
+                findings.append(f"{repo}: {n} is not a release-train crate that is checked")
+            elif crates[n] != repo:
+                findings.append(f"{repo}: {n} belongs to {crates[n]} in release-train.toml")
+            if n in seen:
+                findings.append(f"{n} is listed under both {seen[n]} and {repo}")
+            seen.setdefault(n, repo)
+    for n in sorted(set(crates) - set(seen) - listed):
+        findings.append(f"{n} ({crates[n]}) has no entry in the state file")
+    for n in sorted(set(seen) & listed):
+        findings.append(f"{n} has an entry in the state file and is listed in missing-manifests.toml")
+    return findings, len(entries)
+
+
 def main(argv: list[str] | None = None, fetch=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", default=str(ROOT / "release-train.toml"))
@@ -316,8 +374,28 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
     ap.add_argument("--missing", default=str(ROOT / "conformance" / "missing-manifests.toml"))
     ap.add_argument("--state", default=str(ROOT / "conformance" / "manifest-state.toml"))
     ap.add_argument("--owner", default=None, help="the GitHub owner (default: [train] github of the roster)")
-    ap.add_argument("--write", action="store_true", help="write the status counts to --state")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--write", action="store_true", help="write the status counts to --state")
+    mode.add_argument("--internal", action="store_true",
+                      help="check the committed state file alone, reading no other repository")
     a = ap.parse_args(argv)
+    if a.internal:
+        try:
+            roster = load_toml(Path(a.roster))
+            gates = load_toml(Path(a.gates))
+            missing = load_toml(Path(a.missing)) if Path(a.missing).exists() else {}
+            text = Path(a.state).read_text(encoding="utf-8")
+            findings, n = check_state(roster, gates, missing, text)
+        except (InputError, OSError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        for f in findings:
+            print(f"found: {f}")
+        if n == 0 and not findings:
+            print("error: the state file has no manifest entry (compared nothing)", file=sys.stderr)
+            return 2
+        print(f"conformance state (internal): {n} repositories, {len(findings)} findings")
+        return 1 if findings else 0
     try:
         roster = load_toml(Path(a.roster))
         gates = load_toml(Path(a.gates))
@@ -343,8 +421,9 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
             state_path.write_text(rendered, encoding="utf-8")
             print(f"conformance roster: wrote {state_path.name}")
         elif not state_path.exists() or state_path.read_text(encoding="utf-8") != rendered:
-            findings.append(f"{state_path.name} differs from the manifests at main "
-                            f"(regenerate with --write)")
+            findings.append(f"{state_path.name} differs from the manifests at main (regenerate manifest-state: "
+                            f"run python3 scripts/conformance_roster_check.py --write && "
+                            f"python3 scripts/gen_law_status.py, and commit both)")
             print(f"found: {findings[-1]}")
     print(f"conformance roster: {files} manifests read for {read} crates (crates that share a repository share "
           f"its manifest), {compared} gates compared, {len(findings)} findings")

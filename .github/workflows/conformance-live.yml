@@ -1,0 +1,44 @@
+# Conformance of the release-train crates, read from their main branches
+#
+# scripts/conformance_roster_check.py in its default mode: every crate that is not exempt
+# holds alice-law-conformance.toml at the main of its repository with every gate, valid
+# statuses, located fail-known entries, and the committed conformance/manifest-state.toml
+# equals what those mains show. A manifest that changed upstream turns this red with the
+# command that regenerates the state; the regeneration is a commit in this repository
+# (CI does not commit). Nothing compared is a failure.
+#
+# On every push to main and daily, and on demand. It is not part of the branch / pull
+# request checks or the pre-push gate: those run the same script with --internal (the
+# committed state alone), so a landing in another repository does not fail a change here.
+
+name: Conformance (live)
+
+on:
+  schedule:
+    - cron: "23 3 * * *"   # daily 03:23 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-live-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  live:
+    name: Every release-train crate declares its conformance at main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Test the conformance roster checker
+        run: python3 scripts/test_conformance_roster_check.py
+
+      - name: The committed state equals the members' mains
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/conformance_roster_check.py
