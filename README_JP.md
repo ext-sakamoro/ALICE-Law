@@ -187,8 +187,8 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 | ALICE-DetMath | alice-det-math | 6 | 6 | 0 | 2 |
 | ALICE-Edge | alice-edge | 4 | 5 | 5 | 0 |
 | ALICE-Kinematics | alice-kinematics | 2 | 9 | 3 | 0 |
-| ALICE-LLM | alice-llm | 1 | 11 | 2 | 0 |
-| ALICE-LOL | alice-lol, alice-lol-macro | 4 | 6 | 4 | 0 |
+| ALICE-LLM | alice-llm | 2 | 10 | 2 | 0 |
+| ALICE-LOL | alice-lol, alice-lol-macro | 5 | 5 | 4 | 0 |
 | ALICE-ML | alice-ml | 2 | 8 | 4 | 0 |
 | ALICE-Physics | alice-physics | 7 | 6 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 1 | 9 | 4 | 0 |
