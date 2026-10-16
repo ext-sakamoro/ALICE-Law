@@ -204,7 +204,7 @@ required-ci = [
 
 [crate.alice-sdf]
 version = "6.1.0"
-state = "prepared"
+state = "published"
 order = 7
 repo = "ALICE-SDF"
 consumer-features = [["aaa", "all-shaders", "asp", "blinkscript", "cli", "codec", "destruction", "ffi", "font", "gi", "glsl", "godot", "gpu", "gpu-mesh", "hlsl", "image", "jit", "msl", "openvdb", "physics", "rust", "sdf-cache", "svo", "svo-gpu", "terrain", "texture-fit", "unity", "unreal", "volume", "wasm"]]

@@ -154,7 +154,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-analytics | 0.6.0 | published | 4 | ALICE-Analytics | v0.6.0 |
 | alice-db | 0.5.1 | published | 5 | ALICE-DB | v0.5.1 |
 | alice-physics | 3.1.0 | published | 6 | ALICE-Physics | v3.1.0 |
-| alice-sdf | 6.1.0 | prepared | 7 | ALICE-SDF | v6.1.0 |
+| alice-sdf | 6.1.0 | published | 7 | ALICE-SDF | v6.1.0 |
 | alice-llm | 2.0.0 | published | 8 | ALICE-LLM | v2.0.0 |
 | alice-lol-macro | 0.3.0 | published | 9 | ALICE-LOL | alice-lol-macro-v0.3.0 |
 | alice-lol | 0.4.2 | published | 10 | ALICE-LOL | alice-lol-v0.4.2 |
