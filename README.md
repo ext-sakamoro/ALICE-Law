@@ -182,7 +182,7 @@ One row per repository: crates that share a repository share its one manifest at
 | repository | read for | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
 | ALICE-Analytics | alice-analytics | 3 | 7 | 4 | 0 |
-| ALICE-Crypto | alice-crypto | 0 | 10 | 4 | 0 |
+| ALICE-Crypto | alice-crypto | 0 | 11 | 3 | 0 |
 | ALICE-DB | alice-db | 3 | 7 | 4 | 0 |
 | ALICE-DetMath | alice-det-math | 5 | 7 | 0 | 2 |
 | ALICE-Edge | alice-edge | 3 | 5 | 6 | 0 |

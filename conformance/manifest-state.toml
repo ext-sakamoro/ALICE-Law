@@ -12,8 +12,8 @@ crates = ["alice-analytics"]
 [manifest."ALICE-Crypto"]
 crates = ["alice-crypto"]
 "pass" = 0
-"fail-known" = 10
-"unverified" = 4
+"fail-known" = 11
+"unverified" = 3
 "n/a" = 0
 
 [manifest."ALICE-DB"]
