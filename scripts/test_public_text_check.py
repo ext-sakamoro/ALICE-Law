@@ -1244,6 +1244,13 @@ class Devices(Base):
         for line in ("Android Jetpack Compose", "a jetpacks game", "ALT4T"):
             self.assertNotIn("device detail", ptc.kinds(line), line)
 
+    def test_the_short_board_names_as_whole_tokens(self):
+        for line in ("CacheBudget::l2_rpi5()", "label L2-RasPi5", "raspi_case", "an RPi 4", "Raspberry Pi 5",
+                     "l2_rpi5_dual", "L2x2-RasPi5", "rpi", "Ras Pi 4", "x.raspi."):
+            self.assertIn("device", ptc.kinds(line), line)
+        for line in ("grasping", "Graspi", "rpix", "therapist", "raspberries", "rasping", "crpi", "wraspi2"):
+            self.assertNotIn("device", ptc.kinds(line), line)
+
     def test_a_release_string_next_to_a_device_line(self):
         self.assertIn("f:2: device detail", ptc.scan_text("f", "a jetson board\nrunning R36.4.3\n"))
         self.assertIn("f:1: device detail", ptc.scan_text("f", "R36.4.3\non the jetson\n"))

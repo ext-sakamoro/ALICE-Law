@@ -114,7 +114,11 @@ FORBIDDEN = [
     ("home path", re.compile(r"(?:^|(?<=[\s\"'=(\[`<,;:])|(?<=file://))/(?:Users|home)/(?!(?:runner|user|USER|username|you|me|name|Shared|<[^>/]+>|\$\{?[A-Za-z_]+\}?)/)"
                              r"[A-Za-z0-9._\-]+/")),
     # (any case: a host name is often the device name in lower case)
-    ("device", re.compile(r"(?i:" + words(r"jetson", r"orin[\s-]*(?:nano|nx|agx)", r"mac\s?mini", r"macbook")
+    ("device", re.compile(r"(?i:" + words(r"jetson", r"orin[\s-]*(?:nano|nx|agx)", r"mac\s?mini", r"macbook",
+                                         # the short names of the board, with a model number or
+                                         # none, as a whole token: no letter on either side, so
+                                         # l2_rpi5 and L2-RasPi5 are found and grasping is not
+                                         r"ras\s?pi\d*", r"rpi\d*")
                           + r"|raspberry\s*pi)")),
     # the SDK / firmware of such a device ("JetPack 6", "JetPack R36", "L4T"); Android's
     # "Jetpack Compose" has no version and is not one
