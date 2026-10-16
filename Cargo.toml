@@ -10,7 +10,7 @@ description = "Integration checks across the core ALICE crates, built from their
 # their dependencies on each other (so the lock file shows every link between
 # them). No path dependencies: everything comes from crates.io.
 [dependencies]
-alice-lol = { version = "0.4", features = ["physics"] }
+alice-lol = { version = ">=0.4.1, <0.6", features = ["physics"] }
 alice-det-math = "0.5"
 alice-sdf = { version = "6", features = ["physics"] }
 alice-physics = { version = "3", features = ["analytics", "replay"] }

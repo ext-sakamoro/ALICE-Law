@@ -117,9 +117,9 @@ dependencies = [
 
 [[package]]
 name = "alice-lol"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0aa048877c061b5dd7846f293d404909fbb074f4bed7899f1854ab811508b9f"
+checksum = "baa53713be3c99b9b49e4496838250cb34d0644bf5055ec1c569b8b67607d24b"
 dependencies = [
  "alice-det-math",
  "alice-lol-macro",

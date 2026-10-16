@@ -7,10 +7,11 @@ license = "AGPL-3.0-or-later OR LicenseRef-Commercial"
 description = "End to end check across the core ALICE crates: read a law, compute, save, restore, compare bit for bit"
 
 # The published releases the check is written against. `alice-lol` 0.4 is the first
-# release with the research law reader used here. Main mode (scripts/main_mode.py)
+# release with the research law reader used here; 0.4.1 up to the 0.5 series is
+# accepted. Main mode (scripts/main_mode.py)
 # patches these with the main branches of the nine repositories.
 [dependencies]
-alice-lol = { version = "0.4", features = ["physics"] }
+alice-lol = { version = ">=0.4.1, <0.6", features = ["physics"] }
 alice-physics = { version = "3", default-features = false, features = ["std"] }
 alice-sdf = "6"
 alice-db = "0.5"
