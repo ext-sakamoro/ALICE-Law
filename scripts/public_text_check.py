@@ -115,7 +115,13 @@ FORBIDDEN = [
                              r"[A-Za-z0-9._\-]+/")),
     # (any case: a host name is often the device name in lower case)
     ("device", re.compile(r"(?i:" + words(r"jetson", r"orin[\s-]*(?:nano|nx|agx)", r"mac\s?mini", r"macbook")
-                          + r"|raspberry\s*pi)")),
+                          + r"|raspberry[\s_-]*pi)"
+                          # the short names of the board, with a model number or none, as a whole
+                          # token: no letter on either side, or a camelCase boundary (lower → Upper
+                          # before it, a letter-to-Upper step after it), so l2_rpi5, L2-RasPi5,
+                          # budgetRpi5 and RpiCache are found and grasping, rpix and RPIX are not
+                          + r"|(?:(?<![A-Za-z])|(?<=[a-z])(?=[A-Z]))(?i:ras\s?pi\d*|rpi\d*)"
+                          + r"(?:(?![A-Za-z])|(?<![A-Z])(?=[A-Z]))")),
     # the SDK / firmware of such a device ("JetPack 6", "JetPack R36", "L4T"); Android's
     # "Jetpack Compose" has no version and is not one
     ("device detail", re.compile(r"(?i)(?<![A-Za-z])(?:jetpack\s*(?:r?\d|sdk)|l4t)(?![A-Za-z])")),
