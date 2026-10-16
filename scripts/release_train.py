@@ -12,6 +12,14 @@
                                          and the sets name only its features; the working
                                          tree is read (no change to a tracked file); no
                                          crate compared or cargo metadata failing exits 2
+    semver-config-drift --repos-root DIR [--at REF]
+                                         every run of scripts/semver_gate.py in the
+                                         workflows of a roster repository at REF: its
+                                         --config carries the roster's consumer sets, reason
+                                         and excluded features for the crate of its
+                                         --manifest (none where the roster declares none);
+                                         every roster repository must be checked out; no
+                                         run compared exits 2
     publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]
                                          run right before `cargo publish` of <crate> from
                                          the checkout DIR; the manifest (P, default
@@ -85,6 +93,7 @@ import importlib.util
 import io
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1496,6 +1505,88 @@ def feature_coverage(roster: dict[str, dict], repos_root: Path, metadata) -> tup
     return problems, ok, compared
 
 
+# the keys a repository's semver-gate config copies from its roster entry (equal-version is
+# the repository's own: how its CI treats a version not raised yet)
+SEMVER_CONFIG_COPIED = ("consumer-features", "consumer-check-features", "consumer-features-why",
+                        "exclude-features")
+
+
+def feature_sets_key(sets: list) -> list:
+    """the declared sets with order ignored: within a set and between sets"""
+    return sorted(sorted(s) for s in sets)
+
+
+def semver_gate_invocations(repo: Path, at: str) -> list[tuple[str, str, str | None]]:
+    """(workflow, manifest, config or None) of every `scripts/semver_gate.py` run in the
+    repository's workflows at `at` (--manifest defaults to Cargo.toml; a run with no --config
+    uses the every-feature set); a line continued with a backslash is read as one"""
+    names = git(repo, "ls-tree", "--name-only", f"{at}:.github/workflows").split()
+    found = []
+    for wf in sorted(n for n in names if n.endswith((".yml", ".yaml"))):
+        text = git(repo, "show", f"{at}:.github/workflows/{wf}").replace("\\\n", " ")
+        for line in text.splitlines():
+            code = line.split(" #", 1)[0]
+            # the script python runs (not a step name, a path filter or test_semver_gate.py)
+            m = re.search(r"\bpython3?\s+(?:\S*/)?semver_gate\.py\b(.*)", code)
+            if not m:
+                continue
+            try:
+                args = shlex.split(m.group(1))
+            except ValueError:
+                args = m.group(1).split()
+            opts = {"--manifest": "Cargo.toml", "--config": None}
+            for i, x in enumerate(args):
+                for key in opts:
+                    if x == key and i + 1 < len(args):
+                        opts[key] = args[i + 1]
+                    elif x.startswith(key + "="):
+                        opts[key] = x.split("=", 1)[1]
+            found.append((wf, opts["--manifest"], opts["--config"]))
+    return found
+
+
+def semver_config_drift(roster: dict[str, dict], repos_root: Path, at: str) -> tuple[list[str], list[str], int]:
+    """(problems, configs that match, runs compared): every run of scripts/semver_gate.py in
+    the workflows of a roster repository at `at` checks the crate of its --manifest, and the
+    --config it reads carries that crate's roster sets, reason and excluded features (no
+    --config, or a config without sets, where the roster declares none: the every-feature
+    set); a repository with no such run is not wired yet"""
+    problems, ok, compared = [], [], 0
+    by_repo: dict[str, list[str]] = {}
+    for name, c in roster.items():
+        if "repo" in c:
+            by_repo.setdefault(c["repo"], []).append(name)
+    for repo_name in sorted(by_repo):
+        repo = repos_root / repo_name
+        if not (repo / ".git").exists():
+            problems.append(f"{repo_name}: {repo} is not a checkout (every roster repository is read)")
+            continue
+        for wf, manifest_path, config_path in semver_gate_invocations(repo, at):
+            where = f"{repo_name}/.github/workflows/{wf} (--manifest {manifest_path}, --config {config_path})"
+            name = tomllib.loads(git(repo, "show", f"{at}:{manifest_path}")).get("package", {}).get("name")
+            if name not in by_repo[repo_name]:
+                problems.append(f"{where}: the manifest is {name!r}, which is not a roster crate of {repo_name} "
+                                f"({', '.join(sorted(by_repo[repo_name]))})")
+                continue
+            config = tomllib.loads(git(repo, "show", f"{at}:{config_path}")) if config_path else {}
+            compared += 1
+            entry = roster[name]
+            diff = []
+            for key in SEMVER_CONFIG_COPIED:
+                want, have = entry.get(key), config.get(key)
+                if key in ("consumer-features", "consumer-check-features"):
+                    want, have = feature_sets_key(want or []), feature_sets_key(have or [])
+                elif key == "exclude-features":
+                    want, have = want or {}, have or {}
+                if want != have:
+                    diff.append(f"{key}: roster {entry.get(key)!r}, config {config.get(key)!r}")
+            if diff:
+                problems.append(f"{where} at {at} is not a copy of [crate.{name}]: " + "; ".join(diff))
+            else:
+                ok.append(f"{name}: {where}")
+    return problems, ok, compared
+
+
 def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) -> tuple[list[str], list[str], int]:
     """(to bump, already accept, manifests read): every Cargo.toml at `at` in the
     repositories of the roster that requires `crate` without accepting its roster version"""
@@ -1562,6 +1653,10 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
     fc.add_argument("--repos-root", type=Path, required=True,
                     help="the directory holding a checkout of the repository of every crate with consumer sets "
                          "(its working tree is read: check out the commit to check)")
+    sd = sub.add_parser("semver-config-drift")
+    sd.add_argument("--repos-root", type=Path, required=True,
+                    help="the directory holding a checkout of every roster repository")
+    sd.add_argument("--at", default="origin/main", help="the commit read in each checkout (fetch first)")
     a = ap.parse_args(argv)
     try:
         roster_text = a.roster.read_text(encoding="utf-8")
@@ -1589,6 +1684,21 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
         print(f"feature-coverage: {compared} crate(s) with consumer sets compared, {len(problems)} problem(s)")
         if compared == 0 and not problems:
             print("error: no crate with consumer sets was compared", file=sys.stderr)
+            return 2
+        return 1 if problems else 0
+    if a.cmd == "semver-config-drift":
+        try:
+            problems, ok, compared = semver_config_drift(roster, a.repos_root, a.at)
+        except (OSError, ValueError, subprocess.CalledProcessError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        for line in ok:
+            print(f"copy: {line}")
+        for p in problems:
+            print(f"refused: {p}")
+        print(f"semver-config-drift: {compared} semver_gate run(s) compared at {a.at}, {len(problems)} problem(s)")
+        if compared == 0 and not problems:
+            print(f"error: no workflow runs scripts/semver_gate.py at {a.at}: nothing was compared", file=sys.stderr)
             return 2
         return 1 if problems else 0
     if a.cmd != "followups" and a.crate not in roster:

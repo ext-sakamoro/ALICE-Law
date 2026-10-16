@@ -1931,6 +1931,89 @@ class FeatureCoverage(unittest.TestCase):
         self.assertNotIn("go for", out)
 
 
+SEMVER_WF = ("jobs:\n  semver:\n    steps:\n      - name: run scripts/semver_gate.py (shared)\n"
+             "        run: python3 scripts/semver_gate.py --config .github/semver-gate.toml --target-dir t\n")
+GATE_CONFIG = ('consumer-features = [["std", "fft"]]\nconsumer-features-why = "w"\n'
+               'exclude-features = { hw = "a board-only feature" }\nequal-version = "next-smallest-step"\n')
+
+
+class SemverConfigDrift(unittest.TestCase):
+    def run_drift(self, roster_text: str, repos: dict[str, dict[str, str]]):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d, "repos")
+            root.mkdir()
+            for name, files in repos.items():
+                named_repo(root, name, files)
+            p = Path(d, "r.toml")
+            p.write_text(roster_text, encoding="utf-8")
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = rt.main(["--roster", str(p), "semver-config-drift", "--repos-root", str(root), "--at", "HEAD"])
+        return code, out.getvalue() + err.getvalue()
+
+    def zip_repo(self, config: str | None = GATE_CONFIG, workflow: str = SEMVER_WF, extra=None) -> dict:
+        files = {"Cargo.toml": ZIP_FEATURES, ".github/workflows/semver.yml": workflow, **(extra or {})}
+        if config is not None:
+            files[".github/semver-gate.toml"] = config
+        return files
+
+    def test_a_copy_of_the_roster_entry_passes_and_the_step_name_is_not_a_run(self):
+        code, out = self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo()})
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 semver_gate run(s) compared", out)
+
+    def test_order_does_not_matter(self):
+        cfg = GATE_CONFIG.replace('[["std", "fft"]]', '[["fft", "std"]]')
+        self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(cfg)})[0], 0)
+
+    def test_each_copied_key_that_differs_is_refused(self):
+        for old, new in (('[["std", "fft"]]', '[["std"]]'), ('consumer-features-why = "w"', 'consumer-features-why = "x"'),
+                         ('{ hw = "a board-only feature" }', '{ hw = "another reason" }')):
+            code, out = self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(GATE_CONFIG.replace(old, new))})
+            self.assertEqual(code, 1, (old, out))
+            self.assertIn("is not a copy of [crate.alice-zip]", out)
+        # check sets present only in the config
+        code, out = self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(GATE_CONFIG + 'consumer-check-features = [["hw"]]\n')})
+        self.assertEqual(code, 1, out)
+        self.assertIn("consumer-check-features", out)
+
+    def test_a_run_without_config_matches_only_a_roster_without_sets(self):
+        wf = SEMVER_WF.replace(" --config .github/semver-gate.toml", "")
+        code, out = self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(None, wf)})
+        self.assertEqual(code, 1, out)
+        plain = ROSTER.replace('order = 1\n', 'order = 1\nrepo = "ALICE-Zip"\n', 1)
+        self.assertEqual(self.run_drift(plain, {"ALICE-Zip": self.zip_repo(None, wf)})[0], 0)
+
+    def test_the_manifest_of_the_run_names_the_crate(self):
+        wf = SEMVER_WF.replace("semver_gate.py --config", "semver_gate.py --manifest lib/Cargo.toml --config")
+        files = self.zip_repo(workflow=wf, extra={"Cargo.toml": "[workspace]\nmembers = [\"lib\"]\n",
+                                                  "lib/Cargo.toml": ZIP_FEATURES})
+        self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": files})[0], 0)
+        # a roster crate of another repository, run from this one
+        other = self.zip_repo(extra={"Cargo.toml": ZIP_FEATURES.replace('"alice-zip"', '"alice-det-math"', 1)})
+        code, out = self.run_drift(COVERED, {"ALICE-Zip": other})
+        self.assertEqual(code, 1, out)
+        self.assertIn("which is not a roster crate of ALICE-Zip", out)
+
+    def test_a_continued_line_is_one_run(self):
+        wf = SEMVER_WF.replace("semver_gate.py --config", "semver_gate.py \\\n          --config")
+        self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(workflow=wf)})[0], 0)
+        bad = SEMVER_WF.replace("semver_gate.py --config", "semver_gate.py \\\n          --config").replace(
+            ".github/semver-gate.toml", ".github/other.toml")
+        code, out = self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(workflow=bad, extra={
+            ".github/other.toml": 'consumer-features = [["std"]]\nconsumer-features-why = "w"\n'})})
+        self.assertEqual(code, 1, out)
+
+    def test_a_missing_checkout_is_refused_and_nothing_compared_exits_2(self):
+        code, out = self.run_drift(COVERED, {"Other": self.zip_repo()})
+        self.assertEqual(code, 1, out)
+        self.assertIn("is not a checkout", out)
+        code, out = self.run_drift(COVERED, {"ALICE-Zip": {"Cargo.toml": ZIP_FEATURES,
+                                                           ".github/workflows/ci.yml": "jobs: {}\n"}})
+        self.assertEqual(code, 2, out)
+        self.assertIn("nothing was compared", out)
+
+
 class GateGoOutput(unittest.TestCase):
     def test_the_go_lines_name_every_step_in_one_column(self):
         with tempfile.TemporaryDirectory() as d:
