@@ -1931,13 +1931,15 @@ class FeatureCoverage(unittest.TestCase):
         self.assertNotIn("go for", out)
 
 
-SEMVER_WF = ("jobs:\n  semver:\n    steps:\n      - name: run scripts/semver_gate.py (shared)\n"
+SEMVER_WF = ("on:\n  push:\n    branches: [main, 'ci/**']\njobs:\n  semver:\n    steps:\n      - name: run scripts/semver_gate.py (shared)\n"
              "        run: python3 scripts/semver_gate.py --config .github/semver-gate.toml --target-dir t\n")
 GATE_CONFIG = ('consumer-features = [["std", "fft"]]\nconsumer-features-why = "w"\n'
                'exclude-features = { hw = "a board-only feature" }\nequal-version = "next-smallest-step"\n')
 
 
-class SemverConfigDrift(unittest.TestCase):
+class DriftHarness(unittest.TestCase):
+    """runs semver-config-drift over fixture repositories (no tests of its own)"""
+
     def run_drift(self, roster_text: str, repos: dict[str, dict[str, str]]):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d, "repos")
@@ -1957,6 +1959,8 @@ class SemverConfigDrift(unittest.TestCase):
             files[".github/semver-gate.toml"] = config
         return files
 
+
+class SemverConfigDrift(DriftHarness):
     def test_a_copy_of_the_roster_entry_passes_and_the_step_name_is_not_a_run(self):
         code, out = self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo()})
         self.assertEqual(code, 0, out)
@@ -2076,8 +2080,9 @@ class SemverConfigDrift(unittest.TestCase):
             self.assertEqual(code, 1, (form, out))
             self.assertIn(needle, out, form)
         # path filters, step names and comments are not runs
-        wf = ("on:\n  push:\n    paths:\n      - 'scripts/semver_gate.py'\n      - scripts/test_semver_gate.py\n"
-              + SEMVER_WF + "      # runs scripts/semver_gate.py above\n")
+        wf = SEMVER_WF.replace("    branches: [main, 'ci/**']\n", "    branches: [main, 'ci/**']\n    paths:\n"
+                               "      - 'scripts/semver_gate.py'\n      - scripts/test_semver_gate.py\n"
+                               "      - '.github/semver-gate.toml'\n") + "      # runs scripts/semver_gate.py above\n"
         self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(workflow=wf)})[0], 0)
 
     def test_a_missing_checkout_is_refused_and_nothing_compared_exits_2(self):
@@ -2088,6 +2093,116 @@ class SemverConfigDrift(unittest.TestCase):
                                                            ".github/workflows/ci.yml": "jobs: {}\n"}})
         self.assertEqual(code, 2, out)
         self.assertIn("nothing was compared", out)
+
+
+CHANGES_WF = """on:
+  push:
+    branches: [main, 'ci/**']
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/semver_gate.py'
+      - '.github/semver-gate.toml'
+jobs:
+  changes:
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: decide
+        id: decide
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --patterns-file .github/paths/semver-checks.txt
+  semver-checks:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    steps:
+      - name: run
+        run: python3 scripts/semver_gate.py --config .github/semver-gate.toml --target-dir t
+  gate:
+    if: always()
+    needs: [changes, semver-checks]
+    steps:
+      - name: gate
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"
+"""
+PATTERNS = "# the paths\nsrc/**\nscripts/semver_gate.py\n.github/semver-gate.toml\n"
+
+
+class SemverGateBlocks(DriftHarness):
+    """the run of the gate can fail the workflow, and a push to main that changes the gate
+    reaches it"""
+
+    def refused(self, workflow: str, needle: str, extra=None):
+        code, out = self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(workflow=workflow, extra=extra)})
+        self.assertEqual(code, 1, (needle, out))
+        self.assertIn(needle, out)
+
+    def test_a_plain_run_on_push_to_main_blocks(self):
+        self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo()})[0], 0)
+        # the event conditions are allowed on the step and the job
+        wf = SEMVER_WF.replace("      - name: run scripts", "      - if: github.event_name == 'push'\n        name: run scripts")
+        wf = wf.replace("  semver:\n", "  semver:\n    if: ${{ github.event_name == 'pull_request' }}\n")
+        self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(workflow=wf)})[0], 0)
+
+    def test_a_soft_command_is_refused(self):
+        for tail, needle in (("--target-dir t || true\n", "`||` after the run"),
+                             ("--target-dir t||:\n", "`||` after the run"),
+                             ("--target-dir t | tee log\n", "`|` after the run"),
+                             ("--target-dir t &\n", "`&` after the run")):
+            self.refused(SEMVER_WF.replace("--target-dir t\n", tail), needle)
+        block = SEMVER_WF.replace("        run: python3 scripts/semver_gate.py",
+                                  "        run: |\n          set +e\n          python3 scripts/semver_gate.py")
+        self.refused(block, "`set +e` before the run")
+
+    def test_continue_on_error_shell_and_if_are_refused(self):
+        step = "      - name: run scripts/semver_gate.py (shared)\n"
+        self.refused(SEMVER_WF.replace(step, step + "        continue-on-error: true\n"), "continue-on-error on the step")
+        self.refused(SEMVER_WF.replace("  semver:\n", "  semver:\n    continue-on-error: true\n"),
+                     "continue-on-error on the job semver")
+        self.refused(SEMVER_WF.replace(step, step + "        shell: python\n"), "shell 'python' on the step")
+        self.refused(SEMVER_WF.replace(step, step + "        if: false\n"), "the step has `if: false`")
+        self.refused(SEMVER_WF.replace("  semver:\n", "  semver:\n    if: github.ref != 'refs/heads/main'\n"),
+                     "job semver has `if: github.ref != 'refs/heads/main'`")
+        # continue-on-error: false is not soft
+        self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(
+            workflow=SEMVER_WF.replace(step, step + "        continue-on-error: false\n"))})[0], 0)
+
+    def test_a_push_to_main_with_a_change_to_the_gate_reaches_the_run(self):
+        self.refused(SEMVER_WF.replace("  push:\n    branches: [main, 'ci/**']\n", "  workflow_dispatch:\n"),
+                     "does not run on push")
+        self.refused(SEMVER_WF.replace("[main, 'ci/**']", "['ci/**']"), "does not include main")
+        paths = "  push:\n    branches: [main]\n    paths:\n      - 'src/**'\n      - '.github/semver-gate.toml'\n"
+        self.refused(SEMVER_WF.replace("  push:\n    branches: [main, 'ci/**']\n", paths),
+                     "on.push.paths does not list ['scripts/semver_gate.py']")
+        ok = paths.replace("      - 'src/**'\n", "      - 'src/**'\n      - 'scripts/semver_gate.py'\n")
+        self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(
+            workflow=SEMVER_WF.replace("  push:\n    branches: [main, 'ci/**']\n", ok))})[0], 0)
+        self.refused(SEMVER_WF.replace("    branches: [main, 'ci/**']\n", "    branches: [main]\n    paths-ignore:\n      - 'scripts/**'\n"),
+                     "paths-ignore")
+
+    def test_a_job_the_changes_job_decides_blocks_through_the_gate_job(self):
+        files = {".github/paths/semver-checks.txt": PATTERNS}
+        self.assertEqual(self.run_drift(COVERED, {"ALICE-Zip": self.zip_repo(workflow=CHANGES_WF, extra=files)})[0], 0)
+        gate = CHANGES_WF[CHANGES_WF.index("  gate:\n"):]
+        for wf, needle in (
+                (CHANGES_WF.replace(gate, ""), "no `if: always()` job that needs both changes and semver-checks"),
+                (CHANGES_WF.replace("needs: [changes, semver-checks]", "needs: [changes]"), "no `if: always()` job"),
+                (CHANGES_WF.replace("  gate:\n    if: always()\n", "  gate:\n    if: always()\n    continue-on-error: true\n"),
+                 "continue-on-error on the gate job gate"),
+                (CHANGES_WF.replace('--needs-json "$NEEDS"', '--needs-json "$NEEDS" || true'), "`||` after changed_paths.py gate"),
+                (CHANGES_WF.replace("changed_paths.py gate", "changed_paths.py report"), "does not run changed_paths.py gate"),
+                (CHANGES_WF.replace("      - name: gate\n", "      - name: gate\n        if: false\n"),
+                 "a step of the gate job gate has `if: false`"),
+                (CHANGES_WF.replace("--patterns-file .github/paths/semver-checks.txt", "--pattern 'src/**'"),
+                 "lists patterns inline"),
+                (CHANGES_WF.replace("  changes:\n", "  changed:\n").replace("needs: changes\n", "needs: changed\n"),
+                 "there is no changes job")):
+            self.refused(wf, needle, files)
+        self.refused(CHANGES_WF, "does not list ['scripts/semver_gate.py']",
+                     {".github/paths/semver-checks.txt": PATTERNS.replace("scripts/semver_gate.py\n", "")})
+        self.refused(CHANGES_WF.replace("      - 'src/**'\n", ""), "on.pull_request.paths is not the patterns", files)
 
 
 class GateGoOutput(unittest.TestCase):
