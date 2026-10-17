@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Local run of the checks CI makes on every push, before pushing:
 #   scripts/preflight.sh [--quick]
-# (--quick is accepted and runs the same checks: all of them take seconds; the conformance
-# roster reads the release-train repositories through `gh api`, the others need no network.)
+# (--quick is accepted and runs the same checks; the conformance roster reads the release-train
+# repositories through `gh api`, and the strict shared-file check reads every listed main from GitHub,
+# about two minutes; the others need no network.)
 # The end to end crate and the resolution against crates.io are not run here.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -39,6 +40,11 @@ else
   python3 scripts/shared_files_check.py --table conformance/shared-files.toml
 fi
 python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
+
+echo "== the shared-file table against every listed main, strict (a change to this repository lands only with a
+# table that lists every holder; conformance-live lets a rollout land first and counts the unlisted holders)"
+python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --strict
+python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --strict
 
 echo "== README names every release-train repository"
 python3 scripts/readme_roster_check.py

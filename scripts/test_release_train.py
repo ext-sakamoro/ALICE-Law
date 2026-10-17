@@ -29,6 +29,10 @@ spec = importlib.util.spec_from_file_location("rt", HERE / "release_train.py")
 rt = importlib.util.module_from_spec(spec)
 sys.modules["rt"] = rt
 spec.loader.exec_module(rt)
+
+# the publish gate's G11 (c) check reads GitHub; every test runs without it unless it sets its own
+REAL_SHARED_FILES_STRICT = rt.shared_files_strict
+rt.shared_files_strict = lambda: ([], 1)
 # the gate's consumer build runs cargo on the packaged crate; the fake packages of these
 # tests are not crates, so the gate tests use a consumer that accepts them, and the real
 # one is tested on its own (ConsumerBuild)
@@ -2439,6 +2443,34 @@ class RegistryConsumers(unittest.TestCase):
         self.assertEqual(code, 1, out.getvalue())
         self.assertIn("refused: ALICE-C/Cargo.toml [dependencies] alice-zip = '0.9' does not accept", out.getvalue())
         self.assertIn("consumers: 1 manifests read under", out.getvalue())
+
+
+class PublishGateSharedFiles(History):
+    """the publish gate refuses while the shared-file table is stale (shared_files_check --live --strict)"""
+
+    def with_check(self, result):
+        saved = rt.shared_files_strict
+        rt.shared_files_strict = lambda: result
+        try:
+            return self.gate("")
+        finally:
+            rt.shared_files_strict = saved
+
+    def test_a_current_table_lets_the_publish_go(self):
+        code, out = self.with_check(([], 1))
+        self.assertEqual(code, 0, out)
+        self.assertIn("shared files: the table matches every listed main", out)
+
+    def test_a_stale_table_refuses_the_publish(self):
+        problem = "shared files (G11 (c), --live --strict): scripts/x.py: present on ALICE-Q main"
+        code, out = self.with_check(([problem], 1))
+        self.assertEqual(code, 1, out)
+        self.assertIn("present on ALICE-Q main", out)
+
+    def test_the_real_check_runs_the_strict_live_mode(self):
+        import inspect
+        src = inspect.getsource(REAL_SHARED_FILES_STRICT)
+        self.assertIn('"--live", "--strict"', src)
 
 
 if __name__ == "__main__":

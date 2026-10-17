@@ -117,6 +117,38 @@ class Generate(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("the variants on the mains have moved", out)
 
+    def gained_holder(self, data: bytes):
+        """the table lists s.sh on A and B; then ALICE-C, a table repository through c.sh, gains s.sh"""
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\nscripts/c.sh\tALICE-A,ALICE-C\n")
+        self.w.commit("ALICE-C", {"scripts/c.sh": b"c\n", "scripts/s.sh": None})
+        self.w.commit("ALICE-A", {"scripts/c.sh": b"c\n"})
+        self.gen("--write", "--registry", str(reg))
+        self.w.commit("ALICE-C", {"scripts/s.sh": data})
+
+    def test_check_reports_an_unlisted_holder_with_the_same_bytes(self):
+        self.gained_holder(SHARED)
+        code, out = self.gen("--check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("unlisted holder, same bytes: scripts/s.sh on ALICE-C", out)
+
+    def test_strict_check_fails_on_an_unlisted_holder(self):
+        self.gained_holder(SHARED)
+        self.assertEqual(self.gen("--check", "--strict")[0], 1)
+
+    def test_check_fails_on_a_new_holder_with_other_bytes(self):
+        self.gained_holder(b"different\n")
+        self.assertEqual(self.gen("--check")[0], 1)
+
+    def test_moved_pending_variants_are_reported_in_strict_mode_too(self):
+        # a pending row's copies move during its rollout by definition: strict is about unlisted holders
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\n")
+        self.gen("--write", "--registry", str(reg))
+        self.w.commit("ALICE-C", {"scripts/s.sh": b"third\n"})
+        self.assertEqual(self.gen("--check")[0], 0)
+        code, out = self.gen("--check", "--strict")
+        self.assertEqual(code, 0, out)
+        self.assertIn("the variants on the mains have moved", out)
+
     def test_an_empty_registry_writes_nothing(self):
         reg = self.registry("# nothing\n")
         self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 2)

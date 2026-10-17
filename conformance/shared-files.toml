@@ -70,7 +70,8 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/clippy_external_coverage.py"
-pending = { since = "2026-10-17", exit = "the copies converge on one variant, or each differing repository is exempted with its reason", target = "5c8a6ba952906f6403e131a7e5dbae8b601f20c829fd32c8fb8eaa74cfa0829b", owner = "ALICE-DB", variants = { "5c8a6ba952906f6403e131a7e5dbae8b601f20c829fd32c8fb8eaa74cfa0829b" = ["ALICE-DB"], "9968eb4df384642e4f0c7fadda0294a74a5b030b3d9ea8df3f4d870150184aba" = ["ALICE-Crypto"] } }
+sha256 = "5c8a6ba952906f6403e131a7e5dbae8b601f20c829fd32c8fb8eaa74cfa0829b"
+source = { repo = "ALICE-Crypto", rev = "1fd3e17c71981f987a7215ed81354f49c9e66784" }
 repos = ["ALICE-Crypto", "ALICE-DB"]
 
 [[file]]
@@ -91,7 +92,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/id_move_check.py"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the re-rolled bytes of ALICE-Zip main 67d678d (the target)", target = "1ef3d2c4a9377d52e558ad33e89b1e798907ffb0d94007256de5d5fd9d32d40a", owner = "ALICE-Zip", variants = { "1ef3d2c4a9377d52e558ad33e89b1e798907ffb0d94007256de5d5fd9d32d40a" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "absent" = ["ALICE-DetMath", "ALICE-Physics", "ALICE-SDF"] } }
+pending = { since = "2026-10-17", exit = "every listed repository's main has the re-rolled bytes of ALICE-Zip main 72cd19f (the target)", target = "7db5280a7b69b8a2ed21c758ae3a493dbd347abff92c03aa27d55b4f15a5f8bc", owner = "ALICE-Zip", variants = { "1ef3d2c4a9377d52e558ad33e89b1e798907ffb0d94007256de5d5fd9d32d40a" = ["ALICE-DetMath", "ALICE-LLM", "ALICE-LOL", "ALICE-ML"], "7db5280a7b69b8a2ed21c758ae3a493dbd347abff92c03aa27d55b4f15a5f8bc" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-Sync", "ALICE-Zip"], "absent" = ["ALICE-Physics", "ALICE-SDF"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -190,7 +191,8 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/test_clippy_external_coverage.py"
-pending = { since = "2026-10-17", exit = "the copies converge on one variant, or each differing repository is exempted with its reason", target = "bd93bfca6a2a6788a87f26b289db05911200f8343a956735c0dcb81191ce7351", owner = "ALICE-DB", variants = { "4f92a45520e601379636303590fe761a943f828e22d1bd16fddf4d830cdbce7e" = ["ALICE-Crypto"], "bd93bfca6a2a6788a87f26b289db05911200f8343a956735c0dcb81191ce7351" = ["ALICE-DB"] } }
+sha256 = "bd93bfca6a2a6788a87f26b289db05911200f8343a956735c0dcb81191ce7351"
+source = { repo = "ALICE-Crypto", rev = "1fd3e17c71981f987a7215ed81354f49c9e66784" }
 repos = ["ALICE-Crypto", "ALICE-DB"]
 
 [[file]]
@@ -211,7 +213,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/test_id_move_check.py"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the re-rolled bytes of ALICE-Zip main 67d678d (the target)", target = "cf6895d53621244ef5e9df656351e46aa30e36691e683873816cf6f89679bea9", owner = "ALICE-Zip", variants = { "absent" = ["ALICE-DetMath", "ALICE-Physics", "ALICE-SDF"], "cf6895d53621244ef5e9df656351e46aa30e36691e683873816cf6f89679bea9" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"] } }
+pending = { since = "2026-10-17", exit = "every listed repository's main has the re-rolled bytes of ALICE-Zip main 72cd19f (the target)", target = "21cf1838aa4975d0533b0ac13acbcb96f2e1ebb73eb834ab76e5e6868df74699", owner = "ALICE-Zip", variants = { "21cf1838aa4975d0533b0ac13acbcb96f2e1ebb73eb834ab76e5e6868df74699" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-Sync", "ALICE-Zip"], "absent" = ["ALICE-Physics", "ALICE-SDF"], "cf6895d53621244ef5e9df656351e46aa30e36691e683873816cf6f89679bea9" = ["ALICE-DetMath", "ALICE-LLM", "ALICE-LOL", "ALICE-ML"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]

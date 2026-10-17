@@ -301,6 +301,37 @@ class Live(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("present on ALICE-C main", out)
 
+    def holder_c(self, data: bytes):
+        """ALICE-C is read through a row of its own (scripts/c.sh), and holds scripts/s.sh with `data`"""
+        rev = self.w.commit("ALICE-C", {"scripts/c.sh": b"c\n", "scripts/s.sh": data})
+        self.w.commit("ALICE-A", {"scripts/c.sh": b"c\n"})
+        c_row = {"path": "scripts/c.sh", "sha256": h(b"c\n"), "source": {"repo": "ALICE-C", "rev": rev},
+                 "repos": ["ALICE-A", "ALICE-C"], "paths": {}, "exempt": {}}
+        self.t.write_text(self.w.table(c_row, self.w.uniform()), encoding="utf-8")
+
+    def test_an_unlisted_holder_with_the_same_bytes_is_a_counted_note(self):
+        # a rollout landed before the table was regenerated: not drift
+        self.holder_c(SHARED)
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn("unlisted holder, same bytes: 1", out)
+        self.assertIn("unlisted holder: scripts/s.sh on ALICE-C main", out)
+        self.assertNotIn("pending: unlisted", out)
+
+    def test_an_unlisted_holder_with_one_byte_changed_is_red(self):
+        data = bytearray(SHARED)
+        data[0] ^= 1
+        self.holder_c(bytes(data))
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("present on ALICE-C main (sha256", out)
+
+    def test_strict_makes_an_unlisted_holder_with_the_same_bytes_a_finding(self):
+        self.holder_c(SHARED)
+        code, out = self.live("--strict")
+        self.assertEqual(code, 1, out)
+        self.assertIn("present on ALICE-C main (the same bytes as its entry)", out)
+
     def test_discovery_reds_a_byte_identical_file_with_no_entry(self):
         self.w.commit("ALICE-A", {"scripts/new.py": b"print(1)\n"})
         self.w.commit("ALICE-B", {"scripts/new.py": b"print(1)\n"})

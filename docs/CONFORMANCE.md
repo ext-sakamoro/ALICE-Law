@@ -376,6 +376,13 @@ byte-identical in two table repositories and has no entry (a shared copy elsewhe
 under `tests/` or `src/`, is checked once a row names it, not found by this scan),
 and checks that the table is the generated one; the branch checks refuse a change that adds
 a pending row.
+A rollout that lands before the table is regenerated does not turn that job red: a copy on a
+main the table does not list, with the bytes of its row (or one of a pending row's
+variants), is counted as an unlisted holder with the date it appeared, while a copy with
+other bytes stays a finding. The table must still be regenerated before the next publish:
+this repository's own checks (`scripts/preflight.sh`) and the publish gate
+(`scripts/release_train.py publish-gate`) run the comparison with `--strict`, where an
+unlisted holder is a finding.
 
 **Claim.** Each machine-checked gate of the crate has (a) a canary its checker must flag, (b) a failure when it compared nothing, and (c) where its checker or helper is shared with other crates, a check that the copies are identical.
 

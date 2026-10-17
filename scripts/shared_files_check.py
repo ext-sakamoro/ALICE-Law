@@ -34,8 +34,12 @@ repository that gains the path without an exemption is a finding.
       rollout lands); the variants of each pending row listed (not a finding); a pending row
       past its time is a finding; and a discovery pass over every file under DISCOVERED of
       the table's repositories: one byte-identical in two or more of them with no entry, or
-      a copy of a table path in a repository the entry neither lists nor exempts, is a
-      finding (a shared copy outside DISCOVERED, under tests/ or src/, is checked only once a
+      a copy of a table path with other bytes in a repository the entry neither lists nor
+      exempts, is a finding; a copy with the entry's bytes (or one of a pending row's
+      variants) in such a repository is an unlisted holder, a counted note with the date it
+      appeared there, because a rollout lands before the table is regenerated (--strict
+      makes it a finding: the regeneration and landing path of this repository and the
+      pre-publish gate run strict, so the table cannot stay stale into a release) (a shared copy outside DISCOVERED, under tests/ or src/, is checked only once a
       row names it)
   shared_files_check.py --table TABLE --repo DIR --name ALICE-X
       a crate's tree: each uniform file listed for ALICE-X present with the entry's bytes;
@@ -330,18 +334,20 @@ def fetch_sources(entries: list[dict], remote: Remote) -> tuple[list[str], list[
                                 sum("pending" in e for e in entries))
 
 
-def live(entries: list[dict], remote: Remote, today: datetime.date):
+def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False):
     """Every listed repository's main against the table, and the discovery pass."""
     problems: list[str] = []
     notes: list[str] = []
     copies = pending = 0
     uniform_copies = 0
+    unlisted: list[tuple[str, str, str, str]] = []
     repos = sorted({r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})})
     trees = {r: tree(remote(r)) for r in repos}
     if not trees:
         raise Unreadable("no repository read (compared nothing)")
     for r in repos:
-        remote.prefetch(r, "origin/main", [path_in(e, r) for e in entries if r in e["repos"]])
+        remote.prefetch(r, "origin/main", [path_in(e, r) for e in entries if r in e["repos"]]
+                        + [e["path"] for e in entries if r not in e["repos"] and e["path"] in trees[r]])
     for e in entries:
         if "pending" in e:
             pending += 1
@@ -388,9 +394,27 @@ def live(entries: list[dict], remote: Remote, today: datetime.date):
                             f"but has no entry")
     for e in entries:
         listed = set(e["repos"]) | set(e.get("exempt", {}))
+        known_bytes = ({e["sha256"]} if "sha256" in e
+                       else {k for k in e.get("pending", {}).get("variants", {}) if k != "absent"})
         for r, files in trees.items():
-            if r not in listed and e["path"] in files:
-                problems.append(f"{e['path']}: present on {r} main, which the entry neither lists nor exempts")
+            if r in listed or e["path"] not in files:
+                continue
+            data = show(remote(r), "origin/main", e["path"])
+            got = sha256(data) if data is not None else ""
+            if got and got in known_bytes and not strict:
+                # a rollout landed before the table was regenerated: the same bytes, not drift
+                since = subprocess.run(["git", "-C", str(remote(r)), "log", "-1", "--format=%cs", "--diff-filter=A",
+                                        "origin/main", "--", e["path"]], capture_output=True, text=True).stdout.strip()
+                unlisted.append((e["path"], r, got, since or "?"))
+                continue
+            what = "the same bytes as its entry" if got in known_bytes else f"sha256 {got or '(unreadable)'}"
+            problems.append(f"{e['path']}: present on {r} main ({what}), which the entry neither lists nor exempts")
+    if unlisted:
+        oldest = min(u[3] for u in unlisted)
+        notes.append(f"unlisted holder, same bytes: {len(unlisted)} (oldest since {oldest}; regenerate the table"
+                     " before the next publish)")
+        notes += [f"  unlisted holder: {path} on {r} main, sha256 {got[:12]}, since {since}"
+                  for path, r, got, since in unlisted]
     return problems, notes, counts(len(entries), len(trees), copies, pending), uniform_copies
 
 
@@ -405,6 +429,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--expect-copies", type=int,
                     help="with --live: the number of copies that must be compared (count lock)")
     ap.add_argument("--today", help="with --live: the date pending rows are aged against (default: today, UTC)")
+    ap.add_argument("--strict", action="store_true",
+                    help="with --live: an unlisted holder is a finding even with the same bytes (the regeneration "
+                         "and landing path of this repository, and the pre-publish gate)")
     ap.add_argument("--base-table", type=Path,
                     help="the table this one replaces (origin/main's): more pending rows than it is a finding")
     a = ap.parse_args(argv)
@@ -429,7 +456,7 @@ def main(argv: list[str]) -> int:
                 else:
                     today = (datetime.date.fromisoformat(a.today) if a.today
                              else datetime.datetime.now(datetime.timezone.utc).date())
-                    problems, notes, c, locked = live(entries, remote, today)
+                    problems, notes, c, locked = live(entries, remote, today, strict=a.strict)
         else:
             problems = []
             c = counts(len(entries), len({r for e in entries for r in e["repos"]}),
@@ -451,7 +478,8 @@ def main(argv: list[str]) -> int:
         else:
             print(f"shared_files_check: count lock: {got} copies of uniform rows")
     for n in notes:
-        print(f"shared_files_check: pending: {n}")
+        kind = "" if n.lstrip().startswith("unlisted holder") else "pending: "
+        print(f"shared_files_check: {kind}{n}")
     for p in problems:
         print(f"shared_files_check: {p}", file=sys.stderr)
     print(f"shared_files_check: {summary(c)}, {len(problems)} finding(s)")

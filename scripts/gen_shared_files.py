@@ -25,7 +25,10 @@ its target bytes.
 
 --check regenerates in memory and exits 1 when the table differs, except for the variants
 of a pending row, which are reported (the copies of a pending file are moving by
-definition). The repositories' main is fetched from GitHub (blob-less), or read from
+definition), and for a row that only gained holders carrying the row's own bytes (a
+rollout that landed before the table was regenerated), which is reported as an unlisted
+holder; with --strict an unlisted holder is a difference too (a pending row's variants are
+expected to move during its rollout, so they stay reported in every mode). The repositories' main is fetched from GitHub (blob-less), or read from
 DIR/<repo> (its origin/main) with --checkouts. A run that would write no entry exits 2.
 """
 from __future__ import annotations
@@ -212,6 +215,41 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
     return entries
 
 
+def unlisted_same_bytes(old: list[dict], new: list[dict]) -> tuple[list[dict], list[tuple[str, list[str]]]]:
+    """new entries with each row that differs from the table only by added holders carrying the row's own
+    bytes put back to the table's row, and the (path, added holders) of those rows"""
+    before = {e["path"]: e for e in old}
+    out, held = [], []
+    for e in new:
+        o = before.get(e["path"])
+        if o is None or not e["repos"] or not o["repos"]:
+            out.append(e)
+            continue
+        added = [r for r in e["repos"] if r not in o["repos"]]
+        if not added or [r for r in o["repos"] if r not in e["repos"]]:
+            out.append(e)
+            continue
+        def rest(d: dict, drop: str) -> dict:
+            return {k: v for k, v in d.items() if k != drop and v != {}}  # an absent paths / exempt reads as {}
+
+        if "sha256" in o and "sha256" in e and e["sha256"] == o["sha256"]:
+            same = rest(e, "repos") == rest(o, "repos")
+        elif "pending" in o and "pending" in e:
+            known = set(o["pending"]["variants"]) - {"absent"}
+            added_bytes = {k for k, rs in e["pending"]["variants"].items() if set(rs) & set(added)}
+            same = (added_bytes <= known and rest(e["pending"], "variants") == rest(o["pending"], "variants")
+                    and rest({k: v for k, v in e.items() if k != "pending"}, "repos")
+                    == rest({k: v for k, v in o.items() if k != "pending"}, "repos"))
+        else:
+            same = False
+        if same:
+            out.append(o)
+            held.append((e["path"], added))
+        else:
+            out.append(e)
+    return out, held
+
+
 def without_variants(text: str) -> tuple[str, dict[str, dict]]:
     entries = sfc.load(text)
     stripped = copy.deepcopy(entries)
@@ -233,6 +271,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--discover", action="store_true")
     ap.add_argument("--checkouts", type=Path)
     ap.add_argument("--today", help="the date a new pending row records (default: today, UTC)")
+    ap.add_argument("--strict", action="store_true",
+                    help="with --check: a row that gained holders with its own bytes is a difference too (the"
+                         " regeneration and landing path, and the pre-publish gate)")
     ap.add_argument("--target", action="append", default=[],
                     help="PATH=SHA256@ALICE-X: the bytes a pending row moves to and their owner")
     a = ap.parse_args(argv)
@@ -279,6 +320,14 @@ def main(argv: list[str]) -> int:
         except sfc.Unreadable as e:
             print(f"gen_shared_files: {a.table}: {e}", file=sys.stderr)
             return 1
+        if not a.strict:
+            # a rollout that landed before the table was regenerated: a row that only gained holders with
+            # the row's own bytes is reported, not a difference (--strict: it is one)
+            entries, held = unlisted_same_bytes(sfc.load(current), entries)
+            for path, repos in held:
+                print(f"gen_shared_files: unlisted holder, same bytes: {path} on {', '.join(repos)}"
+                      " (regenerate the table before the next publish)")
+            text = render(entries)
         new_plain, new_var = without_variants(text)
         for path in sorted(set(cur_var) & set(new_var)):
             if cur_var[path] != new_var[path]:

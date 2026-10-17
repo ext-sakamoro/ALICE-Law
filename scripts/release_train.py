@@ -933,6 +933,21 @@ def next_crate(roster: dict[str, dict]) -> tuple[str | None, int]:
     return min(pending)[1], len(pending)
 
 
+def shared_files_strict() -> tuple[list[str], int]:
+    """(problems, compared) of `shared_files_check.py --live --strict` on this repository's table (ALICE-Law G11 (c)):
+    a release is cut only while the shared-file table matches every listed main, with no unlisted holder (the live
+    job lets a rollout land before the table is regenerated; a publish does not)"""
+    here = Path(__file__).resolve().parent
+    r = subprocess.run([sys.executable, str(here / "shared_files_check.py"), "--table",
+                        str(here.parent / "conformance" / "shared-files.toml"), "--live", "--strict"],
+                       capture_output=True, text=True)
+    if r.returncode == 0:
+        return [], 1
+    lines = [ln.removeprefix("shared_files_check: ") for ln in r.stderr.splitlines() if ln.strip()]
+    return [f"shared files (G11 (c), --live --strict): {ln}" for ln in lines] or [
+        f"shared files (G11 (c), --live --strict): exit {r.returncode}"], 1
+
+
 def publish_gate(roster: dict[str, dict], crate: str, manifest_text: str,
                  fetch: dc.Fetch, root_text: str | None = None) -> tuple[list[str], int]:
     """(problems, compared) for publishing `crate` now from the given manifest (and the
@@ -2171,7 +2186,7 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
          docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None,
          reviewers=environment_reviewers, inventory=secret_inventory, semver=semver_problems,
-         metadata=sg.cargo_metadata, consumers=registry_consumer_problems) -> int:
+         metadata=sg.cargo_metadata, consumers=registry_consumer_problems, shared_files=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2291,6 +2306,10 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             problems += reg
             compared += n
             print(f"consumers: {n} manifests read under {root} at {a.consumers_at}")
+            sf, n = (shared_files or shared_files_strict)()
+            problems += sf
+            compared += n
+            print(f"shared files: {'the table matches every listed main' if not sf else f'{len(sf)} problem(s)'}")
             github = tomllib.loads(roster_text).get("train", {}).get("github")
             owner_repo = f"{github}/{roster[a.crate]['repo']}" if github and roster[a.crate].get("repo") else None
             declared_all = tomllib.loads(roster_text).get("secrets", {})
