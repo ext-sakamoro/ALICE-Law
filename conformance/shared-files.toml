@@ -92,7 +92,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/id_move_check.py"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the re-rolled bytes of ALICE-Zip main 72cd19f (the target)", target = "7db5280a7b69b8a2ed21c758ae3a493dbd347abff92c03aa27d55b4f15a5f8bc", owner = "ALICE-Zip", variants = { "1ef3d2c4a9377d52e558ad33e89b1e798907ffb0d94007256de5d5fd9d32d40a" = ["ALICE-DetMath", "ALICE-LLM", "ALICE-LOL"], "7db5280a7b69b8a2ed21c758ae3a493dbd347abff92c03aa27d55b4f15a5f8bc" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "absent" = ["ALICE-Physics", "ALICE-SDF"] } }
+pending = { since = "2026-10-17", exit = "every listed repository's main has the re-rolled bytes of ALICE-Zip main 72cd19f (the target)", target = "7db5280a7b69b8a2ed21c758ae3a493dbd347abff92c03aa27d55b4f15a5f8bc", owner = "ALICE-Zip", variants = { "1ef3d2c4a9377d52e558ad33e89b1e798907ffb0d94007256de5d5fd9d32d40a" = ["ALICE-DetMath"], "7db5280a7b69b8a2ed21c758ae3a493dbd347abff92c03aa27d55b4f15a5f8bc" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "absent" = ["ALICE-Physics", "ALICE-SDF"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -123,7 +123,7 @@ repos = ["ALICE-Edge", "ALICE-ML", "ALICE-TRT", "ALICE-View"]
 path = "scripts/order_guard.py"
 sha256 = "1a39a6b6edc14ef10cc01ca94483b757009d4b80314c05bfe45716ef10adefd6"
 source = { repo = "ALICE-Analytics", rev = "4e08553181c33c56da47d6703778123f8b91cd58" }
-repos = ["ALICE-Analytics", "ALICE-Edge", "ALICE-Kinematics", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/public_text.sh"
@@ -213,7 +213,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/test_id_move_check.py"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the re-rolled bytes of ALICE-Zip main 72cd19f (the target)", target = "21cf1838aa4975d0533b0ac13acbcb96f2e1ebb73eb834ab76e5e6868df74699", owner = "ALICE-Zip", variants = { "21cf1838aa4975d0533b0ac13acbcb96f2e1ebb73eb834ab76e5e6868df74699" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "absent" = ["ALICE-Physics", "ALICE-SDF"], "cf6895d53621244ef5e9df656351e46aa30e36691e683873816cf6f89679bea9" = ["ALICE-DetMath", "ALICE-LLM", "ALICE-LOL"] } }
+pending = { since = "2026-10-17", exit = "every listed repository's main has the re-rolled bytes of ALICE-Zip main 72cd19f (the target)", target = "21cf1838aa4975d0533b0ac13acbcb96f2e1ebb73eb834ab76e5e6868df74699", owner = "ALICE-Zip", variants = { "21cf1838aa4975d0533b0ac13acbcb96f2e1ebb73eb834ab76e5e6868df74699" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "absent" = ["ALICE-Physics", "ALICE-SDF"], "cf6895d53621244ef5e9df656351e46aa30e36691e683873816cf6f89679bea9" = ["ALICE-DetMath"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -244,7 +244,7 @@ repos = ["ALICE-Edge", "ALICE-ML", "ALICE-TRT", "ALICE-View"]
 path = "scripts/test_order_guard.py"
 sha256 = "23efe03db2ee9ac42f64408751248f7d5a6294ce3e80fa8cf0344f11526af9c8"
 source = { repo = "ALICE-Analytics", rev = "4e08553181c33c56da47d6703778123f8b91cd58" }
-repos = ["ALICE-Analytics", "ALICE-Edge", "ALICE-Kinematics", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_public_text.py"
