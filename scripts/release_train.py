@@ -20,7 +20,7 @@
                                          --manifest (none where the roster declares none);
                                          every roster repository must be checked out; no
                                          run compared exits 2
-    publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]
+    publish-gate <crate> --repo DIR --ref SHA [--manifest-path P] [--repos-root DIR] [--consumers-at REF]
                                          run right before `cargo publish` of <crate> from
                                          the checkout DIR; the manifest (P, default
                                          Cargo.toml) and the repository's root Cargo.toml
@@ -32,6 +32,12 @@
       - the manifest or the root manifest overrides an `alice-*` crate ([patch.*],
         [replace]) or names one with another registry (`registry`, `registry-index`)
       - <crate> is already on crates.io at that version
+      - a consumer requires <crate> from the registry (a version, neither `path` nor `git`) with a
+        requirement that does not accept the roster version: every Cargo.toml (workspace members too)
+        at --consumers-at (default origin/main; fetch first) of every git checkout directly under
+        --repos-root (default the parent of DIR), one per remote; a repository of the roster with no
+        checkout there, or no manifest read at all, is refused too (path and git dependencies build
+        against the repository's state and are checked when that state is sent, not here)
       - an `alice-*` dependency of the manifest (normal or build, optional or not, any
         target; read from the manifest itself, so the roster cannot list a different
         set) has no crates.io version requirement, or
@@ -1420,6 +1426,77 @@ def mark_published(text: str, crate: str) -> str:
 DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
 
 
+def registry_requirements_on(text: str, crate: str) -> list[tuple[str, str]]:
+    """(table, requirement) of every dependency of a manifest on `crate` that cargo resolves from the
+    registry: a version with neither `path` nor `git` (a path or git dependency builds against the
+    repository's state, which the push gate of that repository checks; it is not decided by a publish)"""
+    data = tomllib.loads(text)
+    tables = [(t, data.get(t, {})) for t in DEP_TABLES]
+    for cfg, target in data.get("target", {}).items():
+        tables += [(f"target.{cfg}.{t}", target.get(t, {})) for t in DEP_TABLES]
+    tables.append(("workspace.dependencies", data.get("workspace", {}).get("dependencies", {})))
+    out = []
+    for table, deps in tables:
+        for key, spec in deps.items():
+            name = alice_name(spec.get("package", key) if isinstance(spec, dict) else key)
+            if name != crate:
+                continue
+            if isinstance(spec, str):
+                out.append((table, spec))
+            elif spec.get("workspace") or "path" in spec or "git" in spec:
+                continue  # the workspace's own entry is read in its table; path / git: not the registry
+            elif spec.get("version"):
+                out.append((table, spec["version"]))
+    return out
+
+
+def registry_consumer_problems(roster: dict[str, dict], crate: str, version: str, repos_root: Path,
+                               at: str) -> tuple[list[str], int]:
+    """(problems, manifests read): every Cargo.toml at `at` of every git checkout directly under
+    `repos_root` (one per remote; workspace members included) that requires `crate` from the registry with a
+    requirement `version` does not satisfy. Publishing then would leave that consumer unable to take the
+    release until its requirement is widened (the publish-wave widening), so the publish is refused.
+    Every repository of the roster must have a checkout there (else the read would silently cover less than
+    the train); no manifest read is a refusal too (a scan that compared nothing)"""
+    problems: list[str] = []
+    missing = sorted(r for r in {c["repo"] for c in roster.values() if "repo" in c}
+                     if not (repos_root / r / ".git").exists())
+    if missing:
+        problems.append(f"{crate}: no checkout of {', '.join(missing)} under {repos_root} "
+                        "(the consumer read must cover every repository of the train; give --repos-root)")
+    read = 0
+    seen: set[str] = set()
+    for repo in sorted(d for d in repos_root.iterdir() if (d / ".git").exists()):
+        try:
+            remote = git(repo, "remote", "get-url", "origin").strip().lower().removesuffix(".git")
+        except subprocess.CalledProcessError:
+            remote = str(repo.resolve())
+        if remote in seen:
+            continue  # another clone of the same repository
+        seen.add(remote)
+        try:
+            names = git(repo, "ls-tree", "-r", "--name-only", at).splitlines()
+        except subprocess.CalledProcessError:
+            continue  # no `at` in this checkout (not a published repository)
+        for path in sorted(n for n in names if n == "Cargo.toml" or n.endswith("/Cargo.toml")):
+            text = git(repo, "show", f"{at}:{path}")
+            read += 1
+            try:
+                if tomllib.loads(text).get("package", {}).get("name") == crate:
+                    continue
+                reqs = registry_requirements_on(text, crate)
+            except tomllib.TOMLDecodeError as e:
+                problems.append(f"{repo.name}/{path}: not readable TOML ({e})")
+                continue
+            for table, req in reqs:
+                if not dc.matches(req, version):
+                    problems.append(f"{repo.name}/{path} [{table}] {crate} = {req!r} does not accept {version} "
+                                    "(registry consumer: widen it before publishing)")
+    if read == 0:
+        problems.append(f"{crate}: no Cargo.toml was read under {repos_root} at {at} (the consumer read compared nothing)")
+    return problems, read
+
+
 def requirements_on(text: str, crate: str) -> list[tuple[str, str | None]]:
     """(table, requirement or None when there is no version) of every dependency of a
     manifest on `crate`, in every table cargo reads (normal, dev, build, target, workspace)"""
@@ -2049,7 +2126,7 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
          lister=cargo_package_list, packager=cargo_package, download=http_get,
          docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None,
          reviewers=environment_reviewers, inventory=secret_inventory, semver=semver_problems,
-         metadata=sg.cargo_metadata) -> int:
+         metadata=sg.cargo_metadata, consumers=registry_consumer_problems) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2066,6 +2143,10 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
 
     g = sub.add_parser("publish-gate")
     release_args(g, False)
+    g.add_argument("--repos-root", type=Path,
+                   help="the directory holding a checkout of every consumer repository (default: the parent of --repo)")
+    g.add_argument("--consumers-at", default="origin/main",
+                   help="the commit read in each consumer checkout (fetch first)")
     g.add_argument("--target-dir", type=Path, help="where cargo package builds (default: a temporary directory)")
     release_args(sub.add_parser("publish-verify"), True)
     m = sub.add_parser("roster-mark")
@@ -2160,6 +2241,11 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             hist, n = history_problems(a.repo, a.ref, a.crate, roster[a.crate], a.manifest_path)
             problems += hist
             compared += n
+            root = a.repos_root or a.repo.resolve().parent
+            reg, n = consumers(roster, a.crate, roster[a.crate]["version"], root, a.consumers_at)
+            problems += reg
+            compared += n
+            print(f"consumers: {n} manifests read under {root} at {a.consumers_at}")
             github = tomllib.loads(roster_text).get("train", {}).get("github")
             owner_repo = f"{github}/{roster[a.crate]['repo']}" if github and roster[a.crate].get("repo") else None
             declared_all = tomllib.loads(roster_text).get("secrets", {})

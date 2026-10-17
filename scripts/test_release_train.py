@@ -46,6 +46,9 @@ def _main(argv=None, **kw):
     # and read the features from the fixture's [features] table instead of cargo metadata
     # (class FeatureCoverage runs the real cargo metadata)
     kw.setdefault("metadata", fixture_metadata)
+    # and do not read consumer checkouts next to the fixture repository (class RegistryConsumers tests
+    # that step on checkouts of its own)
+    kw.setdefault("consumers", lambda *a: ([], 1))
     return _REAL_MAIN(argv, **kw)
 
 
@@ -2269,6 +2272,114 @@ class GateGoOutput(unittest.TestCase):
                          ["commit", ".crate sha256", "text", "consumer", "semver", "publish", "then"])
         self.assertEqual({len(name) + len(gap) for name, gap in labels}, {14}, labels)
         self.assertIn("  semver:        0.9.0 -> 0.10.0 (major step)", text)
+
+
+class RegistryConsumers(unittest.TestCase):
+    """the publish refuses while a consumer requiring the crate from the registry cannot accept the version
+    (the publish-wave widening); a path or git dependency is the push gate's case, not this one"""
+
+    ROSTER = {"alice-zip": {"version": "0.10.0", "repo": "ALICE-Zip"}}
+
+    def checkout(self, root: Path, name: str, files: dict[str, str], remote: str | None = None) -> Path:
+        repo = root / name
+        repo.mkdir(parents=True)
+        git(repo, "init", "-q")
+        for rel, text in files.items():
+            (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+            (repo / rel).write_text(text, encoding="utf-8")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "x")
+        git(repo, "remote", "add", "origin", remote or f"https://example.invalid/{name}.git")
+        return repo
+
+    def scan(self, consumers: dict[str, dict[str, str]], with_provider: bool = True):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            if with_provider:
+                self.checkout(root, "ALICE-Zip", {"Cargo.toml": ZIP})
+            for name, files in consumers.items():
+                self.checkout(root, name, files)
+            return rt.registry_consumer_problems(self.ROSTER, "alice-zip", "0.10.0", root, "HEAD")
+
+    @staticmethod
+    def consumer(dep: str) -> dict[str, str]:
+        return {"Cargo.toml": f'[package]\nname = "c"\nversion = "0.1.0"\n\n{dep}\n'}
+
+    def test_a_registry_requirement_that_does_not_accept_the_version_is_refused(self):
+        problems, read = self.scan({"ALICE-C": self.consumer('[dependencies]\nalice-zip = "0.9"')})
+        self.assertEqual(read, 2)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("ALICE-C/Cargo.toml [dependencies] alice-zip = '0.9' does not accept 0.10.0", problems[0])
+
+    def test_a_widened_requirement_goes(self):
+        problems, _ = self.scan({"ALICE-C": self.consumer('[dependencies]\nalice-zip = ">=0.9, <0.11"')})
+        self.assertEqual(problems, [])
+
+    def test_path_and_git_dependencies_are_the_push_gates_case(self):
+        problems, read = self.scan({
+            "ALICE-P": self.consumer('[dependencies]\nalice-zip = { path = "../ALICE-Zip", version = "0.9" }'),
+            "ALICE-G": self.consumer('[dependencies]\nalice-zip = { git = "https://example.invalid/z", version = "0.9" }'),
+            "ALICE-T": self.consumer('[dependencies.alice-zip]\nversion = "0.9"\npath = "../ALICE-Zip"'),
+        })
+        self.assertEqual((problems, read), ([], 4))
+
+    def test_the_table_form_and_every_dependency_table_are_read(self):
+        problems, _ = self.scan({
+            "ALICE-T": self.consumer('[dependencies.alice-zip]\nversion = "0.9"'),
+            "ALICE-D": self.consumer('[dev-dependencies]\nalice-zip = "0.9"'),
+            "ALICE-W": {"Cargo.toml": '[workspace]\nmembers = ["m"]\n\n[workspace.dependencies]\nalice-zip = "0.9"\n'},
+            "ALICE-R": self.consumer('[target.\'cfg(unix)\'.dependencies]\nalice_zip = "0.9"'),
+        })
+        self.assertEqual(len(problems), 4, problems)
+
+    def test_a_workspace_member_of_a_consumer_counts(self):
+        problems, read = self.scan({"ALICE-M": {
+            "Cargo.toml": '[workspace]\nmembers = ["m"]\n',
+            "m/Cargo.toml": '[package]\nname = "m"\nversion = "0.1.0"\n\n[dependencies]\nalice-zip = "0.9"\n',
+        }})
+        self.assertEqual(read, 3)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("ALICE-M/m/Cargo.toml", problems[0])
+
+    def test_a_second_clone_of_the_same_repository_is_read_once(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self.checkout(root, "ALICE-Zip", {"Cargo.toml": ZIP})
+            for name in ("ALICE-C", "ALICE-C-copy"):
+                self.checkout(root, name, self.consumer('[dependencies]\nalice-zip = "0.9"'),
+                              remote="https://example.invalid/ALICE-C.git")
+            problems, read = rt.registry_consumer_problems(self.ROSTER, "alice-zip", "0.10.0", root, "HEAD")
+        self.assertEqual((len(problems), read), (1, 2))
+
+    def test_a_roster_repository_without_a_checkout_is_refused(self):
+        problems, _ = self.scan({"ALICE-C": self.consumer('[dependencies]\nalice-zip = "0.10"')}, with_provider=False)
+        self.assertTrue(any("no checkout of ALICE-Zip" in p for p in problems), problems)
+
+    def test_reading_nothing_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            problems, read = rt.registry_consumer_problems({"alice-zip": {"version": "0.10.0"}}, "alice-zip",
+                                                           "0.10.0", Path(d), "HEAD")
+        self.assertEqual(read, 0)
+        self.assertTrue(any("compared nothing" in p for p in problems), problems)
+
+    def test_the_gate_refuses_on_a_registry_consumer(self):
+        # through the command: --repos-root is read and its problems refuse the publish
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d, "consumers")
+            root.mkdir()
+            self.checkout(root, "ALICE-C", self.consumer('[dependencies]\nalice-zip = "0.9"'))
+            p = Path(d, "release-train.toml")
+            p.write_text(ROSTER, encoding="utf-8")
+            repo, ref = make_repo(d, {"Cargo.toml": ZIP})
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                code = rt.main(["--roster", str(p), "publish-gate", "alice-zip", "--repo", str(repo), "--ref", ref,
+                                "--repos-root", str(root), "--consumers-at", "HEAD"],
+                               fetch=fixture(PUBLISHED_DM), lister=lambda r, mp: ["Cargo.toml", "src/lib.rs"],
+                               packager=fake_packager, consumers=rt.registry_consumer_problems)
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertIn("refused: ALICE-C/Cargo.toml [dependencies] alice-zip = '0.9' does not accept", out.getvalue())
+        self.assertIn("consumers: 1 manifests read under", out.getvalue())
 
 
 if __name__ == "__main__":
