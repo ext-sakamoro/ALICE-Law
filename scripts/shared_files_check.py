@@ -29,7 +29,9 @@ repository that gains the path without an exemption is a finding.
       repository's main, with the entry's bytes at the entry's path
   shared_files_check.py --table TABLE --live [--expect-copies N] [--today YYYY-MM-DD]
       every listed repository's main fetched from GitHub: each copy of a uniform file equal
-      to its entry; the variants of each pending row listed (not a finding); a pending row
+      to its entry (with --expect-copies N, exactly N copies of uniform rows compared: the
+      lock moves only with the table, since a pending row's copies come and go as its
+      rollout lands); the variants of each pending row listed (not a finding); a pending row
       past its time is a finding; and a discovery pass over every file under DISCOVERED of
       the table's repositories: one byte-identical in two or more of them with no entry, or
       a copy of a table path in a repository the entry neither lists nor exempts, is a
@@ -333,6 +335,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date):
     problems: list[str] = []
     notes: list[str] = []
     copies = pending = 0
+    uniform_copies = 0
     repos = sorted({r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})})
     trees = {r: tree(remote(r)) for r in repos}
     if not trees:
@@ -366,6 +369,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date):
                 problems.append(f"{rel}: missing on {r} main")
                 continue
             copies += 1
+            uniform_copies += 1
             if sha256(data) != e["sha256"]:
                 problems.append(f"{rel}: {r} main has sha256 {sha256(data)}, the table {e['sha256']}")
     # discovery
@@ -387,7 +391,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date):
         for r, files in trees.items():
             if r not in listed and e["path"] in files:
                 problems.append(f"{e['path']}: present on {r} main, which the entry neither lists nor exempts")
-    return problems, notes, counts(len(entries), len(trees), copies, pending)
+    return problems, notes, counts(len(entries), len(trees), copies, pending), uniform_copies
 
 
 def main(argv: list[str]) -> int:
@@ -407,6 +411,7 @@ def main(argv: list[str]) -> int:
     if (a.repo is None) != (a.name is None):
         ap.error("--repo and --name go together")
     notes: list[str] = []
+    locked: int | None = None
     try:
         entries = load(a.table.read_text(encoding="utf-8"))
         base_pending = None
@@ -424,7 +429,7 @@ def main(argv: list[str]) -> int:
                 else:
                     today = (datetime.date.fromisoformat(a.today) if a.today
                              else datetime.datetime.now(datetime.timezone.utc).date())
-                    problems, notes, c = live(entries, remote, today)
+                    problems, notes, c, locked = live(entries, remote, today)
         else:
             problems = []
             c = counts(len(entries), len({r for e in entries for r in e["repos"]}),
@@ -437,8 +442,14 @@ def main(argv: list[str]) -> int:
             problems.append(f"{c[3]} pending rows, the base table has {base_pending} (pending only goes down)")
         else:
             print(f"shared_files_check: pending {c[3]}, the base table {base_pending}")
-    if a.expect_copies is not None and c[2] != a.expect_copies:
-        problems.append(f"compared {c[2]} copies, the count lock says {a.expect_copies}")
+    if a.expect_copies is not None:
+        # with --live the lock is on the copies of uniform rows, which change only with the
+        # table; the copies of a pending row come and go as its rollout lands
+        got = locked if locked is not None else c[2]
+        if got != a.expect_copies:
+            problems.append(f"compared {got} copies of uniform rows, the count lock says {a.expect_copies}")
+        else:
+            print(f"shared_files_check: count lock: {got} copies of uniform rows")
     for n in notes:
         print(f"shared_files_check: pending: {n}")
     for p in problems:

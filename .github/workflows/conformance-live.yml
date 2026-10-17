@@ -45,8 +45,9 @@ jobs:
 
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
-  # carries each uniform copy byte for byte (count-locked: a row added or removed, or a
-  # pending copy appearing, moves the number here in the same commit); a pending row is
+  # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a
+  # row added, removed or settled moves the number here in the same commit, a pending row's
+  # copies coming and going as its rollout lands do not); a pending row is
   # listed with its variants and is red only past its time; the discovery pass is red for a
   # file byte-identical in two table repositories with no entry, and for a copy on a main
   # its entry neither lists nor exempts; and the table is what scripts/gen_shared_files.py
@@ -68,7 +69,7 @@ jobs:
         run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --fetch
 
       - name: Every listed repository's main carries each copy
-        run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies 752
+        run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies 653
 
       - name: The table is the generated one
         run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check

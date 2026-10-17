@@ -278,6 +278,18 @@ class Live(Base):
         self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
         self.assertEqual(self.live("--expect-copies", "3")[0], 1)
 
+    def test_the_count_lock_counts_only_the_copies_of_uniform_rows(self):
+        # a pending row's copies appear as its rollout lands; the lock does not move with them
+        rev = self.w.commit("ALICE-C", {"scripts/c.sh": b"c\n"})
+        self.w.commit("ALICE-A", {"scripts/c.sh": b"c\n"})
+        c_row = {"path": "scripts/c.sh", "sha256": h(b"c\n"), "source": {"repo": "ALICE-C", "rev": rev},
+                 "repos": ["ALICE-A", "ALICE-C"], "paths": {}, "exempt": {}}
+        self.t.write_text(self.w.table(c_row, self.w.pending()), encoding="utf-8")
+        code, out = self.live("--expect-copies", "2")
+        self.assertEqual(code, 0, out)
+        self.assertIn("count lock: 2 copies of uniform rows", out)
+        self.assertEqual(self.live("--expect-copies", "5")[0], 1)
+
     def test_a_copy_on_a_main_the_entry_neither_lists_nor_exempts_is_red(self):
         # ALICE-C is a table repository through another row, so its main is read
         rev = self.w.commit("ALICE-C", {"scripts/c.sh": b"c\n"})
