@@ -70,7 +70,7 @@ in the same module, since both lints share a name).
 
 **Claim.** Every `f32` / `f64` max and min the crate computes, at scalar width and at each SIMD width it builds, goes through a Law helper with maximumNumber / minimumNumber semantics; a site that must use the platform operation is a named `raw_*` helper listed in a default-deny manifest.
 
-**Evidence for `pass`.** the clippy ban on `f32::max` / `f32::min` / `f64::max` / `f64::min` in library code; the manifest check script and its CI step; for each SIMD width the crate builds, one test with the `(+0, -0)` and `(-0, +0)` pairs (test names per width); and for each class of scalar site (the public functions whose result is a max or min of float inputs, grouped by the computation they share), one test through the public API that checks the result's bits for `(+0, -0)`, `(-0, +0)` and a NaN operand (the class and its test name, one evidence entry each). The ban sees a call, not a rewrite: `if x > 0.0 { x } else { 0.0 }` is a max of `x` and `+0` that no lint names, and only a test of the result's bits sees what it returns for `-0`.
+**Evidence for `pass`.** the clippy ban on `f32::max` / `f32::min` / `f64::max` / `f64::min` in library code; the manifest check script and its CI step; for each SIMD width the crate builds, one test with the `(+0, -0)` and `(-0, +0)` pairs (test names per width); and for each class of scalar site (the public functions whose result is a max or min of float inputs, grouped by the computation they share), one test through the public API that checks the result's bits for `(+0, -0)`, `(-0, +0)` and a NaN operand (a NaN result being the canonical quiet NaN of G4) (the class and its test name, one evidence entry each). The ban sees a call, not a rewrite: `if x > 0.0 { x } else { 0.0 }` is a max of `x` and `+0` that no lint names, and only a test of the result's bits sees what it returns for `-0`.
 
 **Mutant** (turns the evidence red). replace one Law max with `f32::max` (the lint fails); add a `raw_*` site the manifest does not list (the manifest check fails); swap the operand order in one SIMD Law max (that width's test fails); rewrite one scalar site's Law max as a comparison (`if a > b { a } else { b }`) (that class's tie test fails).
 
@@ -151,11 +151,19 @@ pattern, run under both `debug` and `release` profiles on both `x86_64` and
 exist to guarantee; this gate is where that guarantee is actually exercised
 against concrete inputs, including ones no static checker reaches.
 
-**Claim.** A named test checks the crate's signed-zero and exact-cancellation cases against fixed expected bit patterns, and CI runs it on all of {debug, release} x {x86_64, aarch64} as required jobs.
+A NaN that reaches a Law output is the canonical quiet NaN: `0x7fc00000` for
+`f32`, `0x7ff8000000000000` for `f64`. IEEE 754 leaves the sign and the
+payload of a NaN result unspecified, and they do change with the optimisation
+level and the architecture (a `sign * x` the optimiser turns into a select and
+a negation gives `0x7fc00000` in debug and `0xffc00000` in release), so a
+crate whose output can be NaN canonicalises it before the value leaves; the
+sign and payload are not part of the output.
+
+**Claim.** A named test checks the crate's signed-zero and exact-cancellation cases, and a NaN case wherever an output can be NaN, against fixed expected bit patterns (a NaN output being the canonical quiet NaN), and CI runs it on all of {debug, release} x {x86_64, aarch64} as required jobs.
 
 **Evidence for `pass`.** the test name(s); the CI matrix showing the four combinations, without `continue-on-error`.
 
-**Mutant** (turns the evidence red). flip one expected bit (the test fails on all four legs); rewrite one Law site to the outer-negated fma form of G3 (the test fails on the aarch64 release leg).
+**Mutant** (turns the evidence red). flip one expected bit (the test fails on all four legs); rewrite one Law site to the outer-negated fma form of G3 (the test fails on the aarch64 release leg); remove the canonicalisation at one output that can be NaN (the NaN case fails at least on the leg where the sign or payload differs).
 
 **Look at.** that each case named in the test reaches a library function (not a copy of it in the test).
 
@@ -558,6 +566,7 @@ verified earlier one (`check_semantics`).
 | gate | change |
 |---|---|
 | G2 | **meaning** (tightening): besides the ban and the SIMD-width tests, one bit-level tie test through the public API (`(+0, -0)`, `(-0, +0)`, a NaN operand) per class of scalar site, because the ban cannot see a max or min written as a comparison. A G2 `pass` without `tie_tests` naming tests that exist reads as `unverified` (the roster check) until the manifest adds them |
+| G4 | **meaning** (tightening): a NaN at a Law output is the canonical quiet NaN (`f32` `0x7fc00000`, `f64` `0x7ff8000000000000`), its sign and payload not exposed; a crate whose output can be NaN pins it with a NaN case in the goldens |
 | G6 | wording: the named equivalent is `<CRATE>_SEMANTICS_ID`; a re-exported upstream identifier is that upstream's, not this gate's evidence |
 | G8 | **meaning** (tightening): data without an identifier is readable only with a typed status the caller sees and a policy that refuses it; silent acceptance is a fail. A G8 `pass` without `writers` and the legacy fields, each naming something that exists, reads as `unverified` until the manifest adds them |
 | G9 | wording: where there is no G8 identifier, the entry takes G8's status and cites it |

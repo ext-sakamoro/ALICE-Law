@@ -89,7 +89,7 @@ evidence_kinds = ["syn-ast-checker", "macro-mention-hard-fail", "tests-examples-
 id = "G4"
 checked_by = "machine"
 name = "debug-release-arch-goldens"
-definition = "Signed-zero and exact-cancellation test cases are checked against fixed expected bit patterns under {debug, release} x {x86_64, aarch64}."
+definition = "Signed-zero and exact-cancellation test cases, and a NaN case wherever an output can be NaN (the canonical quiet NaN: f32 0x7fc00000, f64 0x7ff8000000000000), are checked against fixed expected bit patterns under {debug, release} x {x86_64, aarch64}."
 evidence_kinds = ["golden-test-file", "ci-matrix-leg-list"]
 
 [[gate]]
