@@ -4,51 +4,51 @@
 
 [manifest."ALICE-Analytics"]
 crates = ["alice-analytics"]
-"pass" = 4
-"fail-known" = 6
+"pass" = 6
+"fail-known" = 4
 "unverified" = 4
 "n/a" = 0
 
 [manifest."ALICE-Crypto"]
 crates = ["alice-crypto"]
-"pass" = 4
-"fail-known" = 7
+"pass" = 5
+"fail-known" = 6
 "unverified" = 3
 "n/a" = 0
 
 [manifest."ALICE-DB"]
 crates = ["alice-db"]
-"pass" = 4
-"fail-known" = 7
+"pass" = 7
+"fail-known" = 4
 "unverified" = 3
 "n/a" = 0
 
 [manifest."ALICE-DetMath"]
 crates = ["alice-det-math"]
-"pass" = 6
-"fail-known" = 6
+"pass" = 7
+"fail-known" = 5
 "unverified" = 0
 "n/a" = 2
 
 [manifest."ALICE-Edge"]
 crates = ["alice-edge"]
-"pass" = 4
-"fail-known" = 5
+"pass" = 6
+"fail-known" = 3
 "unverified" = 5
 "n/a" = 0
 
 [manifest."ALICE-Kinematics"]
 crates = ["alice-kinematics"]
-"pass" = 3
-"fail-known" = 8
-"unverified" = 3
+"pass" = 8
+"fail-known" = 4
+"unverified" = 2
 "n/a" = 0
 
 [manifest."ALICE-LLM"]
 crates = ["alice-llm"]
-"pass" = 2
-"fail-known" = 10
-"unverified" = 2
+"pass" = 12
+"fail-known" = 1
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-LOL"]
@@ -81,14 +81,14 @@ crates = ["alice-sdf"]
 
 [manifest."ALICE-Sync"]
 crates = ["alice-sync"]
-"pass" = 7
-"fail-known" = 4
-"unverified" = 3
+"pass" = 12
+"fail-known" = 1
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-Zip"]
 crates = ["alice-zip", "alice-zip-cli"]
-"pass" = 5
-"fail-known" = 9
+"pass" = 9
+"fail-known" = 5
 "unverified" = 0
 "n/a" = 0

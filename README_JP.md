@@ -181,19 +181,19 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 
 | repository | 読む crate | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
-| ALICE-Analytics | alice-analytics | 4 | 6 | 4 | 0 |
-| ALICE-Crypto | alice-crypto | 4 | 7 | 3 | 0 |
-| ALICE-DB | alice-db | 4 | 7 | 3 | 0 |
-| ALICE-DetMath | alice-det-math | 6 | 6 | 0 | 2 |
-| ALICE-Edge | alice-edge | 4 | 5 | 5 | 0 |
-| ALICE-Kinematics | alice-kinematics | 3 | 8 | 3 | 0 |
-| ALICE-LLM | alice-llm | 2 | 10 | 2 | 0 |
+| ALICE-Analytics | alice-analytics | 6 | 4 | 4 | 0 |
+| ALICE-Crypto | alice-crypto | 5 | 6 | 3 | 0 |
+| ALICE-DB | alice-db | 7 | 4 | 3 | 0 |
+| ALICE-DetMath | alice-det-math | 7 | 5 | 0 | 2 |
+| ALICE-Edge | alice-edge | 6 | 3 | 5 | 0 |
+| ALICE-Kinematics | alice-kinematics | 8 | 4 | 2 | 0 |
+| ALICE-LLM | alice-llm | 12 | 1 | 1 | 0 |
 | ALICE-LOL | alice-lol, alice-lol-macro | 5 | 5 | 4 | 0 |
 | ALICE-ML | alice-ml | 3 | 7 | 4 | 0 |
 | ALICE-Physics | alice-physics | 8 | 5 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 1 | 9 | 4 | 0 |
-| ALICE-Sync | alice-sync | 7 | 4 | 3 | 0 |
-| ALICE-Zip | alice-zip, alice-zip-cli | 5 | 9 | 0 | 0 |
+| ALICE-Sync | alice-sync | 12 | 1 | 1 | 0 |
+| ALICE-Zip | alice-zip, alice-zip-cli | 9 | 5 | 0 | 0 |
 
 ### manifest がまだ無い crate
 
