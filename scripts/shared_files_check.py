@@ -14,7 +14,14 @@ different file at the same path), and either
     `since` is the date the row became pending and `exit` says what ends it. A pending row
     pins no bytes and never makes a crate's cell a pass; it is listed and counted in every
     mode, and one older than PENDING_MAX_DAYS days is a finding (pending is not a parking
-    place). With --base-table, a table with more pending rows than the base is a finding.
+    place). A planned row (`planned` = the git blob id the shared-file registry moves the
+    file to) is a rollout in progress: its owner has landed the new bytes first. The owner's
+    main must hold the target (its SHA-256 and its blob id equal to `planned`), a planned row
+    all of whose copies have the target is a finding (it has converged: regenerate), and one
+    older than PLANNED_MAX_DAYS days is a finding. With --base-table, a table with more
+    unplanned pending rows than the base is a finding (a planned row may be born; an
+    unplanned divergence may not grow), and so is a row pending in both whose `since` is
+    later than the base's (the age limits cannot be restarted by editing the date).
 
 A repository that legitimately has a different file at a shared path is exempted on that
 path's entry with its reason; the discovery scope itself has no exceptions. A path that looks
@@ -71,6 +78,7 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 GITHUB = "https://github.com/ext-sakamoro/"
 MIN_REASON = 12
 PENDING_MAX_DAYS = 21
+PLANNED_MAX_DAYS = 14
 DISCOVERED = ("scripts/", "tools/", ".github/workflows/", ".github/actions/")
 UNIFORM_KEYS = {"path", "sha256", "source", "repos", "paths", "exempt"}
 PENDING_KEYS = {"path", "pending", "repos", "paths", "exempt"}
@@ -78,6 +86,21 @@ PENDING_KEYS = {"path", "pending", "repos", "paths", "exempt"}
 
 class Unreadable(Exception):
     """The input cannot be compared (exit 2)."""
+
+
+def git_blob(data: bytes) -> str:
+    """the git blob id of `data` (what the shared-file registry's next= names)"""
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def is_planned(e: dict) -> bool:
+    return "planned" in e.get("pending", {})
+
+
+def pending_counts(entries: list[dict]) -> tuple[int, int]:
+    """(planned, unplanned) pending rows"""
+    planned = sum(is_planned(e) for e in entries)
+    return planned, sum("pending" in e for e in entries) - planned
 
 
 def sha256(data: bytes) -> str:
@@ -141,8 +164,8 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
             pass
         elif "pending" in f:
             p = f["pending"]
-            if not isinstance(p, dict) or set(p) != {"since", "exit", "target", "owner", "variants"}:
-                raise Unreadable(f"{where}: pending must be {{ since, exit, target, owner, variants }}")
+            if not isinstance(p, dict) or set(p) - {"planned"} != {"since", "exit", "target", "owner", "variants"}:
+                raise Unreadable(f"{where}: pending must be {{ since, exit, target, owner, variants[, planned] }}")
             if not isinstance(p["target"], str) or not HEX64.match(p["target"]):
                 raise Unreadable(f"{where}: pending.target must be the SHA-256 that becomes the file's bytes")
             if not isinstance(p["owner"], str) or not REPO.match(p["owner"]) or p["owner"] not in repos:
@@ -162,6 +185,11 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
             members = [r for rs in v.values() for r in rs]
             if sorted(members) != repos:
                 raise Unreadable(f"{where}: pending.variants must cover each listed repository exactly once")
+            if "planned" in p:
+                if not isinstance(p["planned"], str) or not HEX40.match(p["planned"]):
+                    raise Unreadable(f"{where}: pending.planned must be the 40-hex git blob id the registry moves to")
+                if p["owner"] not in v.get(p["target"], []):
+                    raise Unreadable(f"{where}: a planned row's owner must hold the target in its variants")
         else:
             if not isinstance(f["sha256"], str) or not HEX64.match(f["sha256"]):
                 raise Unreadable(f"{where}: sha256 is not 64 lower-case hex digits")
@@ -356,10 +384,25 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
             since = datetime.date.fromisoformat(e["pending"]["since"])
             age = (today - since).days
             found: dict[str, list[str]] = collections.defaultdict(list)
+            owner_blob = None
             for r in e["repos"]:
                 data = show(remote(r), "origin/main", path_in(e, r))
                 found["absent" if data is None else sha256(data)].append(r)
                 copies += data is not None
+                if r == e["pending"]["owner"] and data is not None:
+                    owner_blob = (sha256(data), git_blob(data))
+            if is_planned(e):
+                p = e["pending"]
+                if owner_blob != (p["target"], p["planned"]):
+                    got = f"sha256 {owner_blob[0][:12]}, blob {owner_blob[1][:12]}" if owner_blob else "no copy"
+                    problems.append(f"{e['path']}: planned row, but the owner {p['owner']} main does not hold the "
+                                    f"target (sha256 {p['target'][:12]}, blob {p['planned'][:12]}; it has {got})")
+                if set(found) == {p["target"]}:
+                    problems.append(f"{e['path']}: planned row whose every copy has the target: it has converged "
+                                    "(regenerate the table)")
+                if age > PLANNED_MAX_DAYS:
+                    problems.append(f"{e['path']}: planned since {p['since']}, more than {PLANNED_MAX_DAYS} days "
+                                    f"(the rollout to {p['planned'][:12]} has not finished)")
             recorded = {k: sorted(v) for k, v in e["pending"]["variants"].items()}
             moved = "" if dict(found) == recorded else " (the variants on the mains have moved since the table)"
             notes.append(f"{e['path']}: pending {age} day(s), {len(found)} variant(s): "
@@ -445,8 +488,11 @@ def main(argv: list[str]) -> int:
     try:
         entries = load(a.table.read_text(encoding="utf-8"))
         base_pending = None
+        base_since: dict[str, str] = {}
         if a.base_table is not None:
-            base_pending = sum("pending" in e for e in load(a.base_table.read_text(encoding="utf-8")))
+            base_entries = load(a.base_table.read_text(encoding="utf-8"))
+            base_pending = pending_counts(base_entries)
+            base_since = {e["path"]: e["pending"]["since"] for e in base_entries if "pending" in e}
         if a.repo is not None:
             if not REPO.match(a.name):
                 raise Unreadable(f"--name {a.name!r} is not an ALICE-… repository name")
@@ -468,10 +514,22 @@ def main(argv: list[str]) -> int:
         print(f"shared_files_check: {e}", file=sys.stderr)
         return 2
     if base_pending is not None:
-        if c[3] > base_pending:
-            problems.append(f"{c[3]} pending rows, the base table has {base_pending} (pending only goes down)")
+        # a row pending in both tables keeps its date: moving `since` later would restart the age limits
+        for e in entries:
+            was = base_since.get(e["path"])
+            if "pending" in e and was is not None and e["pending"]["since"] > was:
+                problems.append(f"{e['path']}: pending since {e['pending']['since']}, the base table says {was} "
+                                "(a pending row's date only stays or goes back)")
+        planned, unplanned = pending_counts(entries)
+        if planned + unplanned != c[3]:
+            problems.append(f"the pending rows counted ({c[3]}) are not the planned and unplanned ones "
+                            f"({planned} + {unplanned})")
+        if unplanned > base_pending[1]:
+            problems.append(f"{unplanned} unplanned pending rows, the base table has {base_pending[1]} (an unplanned "
+                            "divergence only goes down; a rollout is a planned row, with the registry's next=)")
         else:
-            print(f"shared_files_check: pending {c[3]}, the base table {base_pending}")
+            print(f"shared_files_check: pending {c[3]} (planned {planned}, unplanned {unplanned}), the base table "
+                  f"{sum(base_pending)} (planned {base_pending[0]}, unplanned {base_pending[1]})")
     if a.expect_copies is not None:
         # with --live the lock is on the copies of uniform rows, which change only with the
         # table; the copies of a pending row come and go as its rollout lands
