@@ -27,6 +27,7 @@ the file is regenerated), which keeps the README tables generated from it determ
 
     conformance_roster_check.py [--roster FILE] [--gates FILE] [--missing FILE] [--state FILE]
                                 [--owner OWNER] [--write | --internal]
+    conformance_roster_check.py --check-manifest DIR [--ref REF] [--gates FILE]
 
 `--internal` reads nothing from the other repositories: it checks only that the committed state
 file is consistent with this repository (it parses, it covers exactly the release-train crates
@@ -36,6 +37,15 @@ and the branch / pull request CI run, so a manifest landing in another repositor
 this repository's own change fail. The comparison with the members' mains (the default mode) is
 unchanged and runs on every push to main and daily (.github/workflows/conformance-live.yml); when
 it finds the state stale it says how to regenerate it.
+
+`--check-manifest DIR` checks one member's manifest at a git ref of a local clone (`--ref`,
+default HEAD) before it lands: the same `check_manifest` the comparison with main runs (the gate
+ids, the status vocabulary, the evidence paths and the location of a `fail-known`, the
+`pass` / `n/a` read as `unverified` without evidence or a mutant), against the file tree of that
+ref instead of main's. A branch's own CI does not run this check, so a manifest can pass there and
+still be refused here once it lands; verifiers run it on the branch first. It prints the status
+counts the state file would record; it reads no other repository and writes nothing. Exit 2 when
+the ref has no manifest, no file or no gate was compared, or the clone or ref cannot be read.
 
 Exit 0 when every crate passes, 1 on a finding, 2 when nothing was compared (no crate, no gate,
 no manifest read) or an input cannot be read. Reads each repository through `gh api`
@@ -169,8 +179,8 @@ def gate_vocabulary(gates: dict) -> dict[str, tuple[str, ...]]:
 
 
 def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], paths: set[str],
-                   warnings: list[str]) -> tuple[list[str], dict[str, int], int]:
-    """(findings, status counts, gates compared) for one crate's manifest text"""
+                   warnings: list[str], at: str = "main") -> tuple[list[str], dict[str, int], int]:
+    """(findings, status counts, gates compared) for one crate's manifest text; `paths` are the files at `at`"""
     where = f"{crate}: {MANIFEST}"
     try:
         manifest = tomllib.loads(text)
@@ -206,7 +216,7 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
         named = [t for t in (first_path(x) for x in evidence) if t]
         gone = sorted({t for t in named if not exists(t, paths)})
         if gone:
-            findings.append(f"{where}: {gid} evidence names paths that are not at main: {gone}")
+            findings.append(f"{where}: {gid} evidence names paths that are not at {at}: {gone}")
         mutant = e.get("mutant", "")
         if "mutant" in e and not isinstance(mutant, str):
             findings.append(f"{where}: {gid} mutant is not a string")
@@ -218,11 +228,11 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
             words = [w for s in [note, *evidence] for w in path_words(s)]
             if not any(locates(t, line, paths) for t, line in words):
                 findings.append(f"{where}: {gid} is fail-known without a located site (its note or evidence "
-                                f"names no file at main outside the root files describing the crate, by its "
+                                f"names no file at {at} outside the root files describing the crate, by its "
                                 f"path, or by its name with a line number)")
         if status in ("pass", "n/a"):
             shown = [t for t in named if exists(t, paths)]
-            lack = "evidence naming a path at main" if not shown else ("a mutant" if not str(mutant).strip() else "")
+            lack = f"evidence naming a path at {at}" if not shown else ("a mutant" if not str(mutant).strip() else "")
             if lack:
                 warnings.append(f"{where}: {gid} {status} without {lack}, read as unverified")
                 status = "unverified"
@@ -253,6 +263,38 @@ def gh_fetcher(owner: str):
             return None, paths
         return base64.b64decode(blob["content"]).decode("utf-8"), paths
     return fetch
+
+
+def git_fetcher(repo_dir: Path, ref: str):
+    """the (manifest text, blob paths) of one local clone at `ref`, the shape gh_fetcher returns for main"""
+    def git(*args: str) -> str:
+        p = subprocess.run(["git", "-C", str(repo_dir), *args], capture_output=True, text=True)
+        if p.returncode != 0:
+            raise InputError(f"git {' '.join(args)} in {repo_dir}: {p.stderr.strip()[:200]}")
+        return p.stdout
+
+    def fetch() -> tuple[str | None, set[str]]:
+        commit = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").strip()
+        paths = set(git("ls-tree", "-r", "--name-only", "-z", commit).split("\0")) - {""}
+        if MANIFEST not in paths:
+            return None, paths
+        return git("show", f"{commit}:{MANIFEST}"), paths
+    return fetch
+
+
+def check_one(repo_dir: Path, ref: str, gates: dict, fetch=None) -> tuple[list[str], list[str], dict, int, int]:
+    """(findings, notes, status counts, gates compared, files at the ref) for one manifest at a ref"""
+    vocab = gate_vocabulary(gates)
+    if not vocab:
+        raise InputError("conformance/gates.toml lists no gate")
+    text, paths = (fetch or git_fetcher(repo_dir, ref))()
+    if not paths:
+        raise InputError(f"{repo_dir} at {ref}: no file (compared nothing)")
+    if text is None:
+        raise InputError(f"{repo_dir} at {ref}: no {MANIFEST}")
+    notes: list[str] = []
+    findings, counts, compared = check_manifest(repo_dir.name, text, vocab, paths, notes, at=ref)
+    return findings, notes, counts, compared, len(paths)
 
 
 def render_state(states: dict[str, dict]) -> str:
@@ -378,7 +420,28 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
     mode.add_argument("--write", action="store_true", help="write the status counts to --state")
     mode.add_argument("--internal", action="store_true",
                       help="check the committed state file alone, reading no other repository")
+    mode.add_argument("--check-manifest", metavar="DIR",
+                      help="check the manifest of the local clone DIR at --ref, before it lands")
+    ap.add_argument("--ref", default="HEAD", help="the git ref --check-manifest reads (default HEAD)")
     a = ap.parse_args(argv)
+    if a.check_manifest:
+        try:
+            gates = load_toml(Path(a.gates))
+            findings, notes, counts, compared, nfiles = check_one(Path(a.check_manifest), a.ref, gates, fetch)
+        except (InputError, OSError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        for n in notes:
+            print(f"note: {n}")
+        for f in findings:
+            print(f"found: {f}")
+        if compared == 0:
+            print("error: the manifest has no gate entry (compared nothing)", file=sys.stderr)
+            return 2
+        shown = ", ".join(f"{s} {counts[s]}" for s in STATUSES) if not findings else "not counted"
+        print(f"manifest check: {Path(a.check_manifest).name}@{a.ref}: {compared} gates compared against "
+              f"{nfiles} files, {len(findings)} findings ({shown})")
+        return 1 if findings else 0
     if a.internal:
         try:
             roster = load_toml(Path(a.roster))

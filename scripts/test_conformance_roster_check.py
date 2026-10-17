@@ -289,6 +289,70 @@ class Fetcher(unittest.TestCase):
             self.fetch_with({"git/trees": (1, "gh: Not Found (HTTP 404)")})
 
 
+class CheckManifest(unittest.TestCase):
+    """--check-manifest: one member's manifest at a git ref of a local clone"""
+
+    def repo(self, files: dict, commit=True) -> Path:
+        import subprocess
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, d)
+        git = lambda *a: subprocess.run(["git", "-C", str(d), *a], check=True, capture_output=True)
+        git("init", "-q")
+        for rel, text in files.items():
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel).write_text(text, encoding="utf-8")
+        if commit:
+            git("add", "-A")
+            git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "c")
+        return d
+
+    def run_cm(self, d: Path, ref="HEAD"):
+        with tempfile.TemporaryDirectory() as t:
+            g = Path(t) / "g.toml"
+            g.write_text(GATES, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = crc.main(["--check-manifest", str(d), "--ref", ref, "--gates", str(g)])
+        return code, out.getvalue()
+
+    def files(self, text=None):
+        f = {rel: "x\n" for rel in ("src/lib.rs", "tests/golden.rs", "Cargo.toml")}
+        f[crc.MANIFEST] = manifest() if text is None else text
+        return f
+
+    def test_a_clean_manifest_passes_with_the_counts_it_would_record(self):
+        code, out = self.run_cm(self.repo(self.files()))
+        self.assertEqual(code, 0, out)
+        self.assertIn("3 gates compared against 4 files, 0 findings (pass 1, fail-known 1, unverified 1, n/a 0)", out)
+
+    def test_an_evidence_path_missing_at_the_ref_is_a_finding_naming_the_ref(self):
+        text = manifest(G1='status = "pass"\nevidence = ["tools/x/{a.rs,b.rs}"]\nmutant = "m"')
+        code, out = self.run_cm(self.repo(self.files(text)))
+        self.assertEqual(code, 1, out)
+        self.assertIn("G1 evidence names paths that are not at HEAD", out)
+
+    def test_the_ref_is_read_not_the_working_tree(self):
+        d = self.repo(self.files(manifest(G1='status = "pass"\nevidence = ["src/new.rs"]\nmutant = "m"')))
+        (d / "src" / "new.rs").write_text("uncommitted\n", encoding="utf-8")
+        code, out = self.run_cm(d)
+        self.assertEqual(code, 1, out)
+        self.assertIn("src/new.rs", out)
+
+    def test_no_manifest_at_the_ref_or_an_unknown_ref_compares_nothing(self):
+        f = self.files()
+        del f[crc.MANIFEST]
+        code, out = self.run_cm(self.repo(f))
+        self.assertEqual(code, 2, out)
+        self.assertIn("no alice-law-conformance.toml", out)
+        code, out = self.run_cm(self.repo(self.files()), ref="no-such-ref")
+        self.assertEqual(code, 2, out)
+
+    def test_a_manifest_with_no_gate_entry_compared_nothing(self):
+        code, out = self.run_cm(self.repo(self.files("# nothing\n")))
+        self.assertEqual(code, 2, out)
+        self.assertIn("compared nothing", out)
+
+
 class Internal(unittest.TestCase):
     """--internal: the committed state file alone, no other repository read"""
     GOOD = ('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 1\n"fail-known" = 1\n"unverified" = 1\n"n/a" = 0\n\n'

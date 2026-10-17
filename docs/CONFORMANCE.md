@@ -494,6 +494,20 @@ meet. A feature the table does not list is not declared, and the README block
 generator refuses a feature marked `inside` without evidence, and a listed
 feature the crate does not have.
 
+### Checking a manifest before it lands
+
+A branch's own CI does not read its manifest the way this repository's roster
+check reads it at main, so a manifest can pass there and be refused once it
+lands. Before a change to a manifest lands, run the same check against the
+branch, from a clone of this repository:
+
+    python3 scripts/conformance_roster_check.py --check-manifest <clone of the crate> --ref <branch or commit>
+
+It applies the roster check's own rules (gate ids, status vocabulary, evidence
+paths at that ref, a located `fail-known`, `pass` / `n/a` without evidence or a
+mutant read as `unverified`) and prints the counts the state file would
+record. Exit 1 on a finding, 2 when nothing was compared.
+
 ### The README block
 
 A crate states its ALICE-Law status in one place: the block between
