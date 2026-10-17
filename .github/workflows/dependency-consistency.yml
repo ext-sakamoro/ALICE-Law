@@ -25,6 +25,7 @@ on:
       - "docs/CONFORMANCE.md"
       - "conformance/**"
       - "e2e/golden/run.digest"
+      - "e2e/golden/values.digest"
       - "README_JP.md"
       - "scripts/**"
       - ".github/workflows/**"
@@ -63,6 +64,9 @@ jobs:
 
       - name: Test the conformance roster checker
         run: python3 scripts/test_conformance_roster_check.py
+
+      - name: Test main mode (the requirement raise and what verify counts)
+        run: python3 scripts/test_main_mode.py
 
       # the committed conformance state alone (it parses, covers exactly the train's crates,
       # counts sum to the gates); the comparison with the members' mains is conformance-live.yml,
