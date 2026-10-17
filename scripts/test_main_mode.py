@@ -107,6 +107,20 @@ class Problems(unittest.TestCase):
         self.assertEqual(len(problems), len(mm.CRATES))
 
 
+class Requirers(unittest.TestCase):
+    def test_the_crates_that_do_not_accept_main_are_named(self):
+        def dep(name, req):
+            return {"name": name, "req": req, "kind": None}
+        packages = [
+            {"name": "alice-db", "dependencies": [dep("alice-zip", "^0.10")]},
+            {"name": "alice-edge", "dependencies": [dep("alice-zip", "^0.10")]},
+            {"name": "alice-lol", "dependencies": [dep("alice-zip", ">=0.10, <0.12")]},
+            {"name": "alice-sdf", "dependencies": [dep("alice-det-math", "^0.5")]},
+        ]
+        self.assertEqual(mm.requirers(packages, "alice-zip", "0.11.0"), ["alice-db (^0.10)", "alice-edge (^0.10)"])
+        self.assertEqual(mm.requirers(packages, "alice-zip", "0.10.3"), [])
+
+
 class Verify(unittest.TestCase):
     def test_without_the_patch_it_says_so_instead_of_reading_every_crate_as_from_crates_io(self):
         import contextlib

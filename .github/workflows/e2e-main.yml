@@ -83,14 +83,16 @@ jobs:
           cd e2e && cargo --version
           python3 ../scripts/expected_failure.py e2e-main-patch -- cargo generate-lockfile
 
-      - name: Test
+      # first, so a core crate that comes from crates.io beside its checkout (a member whose main does
+      # not accept another member's main) is named with its requirers before the build fails on it
+      - name: Every core crate taken from main
         if: steps.patch.outputs.expected != 'true'
+        run: python3 scripts/main_mode.py verify | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Test
+        if: always() && steps.patch.outputs.expected != 'true'
         working-directory: e2e
         run: cargo test --release --locked -- --nocapture
-
-      - name: Every core crate taken from main
-        if: always() && steps.patch.outputs.expected != 'true'
-        run: python3 scripts/main_mode.py verify | tee -a "$GITHUB_STEP_SUMMARY"
 
   teeth:
     name: Mutations the test has to catch (main)

@@ -175,6 +175,18 @@ def problems_of(packages: list[dict]) -> tuple[dict[str, list[tuple[str, str]]],
     return seen, problems, sum(len(v) for v in seen.values())
 
 
+def requirers(packages: list[dict], crate: str, main_version: str) -> list[str]:
+    """`name (requirement)` of every resolved package whose requirement on `crate` does not accept the
+    version on main: the ones that pull a crates.io copy in beside the checkout"""
+    out = []
+    for p in packages:
+        for d in p.get("dependencies", []):
+            if d.get("name") == crate and d.get("kind") in (None, "normal", "build") and not accepts(
+                    d.get("req", ""), main_version):
+                out.append(f"{p['name']} ({d['req']})")
+    return sorted(set(out))
+
+
 def verify() -> int:
     if not CONFIG.is_file():
         # the patch step failed or was skipped: every crate would read as "from crates.io",
@@ -197,6 +209,14 @@ def verify() -> int:
     print(f"main mode: compared {compared} resolved crates, {len(problems)} problem(s)")
     for p in problems:
         print(f"main mode: {p}")
+    # who pulls a crates.io copy in beside the checkout: the early warning, named
+    for crate in CRATES:
+        found = seen.get(crate, [])
+        mains = [v for v, src in found if src == "path"]
+        if mains and any(src != "path" for _, src in found):
+            who = requirers(packages, crate, mains[0])
+            print(f"main mode: {crate}: main is {mains[0]}, required by "
+                  f"{', '.join(who) or '(no requirement found)'}, which do not accept it")
     if compared == 0:
         return 2
     return 1 if problems else 0
