@@ -107,5 +107,24 @@ class Problems(unittest.TestCase):
         self.assertEqual(len(problems), len(mm.CRATES))
 
 
+class Verify(unittest.TestCase):
+    def test_without_the_patch_it_says_so_instead_of_reading_every_crate_as_from_crates_io(self):
+        import contextlib
+        import io
+        import tempfile
+        saved = mm.CONFIG
+        with tempfile.TemporaryDirectory() as d:
+            mm.CONFIG = Path(d) / ".cargo" / "config.toml"
+            self.addCleanup(setattr, mm, "CONFIG", saved)
+            mm_root = mm.ROOT
+            mm.ROOT = Path(d)
+            self.addCleanup(setattr, mm, "ROOT", mm_root)
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = mm.verify()
+        self.assertEqual(code, 2)
+        self.assertIn("the patch did not run", err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

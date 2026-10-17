@@ -176,6 +176,12 @@ def problems_of(packages: list[dict]) -> tuple[dict[str, list[tuple[str, str]]],
 
 
 def verify() -> int:
+    if not CONFIG.is_file():
+        # the patch step failed or was skipped: every crate would read as "from crates.io",
+        # which looks like a wiring failure when it is not one
+        print(f"main mode: the patch did not run (no {CONFIG.relative_to(ROOT)}), nothing to verify",
+              file=sys.stderr)
+        return 2
     out = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--manifest-path", str(E2E / "Cargo.toml")],
         check=True,
