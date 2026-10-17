@@ -211,6 +211,45 @@ def symbol_defined(ref: str, paths: set[str], read) -> str | None:
     return None
 
 
+def test_fn_gap(ref: str, paths: set[str], read) -> str | None:
+    """None when `<path>.rs::<fn>` is a test that runs: a `fn` carrying `#[test]`, with no `#[ignore]`
+    and no always-false `#[cfg(any())]` among its attributes, in a file under tests/ or after a
+    `#[cfg(test)]` in a file under src/; otherwise why not"""
+    why = symbol_defined(ref, paths, read)
+    if why:
+        return why
+    m = SYMBOL_REF_RE.match(ref.strip())
+    path, name = m["path"], m["name"]
+    code = rust_code(read(path))
+    at = re.search(r"\bfn\s+" + name + r"\b", code)
+    if not at:
+        return f"{path}: {name} is not a fn"
+    # the attributes directly above the fn (a #[...] block may span lines)
+    head = code[:at.start()]
+    lines = head.split("\n")
+    attrs: list[str] = []
+    depth = 0
+    for line in reversed(lines[:-1] if lines and not lines[-1].strip() else lines):
+        t = line.strip()
+        if depth == 0 and not t:
+            break
+        if depth == 0 and not (t.startswith("#[") or t.startswith("pub") or t.endswith("]") or t.endswith(",")
+                               or t.startswith("async")):
+            break
+        attrs.append(t)
+        depth += t.count("]") - t.count("[")
+    block = " ".join(attrs)
+    if not re.search(r"#\[\s*test\s*\]", block):
+        return f"{path}: {name} has no #[test]"
+    if re.search(r"#\[\s*ignore\b", block):
+        return f"{path}: {name} is #[ignore]d"
+    if re.search(r"#\[\s*cfg\s*\(\s*any\s*\(\s*\)\s*\)\s*\]", block):
+        return f"{path}: {name} is under #[cfg(any())], never built"
+    if not path.startswith("tests/") and not re.search(r"#\[\s*cfg\s*\(\s*test\s*\)\s*\]", head):
+        return f"{path}: {name} is outside tests/ and no #[cfg(test)] precedes it"
+    return None
+
+
 def law_evidence_gap(gid: str, e: dict, paths: set[str], read) -> str | None:
     """for a G2 or G8 `pass`: what the manifest lacks of the evidence the gate text asks for, or None"""
     if gid == "G2":
@@ -222,7 +261,7 @@ def law_evidence_gap(gid: str, e: dict, paths: set[str], read) -> str | None:
             label, sep, ref = t.rpartition(": ")
             if not sep or not label.strip():
                 return f"tie_tests entry {t!r} is not `<class>: <path>.rs::<test>`"
-            why = symbol_defined(ref, paths, read)
+            why = test_fn_gap(ref, paths, read)
             if why:
                 return f"tie_tests entry {t!r}: {why}"
     if gid == "G8":

@@ -431,7 +431,7 @@ root) has one entry per gate, with these fields:
 | `since` | the version or commit the gate first passed |
 | `note` | mandatory for `fail-known` (what is unmet, with file:line where there is a site) and for `n/a` (what makes the gate not apply) |
 | `reference_repo` | the crate whose implementation this gate's mechanism was taken from or checked against, where one exists |
-| `tie_tests` | G2 only, required for `pass`: one string per class of scalar site, `"<class>: <path>.rs::<test>"`; `[]` states the crate has no scalar float max / min site |
+| `tie_tests` | G2 only, required for `pass`: one string per class of scalar site, `"<class>: <path>.rs::<test>"`, each a test that runs (a `fn` with `#[test]`, not `#[ignore]` and not under `#[cfg(any())]`, in a file under `tests/` or after a `#[cfg(test)]`); `[]` states the crate has no scalar float max / min site |
 | `writers` | G8 only, required for `pass`: every function writing a durable form of Law-bearing values, `"<path>.rs::<fn>"`; an empty list compared nothing and does not count |
 | `legacy` / `legacy_status` / `legacy_policy` | G8 only, required for `pass`: `legacy = "none"` when no data without an identifier is readable; otherwise `legacy_status` (the typed status such data is read with) and `legacy_policy` (the policy refusing it), each `"<path>.rs::<name>"` |
 
