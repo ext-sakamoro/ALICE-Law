@@ -269,16 +269,20 @@ class Fetcher(unittest.TestCase):
 
     def test_the_tree_and_the_manifest_are_read(self):
         import base64
-        text, paths = self.fetch_with({
+        text, paths, read = self.fetch_with({
             "git/trees": (0, {"tree": [{"path": "alice-law-conformance.toml", "type": "blob"},
                                        {"path": "src", "type": "tree"}, {"path": "src/lib.rs", "type": "blob"}]}),
-            "contents/": (0, {"content": base64.b64encode(b"[G1]\n").decode()})})
+            "contents/alice-law": (0, {"content": base64.b64encode(b"[G1]\n").decode()}),
+            "contents/src/lib.rs": (0, {"content": base64.b64encode(b"fn tie() {}\n").decode()})})
         self.assertEqual(text, "[G1]\n")
         self.assertEqual(paths, {"alice-law-conformance.toml", "src/lib.rs"})
+        self.assertEqual(read("src/lib.rs"), "fn tie() {}\n")
+        self.assertIsNone(read("src/absent.rs"))
 
     def test_no_manifest_in_the_tree_is_none(self):
-        text, paths = self.fetch_with({"git/trees": (0, {"tree": [{"path": "src/lib.rs", "type": "blob"}]})})
+        text, paths, read = self.fetch_with({"git/trees": (0, {"tree": [{"path": "src/lib.rs", "type": "blob"}]})})
         self.assertIsNone(text)
+        self.assertIsNone(read)
 
     def test_a_truncated_tree_or_an_api_error_is_an_input_error(self):
         with self.assertRaises(crc.InputError):
@@ -381,6 +385,69 @@ class CheckManifest(unittest.TestCase):
         code, out = self.run_cm(self.repo(self.files("# nothing\n")))
         self.assertEqual(code, 2, out)
         self.assertIn("compared nothing", out)
+
+
+class LawEvidence(unittest.TestCase):
+    """a G2 / G8 pass counts only with the evidence the gate text asks for, named and present at the ref"""
+    GATES = 'status_vocabulary = ["pass", "fail-known", "unverified", "n/a"]\n' + \
+        "\n".join(f'[[gate]]\nid = "G{i}"\nname = "g{i}"\n' for i in (2, 8))
+    SRC = {"src/lib.rs": "pub fn write_v2(x: u8) {}\npub enum Pinning {\n    Unpinned,\n    Pinned,\n}\n"
+                         "pub struct RequirePinned;\n",
+           "tests/ties.rs": "#[test]\nfn max_ties_through_the_api() {}\n"}
+    PASS = 'status = "pass"\nevidence = ["src/lib.rs"]\nmutant = "m"'
+
+    def counts(self, g2: str, g8: str):
+        files = dict(self.SRC)
+        files[crc.MANIFEST] = f"[G2]\n{self.PASS}\n{g2}\n\n[G8]\n{self.PASS}\n{g8}\n"
+        d = CheckManifest.repo(self, files)
+        with tempfile.TemporaryDirectory() as t:
+            g = Path(t) / "g.toml"
+            g.write_text(self.GATES, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = crc.main(["--check-manifest", str(d), "--gates", str(g)])
+        self.assertEqual(code, 0, out.getvalue())
+        text = out.getvalue()
+        return text[text.index("findings (") + len("findings ("):].split(")")[0], text
+
+    G2_OK = 'tie_tests = ["max of a field: tests/ties.rs::max_ties_through_the_api"]'
+    G8_OK = ('writers = ["src/lib.rs::write_v2"]\nlegacy_status = "src/lib.rs::Unpinned"\n'
+             'legacy_policy = "src/lib.rs::RequirePinned"')
+
+    def test_both_passes_with_their_evidence_count_as_pass(self):
+        c, _ = self.counts(self.G2_OK, self.G8_OK)
+        self.assertEqual(c, "pass 2, fail-known 0, unverified 0, n/a 0")
+        c, _ = self.counts("tie_tests = []", 'writers = ["src/lib.rs::write_v2"]\nlegacy = "none"')
+        self.assertEqual(c, "pass 2, fail-known 0, unverified 0, n/a 0")
+
+    def test_a_g2_pass_without_existing_tie_tests_is_unverified(self):
+        for g2, why in [("", "G2 pass without tie_tests"),
+                        ('tie_tests = ["max: tests/ties.rs::no_such_test"]', "does not define no_such_test"),
+                        ('tie_tests = ["max: tests/gone.rs::max_ties_through_the_api"]', "tests/gone.rs is not in the tree"),
+                        ('tie_tests = ["tests/ties.rs::max_ties_through_the_api"]', "is not `<class>:")]:
+            c, out = self.counts(g2, self.G8_OK)
+            self.assertEqual(c, "pass 1, fail-known 0, unverified 1, n/a 0", g2)
+            self.assertIn(why, out)
+
+    def test_a_g8_pass_without_writers_or_the_legacy_status_and_policy_is_unverified(self):
+        for g8, why in [("legacy = \"none\"", "G8 pass without writers"),
+                        ('writers = []\nlegacy = "none"', "an empty list compared nothing"),
+                        ('writers = ["src/lib.rs::write_v9"]\nlegacy = "none"', "does not define write_v9"),
+                        ('writers = ["src/lib.rs::write_v2"]', "legacy_status"),
+                        ('writers = ["src/lib.rs::write_v2"]\nlegacy_status = "src/lib.rs::Unpinned"',
+                         "legacy_policy"),
+                        ('writers = ["src/lib.rs::write_v2"]\nlegacy_status = "src/lib.rs::Unpinned"\n'
+                         'legacy_policy = "src/lib.rs::Strict"', "does not define Strict")]:
+            c, out = self.counts(self.G2_OK, g8)
+            self.assertEqual(c, "pass 1, fail-known 0, unverified 1, n/a 0", g8)
+            self.assertIn(why, out)
+
+    def test_symbol_lookup_reads_the_ref_not_the_name_in_a_comment(self):
+        paths = {"src/a.rs"}
+        read = {"src/a.rs": "// fn ghost() appears only here\nfn real() {}\n"}.get
+        self.assertIsNone(crc.symbol_defined("src/a.rs::real", paths, read))
+        self.assertIsNotNone(crc.symbol_defined("src/a.rs::ghost", paths, read))
+        self.assertIsNotNone(crc.symbol_defined("src/a.rs::real", paths, None))
 
 
 class Internal(unittest.TestCase):

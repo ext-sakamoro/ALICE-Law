@@ -178,9 +178,76 @@ def gate_vocabulary(gates: dict) -> dict[str, tuple[str, ...]]:
     return out
 
 
+RUST_NON_CODE_RE = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"', re.S)
+
+
+def rust_code(text: str) -> str:
+    """Rust source with comments and string literals blanked (a name in a comment is not a definition)"""
+    return RUST_NON_CODE_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
+
+SYMBOL_REF_RE = re.compile(r"^(?P<path>[\w./\-]+\.rs)::(?P<name>[A-Za-z_][A-Za-z0-9_]*)$")
+
+
+def symbol_defined(ref: str, paths: set[str], read) -> str | None:
+    """None when `<path>::<name>` names a file at the ref that defines `name` (a fn, type, const, static or
+    enum variant written as `name` after one of those keywords, or `name {` / `name(` / `name,` inside it);
+    otherwise why not"""
+    m = SYMBOL_REF_RE.match(ref.strip())
+    if not m:
+        return f"{ref!r} is not <path>.rs::<name>"
+    path, name = m["path"], m["name"]
+    if path not in paths:
+        return f"{path} is not in the tree"
+    if read is None:
+        return f"{path} could not be read"
+    text = read(path)
+    if text is None:
+        return f"{path} could not be read"
+    text = rust_code(text)
+    if not re.search(r"\b(?:fn|struct|enum|trait|type|const|static|mod)\s+" + name + r"\b", text) and \
+            not re.search(r"^\s*" + name + r"\b\s*[({,]", text, re.M):
+        return f"{path} does not define {name}"
+    return None
+
+
+def law_evidence_gap(gid: str, e: dict, paths: set[str], read) -> str | None:
+    """for a G2 or G8 `pass`: what the manifest lacks of the evidence the gate text asks for, or None"""
+    if gid == "G2":
+        ties = e.get("tie_tests")
+        if not isinstance(ties, list) or not all(isinstance(x, str) for x in ties):
+            return "tie_tests (one `<class>: <path>.rs::<test>` per class of scalar site, [] when it has none)"
+        for t in ties:
+            label, sep, ref = t.partition(": ")
+            if not sep or not label.strip() or ":" in label:
+                return f"tie_tests entry {t!r} is not `<class>: <path>.rs::<test>`"
+            why = symbol_defined(ref, paths, read)
+            if why:
+                return f"tie_tests entry {t!r}: {why}"
+    if gid == "G8":
+        writers = e.get("writers")
+        if not isinstance(writers, list) or not writers or not all(isinstance(x, str) for x in writers):
+            return "writers (every function writing a durable form, `<path>.rs::<fn>`; an empty list compared nothing)"
+        for w in writers:
+            why = symbol_defined(w, paths, read)
+            if why:
+                return f"writers entry {w!r}: {why}"
+        if e.get("legacy") != "none":
+            for key in ("legacy_status", "legacy_policy"):
+                ref = e.get(key)
+                if not isinstance(ref, str):
+                    return (f"{key} (the typed status of data read without an identifier and the policy refusing "
+                            f"it, `<path>.rs::<name>`; or legacy = \"none\" when no such data is readable)")
+                why = symbol_defined(ref, paths, read)
+                if why:
+                    return f"{key} {ref!r}: {why}"
+    return None
+
+
 def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], paths: set[str],
-                   warnings: list[str], at: str = "main") -> tuple[list[str], dict[str, int], int]:
-    """(findings, status counts, gates compared) for one crate's manifest text; `paths` are the files at `at`"""
+                   warnings: list[str], at: str = "main", read=None) -> tuple[list[str], dict[str, int], int]:
+    """(findings, status counts, gates compared) for one crate's manifest text; `paths` are the files at `at`,
+    `read(path)` their text (None: a G2 / G8 pass cannot be shown and reads as unverified)"""
     where = f"{crate}: {MANIFEST}"
     try:
         manifest = tomllib.loads(text)
@@ -236,6 +303,11 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
             if lack:
                 warnings.append(f"{where}: {gid} {status} without {lack}, read as unverified")
                 status = "unverified"
+        if status == "pass":
+            gap = law_evidence_gap(gid, e, paths, read)
+            if gap:
+                warnings.append(f"{where}: {gid} pass without {gap}, read as unverified")
+                status = "unverified"
         counts[status] += 1
     return findings, counts, compared
 
@@ -257,11 +329,18 @@ def gh_fetcher(owner: str):
             raise InputError(f"{owner}/{repo}: the file tree is truncated")
         paths = {t["path"] for t in tree.get("tree", []) if t.get("type") == "blob"}
         if MANIFEST not in paths:
-            return None, paths
+            return None, paths, None
         blob = api(f"repos/{owner}/{repo}/contents/{MANIFEST}?ref=main")
         if blob is None:
-            return None, paths
-        return base64.b64decode(blob["content"]).decode("utf-8"), paths
+            return None, paths, None
+        cache: dict[str, str | None] = {}
+
+        def read(path: str) -> str | None:
+            if path not in cache:
+                b = api(f"repos/{owner}/{repo}/contents/{path}?ref=main") if path in paths else None
+                cache[path] = base64.b64decode(b["content"]).decode("utf-8", "replace") if b and b.get("content") else None
+            return cache[path]
+        return base64.b64decode(blob["content"]).decode("utf-8"), paths, read
     return fetch
 
 
@@ -281,8 +360,11 @@ def git_fetcher(repo_dir: Path, ref: str):
         commit = p.stdout.strip()
         paths = set(git("ls-tree", "-r", "--name-only", "-z", commit).split("\0")) - {""}
         if MANIFEST not in paths:
-            return None, paths
-        return git("show", f"{commit}:{MANIFEST}"), paths
+            return None, paths, None
+
+        def read(path: str) -> str | None:
+            return git("show", f"{commit}:{path}") if path in paths else None
+        return git("show", f"{commit}:{MANIFEST}"), paths, read
     return fetch
 
 
@@ -299,13 +381,14 @@ def check_one(repo_dir: Path, ref: str, gates: dict, fetch=None) -> tuple[list[s
     vocab = gate_vocabulary(gates)
     if not vocab:
         raise InputError("conformance/gates.toml lists no gate")
-    text, paths = (fetch or git_fetcher(repo_dir, ref))()
+    text, paths, *rest = (fetch or git_fetcher(repo_dir, ref))()
+    read = rest[0] if rest else None
     if not paths:
         raise InputError(f"{repo_dir} at {ref}: no file (compared nothing)")
     if text is None:
         raise InputError(f"{repo_dir} at {ref}: no {MANIFEST}")
     notes: list[str] = []
-    findings, counts, compared = check_manifest(repo_name(repo_dir), text, vocab, paths, notes, at=ref)
+    findings, counts, compared = check_manifest(repo_name(repo_dir), text, vocab, paths, notes, at=ref, read=read)
     return findings, notes, counts, compared, len(paths)
 
 
@@ -347,7 +430,8 @@ def check(roster: dict, gates: dict, missing: dict, fetch) -> tuple[list[str], l
     for crate, repo in sorted(crates.items()):
         if repo not in cache:
             cache[repo] = fetch(repo)
-        text, paths = cache[repo]
+        text, paths, *rest = cache[repo]
+        reader = rest[0] if rest else None
         if text is None:
             if crate in listed:
                 notes.append(f"{crate}: no {MANIFEST} at main, as missing-manifests.toml expects "
@@ -360,7 +444,7 @@ def check(roster: dict, gates: dict, missing: dict, fetch) -> tuple[list[str], l
                             f"(remove it)")
         read += 1
         if repo not in checked:  # one manifest per repository, checked once for every crate it is read for
-            f, counts, n = check_manifest(repo, text, vocab, paths, notes)
+            f, counts, n = check_manifest(repo, text, vocab, paths, notes, read=reader)
             findings += f
             compared += n
             checked[repo] = not f
@@ -368,7 +452,7 @@ def check(roster: dict, gates: dict, missing: dict, fetch) -> tuple[list[str], l
                 states[repo] = {"crates": [], "counts": counts}
         if checked[repo]:
             states[repo]["crates"].append(crate)
-    files = len({repo for repo, (text, _) in cache.items() if text is not None})
+    files = len({repo for repo, got in cache.items() if got[0] is not None})
     return findings, notes, states, read, compared, files
 
 
