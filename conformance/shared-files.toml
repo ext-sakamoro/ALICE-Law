@@ -98,7 +98,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/law_readme_block_check.py"
 sha256 = "7afcaac8fa65121748ae65a52853f3b40eb98beeaf41dd85d096714c64d2e45a"
 source = { repo = "ALICE-Analytics", rev = "6f373928cfffa39f58f7ce0abf225752a71ab5e5" }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/libm_ban_check.py"
@@ -218,7 +218,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/test_law_readme_block_check.py"
 sha256 = "6b1694e80d3687c164d5552d8a0d679122a42726f087edd4054bb7a01a432d2f"
 source = { repo = "ALICE-Analytics", rev = "6f373928cfffa39f58f7ce0abf225752a71ab5e5" }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_libm_ban_check.py"
