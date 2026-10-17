@@ -183,7 +183,7 @@ One row per repository: crates that share a repository share its one manifest at
 |---|---|---|---|---|---|
 | ALICE-Analytics | alice-analytics | 9 | 2 | 1 | 2 |
 | ALICE-Crypto | alice-crypto | 10 | 1 | 0 | 3 |
-| ALICE-DB | alice-db | 10 | 1 | 3 | 0 |
+| ALICE-DB | alice-db | 12 | 1 | 1 | 0 |
 | ALICE-DetMath | alice-det-math | 10 | 2 | 0 | 2 |
 | ALICE-Edge | alice-edge | 11 | 1 | 2 | 0 |
 | ALICE-Kinematics | alice-kinematics | 12 | 0 | 2 | 0 |
