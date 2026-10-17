@@ -25,8 +25,8 @@ crates = ["alice-db"]
 
 [manifest."ALICE-DetMath"]
 crates = ["alice-det-math"]
-"pass" = 9
-"fail-known" = 3
+"pass" = 10
+"fail-known" = 2
 "unverified" = 0
 "n/a" = 2
 
@@ -39,8 +39,8 @@ crates = ["alice-edge"]
 
 [manifest."ALICE-Kinematics"]
 crates = ["alice-kinematics"]
-"pass" = 8
-"fail-known" = 4
+"pass" = 12
+"fail-known" = 0
 "unverified" = 2
 "n/a" = 0
 
@@ -67,9 +67,9 @@ crates = ["alice-ml"]
 
 [manifest."ALICE-Physics"]
 crates = ["alice-physics"]
-"pass" = 8
+"pass" = 6
 "fail-known" = 5
-"unverified" = 1
+"unverified" = 3
 "n/a" = 0
 
 [manifest."ALICE-SDF"]
@@ -88,7 +88,7 @@ crates = ["alice-sync"]
 
 [manifest."ALICE-Zip"]
 crates = ["alice-zip", "alice-zip-cli"]
-"pass" = 12
-"fail-known" = 2
+"pass" = 13
+"fail-known" = 1
 "unverified" = 0
 "n/a" = 0
