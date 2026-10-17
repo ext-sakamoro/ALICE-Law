@@ -30,7 +30,14 @@ python3 scripts/test_gen_shared_files.py
 
 echo "== the shared-file table reads, and this repository's copies equal it (the comparison with
 # every listed repository's main runs on every push to main and daily, conformance-live.yml)"
-python3 scripts/shared_files_check.py --table conformance/shared-files.toml
+if git cat-file -e origin/main:conformance/shared-files.toml 2>/dev/null; then
+  base_table=$(mktemp)
+  git show origin/main:conformance/shared-files.toml > "$base_table"
+  python3 scripts/shared_files_check.py --table conformance/shared-files.toml --base-table "$base_table"
+  rm -f "$base_table"
+else
+  python3 scripts/shared_files_check.py --table conformance/shared-files.toml
+fi
 python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
 
 echo "== README names every release-train repository"

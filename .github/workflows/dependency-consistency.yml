@@ -72,9 +72,18 @@ jobs:
           python3 scripts/test_shared_files_check.py
           python3 scripts/test_gen_shared_files.py
 
-      - name: The shared-file table reads, and this repository's copies equal it
+      # pending rows only go down: a change may not add one against the table on main
+      - name: The shared-file table reads, this repository's copies equal it, pending does not rise
         run: |
-          python3 scripts/shared_files_check.py --table conformance/shared-files.toml
+          git fetch -q --depth 1 origin main
+          if git cat-file -e FETCH_HEAD:conformance/shared-files.toml 2>/dev/null; then
+            git show FETCH_HEAD:conformance/shared-files.toml > "$RUNNER_TEMP/base-shared-files.toml"
+            python3 scripts/shared_files_check.py --table conformance/shared-files.toml \
+              --base-table "$RUNNER_TEMP/base-shared-files.toml"
+          else
+            echo "main has no conformance/shared-files.toml yet: no ratchet base"
+            python3 scripts/shared_files_check.py --table conformance/shared-files.toml
+          fi
           python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
 
       - name: Test main mode (the requirement raise and what verify counts)
