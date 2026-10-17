@@ -131,6 +131,41 @@ class Generate(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("unlisted holder, same bytes: scripts/s.sh on ALICE-C", out)
 
+    def test_check_fails_when_a_holder_drops_the_file_while_another_gains_it(self):
+        # gaining a same-bytes holder does not hide a carrier that lost the file
+        self.gained_holder(SHARED)
+        self.w.commit("ALICE-B", {"scripts/s.sh": None})
+        self.assertEqual(self.gen("--check")[0], 1)
+
+    def test_check_fails_when_a_pending_row_gains_a_holder_with_a_new_variant(self):
+        # the table: s.sh pending between A (SHARED) and B (other bytes); C is a table repository via c.sh
+        self.w.commit("ALICE-B", {"scripts/s.sh": b"b variant\n"})
+        self.w.commit("ALICE-C", {"scripts/c.sh": b"c\n", "scripts/s.sh": None})
+        self.w.commit("ALICE-A", {"scripts/c.sh": b"c\n"})
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\nscripts/c.sh\tALICE-A,ALICE-C\n")
+        self.gen("--write", "--registry", str(reg))
+        self.assertIn("pending", self.entries()["scripts/s.sh"])
+        # C gains s.sh with bytes no variant has: not a same-bytes holder
+        self.w.commit("ALICE-C", {"scripts/s.sh": b"a third variant\n"})
+        self.assertEqual(self.gen("--check")[0], 1)
+        # with bytes of a recorded variant it is only reported
+        self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
+        code, out = self.gen("--check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("unlisted holder, same bytes", out)
+
+    def test_a_row_that_gained_and_lost_holders_is_not_put_back(self):
+        # unit level: through the generator a dropped copy becomes an "absent" variant (a pending row),
+        # so this branch is pinned on the function itself
+        old = [{"path": "scripts/s.sh", "sha256": h(SHARED), "source": {"repo": "ALICE-A", "rev": "0" * 40},
+                "repos": ["ALICE-A", "ALICE-B"]}]
+        new = [{**old[0], "repos": ["ALICE-A", "ALICE-C"], "paths": {}, "exempt": {}}]
+        out, held = gen.unlisted_same_bytes(old, new)
+        self.assertEqual((out, held), (new, []))
+        gained = [{**old[0], "repos": ["ALICE-A", "ALICE-B", "ALICE-C"], "paths": {}, "exempt": {}}]
+        out, held = gen.unlisted_same_bytes(old, gained)
+        self.assertEqual((out, held), (old, [("scripts/s.sh", ["ALICE-C"])]))
+
     def test_strict_check_fails_on_an_unlisted_holder(self):
         self.gained_holder(SHARED)
         self.assertEqual(self.gen("--check", "--strict")[0], 1)
