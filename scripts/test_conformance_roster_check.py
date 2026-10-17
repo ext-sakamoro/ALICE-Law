@@ -393,7 +393,11 @@ class LawEvidence(unittest.TestCase):
         "\n".join(f'[[gate]]\nid = "G{i}"\nname = "g{i}"\n' for i in (2, 8))
     SRC = {"src/lib.rs": "pub fn write_v2(x: u8) {}\npub enum Pinning {\n    Unpinned,\n    Pinned,\n}\n"
                          "pub struct RequirePinned;\n",
-           "tests/ties.rs": "#[test]\nfn max_ties_through_the_api() {}\n"}
+           "tests/ties.rs": "#[test]\nfn max_ties_through_the_api() {}\n\n#[test]\n#[ignore = \"slow\"]\nfn ignored_tie() {}\n\n"
+                            "fn helper_tie() {}\n\n#[cfg(any())]\n#[test]\nfn never_built_tie() {}\n\n"
+                            "#[test]\n#[cfg_attr(\n    miri,\n    ignore\n)]\nfn multi_line_attr_tie() {}\n",
+           "src/bare.rs": "#[test]\nfn outside_tie() {}\n",
+           "src/inner.rs": "fn not_a_test_tie() {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn unit_tie() {}\n}\n"}
     PASS = 'status = "pass"\nevidence = ["src/lib.rs"]\nmutant = "m"'
 
     def counts(self, g2: str, g8: str):
@@ -429,10 +433,20 @@ class LawEvidence(unittest.TestCase):
                         ('tie_tests = ["max: tests/ties.rs::no_such_test"]', "does not define no_such_test"),
                         ('tie_tests = ["max: tests/gone.rs::max_ties_through_the_api"]', "tests/gone.rs is not in the tree"),
                         ('tie_tests = ["tests/ties.rs::max_ties_through_the_api"]', "is not `<class>:"),
-                        ('tie_tests = [" : tests/ties.rs::max_ties_through_the_api"]', "is not `<class>:")]:
+                        ('tie_tests = [" : tests/ties.rs::max_ties_through_the_api"]', "is not `<class>:"),
+                        ('tie_tests = ["max: tests/ties.rs::ignored_tie"]', "is #[ignore]d"),
+                        ('tie_tests = ["max: tests/ties.rs::helper_tie"]', "has no #[test]"),
+                        ('tie_tests = ["max: tests/ties.rs::never_built_tie"]', "never built"),
+                        ('tie_tests = ["max: src/inner.rs::not_a_test_tie"]', "has no #[test]"),
+                        ('tie_tests = ["max: src/bare.rs::outside_tie"]', "outside tests/")]:
             c, out = self.counts(g2, self.G8_OK)
             self.assertEqual(c, "pass 1, fail-known 0, unverified 1, n/a 0", g2)
             self.assertIn(why, out)
+
+    def test_a_unit_test_in_a_cfg_test_module_and_a_multi_line_attribute_count(self):
+        c, _ = self.counts('tie_tests = ["max: src/inner.rs::unit_tie", "min: tests/ties.rs::multi_line_attr_tie"]',
+                           self.G8_OK)
+        self.assertEqual(c, "pass 2, fail-known 0, unverified 0, n/a 0")
 
     def test_a_g8_pass_without_writers_or_the_legacy_status_and_policy_is_unverified(self):
         for g8, why in [("legacy = \"none\"", "G8 pass without writers"),
