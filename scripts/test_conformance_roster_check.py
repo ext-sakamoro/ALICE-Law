@@ -469,6 +469,21 @@ class LawEvidence(unittest.TestCase):
         self.assertIsNotNone(crc.symbol_defined("src/a.rs::real", paths, None))
 
 
+    def test_a_quote_in_a_char_literal_or_a_raw_string_does_not_blank_the_code_after_it(self):
+        # the two forms that hid real writers: a `'"'` match arm (ALICE-Edge src/mqtt_bridge.rs) and a
+        # `strip_prefix('"')` call (libalice src/residual.rs), each followed by a pub fn; and a raw string
+        # holding quotes; each is followed by a string literal, as in the real files, so a quote counted
+        # as opening a string pairs with it and swallows the fn between
+        paths = {"src/a.rs", "src/b.rs", "src/c.rs"}
+        read = {"src/a.rs": 'fn esc(c: char, out: &mut String) {\n    match c {\n        \'"\' => out.push_str("q"),\n        _ => out.push(c),\n    }\n}\npub fn to_binary_ext() -> u8 { 1 }\nconst TAIL: &str = "tail";\n', "src/b.rs": 'fn key(raw: &str) -> Option<&str> {\n    raw.strip_prefix(\'"\').and_then(|r| r.strip_suffix(b\'\\\'\' as char))\n}\npub fn compress_residual_delta() {}\nconst TAIL: &str = "tail";\n', "src/c.rs": 'fn json<\'a>(x: &\'a str) -> String {\n    format!(r#"{} says "hi"#, x)\n}\npub fn after_raw() {}\nconst TAIL: &str = "tail";\n// fn in_comment() {}\nconst S: &str = "fn in_string() {}";\n'}.get
+        self.assertIsNone(crc.symbol_defined("src/a.rs::to_binary_ext", paths, read))
+        self.assertIsNone(crc.symbol_defined("src/b.rs::compress_residual_delta", paths, read))
+        self.assertIsNone(crc.symbol_defined("src/c.rs::after_raw", paths, read))
+        self.assertIsNone(crc.symbol_defined("src/c.rs::json", paths, read))
+        # still blanked: a name in a comment or a string is not a definition
+        self.assertIsNotNone(crc.symbol_defined("src/c.rs::in_comment", paths, read))
+        self.assertIsNotNone(crc.symbol_defined("src/c.rs::in_string", paths, read))
+
 class Internal(unittest.TestCase):
     """--internal: the committed state file alone, no other repository read"""
     GOOD = ('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 1\n"fail-known" = 1\n"unverified" = 1\n"n/a" = 0\n\n'

@@ -178,7 +178,11 @@ def gate_vocabulary(gates: dict) -> dict[str, tuple[str, ...]]:
     return out
 
 
-RUST_NON_CODE_RE = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"', re.S)
+# comments, raw strings (`r"…"`, `r#"…"#`, `br#"…"#`, inner quotes allowed), strings and char / byte
+# literals (`'"'`, `b'\''`): a quote inside a char literal or a raw string must not start a string, or
+# the code after it is blanked as if it were one (a lifetime `'a` has no closing quote and stays)
+RUST_NON_CODE_RE = re.compile(r'//[^\n]*|/\*.*?\*/|(?<![\w])b?r(#*)".*?"\1|"(?:\\.|[^"\\])*"'
+                              r"|(?<![\w])b?'(?:\\.|[^'\\\n])'", re.S)
 
 
 def rust_code(text: str) -> str:
