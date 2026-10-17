@@ -68,6 +68,50 @@ class Generate(Base):
         self.gen("--write")
         self.assertEqual(self.entries()["scripts/s.sh"]["sha256"], h(new))
 
+    def test_a_rollout_becomes_a_planned_row_when_its_owner_lands_and_uniform_when_all_have(self):
+        new = SHARED + b"# v2\n"
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(new)}\n")
+        # next= on no main yet: the row is what the copies say (uniform), not born pending
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        self.assertEqual(self.entries()["scripts/s.sh"]["sha256"], h(SHARED))
+        self.w.commit("ALICE-B", {"scripts/s.sh": new})
+        self.assertEqual(self.gen("--write", "--next-from", str(reg))[0], 0)
+        p = self.entries()["scripts/s.sh"]["pending"]
+        self.assertEqual((p["planned"], p["target"], p["owner"], p["since"]),
+                         (sfc.git_blob(new), h(new), "ALICE-B", TODAY))
+        # regenerated from the table alone: the planned id is kept, and the table is current
+        self.assertEqual(run(gen.main, ["--table", str(self.t), "--today", "2026-10-20", "--write"])[0], 0)
+        self.assertEqual(self.entries()["scripts/s.sh"]["pending"]["since"], TODAY)
+        self.assertEqual(self.gen("--check", "--strict")[0], 0)
+        self.w.commit("ALICE-A", {"scripts/s.sh": new})
+        self.gen("--write")
+        self.assertEqual(self.entries()["scripts/s.sh"]["sha256"], h(new))
+
+    def test_a_re_rolled_planned_id_keeps_the_date_it_became_planned(self):
+        v2, v3 = SHARED + b"# v2\n", SHARED + b"# v3\n"
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v2)}\n")
+        self.gen("--write", "--registry", str(reg))
+        self.w.commit("ALICE-B", {"scripts/s.sh": v2})
+        self.gen("--write", "--next-from", str(reg))
+        self.assertEqual(self.entries()["scripts/s.sh"]["pending"]["since"], TODAY)
+        # the target is re-rolled to v3 twelve days later: still the same rollout, the clock does not restart
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v3)}\n")
+        self.w.commit("ALICE-B", {"scripts/s.sh": v3})
+        self.assertEqual(run(gen.main, ["--table", str(self.t), "--today", "2026-10-29", "--write",
+                                        "--next-from", str(reg)])[0], 0)
+        p = self.entries()["scripts/s.sh"]["pending"]
+        self.assertEqual((p["planned"], p["since"]), (sfc.git_blob(v3), TODAY))
+        # and so it ages out on the original clock (15 days after it became planned)
+        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", "2026-11-01"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("more than 14 days", out)
+
+    def test_a_next_id_that_no_copy_has_does_not_make_a_planned_row(self):
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tenforced\tnext=" + "1" * 40 + "\n")
+        self.gen("--write", "--registry", str(reg))
+        p = self.entries()["scripts/s.sh"]["pending"]
+        self.assertNotIn("planned", p)  # ALICE-C differs: an unplanned divergence, as before
+
     def test_since_exit_target_and_exemptions_survive_regeneration(self):
         reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\n")
         run(gen.main, ["--table", str(self.t), "--today", "2026-10-01", "--write", "--registry", str(reg)])

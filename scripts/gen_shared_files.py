@@ -19,9 +19,18 @@ a tie, unless --target PATH=SHA256@ALICE-X names it). Nothing that differs is le
 no bytes being replaced are pinned. A pending row becomes uniform only when every copy has
 its target bytes.
 
+A rollout is a planned row: with --next-from REGISTRY (only the registry's next= blob ids are
+read; the rows still come from the table or --registry) or a planned id kept from the table,
+a row one of whose copies has that blob id becomes pending with `planned` = the id, the
+target = those bytes and the owner = the repository holding them (the existing owner when it
+holds them). A next= that no main has yet changes nothing (the row stays what its copies
+say), and a planned row all of whose copies have the target becomes uniform. A planned row keeps
+the date it became planned when its id moves to newer bytes (a re-rolled target does not restart
+the age limit).
+
   gen_shared_files.py --table conformance/shared-files.toml (--write | --check)
                       [--registry FILE] [--discover] [--checkouts DIR] [--today YYYY-MM-DD]
-                      [--target PATH=SHA256@ALICE-X ...]
+                      [--target PATH=SHA256@ALICE-X ...] [--next-from REGISTRY]
 
 --check regenerates in memory and exits 1 when the table differs, except for the variants
 of a pending row, which are reported (the copies of a pending file are moving by
@@ -76,8 +85,9 @@ def render(entries: list[dict]) -> str:
             p = e["pending"]
             variants = ", ".join(f"{q(k)} = [" + ", ".join(q(r) for r in sorted(v)) + "]"
                                  for k, v in sorted(p["variants"].items()))
+            planned = f", planned = {q(p['planned'])}" if "planned" in p else ""
             out.append(f"pending = {{ since = {q(p['since'])}, exit = {q(p['exit'])}, target = {q(p['target'])}, "
-                       f"owner = {q(p['owner'])}, variants = {{ {variants} }} }}\n")
+                       f"owner = {q(p['owner'])}{planned}, variants = {{ {variants} }} }}\n")
         else:
             out.append(f"sha256 = {q(e['sha256'])}\n")
             out.append(f"source = {{ repo = {q(e['source']['repo'])}, rev = {q(e['source']['rev'])} }}\n")
@@ -107,12 +117,17 @@ def rows_from_registry(text: str) -> list[dict]:
             if alt:
                 paths[repo] = alt
         hold = EXIT_NEXT if nxt else (EXIT_PENDING if state != "enforced" else "")
-        row = {"path": cols[0].strip(), "order": order, "paths": paths, "exempt": {}, "hold": hold}
+        row = {"path": cols[0].strip(), "order": order, "paths": paths, "exempt": {}, "hold": hold, "next": nxt}
         prev = rows.get(row["path"])
         if prev is not None and (sorted(prev["order"]) != sorted(order) or prev["paths"] != paths):
             raise sfc.Unreadable(f"registry line {n}: {row['path']} listed twice with different repositories")
         rows.setdefault(row["path"], row)
     return list(rows.values())
+
+
+def next_ids(text: str) -> dict[str, str]:
+    """path -> the registry's next= blob id (rows without one are left out)"""
+    return {r["path"]: r["next"] for r in rows_from_registry(text) if r.get("next")}
 
 
 def rows_from_table(entries: list[dict]) -> list[dict]:
@@ -168,7 +183,7 @@ def widen(rows: list[dict], repo_of) -> None:
 
 
 def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
-          targets: dict[str, tuple[str, str]]) -> list[dict]:
+          targets: dict[str, tuple[str, str]], planned_ids: dict[str, str] | None = None) -> list[dict]:
     entries = []
     wanted: dict[str, list[str]] = collections.defaultdict(list)
     for row in rows:
@@ -181,11 +196,33 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
             entries.append({"path": row["path"], "repos": [], "paths": {}, "exempt": row["exempt"]})
             continue
         found: dict[str, list[str]] = collections.defaultdict(list)
+        blobs: dict[str, str] = {}  # git blob id -> sha256
         for repo in row["order"]:
             data = sfc.show(repo_of(repo), "origin/main", row["paths"].get(repo, row["path"]))
             found["absent" if data is None else hashlib.sha256(data).hexdigest()].append(repo)
+            if data is not None:
+                blobs[sfc.git_blob(data)] = hashlib.sha256(data).hexdigest()
         base = {"path": row["path"], "repos": sorted(row["order"]), "paths": row["paths"], "exempt": row["exempt"]}
         prev = old.get(row["path"], {}).get("pending")
+        # a rollout: the registry's next= (or the planned id the table keeps) held by one of the mains
+        nxt = (planned_ids or {}).get(row["path"]) or row.get("next") or (prev or {}).get("planned")
+        if nxt and nxt in blobs:
+            target = blobs[nxt]
+            if set(found) != {target}:
+                holders = [r for r in row["order"] if r in found[target]]
+                owner = prev["owner"] if prev and prev["owner"] in holders else holders[0]
+                # the clock runs from when the row became planned, under whatever id: a re-rolled target does not
+                # restart it (it resets only when the row leaves the planned state)
+                still = prev is not None and "planned" in prev
+                entries.append({**base, "pending": {"since": prev["since"] if still else today, "exit": EXIT_NEXT,
+                                                    "target": target, "owner": owner, "planned": nxt,
+                                                    "variants": {k: sorted(v) for k, v in found.items()}}})
+                continue
+            prev = None  # converged: a uniform row below
+        elif nxt and prev is not None and "planned" in prev:
+            prev = None  # the planned bytes are on no main any more: what the copies say, below
+        if nxt and (not prev):
+            row = {**row, "hold": ""}  # a next= no main holds (yet) holds nothing back
         goal = targets.get(row["path"], (prev["target"], "") if prev else None)
         # a pending row resolves only when every copy has its target bytes
         settled = goal is None or next(iter(found)) == goal[0]
@@ -276,6 +313,8 @@ def main(argv: list[str]) -> int:
                          " regeneration and landing path, and the pre-publish gate)")
     ap.add_argument("--target", action="append", default=[],
                     help="PATH=SHA256@ALICE-X: the bytes a pending row moves to and their owner")
+    ap.add_argument("--next-from", type=Path,
+                    help="a shared-file registry whose next= blob ids mark rollouts (planned rows)")
     a = ap.parse_args(argv)
     today = a.today or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     try:
@@ -302,7 +341,8 @@ def main(argv: list[str]) -> int:
             if a.discover:
                 rows += discover(rows, repo_of)
             widen(rows, repo_of)
-            entries = build(rows, repo_of, old, today, targets)
+            planned_ids = next_ids(a.next_from.read_text(encoding="utf-8")) if a.next_from else None
+            entries = build(rows, repo_of, old, today, targets, planned_ids)
     except (sfc.Unreadable, OSError, ValueError, subprocess.CalledProcessError) as e:
         print(f"gen_shared_files: {e}", file=sys.stderr)
         return 2

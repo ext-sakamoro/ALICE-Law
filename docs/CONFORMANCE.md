@@ -375,7 +375,14 @@ older than 21 days and a file under `scripts/`, `tools/` or `.github/workflows/`
 byte-identical in two table repositories and has no entry (a shared copy elsewhere, such as
 under `tests/` or `src/`, is checked once a row names it, not found by this scan),
 and checks that the table is the generated one; the branch checks refuse a change that adds
-a pending row.
+an unplanned pending row. A rollout is a planned row instead: the shared-file registry names
+the new bytes (`next=`, a git blob id) before any repository moves, and once the owner's main
+has them `scripts/gen_shared_files.py --next-from <registry>` writes the row as pending with
+`planned` = that id (kept on later regenerations). The live check fails a planned row whose
+owner's main does not hold the target (both its SHA-256 and the planned blob id), one whose
+every copy already has the target (it has converged: regenerate), and one older than 14 days;
+the ratchet counts planned and unplanned rows separately, and only the unplanned count may
+not grow.
 A rollout that lands before the table is regenerated does not turn that job red: a copy on a
 main the table does not list, with the bytes of its row (or one of a pending row's
 variants), is counted as an unlisted holder with the date it appeared, while a copy with

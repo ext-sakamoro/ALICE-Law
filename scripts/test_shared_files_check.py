@@ -85,6 +85,14 @@ class World:
         e.update(override)
         return e
 
+    def planned(self, since: str = "2026-10-10", **override) -> dict:
+        """ALICE-A (the owner) and ALICE-B have landed SHARED, the registry's next=; ALICE-C still has OTHER"""
+        e = self.pending(since)
+        e["pending"] = {**e["pending"], "exit": "every listed repository's main has the bytes the registry row moves to",
+                        "planned": sfc.git_blob(SHARED)}
+        e.update(override)
+        return e
+
     def per_repo(self, exempt: dict | None = None) -> dict:
         return {"path": "scripts/s.sh", "repos": [], "paths": {},
                 "exempt": exempt if exempt is not None else {"ALICE-A": "its own data, not a shared copy",
@@ -167,9 +175,35 @@ class Schema(Base):
         self.t.write_text(self.w.table(self.w.pending()), encoding="utf-8")
         code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 1, out)
-        self.assertIn("pending only goes down", out)
+        self.assertIn("1 unplanned pending rows, the base table has 0", out)
         base.write_text(self.w.table(self.w.pending()), encoding="utf-8")
         self.assertEqual(self.check("--base-table", str(base))[0], 0)
+
+    def test_the_ratchet_admits_a_planned_row_and_counts_both_kinds(self):
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.w.table(), encoding="utf-8")
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        code, out = self.check("--base-table", str(base))
+        self.assertEqual(code, 0, out)
+        self.assertIn("pending 1 (planned 1, unplanned 0), the base table 0 (planned 0, unplanned 0)", out)
+
+    def test_a_planned_row_turning_unplanned_is_refused_by_the_ratchet(self):
+        # the base had a planned row; dropping its planned id makes it an unplanned divergence that grew
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        self.t.write_text(self.w.table(self.w.pending()), encoding="utf-8")
+        code, out = self.check("--base-table", str(base))
+        self.assertEqual(code, 1, out)
+        self.assertIn("1 unplanned pending rows, the base table has 0", out)
+
+    def test_planned_defects_are_refused(self):
+        good = self.w.planned()["pending"]
+        for bad in ({"planned": "x" * 40}, {"planned": "0" * 39},
+                    # the owner must hold the target in the recorded variants
+                    {"owner": "ALICE-C"}):
+            with self.subTest(bad=bad):
+                self.t.write_text(self.w.table(self.w.planned(pending={**good, **bad})), encoding="utf-8")
+                self.assertEqual(self.check()[0], 2)
 
 
 class Repo(Base):
@@ -372,6 +406,47 @@ class Live(Base):
         code, out = self.live(today="2026-11-30")
         self.assertEqual(code, 1, out)
         self.assertIn("more than 21 days", out)
+
+
+class Planned(Base):
+    def live(self, *argv: str, today: str = "2026-10-17"):
+        return self.check("--live", "--today", today, *argv)
+
+    def test_a_planned_row_whose_owner_holds_the_target_passes(self):
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn("pending: scripts/s.sh: pending 7 day(s), 2 variant(s)", out)
+
+    def test_a_planned_id_that_is_not_the_target_bytes_is_red(self):
+        p = self.w.planned()
+        p["pending"]["planned"] = sfc.git_blob(OTHER)
+        self.t.write_text(self.w.table(p), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("the owner ALICE-A main does not hold the target", out)
+
+    def test_an_owner_whose_main_lacks_the_target_is_red(self):
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        self.w.commit("ALICE-A", {"scripts/s.sh": OTHER})
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("the owner ALICE-A main does not hold the target", out)
+
+    def test_a_planned_row_that_has_converged_is_red(self):
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("it has converged", out)
+
+    def test_a_planned_row_past_its_own_time_is_red(self):
+        # 20 days: inside the unplanned 21, outside the planned 14
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        code, out = self.live(today="2026-10-30")
+        self.assertEqual(code, 1, out)
+        self.assertIn("more than 14 days", out)
+        self.assertEqual(self.live(today="2026-10-24")[0], 0)
 
 
 class TheTable(unittest.TestCase):
