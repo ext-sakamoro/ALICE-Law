@@ -61,6 +61,7 @@ const WORLD_FRAMES: usize = 120;
 const WORLD_BODIES: [usize; 2] = [1, 2];
 
 /// Everything the run computes, in the order it is digested
+#[derive(Clone)]
 struct Run {
     cooling: Vec<f64>,
     thermal_residuals: Vec<f32>,
@@ -426,17 +427,100 @@ fn values_f32(db: &AliceDB, name: &str) -> Vec<f32> {
     rows.into_iter().map(|(_, v)| v).collect()
 }
 
-#[test]
-fn a_law_survives_compute_save_and_restore_bit_for_bit() {
-    // the crates were built with one arithmetic: a second version of
-    // alice-det-math in the build would give a crate a different identifier
-    let semantics = alice_det_math::SEMANTICS_ID;
+/// The published releases re-export alice-det-math's identifier: each must be the one
+/// this build linked.
+#[cfg(not(feature = "main-mode"))]
+fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
     let identifiers = [
         ("alice-zip", alice_zip::law::SEMANTICS_ID),
         ("alice-db", alice_db::SEMANTICS_ID),
         ("alice-analytics", alice_analytics::SEMANTICS_ID),
         ("alice-edge", alice_edge::SEMANTICS_ID),
     ];
+    for (name, id) in identifiers {
+        assert_eq!(&id, semantics, "{name} was built with a different alice-det-math");
+    }
+    identifiers.len()
+}
+
+/// On main each crate has its own identifier (ALICE-Law G6), the fold of its own pins
+/// with alice-det-math's: the pins must hold the alice-det-math this build linked, and
+/// folding them must give the crate's identifier (so an identifier that ignored
+/// alice-det-math, or pins that were not the ones folded, fail here).
+#[cfg(feature = "main-mode")]
+fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
+    let crates: [(&str, &[(&str, [u8; 32])], [u8; 32]); 4] = [
+        ("alice-zip", alice_zip::semantics::ZIP_SEMANTICS_PINS, alice_zip::law::SEMANTICS_ID),
+        ("alice-db", alice_db::semantics::DB_SEMANTICS_PINS, alice_db::DB_SEMANTICS_ID),
+        (
+            "alice-analytics",
+            &alice_analytics::semantics::ANALYTICS_SEMANTICS_PINS,
+            alice_analytics::semantics::ANALYTICS_SEMANTICS_ID,
+        ),
+        ("alice-edge", &alice_edge::EDGE_SEMANTICS_PINS, alice_edge::EDGE_SEMANTICS_ID),
+    ];
+    for (name, pins, id) in crates {
+        let det: Vec<_> = pins.iter().filter(|(n, _)| *n == "alice-det-math").collect();
+        assert_eq!(det.len(), 1, "{name}: its pins hold alice-det-math {} times, not once", det.len());
+        assert_eq!(&det[0].1, semantics, "{name} was built with a different alice-det-math");
+        assert_eq!(fold(pins), id, "{name}: its identifier is not the fold of its pins");
+        println!("e2e: {name} identifier {} folds {} pins with alice-det-math", hex(&id), pins.len());
+    }
+    crates.len()
+}
+
+/// alice-det-math's fold: entries sorted by name (byte order), then SHA-256 over each
+/// entry's name length (u32, big-endian), name bytes and 32 digest bytes.
+#[cfg(feature = "main-mode")]
+fn fold(pins: &[(&str, [u8; 32])]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut sorted: Vec<_> = pins.to_vec();
+    sorted.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    assert!(!sorted.is_empty(), "an empty pin table folds nothing");
+    let mut h = Sha256::new();
+    for (name, digest) in sorted {
+        h.update((name.len() as u32).to_be_bytes());
+        h.update(name.as_bytes());
+        h.update(digest);
+    }
+    h.finalize().into()
+}
+
+/// The record alice-db writes for a law (the published releases take no identifier; on
+/// main the record carries the identifier it was written under, ALICE-Law G8).
+#[cfg(not(feature = "main-mode"))]
+fn law_record(name: &str, version: u64, law: &SignalLaw, _semantics: &[u8; 32]) -> Vec<u8> {
+    encode_law_record(name, version, &law.to_parts()).unwrap()
+}
+
+#[cfg(feature = "main-mode")]
+fn law_record(name: &str, version: u64, law: &SignalLaw, semantics: &[u8; 32]) -> Vec<u8> {
+    encode_law_record(name, version, &law.to_parts(), semantics).unwrap()
+}
+
+/// A stored law read back (on main also its record's semantics, which must be the
+/// current one: a record the store read as unpinned or as another arithmetic fails here).
+#[cfg(not(feature = "main-mode"))]
+fn restore_law(db: &AliceDB, name: &str) -> SignalLaw {
+    db.get_law(name).unwrap().unwrap_or_else(|| panic!("{name} was saved"))
+}
+
+#[cfg(feature = "main-mode")]
+fn restore_law(db: &AliceDB, name: &str) -> SignalLaw {
+    let stored = db.get_law(name).unwrap().unwrap_or_else(|| panic!("{name} was saved"));
+    assert_eq!(
+        stored.semantics,
+        alice_db::law_store::RecordSemantics::Current,
+        "{name}: the store read its record under another arithmetic"
+    );
+    stored.law
+}
+
+#[test]
+fn a_law_survives_compute_save_and_restore_bit_for_bit() {
+    // the crates were built with one arithmetic: a second version of
+    // alice-det-math in the build would give a crate a different identifier
+    let semantics = alice_det_math::SEMANTICS_ID;
     // one version of every alice-* crate first: the identifier below is looked up by the one
     // alice-det-math release in the build
     let locked = locked_alice_versions();
@@ -461,9 +545,7 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         );
     }
     println!("e2e: alice-det-math {det_math_version}, identifier {}, {} earlier identifier(s) accepted", hex(&semantics), position);
-    for (name, id) in identifiers {
-        assert_eq!(id, semantics, "{name} was built with a different alice-det-math");
-    }
+    let crate_ids = each_crate_folds_this_det_math(&semantics);
     let lol_pin = alice_lol::law_id::LOL_SEMANTICS_PINS
         .iter()
         .find(|(name, _)| *name == "alice-det-math")
@@ -474,7 +556,7 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         alice_lol::law_id::fold_semantics_pins(alice_lol::law_id::LOL_SEMANTICS_PINS),
         alice_lol::law_id::LOL_SEMANTICS_ID
     );
-    let compared_ids = identifiers.len() + 1;
+    let compared_ids = crate_ids + 1;
 
     for core in [
         "alice-det-math", "alice-crypto", "alice-zip", "alice-analytics",
@@ -521,23 +603,23 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         summary: summary_bytes(&summary),
     };
     let (version, edge_version) = save(&dir, &run, &law, &edge);
-    run.law_record = encode_law_record(LAW_NAME, version, &law.to_parts()).unwrap();
-    run.edge_record = encode_law_record(EDGE_LAW_NAME, edge_version, &edge.to_parts()).unwrap();
+    run.law_record = law_record(LAW_NAME, version, &law, &semantics);
+    run.edge_record = law_record(EDGE_LAW_NAME, edge_version, &edge, &semantics);
     let computed = digest(&run, &world_raw);
 
     // 5. restore
     let db = AliceDB::open(&dir).unwrap();
-    let restored_law = db.get_law(LAW_NAME).unwrap().expect("the law was saved");
-    let restored_edge = db.get_law(EDGE_LAW_NAME).unwrap().expect("the alice-edge law was saved");
+    let restored_law = restore_law(&db, LAW_NAME);
+    let restored_edge = restore_law(&db, EDGE_LAW_NAME);
     let restored = Run {
         cooling: values_f64(&db, "cooling"),
         thermal_residuals: values_f32(&db, "thermal"),
         rod: values_f32(&db, "rod"),
         ties: values_f32(&db, "ties"),
         edge_fit: edge_law(&samples).0,
-        edge_record: encode_law_record(EDGE_LAW_NAME, edge_version, &restored_edge.to_parts()).unwrap(),
+        edge_record: law_record(EDGE_LAW_NAME, edge_version, &restored_edge, &semantics),
         world: values_f64(&db, "world"),
-        law_record: encode_law_record(LAW_NAME, version, &restored_law.to_parts()).unwrap(),
+        law_record: law_record(LAW_NAME, version, &restored_law, &semantics),
         summary: Vec::new(),
     };
     let restored_points: Vec<(f64, f64)> = restored
@@ -592,28 +674,46 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     // golden: what the crates compute, recorded when it was last blessed, one line per
     // alice-det-math release ("<version> <digest>"): the run is digested with law records that
     // carry identifiers derived from the arithmetic, so each release of it has its own digest
-    let golden_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("golden/run.digest");
     let got = hex(&computed);
-    let line = format!("{det_math_version} {got}");
     println!("e2e: run digest without the alice-edge records {}", hex(&digest_of(&run, &world_raw, false)));
+    // the values alone (the law records left out) are the same in both modes: main mode
+    // changes the record format (it carries an identifier, ALICE-Law G8), not what is computed
+    let values = Run { law_record: Vec::new(), edge_record: Vec::new(), ..run.clone() };
+    let values_got = hex(&digest(&values, &world_raw));
+    println!("e2e: values digest {values_got}");
     if let Some(out) = std::env::var_os("ALICE_LAW_E2E_DIGEST_OUT") {
-        // for the comparison of two architectures (.github/workflows/e2e.yml, e2e-main.yml)
-        std::fs::write(out, format!("{line}\n")).unwrap();
+        // for the comparison of two architectures: the whole run in the published mode
+        // (.github/workflows/e2e.yml, against golden/run.digest), the values on main
+        // (e2e-main.yml, against golden/values.digest)
+        let shown = if cfg!(feature = "main-mode") { &values_got } else { &got };
+        std::fs::write(out, format!("{det_math_version} {shown}\n")).unwrap();
     }
+    check_golden("golden/values.digest", &det_math_version, &values_got);
+    // the whole run, records included, is the published releases' format; on main the records
+    // are compared through the store above (written == read back, read as the current semantics)
+    #[cfg(not(feature = "main-mode"))]
+    check_golden("golden/run.digest", &det_math_version, &got);
+    println!("e2e: run digest {got}");
+}
+
+/// `got` against the line of `det_math_version` in the golden file `rel` ("<version> <digest>"
+/// per line), or that line written when ALICE_LAW_E2E_BLESS is set
+fn check_golden(rel: &str, det_math_version: &str, got: &str) {
+    let golden_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
     let recorded = std::fs::read_to_string(&golden_path).unwrap_or_default();
     let mut lines: Vec<(String, String)> = Vec::new();
     for l in recorded.lines().filter(|l| !l.trim().is_empty()) {
-        let (version, digest) = l.split_once(' ').expect("golden/run.digest: \"<version> <digest>\" per line");
+        let (version, digest) = l.split_once(' ').unwrap_or_else(|| panic!("{rel}: \"<version> <digest>\" per line"));
         assert!(
             KNOWN_SEMANTICS.iter().any(|(known, _)| *known == version),
-            "golden/run.digest names alice-det-math {version}, which KNOWN_SEMANTICS does not list"
+            "{rel} names alice-det-math {version}, which KNOWN_SEMANTICS does not list"
         );
-        assert!(lines.iter().all(|(v, _)| v != version), "golden/run.digest names {version} twice");
+        assert!(lines.iter().all(|(v, _)| v != version), "{rel} names {version} twice");
         lines.extend([(version.to_string(), digest.to_string())]);
     }
     if std::env::var_os("ALICE_LAW_E2E_BLESS").is_some() {
-        lines.retain(|(v, _)| *v != det_math_version);
-        lines.extend([(det_math_version.clone(), got.clone())]);
+        lines.retain(|(v, _)| v != det_math_version);
+        lines.extend([(det_math_version.to_string(), got.to_string())]);
         lines.sort_by_key(|(v, _)| KNOWN_SEMANTICS.iter().position(|(known, _)| known == v));
         let text: String = lines.iter().map(|(v, d)| format!("{v} {d}\n")).collect();
         std::fs::write(&golden_path, text).unwrap();
@@ -621,10 +721,9 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     } else {
         let want = lines
             .iter()
-            .find(|(v, _)| *v == det_math_version)
+            .find(|(v, _)| v == det_math_version)
             .map(|(_, d)| d.clone())
-            .unwrap_or_else(|| panic!("golden/run.digest has no digest for alice-det-math {det_math_version}: record it with ALICE_LAW_E2E_BLESS=1"));
-        assert_eq!(got, want, "the run computes something else than when the golden was recorded");
+            .unwrap_or_else(|| panic!("{rel} has no digest for alice-det-math {det_math_version}: record it with ALICE_LAW_E2E_BLESS=1"));
+        assert_eq!(got, want, "{rel}: the run computes something else than when the golden was recorded");
     }
-    println!("e2e: run digest {got}");
 }
