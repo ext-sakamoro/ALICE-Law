@@ -85,6 +85,11 @@ class World:
         e.update(override)
         return e
 
+    def per_repo(self, exempt: dict | None = None) -> dict:
+        return {"path": "scripts/s.sh", "repos": [], "paths": {},
+                "exempt": exempt if exempt is not None else {"ALICE-A": "its own data, not a shared copy",
+                                                             "ALICE-B": "its own data, not a shared copy"}}
+
     def table(self, *entries: dict, **override) -> str:
         return gen.render(list(entries) if entries else [self.uniform(**override)])
 
@@ -151,6 +156,11 @@ class Schema(Base):
         self.assertEqual(self.check()[0], 2)
         del p
 
+    def test_a_per_repository_entry_must_exempt_its_holders(self):
+        self.assertEqual(sfc.load(self.w.table(self.w.per_repo()))[0]["repos"], [])
+        with self.assertRaisesRegex(sfc.Unreadable, "must exempt each repository"):
+            sfc.load(self.w.table(self.w.per_repo(exempt={})))
+
     def test_the_ratchet_refuses_more_pending_rows_than_the_base(self):
         base = Path(self.tmp.name) / "base.toml"
         base.write_text(self.w.table(), encoding="utf-8")
@@ -213,6 +223,11 @@ class Repo(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("pending: scripts/s.sh: pending since 2026-10-10, not yet the target", out)
         self.assertIn("pending 1", out)
+
+    def test_a_per_repository_path_held_without_an_exemption_is_red(self):
+        code, out = self.crate("ALICE-C", self.w.table(self.w.per_repo()))
+        self.assertEqual(code, 1, out)
+        self.assertIn("neither lists nor exempts", out)
 
     def test_a_pending_copy_that_is_no_variant_is_red(self):
         (self.w.work / "ALICE-C" / "scripts/s.sh").write_bytes(b"third\n")
@@ -281,6 +296,17 @@ class Live(Base):
         code, out = self.live()
         self.assertEqual(code, 1, out)
         self.assertIn("scripts/new.py: byte-identical in ALICE-A, ALICE-B but has no entry", out)
+
+    def test_a_new_holder_of_a_per_repository_path_is_red(self):
+        # ALICE-C is read through the uniform row of scripts/c.sh, and has scripts/s.sh unexempted
+        rev = self.w.commit("ALICE-C", {"scripts/c.sh": b"c\n"})
+        self.w.commit("ALICE-A", {"scripts/c.sh": b"c\n"})
+        c_row = {"path": "scripts/c.sh", "sha256": h(b"c\n"), "source": {"repo": "ALICE-C", "rev": rev},
+                 "repos": ["ALICE-A", "ALICE-C"], "paths": {}, "exempt": {}}
+        self.t.write_text(self.w.table(c_row, self.w.per_repo()), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: present on ALICE-C main", out)
 
     def test_a_pending_row_is_listed_not_red_within_its_time(self):
         self.t.write_text(self.w.table(self.w.pending()), encoding="utf-8")

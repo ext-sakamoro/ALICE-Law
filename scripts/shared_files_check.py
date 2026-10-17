@@ -17,7 +17,10 @@ different file at the same path), and either
     place). With --base-table, a table with more pending rows than the base is a finding.
 
 A repository that legitimately has a different file at a shared path is exempted on that
-path's entry with its reason; the discovery scope itself has no exceptions.
+path's entry with its reason; the discovery scope itself has no exceptions. A path that looks
+shared but is per-repository data (each repository's own content) is an entry with `repos =
+[]` and every repository that has it exempted: it pins nothing and compares nothing, and a
+repository that gains the path without an exemption is a finding.
 
   shared_files_check.py --table TABLE [--base-table BASE]
       the schema only (offline: preflight and branch CI), and the pending ratchet
@@ -30,7 +33,8 @@ path's entry with its reason; the discovery scope itself has no exceptions.
       past its time is a finding; and a discovery pass over every file under DISCOVERED of
       the table's repositories: one byte-identical in two or more of them with no entry, or
       a copy of a table path in a repository the entry neither lists nor exempts, is a
-      finding
+      finding (a shared copy outside DISCOVERED, under tests/ or src/, is checked only once a
+      row names it)
   shared_files_check.py --table TABLE --repo DIR --name ALICE-X
       a crate's tree: each uniform file listed for ALICE-X present with the entry's bytes;
       each pending file listed for it present as one of the row's variants (listed as
@@ -106,8 +110,9 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
         where = f"entry {i}"
         if not isinstance(f, dict):
             raise Unreadable(f"{where}: not a table")
-        keys = PENDING_KEYS if "pending" in f else UNIFORM_KEYS
-        required = {"path", "repos"} | ({"pending"} if "pending" in f else {"sha256", "source"})
+        per_repo = f.get("repos") == []
+        keys = ({"path", "repos", "exempt"} if per_repo else PENDING_KEYS if "pending" in f else UNIFORM_KEYS)
+        required = {"path", "repos"} | (set() if per_repo else {"pending"} if "pending" in f else {"sha256", "source"})
         if set(f) - keys or required - set(f):
             raise Unreadable(f"{where}: unknown keys {sorted(set(f) - keys)}, missing keys {sorted(required - set(f))}")
         path = f["path"]
@@ -121,9 +126,14 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
         seen.add(path)
         previous = path
         repos = f["repos"]
-        if not is_repos(repos):
+        if per_repo:
+            if not f.get("exempt"):
+                raise Unreadable(f"{where}: a per-repository entry (repos = []) must exempt each repository that has it")
+        elif not is_repos(repos):
             raise Unreadable(f"{where}: repos must be a sorted list of distinct ALICE-… names")
-        if "pending" in f:
+        if per_repo:
+            pass
+        elif "pending" in f:
             p = f["pending"]
             if not isinstance(p, dict) or set(p) != {"since", "exit", "target", "owner", "variants"}:
                 raise Unreadable(f"{where}: pending must be {{ since, exit, target, owner, variants }}")
@@ -293,7 +303,7 @@ def fetch_sources(entries: list[dict], remote: Remote) -> tuple[list[str], list[
     """Each uniform entry's source commit: on its repository's main, with the entry's bytes."""
     problems: list[str] = []
     copies = 0
-    uniform = [e for e in entries if "pending" not in e]
+    uniform = [e for e in entries if "sha256" in e]
     want: dict[tuple[str, str], list[str]] = collections.defaultdict(list)
     for e in uniform:
         want[(e["source"]["repo"], e["source"]["rev"])].append(path_in(e, e["source"]["repo"]))
@@ -315,7 +325,7 @@ def fetch_sources(entries: list[dict], remote: Remote) -> tuple[list[str], list[
         if sha256(data) != e["sha256"]:
             problems.append(f"{e['path']}: {repo} {rev[:12]} has sha256 {sha256(data)}, the table {e['sha256']}")
     return problems, [], counts(len(uniform), len({e["source"]["repo"] for e in uniform}), copies,
-                                len(entries) - len(uniform))
+                                sum("pending" in e for e in entries))
 
 
 def live(entries: list[dict], remote: Remote, today: datetime.date):
@@ -347,6 +357,8 @@ def live(entries: list[dict], remote: Remote, today: datetime.date):
                 problems.append(f"{e['path']}: pending since {e['pending']['since']}, more than "
                                 f"{PENDING_MAX_DAYS} days ({e['pending']['exit']})")
             continue
+        if "sha256" not in e:
+            continue  # per-repository data: nothing to compare
         for r in e["repos"]:
             rel = path_in(e, r)
             data = show(remote(r), "origin/main", rel)

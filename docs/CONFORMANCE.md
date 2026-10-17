@@ -369,7 +369,9 @@ crate but neither listed nor exempted for it is a finding, and a run that compar
 fails. A crate with a pending row is not a pass for that file: its cell is `fail-known`
 naming the row. `.github/workflows/conformance-live.yml` compares every listed repository's
 main with the table on every push to main and daily (count-locked), fails a pending row
-older than 21 days and a file byte-identical in two table repositories that has no entry,
+older than 21 days and a file under `scripts/`, `tools/` or `.github/workflows/` that is
+byte-identical in two table repositories and has no entry (a shared copy elsewhere, such as
+under `tests/` or `src/`, is checked once a row names it, not found by this scan),
 and checks that the table is the generated one; the branch checks refuse a change that adds
 a pending row.
 

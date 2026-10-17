@@ -66,7 +66,9 @@ def render(entries: list[dict]) -> str:
     for e in sorted(entries, key=lambda e: e["path"]):
         out.append("\n[[file]]\n")
         out.append(f"path = {q(e['path'])}\n")
-        if "pending" in e:
+        if not e["repos"]:
+            pass  # per-repository data: no bytes
+        elif "pending" in e:
             p = e["pending"]
             variants = ", ".join(f"{q(k)} = [" + ", ".join(q(r) for r in sorted(v)) + "]"
                                  for k, v in sorted(p["variants"].items()))
@@ -112,6 +114,9 @@ def rows_from_registry(text: str) -> list[dict]:
 def rows_from_table(entries: list[dict]) -> list[dict]:
     rows = []
     for e in entries:
+        if not e["repos"]:
+            rows.append({"path": e["path"], "order": [], "paths": {}, "exempt": dict(e["exempt"]), "hold": ""})
+            continue
         first = e["source"]["repo"] if "source" in e else e["repos"][0]
         order = [first] + [r for r in e["repos"] if r != first]
         rows.append({"path": e["path"], "order": order, "paths": dict(e.get("paths", {})),
@@ -151,6 +156,8 @@ def widen(rows: list[dict], repo_of) -> None:
     universe = sorted({r for row in rows for r in row["order"]} | {r for row in rows for r in row["exempt"]})
     trees = {r: sfc.tree(repo_of(r)) for r in universe}
     for row in rows:
+        if not row["order"]:
+            continue  # per-repository data: a new holder is the live check's finding, not a new copy
         for r in universe:
             if r not in row["order"] and r not in row["exempt"] and row["path"] in trees[r]:
                 row["order"].append(r)
@@ -166,6 +173,9 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
     for repo, rels in sorted(wanted.items()):
         sfc.prefetch(repo_of(repo), "origin/main", rels)
     for row in rows:
+        if not row["order"]:
+            entries.append({"path": row["path"], "repos": [], "paths": {}, "exempt": row["exempt"]})
+            continue
         found: dict[str, list[str]] = collections.defaultdict(list)
         for repo in row["order"]:
             data = sfc.show(repo_of(repo), "origin/main", row["paths"].get(repo, row["path"]))

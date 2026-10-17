@@ -84,6 +84,18 @@ class Generate(Base):
         self.gen("--write", "--registry", str(reg))
         self.assertEqual(self.entries()["scripts/s.sh"]["repos"], ["ALICE-A", "ALICE-B", "ALICE-C"])
 
+    def test_a_per_repository_row_is_kept_and_never_widened(self):
+        self.w.commit("ALICE-C", {"scripts/c.sh": b"c\n"})
+        self.w.commit("ALICE-A", {"scripts/c.sh": b"c\n"})
+        rev = self.w.revs["ALICE-C"]
+        rows = [self.w.per_repo(), {"path": "scripts/c.sh", "sha256": h(b"c\n"),
+                                    "source": {"repo": "ALICE-C", "rev": rev},
+                                    "repos": ["ALICE-A", "ALICE-C"], "paths": {}, "exempt": {}}]
+        self.t.write_text(gen.render(rows), encoding="utf-8")
+        self.assertEqual(self.gen("--write")[0], 0)
+        e = self.entries()["scripts/s.sh"]
+        self.assertEqual((e["repos"], sorted(e["exempt"])), ([], ["ALICE-A", "ALICE-B"]))
+
     def test_discover_adds_a_byte_identical_file_with_no_row(self):
         self.w.commit("ALICE-A", {"scripts/new.py": b"print(1)\n"})
         self.w.commit("ALICE-B", {"scripts/new.py": b"print(1)\n"})
