@@ -229,11 +229,21 @@ class Repo(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("neither lists nor exempts", out)
 
+    def test_a_pending_copy_with_the_target_bytes_passes_before_a_regeneration(self):
+        # the row moves A, B, C to NEW; C already took it before the table recorded it as a variant
+        new = b"new bytes\n"
+        (self.w.work / "ALICE-C" / "scripts/s.sh").write_bytes(new)
+        row = self.w.pending()
+        row["pending"] = {**row["pending"], "target": h(new)}
+        code, out = self.crate("ALICE-C", self.w.table(row))
+        self.assertEqual(code, 0, out)
+        self.assertIn("the target", out)
+
     def test_a_pending_copy_that_is_no_variant_is_red(self):
         (self.w.work / "ALICE-C" / "scripts/s.sh").write_bytes(b"third\n")
         code, out = self.crate("ALICE-C", self.w.table(self.w.pending()))
         self.assertEqual(code, 1, out)
-        self.assertIn("none of the pending row's variants", out)
+        self.assertIn("none of the pending row's variants nor its target", out)
 
 
 class Fetch(Base):

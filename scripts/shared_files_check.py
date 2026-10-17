@@ -219,8 +219,10 @@ def check_repo(entries: list[dict], root: Path, name: str) -> tuple[list[str], l
                     continue
                 copies += 1
                 got = sha256(f.read_bytes())
-                if got not in e["pending"]["variants"]:
-                    problems.append(f"{rel}: sha256 {got} is none of the pending row's variants")
+                # the target is accepted before a regeneration records it as a variant: it is where the row
+                # is going, so a crate that already took it is not drift
+                if got not in e["pending"]["variants"] and got != e["pending"]["target"]:
+                    problems.append(f"{rel}: sha256 {got} is none of the pending row's variants nor its target")
                 else:
                     on = "the target" if got == e["pending"]["target"] else "not yet the target"
                     notes.append(f"{rel}: pending since {e['pending']['since']}, {on} "
@@ -395,7 +397,8 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
     for e in entries:
         listed = set(e["repos"]) | set(e.get("exempt", {}))
         known_bytes = ({e["sha256"]} if "sha256" in e
-                       else {k for k in e.get("pending", {}).get("variants", {}) if k != "absent"})
+                       else {k for k in e.get("pending", {}).get("variants", {}) if k != "absent"}
+                       | ({e["pending"]["target"]} if "pending" in e else set()))
         for r, files in trees.items():
             if r in listed or e["path"] not in files:
                 continue
