@@ -65,6 +65,18 @@ jobs:
       - name: Test the conformance roster checker
         run: python3 scripts/test_conformance_roster_check.py
 
+      # G11 (c): the shared-file table's schema and this repository's own copies (offline);
+      # the comparison with every listed repository's main is conformance-live.yml
+      - name: Test the shared-file checker and its generator
+        run: |
+          python3 scripts/test_shared_files_check.py
+          python3 scripts/test_gen_shared_files.py
+
+      - name: The shared-file table reads, and this repository's copies equal it
+        run: |
+          python3 scripts/shared_files_check.py --table conformance/shared-files.toml
+          python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
+
       - name: Test main mode (the requirement raise and what verify counts)
         run: python3 scripts/test_main_mode.py
 
