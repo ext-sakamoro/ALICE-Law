@@ -75,7 +75,7 @@ methods = [
 id = "G2"
 checked_by = "machine and audit"
 name = "ieee-max-min"
-definition = "f32/f64 max/min must implement IEEE 754 maximumNumber/minimumNumber, at scalar width and at every SIMD width the crate builds for, via Law helpers and a default-deny manifest of named raw_* exceptions."
+definition = "f32/f64 max/min must implement IEEE 754 maximumNumber/minimumNumber, at scalar width and at every SIMD width the crate builds for, via Law helpers and a default-deny manifest of named raw_* exceptions, with a bit-level tie test through the public API for each class of scalar site."
 evidence_kinds = ["law-helper-source", "raw-helper-manifest", "simd-width-test-matrix"]
 
 [[gate]]
@@ -117,7 +117,7 @@ evidence_kinds = ["handshake-error-type", "mismatch-test"]
 id = "G8"
 checked_by = "machine and audit"
 name = "persisted-semantics-id"
-definition = "Law-bearing values written to a durable form carry their own identifier, distinct from G6's in-process one, describing the meaning of the stored bytes rather than the platform that wrote them; the reader accepts its own identifier or a verified earlier one, and a durable form read back later is this gate's, not G7's."
+definition = "Law-bearing values written to a durable form carry their own identifier, distinct from G6's in-process one, describing the meaning of the stored bytes rather than the platform that wrote them; the reader accepts its own identifier or a verified earlier one, and a durable form read back later is this gate's, not G7's. Data without an identifier is readable only with a typed status the caller sees and a policy that refuses it."
 evidence_kinds = ["persisted-id-format", "roundtrip-test"]
 
 [[gate]]
