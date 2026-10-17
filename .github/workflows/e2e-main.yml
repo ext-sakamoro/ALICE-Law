@@ -167,5 +167,7 @@ jobs:
           cat digests/*
           a=$(cat digests/digest-arm64); b=$(cat digests/digest-x86_64)  # "<alice-det-math version> <digest>"
           test -n "$a" && test "$a" = "$b" || { echo "aarch64 and x86_64 differ"; exit 1; }
-          grep -qxF -- "$a" e2e/golden/run.digest || { echo "both differ from the e2e/golden/run.digest line for their alice-det-math release"; exit 1; }
+          # main mode writes the values digest (the law records are main's format, compared in
+          # the test through the store): the golden is golden/values.digest
+          grep -qxF -- "$a" e2e/golden/values.digest || { echo "both differ from the e2e/golden/values.digest line for their alice-det-math release"; exit 1; }
           echo "aarch64 = x86_64 = golden: $a" >> "$GITHUB_STEP_SUMMARY"
