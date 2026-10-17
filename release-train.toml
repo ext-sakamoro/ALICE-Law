@@ -465,6 +465,17 @@ required-ci = [
 # alice-det-math を直接は引かず、physics feature の alice-physics を通す 公開済みの 0.6.1 は alice-physics ^1.4 を
 # 要求し、main (a3305fd) は "3.0" (最新の 3 系) を要求するので、次の版は main から prepared にできる
 # (publish-gate は最新でない版を受ける要求を拒否する) この repository は alice-sync を引かない
+# 次の 0.7.0 は G7 / G8 で既に互換でない版で、`Discovery::register_peer` の metadata 引数も
+# `HashMap<String, String>` から `impl IntoIterator<Item = (String, String)>` に変わる (Sync の
+# ci/20261018-sync-g13 96703776、mDNS の TXT は key の順) `HashMap` を渡す呼び出しは通るが、型を推論に
+# 任せる呼び出し (`….collect()` / `Default::default()`) は E0283 で型注釈が要る 外部の呼び出しは 0 件
+# (ext-sakamoro の全 repository の code search で register_peer は ALICE-Sync の中だけ) 同じ 0.7.0 で
+# `Discovery::set_metadata` は `Result<(), MetadataError>` を返す (大文字小文字だけが違う key を拒否する)
+# 旧来の `()` を捨てる呼び出しは unused_must_use になり、-D warnings では error RFC 6763 の TXT の key で
+# ないもの (空、印字可能な US-ASCII 0x20-0x7E の外、'=' を含む) も `MetadataError::InvalidKey` で拒否する
+# `MetadataError` は crate の root から再 export される 自分の metadata は mDNS の
+# TXT record に key の順で並ぶ (wire で見える) 0.7.0 を planned にする時に、これらを changelog-has に
+# 破壊的変更の行として載せる
 version = "0.6.1"
 state = "published"
 order = 15
