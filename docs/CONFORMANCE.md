@@ -431,6 +431,16 @@ root) has one entry per gate, with these fields:
 | `since` | the version or commit the gate first passed |
 | `note` | mandatory for `fail-known` (what is unmet, with file:line where there is a site) and for `n/a` (what makes the gate not apply) |
 | `reference_repo` | the crate whose implementation this gate's mechanism was taken from or checked against, where one exists |
+| `tie_tests` | G2 only, required for `pass`: one string per class of scalar site, `"<class>: <path>.rs::<test>"`; `[]` states the crate has no scalar float max / min site |
+| `writers` | G8 only, required for `pass`: every function writing a durable form of Law-bearing values, `"<path>.rs::<fn>"`; an empty list compared nothing and does not count |
+| `legacy` / `legacy_status` / `legacy_policy` | G8 only, required for `pass`: `legacy = "none"` when no data without an identifier is readable; otherwise `legacy_status` (the typed status such data is read with) and `legacy_policy` (the policy refusing it), each `"<path>.rs::<name>"` |
+
+The roster check reads every `<path>.rs::<name>` at the same ref as the
+manifest and looks for its definition (`fn`, `struct`, `enum`, `trait`,
+`type`, `const`, `static`, `mod`, or an enum variant), with comments and
+string literals removed. A G2 or G8 `pass` whose fields are missing, or name
+something that is not there, is counted as `unverified`, with a note saying
+what is missing.
 
 The four statuses keep "not looked at" apart from "looked and unmet":
 
@@ -547,9 +557,9 @@ verified earlier one (`check_semantics`).
 
 | gate | change |
 |---|---|
-| G2 | **meaning** (tightening): besides the ban and the SIMD-width tests, one bit-level tie test through the public API (`(+0, -0)`, `(-0, +0)`, a NaN operand) per class of scalar site, because the ban cannot see a max or min written as a comparison. A `pass` recorded on the earlier text stays until its manifest is next changed |
+| G2 | **meaning** (tightening): besides the ban and the SIMD-width tests, one bit-level tie test through the public API (`(+0, -0)`, `(-0, +0)`, a NaN operand) per class of scalar site, because the ban cannot see a max or min written as a comparison. A G2 `pass` without `tie_tests` naming tests that exist reads as `unverified` (the roster check) until the manifest adds them |
 | G6 | wording: the named equivalent is `<CRATE>_SEMANTICS_ID`; a re-exported upstream identifier is that upstream's, not this gate's evidence |
-| G8 | **meaning** (tightening): data without an identifier is readable only with a typed status the caller sees and a policy that refuses it; silent acceptance is a fail |
+| G8 | **meaning** (tightening): data without an identifier is readable only with a typed status the caller sees and a policy that refuses it; silent acceptance is a fail. A G8 `pass` without `writers` and the legacy fields, each naming something that exists, reads as `unverified` until the manifest adds them |
 | G9 | wording: where there is no G8 identifier, the entry takes G8's status and cites it |
 
 ## Definition changes (2026-10-14)
