@@ -218,8 +218,9 @@ def law_evidence_gap(gid: str, e: dict, paths: set[str], read) -> str | None:
         if not isinstance(ties, list) or not all(isinstance(x, str) for x in ties):
             return "tie_tests (one `<class>: <path>.rs::<test>` per class of scalar site, [] when it has none)"
         for t in ties:
-            label, sep, ref = t.partition(": ")
-            if not sep or not label.strip() or ":" in label:
+            # the class label may contain ": " itself; the reference never does
+            label, sep, ref = t.rpartition(": ")
+            if not sep or not label.strip():
                 return f"tie_tests entry {t!r} is not `<class>: <path>.rs::<test>`"
             why = symbol_defined(ref, paths, read)
             if why:

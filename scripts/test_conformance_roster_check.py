@@ -417,6 +417,10 @@ class LawEvidence(unittest.TestCase):
     def test_both_passes_with_their_evidence_count_as_pass(self):
         c, _ = self.counts(self.G2_OK, self.G8_OK)
         self.assertEqual(c, "pass 2, fail-known 0, unverified 0, n/a 0")
+        # a class label with ": " in it
+        c, _ = self.counts('tie_tests = ["reductions (max: fold, lanes): tests/ties.rs::max_ties_through_the_api"]',
+                           self.G8_OK)
+        self.assertEqual(c, "pass 2, fail-known 0, unverified 0, n/a 0")
         c, _ = self.counts("tie_tests = []", 'writers = ["src/lib.rs::write_v2"]\nlegacy = "none"')
         self.assertEqual(c, "pass 2, fail-known 0, unverified 0, n/a 0")
 
@@ -424,7 +428,8 @@ class LawEvidence(unittest.TestCase):
         for g2, why in [("", "G2 pass without tie_tests"),
                         ('tie_tests = ["max: tests/ties.rs::no_such_test"]', "does not define no_such_test"),
                         ('tie_tests = ["max: tests/gone.rs::max_ties_through_the_api"]', "tests/gone.rs is not in the tree"),
-                        ('tie_tests = ["tests/ties.rs::max_ties_through_the_api"]', "is not `<class>:")]:
+                        ('tie_tests = ["tests/ties.rs::max_ties_through_the_api"]', "is not `<class>:"),
+                        ('tie_tests = [" : tests/ties.rs::max_ties_through_the_api"]', "is not `<class>:")]:
             c, out = self.counts(g2, self.G8_OK)
             self.assertEqual(c, "pass 1, fail-known 0, unverified 1, n/a 0", g2)
             self.assertIn(why, out)
