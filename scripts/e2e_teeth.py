@@ -71,11 +71,24 @@ MUTATIONS = [
         GOLDEN,
     ),
     (
-        "zip: built against a different arithmetic identifier",
+        # a pin digest that is not the one alice-zip's identifier folds (the identifier comes from a
+        # precomputed table, so it does not move, and alice-db, which refuses an alice-zip identifier
+        # it has no row for at compile time, still builds: only the e2e's fold check can catch it)
+        "zip: a pin that its identifier does not fold",
+        "ALICE-Zip/src/semantics.rs",
+        'hex32("96898e3223e8c8d49cdd2a6b49df652ab48347c45df5922237783e10a73a290d")',
+        'hex32("96898e3223e8c8d49cdd2a6b49df652ab48347c45df5922237783e10a73a290e")',
+        "alice-zip: its identifier is not the fold of its pins",
+    ),
+    (
+        # caught by alice-db before the e2e runs: it refuses at compile time an alice-zip identifier
+        # it has no row for, so this row records that the stop exists (a change that removed the
+        # table would lose it and turn this row red)
+        "zip: built against a different arithmetic identifier (stopped by alice-db's compile check)",
         "ALICE-Zip/src/law.rs",
         "pub const SEMANTICS_ID: [u8; 32] =\n    crate::semantics::semantics_id_for(&alice_det_math::SEMANTICS_ID);",
         "pub const SEMANTICS_ID: [u8; 32] = [0x5a; 32];",
-        "alice-zip: its identifier is not the fold of its pins",
+        "alice-zip SEMANTICS_ID has no row in DB_SEMANTICS_BY_ZIP",
     ),
     (
         "analytics: the largest residual reported one ulp off",
