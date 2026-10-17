@@ -338,6 +338,35 @@ class CheckManifest(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("src/new.rs", out)
 
+    def test_the_manifest_text_is_read_at_the_ref_not_from_the_working_tree(self):
+        bad = manifest(G1='status = "pass"\nevidence = ["src/gone.rs"]\nmutant = "m"')
+        # committed clean, working tree bad: the ref is clean
+        d = self.repo(self.files())
+        (d / crc.MANIFEST).write_text(bad, encoding="utf-8")
+        code, out = self.run_cm(d)
+        self.assertEqual(code, 0, out)
+        # committed bad, working tree clean: the ref is bad
+        d = self.repo(self.files(bad))
+        (d / crc.MANIFEST).write_text(manifest(), encoding="utf-8")
+        code, out = self.run_cm(d)
+        self.assertEqual(code, 1, out)
+        self.assertIn("src/gone.rs", out)
+
+    def test_the_label_is_the_repository_name_from_origin(self):
+        import subprocess
+        d = self.repo(self.files())
+        subprocess.run(["git", "-C", str(d), "remote", "add", "origin", "git@github.com:owner/ALICE-Example.git"],
+                       check=True)
+        code, out = self.run_cm(d)
+        self.assertEqual(code, 0, out)
+        self.assertIn("manifest check: ALICE-Example@HEAD:", out)
+        d = self.repo(self.files(manifest(G1='status = "pass"\nevidence = ["src/gone.rs"]\nmutant = "m"')))
+        subprocess.run(["git", "-C", str(d), "remote", "add", "origin", "https://github.com/owner/ALICE-Example"],
+                       check=True)
+        code, out = self.run_cm(d)
+        self.assertEqual(code, 1, out)
+        self.assertIn("found: ALICE-Example: alice-law-conformance.toml: G1 evidence", out)
+
     def test_no_manifest_at_the_ref_or_an_unknown_ref_compares_nothing(self):
         f = self.files()
         del f[crc.MANIFEST]
@@ -346,6 +375,7 @@ class CheckManifest(unittest.TestCase):
         self.assertIn("no alice-law-conformance.toml", out)
         code, out = self.run_cm(self.repo(self.files()), ref="no-such-ref")
         self.assertEqual(code, 2, out)
+        self.assertIn("ref 'no-such-ref' not found", out)
 
     def test_a_manifest_with_no_gate_entry_compared_nothing(self):
         code, out = self.run_cm(self.repo(self.files("# nothing\n")))

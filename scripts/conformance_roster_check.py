@@ -274,12 +274,24 @@ def git_fetcher(repo_dir: Path, ref: str):
         return p.stdout
 
     def fetch() -> tuple[str | None, set[str]]:
-        commit = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").strip()
+        p = subprocess.run(["git", "-C", str(repo_dir), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            raise InputError(f"{repo_dir}: ref {ref!r} not found")
+        commit = p.stdout.strip()
         paths = set(git("ls-tree", "-r", "--name-only", "-z", commit).split("\0")) - {""}
         if MANIFEST not in paths:
             return None, paths
         return git("show", f"{commit}:{MANIFEST}"), paths
     return fetch
+
+
+def repo_name(repo_dir: Path) -> str:
+    """the repository's name from its origin remote (ALICE-Physics), else the clone's directory name"""
+    p = subprocess.run(["git", "-C", str(repo_dir), "remote", "get-url", "origin"], capture_output=True, text=True)
+    url = p.stdout.strip() if p.returncode == 0 else ""
+    name = url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1].removesuffix(".git") if url else ""
+    return name or repo_dir.resolve().name
 
 
 def check_one(repo_dir: Path, ref: str, gates: dict, fetch=None) -> tuple[list[str], list[str], dict, int, int]:
@@ -293,7 +305,7 @@ def check_one(repo_dir: Path, ref: str, gates: dict, fetch=None) -> tuple[list[s
     if text is None:
         raise InputError(f"{repo_dir} at {ref}: no {MANIFEST}")
     notes: list[str] = []
-    findings, counts, compared = check_manifest(repo_dir.name, text, vocab, paths, notes, at=ref)
+    findings, counts, compared = check_manifest(repo_name(repo_dir), text, vocab, paths, notes, at=ref)
     return findings, notes, counts, compared, len(paths)
 
 
@@ -439,7 +451,7 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
             print("error: the manifest has no gate entry (compared nothing)", file=sys.stderr)
             return 2
         shown = ", ".join(f"{s} {counts[s]}" for s in STATUSES) if not findings else "not counted"
-        print(f"manifest check: {Path(a.check_manifest).name}@{a.ref}: {compared} gates compared against "
+        print(f"manifest check: {repo_name(Path(a.check_manifest))}@{a.ref}: {compared} gates compared against "
               f"{nfiles} files, {len(findings)} findings ({shown})")
         return 1 if findings else 0
     if a.internal:
