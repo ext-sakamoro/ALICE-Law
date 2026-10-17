@@ -70,11 +70,11 @@ in the same module, since both lints share a name).
 
 **Claim.** Every `f32` / `f64` max and min the crate computes, at scalar width and at each SIMD width it builds, goes through a Law helper with maximumNumber / minimumNumber semantics; a site that must use the platform operation is a named `raw_*` helper listed in a default-deny manifest.
 
-**Evidence for `pass`.** the clippy ban on `f32::max` / `f32::min` / `f64::max` / `f64::min` in library code; the manifest check script and its CI step; for each SIMD width the crate builds, one test with the `(+0, -0)` and `(-0, +0)` pairs (test names per width).
+**Evidence for `pass`.** the clippy ban on `f32::max` / `f32::min` / `f64::max` / `f64::min` in library code; the manifest check script and its CI step; for each SIMD width the crate builds, one test with the `(+0, -0)` and `(-0, +0)` pairs (test names per width); and for each class of scalar site (the public functions whose result is a max or min of float inputs, grouped by the computation they share), one test through the public API that checks the result's bits for `(+0, -0)`, `(-0, +0)` and a NaN operand (the class and its test name, one evidence entry each). The ban sees a call, not a rewrite: `if x > 0.0 { x } else { 0.0 }` is a max of `x` and `+0` that no lint names, and only a test of the result's bits sees what it returns for `-0`.
 
-**Mutant** (turns the evidence red). replace one Law max with `f32::max` (the lint fails); add a `raw_*` site the manifest does not list (the manifest check fails); swap the operand order in one SIMD Law max (that width's test fails).
+**Mutant** (turns the evidence red). replace one Law max with `f32::max` (the lint fails); add a `raw_*` site the manifest does not list (the manifest check fails); swap the operand order in one SIMD Law max (that width's test fails); rewrite one scalar site's Law max as a comparison (`if a > b { a } else { b }`) (that class's tie test fails).
 
-**Look at.** the list of SIMD widths the crate builds (from its `cfg(target_feature)` and SIMD types), one test per width.
+**Look at.** the list of SIMD widths the crate builds (from its `cfg(target_feature)` and SIMD types), one test per width; the list of scalar site classes, one tie test per class (its completeness is audited).
 
 **Checked by.** machine and audit (the width list)
 
@@ -201,7 +201,7 @@ the result those gates protect, not a substitute for them.
 
 **Claim.** The crate exports a constant identifier (32 bytes) folded from its own Law pins and the identifiers of the Law-bearing crates it depends on; a test pins it to its hexadecimal value, and changing any pin changes it.
 
-**Evidence for `pass`.** `pub const SEMANTICS_ID` (or the crate's named equivalent) with its file:line; the test asserting its hex; a test that changing one pin changes the identifier.
+**Evidence for `pass`.** `pub const SEMANTICS_ID` (or the crate's named equivalent, `<CRATE>_SEMANTICS_ID`, for example `PHYSICS_SEMANTICS_ID`) with its file:line; a constant the crate re-exports from an upstream crate, under any name, is that upstream's identifier and is documented as such, not this gate's evidence; the test asserting its hex; a test that changing one pin changes the identifier.
 
 **Mutant** (turns the evidence red). change one pin constant: the hex test fails.
 
@@ -265,9 +265,15 @@ This is the rule for a saved file read back later; G7's equality applies only
 within one exchange. This identifier is about the meaning
 of the stored bytes, not about which platform produced them.
 
+Data written before the format carried an identifier has none to compare. A
+reader may still read it, but only visibly: the result carries a typed status
+that the caller sees (for example `Unpinned`), and a policy exists that
+refuses such data (for example `RequirePinned` or a strict mode). Reading it
+as if it had been verified, with no status, is a fail.
+
 **Claim.** Every durable format the crate writes Law-bearing values in carries an identifier of the meaning of the stored bytes, and the reader compares the stored identifier, not its own build's: it accepts its own identifier or a verified earlier one (`check_semantics`), and returns the explicit error for any other.
 
-**Evidence for `pass`.** the list of the crate's encode / write functions; the identifier field in each format; a round-trip test that reads a value written with another identifier and gets the mismatch.
+**Evidence for `pass`.** the list of the crate's encode / write functions; the identifier field in each format; a round-trip test that reads a value written with another identifier and gets the mismatch; where data without an identifier is readable, the typed status the reader returns for it and the policy that refuses it, by name, with a test of each.
 
 **Mutant** (turns the evidence red). drop the identifier from one format's writer: the reader's test fails.
 
@@ -289,6 +295,15 @@ when it happens, with the identifiers either side of the change named.
 **Claim.** (unchanged) The G8 identifier is defined against the crate's reference platform; bringing another architecture to bit-for-bit agreement is a fix, not a change of the identifier; an actual meaning change moves the identifier and is released as semver-major, naming the identifiers on either side.
 
 **Evidence for `pass`.** the audit of the identifier's history: every commit that changed the identifier's definition (`git log -S` over it), each with the release it shipped in, showing each was a meaning change released as a major version whose CHANGELOG names the old and new identifiers, and that no cross-architecture fix moved it.
+
+Where the crate has no G8 identifier to audit, this gate takes G8's status
+and cites it: G8 `n/a` (no durable form of Law-bearing values) gives `n/a`,
+with G8's evidence and the mutant of adding a durable writer (which makes G8,
+and so this gate, apply); G8 `fail-known` (a durable form without an
+identifier) gives `fail-known`, its note naming G8's site (this gate cannot be
+met before G8); G8 `unverified` gives `unverified`. Where some durable forms
+carry an identifier and others do not, the identifier that exists is audited
+as above, and the entry is `fail-known` while any form lacks one.
 
 **Mutant** (turns the evidence red). none (a property of the history); the audit list is re-done at each major release.
 
@@ -527,6 +542,15 @@ G8 required a value read back later to be compared against the identifier record
 written; for a file read back by another release the two disagreed. G7 now covers boundaries within
 one exchange, and a durable form read back later is G8's, whose reader accepts its own identifier or a
 verified earlier one (`check_semantics`).
+
+## Definition changes (2026-10-17)
+
+| gate | change |
+|---|---|
+| G2 | **meaning** (tightening): besides the ban and the SIMD-width tests, one bit-level tie test through the public API (`(+0, -0)`, `(-0, +0)`, a NaN operand) per class of scalar site, because the ban cannot see a max or min written as a comparison. A `pass` recorded on the earlier text stays until its manifest is next changed |
+| G6 | wording: the named equivalent is `<CRATE>_SEMANTICS_ID`; a re-exported upstream identifier is that upstream's, not this gate's evidence |
+| G8 | **meaning** (tightening): data without an identifier is readable only with a typed status the caller sees and a policy that refuses it; silent acceptance is a fail |
+| G9 | wording: where there is no G8 identifier, the entry takes G8's status and cites it |
 
 ## Definition changes (2026-10-14)
 
