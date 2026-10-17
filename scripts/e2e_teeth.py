@@ -73,22 +73,23 @@ MUTATIONS = [
     (
         "zip: built against a different arithmetic identifier",
         "ALICE-Zip/src/law.rs",
-        "pub use alice_det_math::SEMANTICS_ID;",
+        "pub const SEMANTICS_ID: [u8; 32] =\n    crate::semantics::semantics_id_for(&alice_det_math::SEMANTICS_ID);",
         "pub const SEMANTICS_ID: [u8; 32] = [0x5a; 32];",
-        "alice-zip was built with a different alice-det-math",
+        "alice-zip: its identifier is not the fold of its pins",
     ),
     (
         "analytics: the largest residual reported one ulp off",
         "ALICE-Analytics/src/law.rs",
-        "                max_abs: min.abs().max(max.abs()),",
-        "                max_abs: f64::from_bits(min.abs().max(max.abs()).to_bits() + 1),",
+        "                max_abs: alice_det_math::max64(min.abs(), max.abs()),",
+        "                max_abs: f64::from_bits(alice_det_math::max64(min.abs(), max.abs()).to_bits() + 1),",
         GOLDEN,
     ),
     (
         "dependencies: a second version of alice-zip in the build",
         "e2e/Cargo.toml",
-        'alice-zip = "0.10"\n',
-        'alice-zip = "0.10"\nalice-zip-old = { package = "alice-zip", version = "0.9" }\n',
+        # anchored on the table, not on the alice-zip line: main mode raises that requirement
+        "[dependencies]\n",
+        '[dependencies]\nalice-zip-old = { package = "alice-zip", version = "0.9" }\n',
         "linked at two or more versions",
     ),
 ]
