@@ -58,9 +58,8 @@ repos = ["ALICE-DB", "ALICE-Edge"]
 
 [[file]]
 path = "scripts/clippy-lib-canary/Cargo.lock"
-sha256 = "d80c6feac86940887d7a71856a1763981ca76092d788ccd6a6e5fe04f1b23491"
-source = { repo = "ALICE-LOL", rev = "b04b434b78d57b8029f4e24e69c4e069f7cf569b" }
-repos = ["ALICE-LOL", "ALICE-Physics"]
+repos = []
+exempt = { "ALICE-LOL" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids", "ALICE-Physics" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids" }
 
 [[file]]
 path = "scripts/clippy_canary.py"
