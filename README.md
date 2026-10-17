@@ -181,19 +181,19 @@ One row per repository: crates that share a repository share its one manifest at
 
 | repository | read for | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
-| ALICE-Analytics | alice-analytics | 4 | 6 | 4 | 0 |
-| ALICE-Crypto | alice-crypto | 4 | 7 | 3 | 0 |
-| ALICE-DB | alice-db | 4 | 7 | 3 | 0 |
-| ALICE-DetMath | alice-det-math | 6 | 6 | 0 | 2 |
-| ALICE-Edge | alice-edge | 4 | 5 | 5 | 0 |
-| ALICE-Kinematics | alice-kinematics | 3 | 8 | 3 | 0 |
-| ALICE-LLM | alice-llm | 2 | 10 | 2 | 0 |
+| ALICE-Analytics | alice-analytics | 9 | 2 | 1 | 2 |
+| ALICE-Crypto | alice-crypto | 10 | 1 | 0 | 3 |
+| ALICE-DB | alice-db | 7 | 4 | 3 | 0 |
+| ALICE-DetMath | alice-det-math | 9 | 3 | 0 | 2 |
+| ALICE-Edge | alice-edge | 11 | 1 | 2 | 0 |
+| ALICE-Kinematics | alice-kinematics | 8 | 4 | 2 | 0 |
+| ALICE-LLM | alice-llm | 12 | 1 | 1 | 0 |
 | ALICE-LOL | alice-lol, alice-lol-macro | 5 | 5 | 4 | 0 |
-| ALICE-ML | alice-ml | 3 | 7 | 4 | 0 |
+| ALICE-ML | alice-ml | 10 | 3 | 1 | 0 |
 | ALICE-Physics | alice-physics | 8 | 5 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 1 | 9 | 4 | 0 |
-| ALICE-Sync | alice-sync | 7 | 4 | 3 | 0 |
-| ALICE-Zip | alice-zip, alice-zip-cli | 5 | 9 | 0 | 0 |
+| ALICE-Sync | alice-sync | 12 | 1 | 1 | 0 |
+| ALICE-Zip | alice-zip, alice-zip-cli | 12 | 2 | 0 | 0 |
 
 ### Crates whose manifest is not written yet
 
