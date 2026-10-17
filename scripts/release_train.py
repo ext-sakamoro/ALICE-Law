@@ -1450,23 +1450,56 @@ def registry_requirements_on(text: str, crate: str) -> list[tuple[str, str]]:
     return out
 
 
+def _consumer_ref(repo: Path, at: str) -> str | None:
+    """the commit to read in a consumer checkout: `at`; when `at` is the default origin/main and the checkout
+    has none, the remote's default branch (origin/HEAD: a repository whose default branch is master); a
+    checkout that has neither is fetched once and asked again; None when it still has no such commit"""
+    def resolve() -> str | None:
+        for ref in [at] + (["origin/HEAD"] if at == "origin/main" else []):
+            try:
+                return git(repo, "rev-parse", "--verify", "-q", f"{ref}^{{commit}}").strip() or None
+            except subprocess.CalledProcessError:
+                continue
+        return None
+
+    found = resolve()
+    if found is None:
+        try:
+            subprocess.run(["git", "-C", str(repo), "fetch", "--quiet", "origin"], capture_output=True,
+                           timeout=60, env=GIT_ENV, check=False)
+            subprocess.run(["git", "-C", str(repo), "remote", "set-head", "origin", "--auto"], capture_output=True,
+                           timeout=60, env=GIT_ENV, check=False)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        found = resolve()
+    return found
+
+
 def registry_consumer_problems(roster: dict[str, dict], crate: str, version: str, repos_root: Path,
                                at: str) -> tuple[list[str], int]:
     """(problems, manifests read): every Cargo.toml at `at` of every git checkout directly under
     `repos_root` (one per remote; workspace members included) that requires `crate` from the registry with a
     requirement `version` does not satisfy. Publishing then would leave that consumer unable to take the
     release until its requirement is widened (the publish-wave widening), so the publish is refused.
-    Every repository of the roster must have a checkout there (else the read would silently cover less than
-    the train); no manifest read is a refusal too (a scan that compared nothing)"""
+    Every repository of the roster must be read: a missing checkout, a checkout with no commit to read (no
+    `at`, no default branch, even after a fetch) or one with no Cargo.toml is a refusal naming it, else the
+    read would silently cover less than the train. Another checkout with no commit to read is skipped and
+    listed. No manifest read at all is a refusal too (a scan that compared nothing)"""
     problems: list[str] = []
-    missing = sorted(r for r in {c["repo"] for c in roster.values() if "repo" in c}
-                     if not (repos_root / r / ".git").exists())
+    roster_repos = sorted({c["repo"] for c in roster.values() if "repo" in c})
+    missing = [r for r in roster_repos if not (repos_root / r / ".git").exists()]
     if missing:
         problems.append(f"{crate}: no checkout of {', '.join(missing)} under {repos_root} "
                         "(the consumer read must cover every repository of the train; give --repos-root)")
     read = 0
     seen: set[str] = set()
-    for repo in sorted(d for d in repos_root.iterdir() if (d / ".git").exists()):
+    covered: list[str] = []
+    skipped: list[str] = []
+    checkouts = sorted(d for d in repos_root.iterdir() if (d / ".git").exists())
+    # the roster's own checkouts first, so a second clone of the same remote never stands in for them
+    checkouts.sort(key=lambda d: d.name not in roster_repos)
+    for repo in checkouts:
+        in_roster = repo.name in roster_repos
         try:
             remote = git(repo, "remote", "get-url", "origin").strip().lower().removesuffix(".git")
         except subprocess.CalledProcessError:
@@ -1474,12 +1507,22 @@ def registry_consumer_problems(roster: dict[str, dict], crate: str, version: str
         if remote in seen:
             continue  # another clone of the same repository
         seen.add(remote)
-        try:
-            names = git(repo, "ls-tree", "-r", "--name-only", at).splitlines()
-        except subprocess.CalledProcessError:
-            continue  # no `at` in this checkout (not a published repository)
-        for path in sorted(n for n in names if n == "Cargo.toml" or n.endswith("/Cargo.toml")):
-            text = git(repo, "show", f"{at}:{path}")
+        ref = _consumer_ref(repo, at)
+        if ref is None:
+            if in_roster:
+                problems.append(f"{repo.name}: no commit to read at {at} (nor its default branch, after a fetch): "
+                                "a repository of the train was not read")
+            else:
+                skipped.append(repo.name)
+            continue
+        names = git(repo, "ls-tree", "-r", "--name-only", ref).splitlines()
+        manifests = sorted(n for n in names if n == "Cargo.toml" or n.endswith("/Cargo.toml"))
+        if in_roster and not manifests:
+            problems.append(f"{repo.name}: no Cargo.toml at {ref[:12]}: a repository of the train was not read")
+        if in_roster and manifests:
+            covered.append(repo.name)
+        for path in manifests:
+            text = git(repo, "show", f"{ref}:{path}")
             read += 1
             try:
                 if tomllib.loads(text).get("package", {}).get("name") == crate:
@@ -1492,6 +1535,8 @@ def registry_consumer_problems(roster: dict[str, dict], crate: str, version: str
                 if not dc.matches(req, version):
                     problems.append(f"{repo.name}/{path} [{table}] {crate} = {req!r} does not accept {version} "
                                     "(registry consumer: widen it before publishing)")
+    print(f"consumers: {len(covered)} of {len(roster_repos)} roster repositories read"
+          + (f"; skipped (no commit to read): {', '.join(skipped)}" if skipped else ""))
     if read == 0:
         problems.append(f"{crate}: no Cargo.toml was read under {repos_root} at {at} (the consumer read compared nothing)")
     return problems, read

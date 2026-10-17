@@ -2362,6 +2362,65 @@ class RegistryConsumers(unittest.TestCase):
         self.assertEqual(read, 0)
         self.assertTrue(any("compared nothing" in p for p in problems), problems)
 
+    def with_origin(self, root: Path, name: str, files: dict[str, str], branch: str) -> Path:
+        """a checkout cloned from a bare origin whose default branch is `branch` (origin/<branch>, origin/HEAD)"""
+        seed = self.checkout(root / "_seed", name, files)
+        git(seed, "branch", "-M", branch)
+        bare = root / "_origins" / f"{name}.git"
+        bare.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "clone", "-q", "--bare", str(seed), str(bare)], check=True, capture_output=True)
+        subprocess.run(["git", "clone", "-q", str(bare), str(root / name)], check=True, capture_output=True)
+        return root / name
+
+    def test_a_roster_repository_whose_default_branch_is_not_main_is_read(self):
+        # no origin/main: the default branch (origin/HEAD) is read, so its requirement is not skipped
+        roster = {"alice-zip": {"version": "0.10.0", "repo": "ALICE-Zip"}, "alice-m": {"version": "1.0.0", "repo": "ALICE-M"}}
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d, "root")
+            self.with_origin(Path(d), "ALICE-Zip", {"Cargo.toml": ZIP}, "main")
+            self.with_origin(Path(d), "ALICE-M", self.consumer('[dependencies]\nalice-zip = "0.9"'), "master")
+            root.mkdir()
+            for n in ("ALICE-Zip", "ALICE-M"):
+                (Path(d) / n).rename(root / n)
+            problems, read = rt.registry_consumer_problems(roster, "alice-zip", "0.10.0", root, "origin/main")
+        self.assertEqual(read, 2)
+        self.assertTrue(any("ALICE-M/Cargo.toml [dependencies] alice-zip = '0.9'" in p for p in problems), problems)
+
+    def test_a_roster_repository_with_no_commit_to_read_is_refused(self):
+        # never fetched (no origin/main, no origin/HEAD) and the remote cannot be reached: refused by name
+        roster = {"alice-zip": {"version": "0.10.0", "repo": "ALICE-Zip"}, "alice-m": {"version": "1.0.0", "repo": "ALICE-M"}}
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self.checkout(root, "ALICE-Zip", {"Cargo.toml": ZIP})
+            self.checkout(root, "ALICE-M", self.consumer('[dependencies]\nalice-zip = "0.9"'),
+                          remote=str(root / "no-such-origin.git"))
+            problems, _ = rt.registry_consumer_problems(roster, "alice-zip", "0.10.0", root, "HEAD~5")
+        self.assertTrue(any(p.startswith("ALICE-M: no commit to read") for p in problems), problems)
+        self.assertTrue(any(p.startswith("ALICE-Zip: no commit to read") for p in problems), problems)
+
+    def test_a_roster_repository_with_no_manifest_is_refused(self):
+        roster = {"alice-zip": {"version": "0.10.0", "repo": "ALICE-Zip"}, "alice-m": {"version": "1.0.0", "repo": "ALICE-M"}}
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self.checkout(root, "ALICE-Zip", {"Cargo.toml": ZIP})
+            self.checkout(root, "ALICE-M", {"README.md": "x\n"})
+            problems, _ = rt.registry_consumer_problems(roster, "alice-zip", "0.10.0", root, "HEAD")
+        self.assertTrue(any(p.startswith("ALICE-M: no Cargo.toml") for p in problems), problems)
+
+    def test_a_checkout_outside_the_roster_with_nothing_to_read_is_skipped_and_listed(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self.checkout(root, "ALICE-Zip", {"Cargo.toml": ZIP})
+            self.checkout(root, "Other", {"Cargo.toml": ZIP}, remote=str(root / "no-such-origin.git"))
+            git(root / "Other", "checkout", "-q", "--orphan", "empty")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                problems, _ = rt.registry_consumer_problems(self.ROSTER, "alice-zip", "0.10.0", root, "origin/main")
+        # the roster repository has no origin/main either (its fake remote is unreachable): refused by name;
+        # the other checkout is only listed
+        self.assertIn("skipped (no commit to read): Other", out.getvalue())
+        self.assertFalse(any(p.startswith("Other") for p in problems), problems)
+
     def test_the_gate_refuses_on_a_registry_consumer(self):
         # through the command: --repos-root is read and its problems refuse the publish
         with tempfile.TemporaryDirectory() as d:
