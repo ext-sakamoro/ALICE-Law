@@ -87,7 +87,8 @@ repos = ["ALICE-Crypto", "ALICE-DB"]
 
 [[file]]
 path = "scripts/fneg_fma_ir_check.py"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "14347ee313c1e7a385b239758b3f87a3f11126353a9e6e8f82a9b7a2cded808c", owner = "ALICE-LOL", planned = "879a1ad6f1a51173560e9a653adf23383bedd206", variants = { "14347ee313c1e7a385b239758b3f87a3f11126353a9e6e8f82a9b7a2cded808c" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "1c8bc58610491a2c52fb14c50a6218b21c85d48e381b3d12cb377f9deae32ee6" = ["ALICE-DB", "ALICE-DetMath", "ALICE-Kinematics", "ALICE-LLM"] } }
+sha256 = "14347ee313c1e7a385b239758b3f87a3f11126353a9e6e8f82a9b7a2cded808c"
+source = { repo = "ALICE-Analytics", rev = "06d2e08a0ad61d30dc0d57ced624a20a9c6b1485" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -226,7 +227,8 @@ repos = ["ALICE-Crypto", "ALICE-DB"]
 
 [[file]]
 path = "scripts/test_fneg_fma_ir_check.py"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "cb135e2e055110363b80f52f1df01ef2b613bc7f2e11e7b07c7e7b40f14bc263", owner = "ALICE-LOL", planned = "90592c16e5fc491746ebd3e33106622aa5190933", variants = { "76834f4cc3591b40fff68445f026214e7c533e42b96e94a9390f12e088ab168a" = ["ALICE-DB", "ALICE-DetMath", "ALICE-Kinematics", "ALICE-LLM"], "cb135e2e055110363b80f52f1df01ef2b613bc7f2e11e7b07c7e7b40f14bc263" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"] } }
+sha256 = "cb135e2e055110363b80f52f1df01ef2b613bc7f2e11e7b07c7e7b40f14bc263"
+source = { repo = "ALICE-Analytics", rev = "06d2e08a0ad61d30dc0d57ced624a20a9c6b1485" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -660,5 +662,6 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "tools/no-outer-fneg-of-fma/src/main.rs"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "f54245f2866ca1640ac506a62dda3039210a5f44ec1e511e57601566e2938257", owner = "ALICE-LOL", planned = "57cc66719237713f8d8f31770a2e688d127016f7", variants = { "aeaaefa5faccd5f21544c3e8c0f957aafb3546b2ba1aeaa955c9212a0cd9a1f4" = ["ALICE-DB", "ALICE-DetMath", "ALICE-Kinematics", "ALICE-LLM"], "f54245f2866ca1640ac506a62dda3039210a5f44ec1e511e57601566e2938257" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"] } }
+sha256 = "f54245f2866ca1640ac506a62dda3039210a5f44ec1e511e57601566e2938257"
+source = { repo = "ALICE-Analytics", rev = "06d2e08a0ad61d30dc0d57ced624a20a9c6b1485" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"]
