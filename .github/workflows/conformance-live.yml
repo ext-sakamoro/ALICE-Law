@@ -64,6 +64,7 @@ jobs:
         run: |
           python3 scripts/test_shared_files_check.py
           python3 scripts/test_gen_shared_files.py
+          python3 scripts/test_shared_files_strict.py
 
       - name: Each source commit is on main with the entry's bytes
         run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --fetch

@@ -28,6 +28,7 @@ python3 scripts/workflow_concurrency.py
 python3 scripts/test_measure_conformance.py
 python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py
+python3 scripts/test_shared_files_strict.py
 
 echo "== the shared-file table reads, and this repository's copies equal it (the comparison with
 # every listed repository's main runs on every push to main and daily, conformance-live.yml)"
