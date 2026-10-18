@@ -173,6 +173,15 @@ class Generate(Base):
         self.assertEqual(code, 0, out)
         self.assertEqual(run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])[0], 0)
 
+    def test_a_re_roll_to_an_owner_outside_the_row_is_refused(self):
+        self.landed_v2()
+        v3 = SHARED + b"# v3\n"
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tpending\tnext={sfc.git_blob(v3)}\n")
+        code, out = run(gen.main, ["--table", str(self.t), "--today", "2026-10-19", "--write", "--next-from", str(reg),
+                                   "--target", f"scripts/s.sh={h(v3)}@ALICE-Z"])
+        self.assertEqual(code, 2, out)
+        self.assertIn("the owner ALICE-Z is not one of the listed repositories", out)
+
     def test_a_re_roll_whose_earlier_bytes_are_on_no_main_is_refused(self):
         self.landed_v2()
         self.assertEqual(self.reroll(SHARED + b"# v3\n"), 0)
