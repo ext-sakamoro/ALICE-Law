@@ -279,6 +279,14 @@ class Schema(Base):
         wrong = self.w.moved(moved_from={"planned": sfc.git_blob(OTHER), "target": h(SHARED)})
         self.t.write_text(self.w.table(wrong), encoding="utf-8")
         self.assertEqual(self.check("--base-table", str(base))[0], 1)
+        # moved_from added to a row whose planned id did not change: the base planned the row without it
+        same_id = self.w.moved(target=h(SHARED), planned=sfc.git_blob(SHARED),
+                               moved_from={"planned": sfc.git_blob(OTHER), "target": h(OTHER)})
+        same_id["pending"]["variants"] = {h(SHARED): ["ALICE-A", "ALICE-B"]}
+        self.t.write_text(self.w.table(same_id), encoding="utf-8")
+        code, out = self.check("--base-table", str(base))
+        self.assertEqual(code, 1, out)
+        self.assertIn("not the base table's planned id", out)
         # a move the base does not explain at all (no planned row there)
         base.write_text(self.w.table(self.w.uniform()), encoding="utf-8")
         self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
