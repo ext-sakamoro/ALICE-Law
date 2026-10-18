@@ -409,7 +409,10 @@ is `<path>.rs::<fn>` (a `#[test]` that runs: not `#[ignore]`, not under `#[cfg(a
 `tests/` or after `#[cfg(test)]`, and a command of a workflow or `scripts/preflight.sh` (comments
 dropped) that runs it: `cargo test` / `cargo nextest run` / `scripts/run_tests.sh` /
 `scripts/cargo_test_nonzero.sh` for its package, selecting the lib's unit tests (no target selection,
-`--lib`, `--tests` or `--all-targets`) or, for `tests/<t>.rs`, that target (`--test <t>`), with every
+`--lib`, `--tests` or `--all-targets`) or, for `tests/<t>.rs`, that target (`--test <t>`), whose
+test-name filters select it (a filter is a substring of its module path `a::b::tests::fn`, or equal to it
+under `--exact`; a matching `--skip` rejects the command; with a filter and a file whose module path
+cannot be derived, the command does not count), with every
 feature it needs on that command: `#[cfg(feature = ...)]` on it or an enclosing module and the
 target's `required-features`), `<path>.py::<test>` (one `def test...` of that name, in a file a
 workflow or `scripts/preflight.sh` command runs) or `<path>.py::<Class>.<method>`, `<path>#<token>` (any file, workflows and `scripts/preflight.sh`

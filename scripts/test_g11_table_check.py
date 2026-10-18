@@ -164,6 +164,50 @@ class Table(unittest.TestCase):
                   "      - run: cargo test --features extra --lib\n      - run: cargo test -p other --lib --features svo\n")
         self.assertFinding("F4", "with feature(s) ['svo']")
 
+    def lib_svo(self, line):
+        self.edit("conformance/g11.toml", "tests/golden.rs::a_wrong_digest_is_refused", "src/lib.rs::gated_unbuilt")
+        self.edit(".github/workflows/ci.yml", "      - run: cargo test --features extra --lib\n",
+                  f"      - run: cargo test --features extra --lib\n      - run: {line}\n")
+
+    def test_a_filter_that_selects_the_test_resolves(self):
+        self.lib_svo("cargo test --lib --features svo more::")
+        self.assertEqual(self.run_main()[0], 0)
+
+    def test_a_filter_that_does_not_select_the_test(self):
+        self.lib_svo("cargo test --lib --features svo nomatch_filter::")
+        self.assertFinding("F4", "with feature(s) ['svo']")
+
+    def test_a_skip_of_the_test(self):
+        self.lib_svo("cargo test --lib --features svo -- --skip gated_unbuilt")
+        self.assertFinding("F4", "with feature(s) ['svo']")
+
+    def test_exact_needs_the_whole_path(self):
+        self.lib_svo("cargo test --lib --features svo -- --exact gated_unbuilt")
+        self.assertFinding("F4", "with feature(s) ['svo']")
+
+    def test_exact_with_the_whole_path_resolves(self):
+        self.lib_svo("cargo test --lib --features svo -- --exact more::gated_unbuilt")
+        self.assertEqual(self.run_main()[0], 0)
+
+    def test_a_filter_where_the_module_path_is_unknown_is_refused(self):
+        # a #[path] attribute makes the file's module unknowable here; a filtered command then does not count
+        self.edit("src/lib.rs", "#[cfg(test)]\n#[cfg(feature = \"extra\")]", '#[path = "y.rs"]\nmod y;\n#[cfg(test)]\n#[cfg(feature = "extra")]')
+        self.lib_svo("cargo test --lib --features svo more::")
+        self.assertFinding("F4", "with feature(s) ['svo']")
+
+    def test_a_filter_through_cargo_test_nonzero(self):
+        self.lib_svo("scripts/cargo_test_nonzero.sh -p demo --lib --features svo other::")
+        self.assertFinding("F4", "with feature(s) ['svo']")
+
+    def test_module_paths(self):
+        tree = g.Tree(lambda p: "", set())
+        code = "mod a {\n    mod b {\n        fn t() {}\n    }\n}\n"
+        self.assertEqual(g.module_path(tree, "x/src/m/n.rs", code, code.index("fn t")), "m::n::a::b::t")
+        self.assertEqual(g.module_path(tree, "x/src/m/mod.rs", code, code.index("fn t")), "m::a::b::t")
+        self.assertEqual(g.module_path(tree, "x/src/lib.rs", "fn t() {}", 0), "t")
+        self.assertEqual(g.module_path(tree, "x/tests/golden.rs", "fn t() {}", 0), "t")
+        self.assertIsNone(g.module_path(tree, "x/src/lib.rs", '#[path = "y.rs"]\nmod y;\nfn t() {}', 22))
+
     def test_an_integration_test_needs_a_run_selecting_it(self):
         self.edit(".github/workflows/ci.yml", "      - run: scripts/run_tests.sh golden -- cargo test --test golden\n", "")
         self.assertFinding("F4", "the integration test golden")

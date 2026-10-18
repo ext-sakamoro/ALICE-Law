@@ -219,11 +219,100 @@ def package_of(tree: Tree, path: str) -> tuple[str | None, dict]:
         parts.pop()
 
 
-def command_runs(cmd: str, package: str | None, defaults: set[str], needs: set[str], target: str | None) -> bool:
+# cargo test options that take a value (their value is not a test-name filter)
+VALUE_OPTIONS = {"-p", "--package", "--features", "-F", "--test", "--bin", "--example", "--bench", "--target",
+                 "--target-dir", "--manifest-path", "-j", "--jobs", "--profile", "--color", "--message-format",
+                 "--exclude", "-Z", "--config", "--test-threads", "--format", "--logfile", "--run-ignored"}
+
+
+def test_args(ws: list[str]) -> list[str]:
+    """the words after `cargo test` / `cargo nextest run` / scripts/cargo_test_nonzero.sh (what cargo test reads)"""
+    for i, w in enumerate(ws):
+        if w == "test" and i > 0 and ws[i - 1] == "cargo":
+            return ws[i + 1:]
+        if w == "run" and i > 0 and ws[i - 1] == "nextest":
+            return ws[i + 1:]
+        if w.endswith("scripts/cargo_test_nonzero.sh"):
+            return ws[i + 1:]
+    for i, w in enumerate(ws):
+        if w == "test" and i > 1 and ws[i - 2] == "cargo":  # cargo +toolchain test
+            return ws[i + 1:]
+    return []
+
+
+def filters_select(args: list[str], test_path: str | None) -> bool:
+    """the test-name filters of a cargo test command (free words before `--`, and after it) select `test_path`
+    (`a::b::tests::fn`): with no filter, every test; a filter is a substring match, or equality under
+    `--exact`; a `--skip` that matches it rejects the command. An unknown expansion (`$x`, `${{ ... }}`) is not
+    read as a filter. Without a module path, a command with a filter or a skip does not count"""
+    filters, skips, exact, after = [], [], False, False
+    i = 0
+    while i < len(args):
+        w = args[i]
+        if w == "--":
+            after = True
+        elif w == "--exact":
+            exact = True
+        elif w == "--skip" and i + 1 < len(args):
+            skips.append(args[i + 1])
+            i += 1
+        elif w.startswith("--skip="):
+            skips.append(w[len("--skip="):])
+        elif w in VALUE_OPTIONS:
+            i += 1
+        elif w.startswith("-") or "$" in w:
+            pass
+        else:
+            filters.append(w)
+        i += 1
+    if not filters and not skips:
+        return True
+    if test_path is None:
+        return False
+    match = (lambda f: f == test_path) if exact else (lambda f: f in test_path)
+    if any(match(sk) for sk in skips):
+        return False
+    return not filters or any(match(f) for f in filters)
+
+
+def module_path(tree: Tree, path: str, code: str, start: int) -> str | None:
+    """`a::b::m::fn` for the fn at `start` in `path`: the file's module from its place under src/ (lib.rs and
+    main.rs are the root, mod.rs its directory) or the root of a tests/<t>.rs target, then the inline `mod`
+    blocks enclosing it; None when a `#[path]` attribute makes the file's module unknowable here"""
+    if re.search(r"#\s*\[\s*path\s*=", code):
+        return None
+    m = re.search(r"(?:^|/)src/(?P<rel>.+)\.rs$", path)
+    if m:
+        parts = m["rel"].split("/")
+        if parts[-1] in ("lib", "main", "mod"):
+            parts = parts[:-1]
+        if parts and parts[0] == "bin":
+            parts = parts[2:] if len(parts) > 1 else []
+    elif re.search(r"(?:^|/)tests/[\w-]+\.rs$", path):
+        parts = []
+    else:
+        return None
+    for mm in re.finditer(r"\bmod\s+(\w+)\s*\{", code[:start]):
+        depth, i = 0, mm.end() - 1
+        while i < start:
+            depth += {"{": 1, "}": -1}.get(code[i], 0)
+            if depth == 0:
+                break
+            i += 1
+        if depth > 0:
+            parts.append(mm.group(1))
+    name = re.match(r"\s*fn\s+(\w+)", code[start:])
+    return "::".join(parts + [name.group(1)]) if name else None
+
+
+def command_runs(cmd: str, package: str | None, defaults: set[str], needs: set[str], target: str | None,
+                 test_path: str | None = None) -> bool:
     """the command runs cargo's tests of `package` with every feature in `needs` turned on, building the lib's
-    unit tests (`target` None) or the integration test `target`"""
+    unit tests (`target` None) or the integration test `target`, and its test-name filters select `test_path`"""
     ws = words(cmd)
     if not RUNNER_RE.search(cmd):
+        return False
+    if not filters_select(test_args(ws), test_path):
         return False
     pkgs = option_values(ws, "-p", "--package")
     if pkgs and package not in pkgs and "--workspace" not in ws and "--all" not in ws:
@@ -275,7 +364,8 @@ def rs_test_gap(tree: Tree, path: str, name: str) -> str | None:
             if t.get("name") == target:
                 needs |= set(t.get("required-features", []))
     defaults = set(manifest.get("features", {}).get("default", []))
-    if not any(command_runs(c, package, defaults, needs, target) for c in ci_commands(tree)):
+    tpath = module_path(tree, path, code, at[0].start())
+    if not any(command_runs(c, package, defaults, needs, target, tpath) for c in ci_commands(tree)):
         what = f"the integration test {target}" if target else "the lib's unit tests"
         feats = f" with feature(s) {sorted(needs)}" if needs else ""
         return (f"{path}: {name}: no workflow or scripts/preflight.sh command runs {what} of {package}{feats} "
