@@ -19,6 +19,7 @@ python3 scripts/test_public_text_check.py
 python3 scripts/test_readme_roster_check.py
 python3 scripts/test_conformance_docs_schema_check.py
 python3 scripts/test_conformance_roster_check.py
+python3 scripts/test_g11_table_check.py
 python3 scripts/test_main_mode.py
 python3 scripts/test_gen_law_status.py
 python3 scripts/test_readme_parity_check.py
