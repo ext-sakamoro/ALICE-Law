@@ -11,7 +11,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
 path = ".github/workflows/eol.yml"
-pending = { since = "2026-10-18", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "6a565ebd9285657f96e639ae5c4ac18d8ebaad9930a14eb087d742cb93d5badd", owner = "ALICE-Kinematics", planned = "96e8a84f1c6d4e1222c2e2bbcf65ec5d5e072dd4", moved_from = { planned = "73961af210483ef472a38d9f5ffa75ecc994498b", target = "fa86e7e6f1dc9eb91f136277bbb6a1e42d5d3a04449cdc8fd59c47dc102316a3" }, variants = { "absent" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"], "fa86e7e6f1dc9eb91f136277bbb6a1e42d5d3a04449cdc8fd59c47dc102316a3" = ["ALICE-Crypto", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"] } }
+sha256 = "6a565ebd9285657f96e639ae5c4ac18d8ebaad9930a14eb087d742cb93d5badd"
+source = { repo = "ALICE-Analytics", rev = "63d2179b39c508b5d5c938364ba95149f858ad91" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -69,7 +70,8 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/check_eol.py"
-pending = { since = "2026-10-18", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "757ffc3027d39a469780741b93fec2a5bd114dd156df19f76d1735d3d05e5ff3", owner = "ALICE-Kinematics", planned = "5153ffc871bdd2c9262757f2737160dd5a011fdb", variants = { "757ffc3027d39a469780741b93fec2a5bd114dd156df19f76d1735d3d05e5ff3" = ["ALICE-Crypto", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"], "absent" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"] } }
+sha256 = "757ffc3027d39a469780741b93fec2a5bd114dd156df19f76d1735d3d05e5ff3"
+source = { repo = "ALICE-Analytics", rev = "63d2179b39c508b5d5c938364ba95149f858ad91" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -231,7 +233,8 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/test_check_eol.py"
-pending = { since = "2026-10-18", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "5422a9d4198c6f41f4c2a626639a987fd379928b37e2ecf1333c73dc94f8522b", owner = "ALICE-Kinematics", planned = "e602dd3e5ed29782ba87b276d2347d52d68a5dd9", variants = { "5422a9d4198c6f41f4c2a626639a987fd379928b37e2ecf1333c73dc94f8522b" = ["ALICE-Crypto", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"], "absent" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"] } }
+sha256 = "5422a9d4198c6f41f4c2a626639a987fd379928b37e2ecf1333c73dc94f8522b"
+source = { repo = "ALICE-Analytics", rev = "63d2179b39c508b5d5c938364ba95149f858ad91" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
