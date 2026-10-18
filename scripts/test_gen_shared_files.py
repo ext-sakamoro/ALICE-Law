@@ -152,6 +152,41 @@ class Generate(Base):
         self.gen("--write")
         self.assertEqual(self.entries()["scripts/s.sh"]["sha256"], h(v3))
 
+    def reroll(self, data: bytes, today: str = "2026-10-19") -> int:
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tpending\tnext={sfc.git_blob(data)}\n")
+        return run(gen.main, ["--table", str(self.t), "--today", today, "--write", "--next-from", str(reg),
+                              "--target", f"scripts/s.sh={h(data)}@ALICE-A"])[0]
+
+    def test_a_second_re_roll_before_the_owner_lands_moves_from_the_bytes_the_mains_hold(self):
+        v2 = self.landed_v2()
+        v3, v4 = SHARED + b"# v3\n", SHARED + b"# v4\n"
+        self.assertEqual(self.reroll(v3), 0)
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
+        # re-rolled again to v4: the owner still holds v2, so the row still moves from v2
+        self.assertEqual(self.reroll(v4), 0)
+        p = self.entries()["scripts/s.sh"]["pending"]
+        self.assertEqual((p["planned"], p["moved_from"]), (sfc.git_blob(v4), {"planned": sfc.git_blob(v2),
+                                                                             "target": h(v2)}))
+        # and the branch check against the v3 table accepts it (the base was itself moving from v2)
+        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])[0], 0)
+
+    def test_a_re_roll_whose_earlier_bytes_are_on_no_main_is_refused(self):
+        self.landed_v2()
+        self.assertEqual(self.reroll(SHARED + b"# v3\n"), 0)
+        # the mains go back to the first bytes: neither the planned v3 nor the v2 it moves from is held
+        self.w.commit("ALICE-A", {"scripts/s.sh": SHARED})
+        self.w.commit("ALICE-B", {"scripts/s.sh": SHARED})
+        before = self.t.read_text(encoding="utf-8")
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tpending\tnext={sfc.git_blob(SHARED + b'# v4\n')}\n")
+        code, out = run(gen.main, ["--table", str(self.t), "--today", "2026-10-20", "--write", "--next-from", str(reg),
+                                   "--target", f"scripts/s.sh={h(SHARED + b'# v4\n')}@ALICE-A"])
+        self.assertEqual(code, 2, out)
+        self.assertIn("no listed main holds the bytes the planned row moves from", out)
+        self.assertEqual(self.t.read_text(encoding="utf-8"), before)
+
     def test_a_move_to_bytes_no_main_holds_without_their_sha256_is_refused_not_dropped(self):
         self.landed_v2()
         before = self.t.read_text(encoding="utf-8")

@@ -591,7 +591,9 @@ def main(argv: list[str]) -> int:
             p, b = e["pending"], base_planned.get(e["path"])
             m = p.get("moved_from")
             if b is not None and b["planned"] != p["planned"]:
-                if m != {"planned": b["planned"], "target": b["target"]}:
+                # from the base's planned bytes, or (a second re-roll before the owner landed the first) from the
+                # bytes the base itself was moving from, which the mains still hold
+                if m != {"planned": b["planned"], "target": b["target"]} and (m is None or m != b.get("moved_from")):
                     problems.append(f"{e['path']}: the planned id moved from {b['planned'][:12]} to "
                                     f"{p['planned'][:12]} without moved_from naming the base's planned id and target")
             elif m is not None and (b is None or b.get("moved_from") != m):
