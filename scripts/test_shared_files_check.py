@@ -22,6 +22,7 @@ ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": 
        "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "GIT_CONFIG_NOSYSTEM": "1", "HOME": "/nonexistent"}
 SHARED = b"#!/bin/sh\necho shared\n"
 OTHER = b"other\n"
+V3 = SHARED + b"# v3\n"
 
 
 def git(*args: str, cwd: Path | None = None) -> str:
@@ -91,6 +92,16 @@ class World:
         e["pending"] = {**e["pending"], "exit": "every listed repository's main has the bytes the registry row moves to",
                         "planned": sfc.git_blob(SHARED)}
         e.update(override)
+        return e
+
+    def moved(self, **override) -> dict:
+        """A planned row re-rolled from SHARED (on ALICE-A, the owner, and ALICE-B) to V3, which no main holds yet"""
+        e = {"path": "scripts/s.sh", "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {},
+             "pending": {"since": "2026-10-10", "exit": "every listed repository's main has the bytes the registry "
+                         "row moves to", "target": h(V3), "owner": "ALICE-A", "planned": sfc.git_blob(V3),
+                         "moved_from": {"planned": sfc.git_blob(SHARED), "target": h(SHARED)},
+                         "variants": {h(SHARED): ["ALICE-A", "ALICE-B"]}}}
+        e["pending"].update(override)
         return e
 
     def per_repo(self, exempt: dict | None = None) -> dict:
@@ -217,6 +228,63 @@ class Schema(Base):
             with self.subTest(bad=bad):
                 self.t.write_text(self.w.table(self.w.planned(pending={**good, **bad})), encoding="utf-8")
                 self.assertEqual(self.check()[0], 2)
+
+
+    def test_moved_defects_are_refused(self):
+        self.assertEqual(len(sfc.load(self.w.table(self.w.moved()))), 1)
+        old = {"planned": sfc.git_blob(SHARED), "target": h(SHARED)}
+        # a moved_from without its target (render cannot write one, so the text is edited)
+        text = self.w.table(self.w.moved()).replace(f', target = "{h(SHARED)}" }}', " }")
+        self.assertIn(f'moved_from = {{ planned = "{sfc.git_blob(SHARED)}" }}', text)
+        with self.assertRaises(sfc.Unreadable):
+            sfc.load(text)
+        for bad in ({"moved_from": {"planned": "x" * 40, "target": h(SHARED)}},
+                    # the bytes it moves from are not the target
+                    {"moved_from": {"planned": sfc.git_blob(V3), "target": h(SHARED)}},
+                    {"moved_from": {"planned": sfc.git_blob(SHARED), "target": h(V3)}},
+                    # the owner holds neither the target nor the bytes it moves from
+                    {"moved_from": {**old, "target": h(OTHER)}}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(sfc.Unreadable):
+                    sfc.load(self.w.table(self.w.moved(**bad)))
+        unplanned = self.w.pending()
+        unplanned["pending"]["moved_from"] = old
+        with self.assertRaisesRegex(sfc.Unreadable, "belongs to a planned row"):
+            sfc.load(self.w.table(unplanned))
+
+    def test_a_planned_id_moved_without_naming_the_base_is_refused(self):
+        base = Path(self.tmp.name) / "base.toml"
+        planned_shared = self.w.moved()
+        planned_shared["pending"] = {k: v for k, v in planned_shared["pending"].items() if k != "moved_from"}
+        planned_shared["pending"].update(target=h(SHARED), planned=sfc.git_blob(SHARED))
+        base.write_text(self.w.table(planned_shared), encoding="utf-8")
+        # the move names the base: passes, the ratchet counts it as planned
+        self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
+        code, out = self.check("--base-table", str(base))
+        self.assertEqual(code, 0, out)
+        self.assertIn("pending 1 (planned 1, unplanned 0), the base table 1 (planned 1, unplanned 0)", out)
+        # the same move again on the next commit: the base already recorded it
+        base.write_text(self.w.table(self.w.moved()), encoding="utf-8")
+        self.assertEqual(self.check("--base-table", str(base))[0], 0)
+        base.write_text(self.w.table(planned_shared), encoding="utf-8")
+        # the planned id moved with no moved_from: the owner holds SHARED, so it reads only as SHARED's target
+        silent = self.w.moved()
+        silent["pending"] = {**{k: v for k, v in silent["pending"].items() if k != "moved_from"},
+                             "planned": sfc.git_blob(V3), "target": h(SHARED)}
+        self.t.write_text(self.w.table(silent), encoding="utf-8")
+        code, out = self.check("--base-table", str(base))
+        self.assertEqual(code, 1, out)
+        self.assertIn("without moved_from naming the base's planned id and target", out)
+        # moved_from naming other bytes than the base's
+        wrong = self.w.moved(moved_from={"planned": sfc.git_blob(OTHER), "target": h(SHARED)})
+        self.t.write_text(self.w.table(wrong), encoding="utf-8")
+        self.assertEqual(self.check("--base-table", str(base))[0], 1)
+        # a move the base does not explain at all (no planned row there)
+        base.write_text(self.w.table(self.w.uniform()), encoding="utf-8")
+        self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
+        code, out = self.check("--base-table", str(base))
+        self.assertEqual(code, 1, out)
+        self.assertIn("not the base table's planned id", out)
 
 
 class Repo(Base):
@@ -504,6 +572,38 @@ class Planned(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("more than 14 days", out)
         self.assertEqual(self.live(today="2026-10-24")[0], 0)
+
+
+    def test_a_moved_row_passes_while_the_owner_holds_either_pair(self):
+        self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.w.commit("ALICE-A", {"scripts/s.sh": V3})
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn("the variants on the mains have moved since the table", out)
+
+    def test_a_moved_row_with_a_third_bytes_value_is_red(self):
+        self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
+        self.w.commit("ALICE-B", {"scripts/s.sh": OTHER})
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"ALICE-B main has sha256 {h(OTHER)[:12]}, neither the planned target", out)
+
+    def test_a_moved_row_whose_owner_holds_neither_pair_is_red(self):
+        self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
+        self.w.commit("ALICE-A", {"scripts/s.sh": OTHER})
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("the owner ALICE-A main does not hold the target", out)
+
+    def test_a_moved_row_whose_earlier_bytes_are_gone_is_noted(self):
+        self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
+        self.w.commit("ALICE-A", {"scripts/s.sh": V3})
+        self.w.commit("ALICE-B", {"scripts/s.sh": None})
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn("no main holds the bytes the planned row moved from any more", out)
 
 
 class TheTable(unittest.TestCase):

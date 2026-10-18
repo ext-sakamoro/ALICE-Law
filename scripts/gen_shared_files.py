@@ -26,7 +26,10 @@ target = those bytes and the owner = the repository holding them (the existing o
 holds them). A next= that no main has yet changes nothing (the row stays what its copies
 say), and a planned row all of whose copies have the target becomes uniform. A planned row keeps
 the date it became planned when its id moves to newer bytes (a re-rolled target does not restart
-the age limit).
+the age limit). A planned row whose next= moves to bytes no main holds yet (a re-roll after some
+mains already took the earlier bytes) stays planned only with --target PATH=SHA256@ALICE-X for
+the new bytes: it records `moved_from` (the earlier planned id and target) until no main holds
+those; without --target it is an error, never a silent drop to an unplanned divergence.
 
   gen_shared_files.py --table conformance/shared-files.toml (--write | --check)
                       [--registry FILE] [--discover] [--checkouts DIR] [--today YYYY-MM-DD]
@@ -86,6 +89,9 @@ def render(entries: list[dict]) -> str:
             variants = ", ".join(f"{q(k)} = [" + ", ".join(q(r) for r in sorted(v)) + "]"
                                  for k, v in sorted(p["variants"].items()))
             planned = f", planned = {q(p['planned'])}" if "planned" in p else ""
+            if "moved_from" in p:
+                m = p["moved_from"]
+                planned += f", moved_from = {{ planned = {q(m['planned'])}, target = {q(m['target'])} }}"
             out.append(f"pending = {{ since = {q(p['since'])}, exit = {q(p['exit'])}, target = {q(p['target'])}, "
                        f"owner = {q(p['owner'])}{planned}, variants = {{ {variants} }} }}\n")
         else:
@@ -206,6 +212,8 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
         prev = old.get(row["path"], {}).get("pending")
         # a rollout: the registry's next= (or the planned id the table keeps) held by one of the mains
         nxt = (planned_ids or {}).get(row["path"]) or row.get("next") or (prev or {}).get("planned")
+        was_planned = prev is not None and "planned" in prev
+        variants = {k: sorted(v) for k, v in found.items()}
         if nxt and nxt in blobs:
             target = blobs[nxt]
             if set(found) != {target}:
@@ -213,14 +221,41 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
                 owner = prev["owner"] if prev and prev["owner"] in holders else holders[0]
                 # the clock runs from when the row became planned, under whatever id: a re-rolled target does not
                 # restart it (it resets only when the row leaves the planned state)
-                still = prev is not None and "planned" in prev
-                entries.append({**base, "pending": {"since": prev["since"] if still else today, "exit": EXIT_NEXT,
-                                                    "target": target, "owner": owner, "planned": nxt,
-                                                    "variants": {k: sorted(v) for k, v in found.items()}}})
+                pending = {"since": prev["since"] if was_planned else today, "exit": EXIT_NEXT,
+                           "target": target, "owner": owner, "planned": nxt, "variants": variants}
+                moved = prev.get("moved_from") if was_planned else None
+                if moved and moved["target"] in found:
+                    pending["moved_from"] = moved  # copies with the earlier bytes remain
+                entries.append({**base, "pending": pending})
                 continue
             prev = None  # converged: a uniform row below
-        elif nxt and prev is not None and "planned" in prev:
-            prev = None  # the planned bytes are on no main any more: what the copies say, below
+        elif nxt and was_planned:
+            # the planned bytes are on no main: a re-roll to bytes no main holds yet. The row stays planned
+            # with the new target only when its bytes are given (or already recorded); it is never dropped
+            # to what the copies say (that would turn a rollout into an unplanned divergence silently)
+            if nxt == prev["planned"] and "moved_from" in prev:
+                entries.append({**base, "pending": {**prev, "variants": variants}})
+                continue
+            if nxt == prev["planned"]:
+                raise sfc.Unreadable(f"{row['path']}: the planned bytes {nxt[:12]} are on no listed main any more "
+                                     "(the owner moved off them: give the bytes the rollout goes to with --target "
+                                     "and the registry's next=, or end the rollout by hand)")
+            if row["path"] not in targets:
+                raise sfc.Unreadable(f"{row['path']}: the registry's next= {nxt[:12]} moves the planned row to bytes "
+                                     "no listed main holds yet: give their SHA-256 and owner with --target "
+                                     "PATH=SHA256@ALICE-X (a planned row is not dropped silently)")
+            target, owner = targets[row["path"]]
+            if owner not in base["repos"]:
+                raise sfc.Unreadable(f"{row['path']}: the owner {owner} is not one of the listed repositories")
+            # the bytes the row moves from: the planned ones a main still holds, or what an earlier move recorded
+            moved = ({"planned": prev["planned"], "target": prev["target"]} if prev["target"] in found
+                     else prev.get("moved_from"))
+            if moved is None or moved["target"] not in found:
+                raise sfc.Unreadable(f"{row['path']}: no listed main holds the bytes the planned row moves from")
+            entries.append({**base, "pending": {"since": prev["since"], "exit": EXIT_NEXT, "target": target,
+                                                "owner": owner, "planned": nxt, "moved_from": moved,
+                                                "variants": variants}})
+            continue
         if nxt and (not prev):
             row = {**row, "hold": ""}  # a next= no main holds (yet) holds nothing back
         goal = targets.get(row["path"], (prev["target"], "") if prev else None)

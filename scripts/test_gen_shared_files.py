@@ -106,6 +106,69 @@ class Generate(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("more than 14 days", out)
 
+    def landed_v2(self):
+        """A and B have landed v2 of a planned row, ALICE-C does not carry the file yet"""
+        v2 = SHARED + b"# v2\n"
+        self.w.commit("ALICE-C", {"scripts/s.sh": None})
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tpending\tnext={sfc.git_blob(v2)}\n")
+        self.w.commit("ALICE-A", {"scripts/s.sh": v2})
+        self.w.commit("ALICE-B", {"scripts/s.sh": v2})
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        p = self.entries()["scripts/s.sh"]["pending"]
+        self.assertEqual((p["planned"], p["variants"]), (sfc.git_blob(v2), {h(v2): ["ALICE-A", "ALICE-B"],
+                                                                           "absent": ["ALICE-C"]}))
+        return v2
+
+    def test_a_planned_row_moves_to_bytes_no_main_holds_with_their_sha256(self):
+        v2 = self.landed_v2()
+        v3 = SHARED + b"# v3\n"
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tpending\tnext={sfc.git_blob(v3)}\n")
+        self.assertEqual(run(gen.main, ["--table", str(self.t), "--today", "2026-10-19", "--write", "--next-from",
+                                        str(reg), "--target", f"scripts/s.sh={h(v3)}@ALICE-A"])[0], 0)
+        p = self.entries()["scripts/s.sh"]["pending"]
+        self.assertEqual((p["planned"], p["target"], p["owner"], p["since"]), (sfc.git_blob(v3), h(v3), "ALICE-A", TODAY))
+        self.assertEqual(p["moved_from"], {"planned": sfc.git_blob(v2), "target": h(v2)})
+        # the move is a planned row: the ratchet is unchanged, and the base explains moved_from
+        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        self.assertEqual(code, 0, out)
+        self.assertIn("pending 1 (planned 1, unplanned 0), the base table 1 (planned 1, unplanned 0)", out)
+        # the mains still hold v2 (the owner too): live passes, and the table regenerates as it is
+        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.gen("--check", "--strict")[0], 0)
+        # the owner lands v3: still moving (B has v2), then every holder has v3 and it is uniform
+        self.w.commit("ALICE-A", {"scripts/s.sh": v3})
+        self.assertEqual(self.gen("--write")[0], 0)
+        p = self.entries()["scripts/s.sh"]["pending"]
+        self.assertEqual((p["planned"], p["moved_from"]["target"]), (sfc.git_blob(v3), h(v2)))
+        self.assertEqual(run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])[0], 0)
+        self.w.commit("ALICE-B", {"scripts/s.sh": v3})
+        self.assertEqual(self.gen("--write")[0], 0)
+        p = self.entries()["scripts/s.sh"]["pending"]
+        self.assertNotIn("moved_from", p, "no main holds v2 any more")
+        self.w.commit("ALICE-C", {"scripts/s.sh": v3})
+        self.gen("--write")
+        self.assertEqual(self.entries()["scripts/s.sh"]["sha256"], h(v3))
+
+    def test_a_move_to_bytes_no_main_holds_without_their_sha256_is_refused_not_dropped(self):
+        self.landed_v2()
+        before = self.t.read_text(encoding="utf-8")
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tpending\tnext={'3' * 40}\n")
+        code, out = self.gen("--write", "--next-from", str(reg))
+        self.assertEqual(code, 2, out)
+        self.assertIn("not dropped silently", out)
+        self.assertEqual(self.t.read_text(encoding="utf-8"), before, "the table is not rewritten")
+
+    def test_a_planned_row_whose_bytes_left_every_main_is_refused_not_dropped(self):
+        self.landed_v2()
+        self.w.commit("ALICE-A", {"scripts/s.sh": SHARED})
+        self.w.commit("ALICE-B", {"scripts/s.sh": SHARED})
+        code, out = self.gen("--write")
+        self.assertEqual(code, 2, out)
+        self.assertIn("on no listed main any more", out)
+
     def test_a_next_id_that_no_copy_has_does_not_make_a_planned_row(self):
         reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tenforced\tnext=" + "1" * 40 + "\n")
         self.gen("--write", "--registry", str(reg))
