@@ -73,6 +73,11 @@ jobs:
           python3 scripts/test_workflow_gh_token_check.py
           python3 scripts/workflow_gh_token_check.py
 
+      # G11: the per-crate table of each pass gate's checker, canary, compared-nothing test and shared rows
+      # (conformance/g11.toml in a crate, which fetches this checker at a pin)
+      - name: Test the G11 table checker
+        run: python3 scripts/test_g11_table_check.py
+
       # G11 (c): the shared-file table's schema and this repository's own copies (offline);
       # the comparison with every listed repository's main is conformance-live.yml
       - name: Test the shared-file checker and its generator

@@ -404,6 +404,25 @@ this repository's own checks (`scripts/preflight.sh`) and the publish gate
 (`scripts/release_train.py publish-gate`) run the comparison with `--strict`, where an
 unlisted holder is a finding.
 
+The per-gate entries are kept as a table, `conformance/g11.toml` in the crate, one `[[row]]` per
+checker: `gate`, `checker` (a path, or `path#token`), `canary` and `zero` (references), and
+`shared` (a list of paths in `conformance/shared-files.toml`, or `"n/a: <reason>"`). A reference
+is `<path>.rs::<fn>` (a `#[test]` that runs: not `#[ignore]`, not under `#[cfg(any())]`, under
+`tests/` or after `#[cfg(test)]`, and under `#[cfg(feature = "x")]` only when a workflow or
+`scripts/preflight.sh` builds feature x), `<path>.py::<test>` (one `def test...` of that name)
+or `<path>.py::<Class>.<method>`, `<path>#<token>` (any file, workflows and `scripts/preflight.sh`
+included), or any of these as `law@<pin>:<reference>`, read in this repository at the revision
+`.github/<pin>` names (a checker the crate fetches from here is tested here).
+`scripts/g11_table_check.py --repo . --name ALICE-<crate>` reads the table: a gate the manifest
+marks `pass` (other than G11) with no row (F1), a row for a gate that is not `pass` (F2), a
+checker path or anchor that is not in the tree (F3), a canary or zero reference that does not
+resolve (F4), a row whose canary and zero are one reference (F5), and a shared path that the
+shared-file table at the crate's `.github/shared-files-pin` revision does not list for the crate,
+or `"n/a"` where it lists the checker (F6), each exit 1; no row or no `pass` gate exits 2. A crate
+fetches the checker at a revision it pins with the checker's SHA-256, as it does the shared-file
+checker. The table is a prerequisite: it does not make G11 `pass` by itself, and the evidence
+below is still required.
+
 **Claim.** Each machine-checked gate of the crate has (a) a canary its checker must flag, (b) a failure when it compared nothing, and (c) where its checker or helper is shared with other crates, a check that the copies are identical.
 
 **Evidence for `pass`.** per gate, the names of the canary test, the zero-compared test and (where shared) the copy check.
