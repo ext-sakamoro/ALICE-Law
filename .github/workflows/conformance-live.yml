@@ -73,3 +73,9 @@ jobs:
 
       - name: The table is the generated one
         run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check
+
+      # the strict pair on every push to main (an unlisted holder of the same bytes is a finding too): it also runs
+      # right before the push, and this is the backstop for a push made without it
+      - name: Strict on a push to main (scripts/shared_files_strict.sh)
+        if: github.event_name == 'push'
+        run: scripts/shared_files_strict.sh

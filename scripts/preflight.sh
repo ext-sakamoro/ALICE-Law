@@ -41,10 +41,13 @@ else
 fi
 python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
 
-echo "== the shared-file table against every listed main, strict (a change to this repository lands only with a
-# table that lists every holder; conformance-live lets a rollout land first and counts the unlisted holders)"
-python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --strict
-python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --strict
+echo "== the shared-file table against every listed main (other bytes, a missing copy, a pending row past its time and
+# nothing compared are findings; an unlisted holder of the same bytes is a counted note here: a rollout that lands in
+# another repository during this run must not make the run fail. The strict pair, where that holder is a finding
+# too, is scripts/shared_files_strict.sh: it runs on the tree to be pushed right before a push to main, and
+# conformance-live.yml on every push to main)"
+python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live
+python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check
 
 echo "== README names every release-train repository"
 python3 scripts/readme_roster_check.py
