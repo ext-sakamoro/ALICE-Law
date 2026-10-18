@@ -91,12 +91,13 @@ LABEL_RE = re.compile(r"^[A-Za-z][\w \-]{0,24}:\s+(?=\S)")
 def first_path(entry: str) -> str | None:
     """the path an evidence entry starts with (docs/CONFORMANCE.md: an entry whose first word is a
     path must exist), after backticks, a `label:` prefix, a leading `./` and a `:<line>` /
-    `::<name>` suffix are removed; None when the first word is not path-like"""
+    `::<name>` / `#<token>` suffix are removed (`path#token` is the anchor form of a place in a file);
+    None when the first word is not path-like"""
     text = LABEL_RE.sub("", str(entry).replace("`", " ").strip())
     words = text.split()
     if not words:
         return None
-    word = re.split(r"::|:(?=\d)|:$", words[0])[0].rstrip(".,;)")
+    word = re.split(r"::|:(?=\d)|:$|#", words[0])[0].rstrip(".,;)")
     while word.startswith("./"):
         word = word[2:]
     if "/" in word or re.search(r"\.(?:" + EXTENSIONS + r")$", word):

@@ -179,12 +179,13 @@ class Check(unittest.TestCase):
     def test_an_evidence_path_in_any_written_form_must_be_at_main(self):
         # the first word of an entry, after backticks, a `label:`, `:<line>`, `::<name>` and `./`
         for entry in ("tests/nope.rs:10", "tests/nope.rs::t", "`tests/nope.rs` runs it", "test: tests/nope.rs",
-                      "nope/", "./tests/nope.rs"):
+                      "nope/", "./tests/nope.rs", "`tests/nope.rs#fn checker` runs it"):
             g1 = f'status = "pass"\nevidence = ["src/lib.rs", "{entry}"]\nmutant = "m"'
             code, out, _ = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()})
             self.assertEqual(code, 1, (entry, out))
             self.assertIn("G1 evidence names paths that are not at main", out)
         for entry in ("tests/golden.rs:10", "tests/golden.rs::checker", "`tests/golden.rs`", "test: tests/golden.rs",
+                      "`tests/golden.rs#fn checker` runs it", "`src/lib.rs#pub fn x`",
                       "./src/lib.rs", "src/", "ci.yml clippy job", "src/lib.rs (see ALICE-Law's scripts/x.py)"):
             g1 = f'status = "pass"\nevidence = ["{entry}"]\nmutant = "m"'
             code, out, state = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()}, write=True)
