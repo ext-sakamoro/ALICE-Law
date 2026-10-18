@@ -188,7 +188,7 @@ One row per repository: crates that share a repository share its one manifest at
 | ALICE-Edge | alice-edge | 13 | 1 | 0 | 0 |
 | ALICE-Kinematics | alice-kinematics | 12 | 1 | 1 | 0 |
 | ALICE-LLM | alice-llm | 12 | 1 | 1 | 0 |
-| ALICE-LOL | alice-lol, alice-lol-macro | 9 | 1 | 4 | 0 |
+| ALICE-LOL | alice-lol, alice-lol-macro | 10 | 1 | 3 | 0 |
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
 | ALICE-Physics | alice-physics | 8 | 5 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 9 | 3 | 2 | 0 |
