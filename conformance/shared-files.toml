@@ -71,7 +71,7 @@ repos = ["ALICE-DB", "ALICE-Edge"]
 [[file]]
 path = "scripts/clippy-lib-canary/Cargo.lock"
 repos = []
-exempt = { "ALICE-LOL" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids", "ALICE-Physics" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids" }
+exempt = { "ALICE-LOL" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids", "ALICE-Physics" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids", "ALICE-SDF" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids" }
 
 [[file]]
 path = "scripts/clippy_canary.py"
@@ -98,7 +98,7 @@ repos = ["ALICE-DetMath", "ALICE-LOL", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/gen_clippy_canary_calls.py"
-pending = { since = "2026-10-17", exit = "the copies converge on one variant, or each differing repository is exempted with its reason", target = "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c", owner = "ALICE-Analytics", variants = { "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Zip"], "978b87ba36ac19397a21083ec2ceb5c2c40617ef2ecfbb7c963941da2ae2eb2c" = ["ALICE-Crypto", "ALICE-LLM", "ALICE-Sync"] } }
+pending = { since = "2026-10-17", exit = "the copies converge on one variant, or each differing repository is exempted with its reason", target = "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c", owner = "ALICE-Analytics", variants = { "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "978b87ba36ac19397a21083ec2ceb5c2c40617ef2ecfbb7c963941da2ae2eb2c" = ["ALICE-Crypto", "ALICE-LLM"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -134,7 +134,7 @@ repos = ["ALICE-Edge", "ALICE-ML", "ALICE-TRT", "ALICE-View"]
 path = "scripts/order_guard.py"
 sha256 = "1a39a6b6edc14ef10cc01ca94483b757009d4b80314c05bfe45716ef10adefd6"
 source = { repo = "ALICE-Analytics", rev = "4e08553181c33c56da47d6703778123f8b91cd58" }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-SDF", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/package_integrity.py"
@@ -165,6 +165,12 @@ path = "scripts/semver_gate.py"
 sha256 = "f4288be4d0b9450f91899a7e66ffd9d3f0a257d74a1b9c0764f200caf0ae52d9"
 source = { repo = "ALICE-Law", rev = "5c07ddafc0ccbd799d24f3bb4da3164b9264c711" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
+
+[[file]]
+path = "scripts/shared_files.sh"
+sha256 = "ef52b1ab6863166916bf931147a9f309f693bdd8daab4d028df9045f38f72c52"
+source = { repo = "ALICE-DetMath", rev = "7a066173d13bb4956ed9b19cc1193eb967e115e1" }
+repos = ["ALICE-DetMath", "ALICE-Kinematics"]
 
 [[file]]
 path = "scripts/stub_guard.sh"
@@ -231,7 +237,7 @@ repos = ["ALICE-DetMath", "ALICE-LOL", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_gen_clippy_canary_calls.py"
-pending = { since = "2026-10-17", exit = "the copies converge on one variant, or each differing repository is exempted with its reason", target = "413efdfdd5e75ce1771091d58346f972e2fbf3886f1931b0c93484c5232002f3", owner = "ALICE-Analytics", variants = { "413efdfdd5e75ce1771091d58346f972e2fbf3886f1931b0c93484c5232002f3" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Zip"], "ef5ce7c4d7757803211adfd4a8c20ee04e19748d8abc9a3cf9b2d7f627e30d1f" = ["ALICE-Crypto", "ALICE-LLM", "ALICE-Sync"] } }
+pending = { since = "2026-10-17", exit = "the copies converge on one variant, or each differing repository is exempted with its reason", target = "413efdfdd5e75ce1771091d58346f972e2fbf3886f1931b0c93484c5232002f3", owner = "ALICE-Analytics", variants = { "413efdfdd5e75ce1771091d58346f972e2fbf3886f1931b0c93484c5232002f3" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "ef5ce7c4d7757803211adfd4a8c20ee04e19748d8abc9a3cf9b2d7f627e30d1f" = ["ALICE-Crypto", "ALICE-LLM"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -267,7 +273,7 @@ repos = ["ALICE-Edge", "ALICE-ML", "ALICE-TRT", "ALICE-View"]
 path = "scripts/test_order_guard.py"
 sha256 = "23efe03db2ee9ac42f64408751248f7d5a6294ce3e80fa8cf0344f11526af9c8"
 source = { repo = "ALICE-Analytics", rev = "4e08553181c33c56da47d6703778123f8b91cd58" }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-SDF", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_package_integrity.py"
@@ -298,6 +304,12 @@ path = "scripts/test_semver_gate.py"
 sha256 = "c2cac3931ab6acfb837b61940f90af74562e4e01e9e8d178392ee00b1a439dbf"
 source = { repo = "ALICE-Law", rev = "5c07ddafc0ccbd799d24f3bb4da3164b9264c711" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
+
+[[file]]
+path = "scripts/test_shared_files.py"
+sha256 = "2efebaf051e2eafb9bf44c1b1444b6064d77c839bff83b36c280e4f9b66bbf1f"
+source = { repo = "ALICE-DetMath", rev = "c9ef9717fad1f08f313b02b860b7f7ef7bd9cab8" }
+repos = ["ALICE-DetMath", "ALICE-Kinematics"]
 
 [[file]]
 path = "scripts/test_tracked_binaries.py"
