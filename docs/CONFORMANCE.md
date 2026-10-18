@@ -386,6 +386,14 @@ owner's main does not hold the target (both its SHA-256 and the planned blob id)
 every copy already has the target (it has converged: regenerate), and one older than 14 days;
 the ratchet counts planned and unplanned rows separately, and only the unplanned count may
 not grow.
+A planned row re-rolled to bytes no main holds yet (some mains already took the earlier
+bytes) stays planned: the registry's `next=` names the new blob and
+`--target PATH=SHA256@ALICE-X` gives their SHA-256 and owner, and the row records
+`moved_from = { planned, target }` of the bytes it moves from, in a table-only commit before
+any main takes the new bytes. Its owner may hold either pair, a copy with a third value is a
+finding, and the branch check fails a planned id that changed without `moved_from` naming the
+base's planned id and target. The generator refuses such a move without the SHA-256, and a
+planned row whose bytes left every main, instead of dropping either to an unplanned row.
 A rollout that lands before the table is regenerated does not turn that job red: a copy on a
 main the table does not list, with the bytes of its row (or one of a pending row's
 variants), is counted as an unlisted holder with the date it appeared, while a copy with

@@ -18,10 +18,15 @@ different file at the same path), and either
     file to) is a rollout in progress: its owner has landed the new bytes first. The owner's
     main must hold the target (its SHA-256 and its blob id equal to `planned`), a planned row
     all of whose copies have the target is a finding (it has converged: regenerate), and one
-    older than PLANNED_MAX_DAYS days is a finding. With --base-table, a table with more
+    older than PLANNED_MAX_DAYS days is a finding. A planned row re-rolled to bytes no main
+    holds yet records `moved_from` = { planned, target } of the bytes it moves from: its owner
+    may hold either pair, and a copy with a third value is a finding (a moving rollout carries
+    exactly two). With --base-table, a table with more
     unplanned pending rows than the base is a finding (a planned row may be born; an
     unplanned divergence may not grow), and so is a row pending in both whose `since` is
-    later than the base's (the age limits cannot be restarted by editing the date).
+    later than the base's (the age limits cannot be restarted by editing the date), and a
+    planned row whose planned id differs from the base's without `moved_from` naming the
+    base's planned id and target (or a `moved_from` the base does not explain).
 
 A repository that legitimately has a different file at a shared path is exempted on that
 path's entry with its reason; the discovery scope itself has no exceptions. A path that looks
@@ -100,6 +105,13 @@ def is_planned(e: dict) -> bool:
     return "planned" in e.get("pending", {})
 
 
+def moving_bytes(e: dict) -> set[str]:
+    """the SHA-256 a pending row is moving between: its target, and for a planned row moved to new bytes the
+    bytes it moves from"""
+    p = e["pending"]
+    return {p["target"]} | ({p["moved_from"]["target"]} if "moved_from" in p else set())
+
+
 def pending_counts(entries: list[dict]) -> tuple[int, int]:
     """(planned, unplanned) pending rows"""
     planned = sum(is_planned(e) for e in entries)
@@ -167,8 +179,10 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
             pass
         elif "pending" in f:
             p = f["pending"]
-            if not isinstance(p, dict) or set(p) - {"planned"} != {"since", "exit", "target", "owner", "variants"}:
-                raise Unreadable(f"{where}: pending must be {{ since, exit, target, owner, variants[, planned] }}")
+            if (not isinstance(p, dict) or set(p) - {"planned", "moved_from"} != {"since", "exit", "target", "owner",
+                                                                                  "variants"}):
+                raise Unreadable(f"{where}: pending must be {{ since, exit, target, owner, variants[, planned"
+                                 "[, moved_from]] }")
             if not isinstance(p["target"], str) or not HEX64.match(p["target"]):
                 raise Unreadable(f"{where}: pending.target must be the SHA-256 that becomes the file's bytes")
             if not isinstance(p["owner"], str) or not REPO.match(p["owner"]) or p["owner"] not in repos:
@@ -191,8 +205,21 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
             if "planned" in p:
                 if not isinstance(p["planned"], str) or not HEX40.match(p["planned"]):
                     raise Unreadable(f"{where}: pending.planned must be the 40-hex git blob id the registry moves to")
-                if p["owner"] not in v.get(p["target"], []):
+                held = [p["target"]]
+                if "moved_from" in p:
+                    m = p["moved_from"]
+                    if (not isinstance(m, dict) or set(m) != {"planned", "target"} or not isinstance(m["planned"], str)
+                            or not HEX40.match(m["planned"]) or not isinstance(m["target"], str)
+                            or not HEX64.match(m["target"])):
+                        raise Unreadable(f"{where}: pending.moved_from must be {{ planned = \"<40 hex>\", "
+                                         "target = \"<SHA-256>\" }, the rollout's earlier bytes")
+                    if m["planned"] == p["planned"] or m["target"] == p["target"]:
+                        raise Unreadable(f"{where}: pending.moved_from must name other bytes than the target")
+                    held.append(m["target"])  # the owner lands the new bytes after the table records them
+                if not any(p["owner"] in v.get(t, []) for t in held):
                     raise Unreadable(f"{where}: a planned row's owner must hold the target in its variants")
+            elif "moved_from" in p:
+                raise Unreadable(f"{where}: pending.moved_from belongs to a planned row")
         else:
             if not isinstance(f["sha256"], str) or not HEX64.match(f["sha256"]):
                 raise Unreadable(f"{where}: sha256 is not 64 lower-case hex digits")
@@ -253,7 +280,7 @@ def check_repo(entries: list[dict], root: Path, name: str) -> tuple[list[str], l
                 got = sha256(f.read_bytes())
                 # the target is accepted before a regeneration records it as a variant: it is where the row
                 # is going, so a crate that already took it is not drift
-                if got not in e["pending"]["variants"] and got != e["pending"]["target"]:
+                if got not in e["pending"]["variants"] and got not in moving_bytes(e):
                     problems.append(f"{rel}: sha256 {got} is none of the pending row's variants nor its target")
                 else:
                     on = "the target" if got == e["pending"]["target"] else "not yet the target"
@@ -413,10 +440,25 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                     owner_blob = (sha256(data), git_blob(data))
             if is_planned(e):
                 p = e["pending"]
-                if owner_blob != (p["target"], p["planned"]):
+                m = p.get("moved_from")
+                # a planned row moved to new bytes: until its owner lands them, the owner holds the earlier pair
+                pairs = [(p["target"], p["planned"])] + ([(m["target"], m["planned"])] if m else [])
+                if owner_blob not in pairs:
                     got = f"sha256 {owner_blob[0][:12]}, blob {owner_blob[1][:12]}" if owner_blob else "no copy"
+                    earlier = f", or the earlier {m['target'][:12]} / {m['planned'][:12]}" if m else ""
                     problems.append(f"{e['path']}: planned row, but the owner {p['owner']} main does not hold the "
-                                    f"target (sha256 {p['target'][:12]}, blob {p['planned'][:12]}; it has {got})")
+                                    f"target (sha256 {p['target'][:12]}, blob {p['planned'][:12]}{earlier}; "
+                                    f"it has {got})")
+                if m:
+                    # a moving rollout carries exactly two bytes: any third is drift, not a step of the rollout
+                    stray = sorted(k for k in found if k != "absent" and k not in moving_bytes(e))
+                    for k in stray:
+                        problems.append(f"{e['path']}: {', '.join(found[k])} main has sha256 {k[:12]}, neither the "
+                                        f"planned target {p['target'][:12]} nor the bytes it moves from "
+                                        f"{m['target'][:12]}")
+                    if m["target"] not in found:
+                        notes.append(f"{e['path']}: no main holds the bytes the planned row moved from any more "
+                                     "(regenerate the table: moved_from goes)")
                 if set(found) == {p["target"]}:
                     problems.append(f"{e['path']}: planned row whose every copy has the target: it has converged "
                                     "(regenerate the table)")
@@ -461,7 +503,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
         listed = set(e["repos"]) | set(e.get("exempt", {}))
         known_bytes = ({e["sha256"]} if "sha256" in e
                        else {k for k in e.get("pending", {}).get("variants", {}) if k != "absent"}
-                       | ({e["pending"]["target"]} if "pending" in e else set()))
+                       | (moving_bytes(e) if "pending" in e else set()))
         for r, files in trees.items():
             if r in listed or e["path"] not in files:
                 continue
@@ -509,10 +551,12 @@ def main(argv: list[str]) -> int:
         entries = load(a.table.read_text(encoding="utf-8"))
         base_pending = None
         base_since: dict[str, str] = {}
+        base_planned: dict[str, dict] = {}
         if a.base_table is not None:
             base_entries = load(a.base_table.read_text(encoding="utf-8"))
             base_pending = pending_counts(base_entries)
             base_since = {e["path"]: e["pending"]["since"] for e in base_entries if "pending" in e}
+            base_planned = {e["path"]: e["pending"] for e in base_entries if is_planned(e)}
         if a.repo is not None:
             if not REPO.match(a.name):
                 raise Unreadable(f"--name {a.name!r} is not an ALICE-… repository name")
@@ -540,6 +584,19 @@ def main(argv: list[str]) -> int:
             if "pending" in e and was is not None and e["pending"]["since"] > was:
                 problems.append(f"{e['path']}: pending since {e['pending']['since']}, the base table says {was} "
                                 "(a pending row's date only stays or goes back)")
+            # a planned row moved to other bytes names what it moved from: the base's planned id and target,
+            # or the same move the base already recorded
+            if not is_planned(e):
+                continue
+            p, b = e["pending"], base_planned.get(e["path"])
+            m = p.get("moved_from")
+            if b is not None and b["planned"] != p["planned"]:
+                if m != {"planned": b["planned"], "target": b["target"]}:
+                    problems.append(f"{e['path']}: the planned id moved from {b['planned'][:12]} to "
+                                    f"{p['planned'][:12]} without moved_from naming the base's planned id and target")
+            elif m is not None and (b is None or b.get("moved_from") != m):
+                problems.append(f"{e['path']}: moved_from names {m['planned'][:12]}, which is not the base table's "
+                                "planned id for this row")
         planned, unplanned = pending_counts(entries)
         if planned + unplanned != c[3]:
             problems.append(f"the pending rows counted ({c[3]}) are not the planned and unplanned ones "
