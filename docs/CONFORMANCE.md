@@ -406,9 +406,13 @@ The per-gate entries are kept as a table, `conformance/g11.toml` in the crate, o
 checker: `gate`, `checker` (a path, or `path#token`), `canary` and `zero` (references), and
 `shared` (a list of paths in `conformance/shared-files.toml`, or `"n/a: <reason>"`). A reference
 is `<path>.rs::<fn>` (a `#[test]` that runs: not `#[ignore]`, not under `#[cfg(any())]`, under
-`tests/` or after `#[cfg(test)]`, and under `#[cfg(feature = "x")]` only when a workflow or
-`scripts/preflight.sh` builds feature x), `<path>.py::<test>` (one `def test...` of that name)
-or `<path>.py::<Class>.<method>`, `<path>#<token>` (any file, workflows and `scripts/preflight.sh`
+`tests/` or after `#[cfg(test)]`, and a command of a workflow or `scripts/preflight.sh` (comments
+dropped) that runs it: `cargo test` / `cargo nextest run` / `scripts/run_tests.sh` /
+`scripts/cargo_test_nonzero.sh` for its package, selecting the lib's unit tests (no target selection,
+`--lib`, `--tests` or `--all-targets`) or, for `tests/<t>.rs`, that target (`--test <t>`), with every
+feature it needs on that command: `#[cfg(feature = ...)]` on it or an enclosing module and the
+target's `required-features`), `<path>.py::<test>` (one `def test...` of that name, in a file a
+workflow or `scripts/preflight.sh` command runs) or `<path>.py::<Class>.<method>`, `<path>#<token>` (any file, workflows and `scripts/preflight.sh`
 included), or any of these as `law@<pin>:<reference>`, read in this repository at the revision
 `.github/<pin>` names (a checker the crate fetches from here is tested here).
 `scripts/g11_table_check.py --repo . --name ALICE-<crate>` reads the table: a gate the manifest

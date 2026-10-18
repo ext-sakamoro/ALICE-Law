@@ -26,8 +26,13 @@ CRATE = {
     "alice-law-conformance.toml": '[G1]\nstatus = "pass"\n\n[G4]\nstatus = "pass"\n\n[G9]\nstatus = "fail-known"\n\n'
                                   '[G11]\nstatus = "unverified"\n',
     ".github/shared-files-pin": f"name {NAME}\nrev {REV}\ntable-sha256 {'0' * 64}\nchecker-sha256 {'0' * 64}\n",
+    "Cargo.toml": '[package]\nname = "demo"\n\n[features]\ndefault = []\nextra = []\nsvo = []\n',
     ".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n      - run: scripts/run_tests.sh golden -- cargo test --test golden\n"
-                                "      - run: cargo test --features extra --lib\n",
+                                "      - run: cargo test --features extra --lib\n"
+                                "      # cargo test --features svo --lib (a comment builds nothing)\n"
+                                "      - run: cargo clippy --features svo --lib\n"
+                                "      - run: cargo test --features svo --test other_target\n"
+                                "      - run: |\n          python3 scripts/test_ban.py\n          python3 scripts/test_run_tests.py\n",
     "scripts/run_tests.sh": "#!/bin/sh\n",
     "scripts/test_run_tests.py": "import unittest\nclass RunTests(unittest.TestCase):\n"
                                  "    def test_no_test_ran_fails(self):\n        pass\n"
@@ -59,6 +64,7 @@ LAW = {
                                      f'[[file]]\npath = "scripts/other.py"\nrepos = ["ALICE-Else"]\n',
     "scripts/test_shared_files_check.py": "import unittest\nclass Shared(unittest.TestCase):\n"
                                           "    def test_compared_nothing_exits_2(self):\n        pass\n",
+    ".github/workflows/law.yml": "jobs:\n  t:\n    steps:\n      - run: python3 scripts/test_shared_files_check.py\n",
 }
 
 
@@ -122,7 +128,7 @@ class Table(unittest.TestCase):
 
     def test_f3_an_anchor_that_occurs_twice(self):
         self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#run:")
-        self.assertFinding("F3", "occurs 2 times")
+        self.assertFinding("F3", "an anchor names one place")
 
     def test_f4_a_renamed_rust_test(self):
         self.edit("tests/golden.rs", "fn a_wrong_digest_is_refused", "fn renamed")
@@ -134,11 +140,45 @@ class Table(unittest.TestCase):
 
     def test_f4_a_feature_gated_test_no_ci_step_builds(self):
         self.edit("conformance/g11.toml", "tests/golden.rs::a_wrong_digest_is_refused", "src/lib.rs::gated_unbuilt")
-        self.assertFinding("F4", "needs feature 'svo'")
+        self.assertFinding("F4", "with feature(s) ['svo']")
 
     def test_a_feature_gated_test_a_ci_step_builds_resolves(self):
         self.edit("conformance/g11.toml", "tests/golden.rs::a_wrong_digest_is_refused", "src/lib.rs::gated_built")
         self.assertEqual(self.run_main()[0], 0)
+
+    def test_f4_the_feature_only_on_a_clippy_line_a_comment_or_another_target(self):
+        # src/lib.rs::gated_unbuilt needs svo: the fixture's CI names svo on a comment, a clippy line and a
+        # `cargo test --test other_target` line, none of which runs the lib's unit tests with svo
+        self.edit("conformance/g11.toml", "tests/golden.rs::a_wrong_digest_is_refused", "src/lib.rs::gated_unbuilt")
+        self.assertFinding("F4", "lib's unit tests of demo with feature(s) ['svo']")
+
+    def test_a_lib_test_line_with_the_feature_resolves(self):
+        self.edit("conformance/g11.toml", "tests/golden.rs::a_wrong_digest_is_refused", "src/lib.rs::gated_unbuilt")
+        self.edit(".github/workflows/ci.yml", "      - run: cargo test --features extra --lib\n",
+                  "      - run: cargo test --features extra --lib\n      - run: cargo test --lib --features svo gated\n")
+        self.assertEqual(self.run_main()[0], 0)
+
+    def test_a_lib_test_line_for_another_package_does_not_count(self):
+        self.edit("conformance/g11.toml", "tests/golden.rs::a_wrong_digest_is_refused", "src/lib.rs::gated_unbuilt")
+        self.edit(".github/workflows/ci.yml", "      - run: cargo test --features extra --lib\n",
+                  "      - run: cargo test --features extra --lib\n      - run: cargo test -p other --lib --features svo\n")
+        self.assertFinding("F4", "with feature(s) ['svo']")
+
+    def test_an_integration_test_needs_a_run_selecting_it(self):
+        self.edit(".github/workflows/ci.yml", "      - run: scripts/run_tests.sh golden -- cargo test --test golden\n", "")
+        self.assertFinding("F4", "the integration test golden")
+
+    def test_required_features_of_a_test_target_count(self):
+        self.edit("Cargo.toml", "svo = []\n", 'svo = []\n\n[[test]]\nname = "golden"\nrequired-features = ["svo"]\n')
+        self.assertFinding("F4", "the integration test golden of demo with feature(s) ['svo']")
+
+    def test_a_python_test_no_command_runs(self):
+        self.edit(".github/workflows/ci.yml", "          python3 scripts/test_ban.py\n", "")
+        self.assertFinding("F4", "scripts/test_ban.py: no workflow or scripts/preflight.sh command runs it")
+
+    def test_a_python_test_named_only_in_a_comment(self):
+        self.edit(".github/workflows/ci.yml", "          python3 scripts/test_ban.py\n", "          # python3 scripts/test_ban.py\n")
+        self.assertFinding("F4", "scripts/test_ban.py: no workflow")
 
     def test_f4_a_missing_python_test(self):
         self.edit("scripts/test_ban.py", "def test_flags_the_canary", "def test_other")
