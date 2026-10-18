@@ -70,7 +70,7 @@ class Check(unittest.TestCase):
                 return repos.get(repo), set(PATHS)
             out = io.StringIO()
             args = ["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing", str(d / "m.toml"),
-                    "--state", str(st)] + (["--write"] if write else [])
+                    "--state", str(st), "--pending", str(d / "p.toml")] + (["--write"] if write else [])
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(args, fetch=fetch)
             self.assertNotIn("Law", calls)  # an exempt crate is not read
@@ -599,6 +599,143 @@ class Internal(unittest.TestCase):
         code, out, _ = check.run_check({"Alpha": manifest(), "Beta": manifest()}, state="# stale\n", write=False)
         self.assertEqual(code, 1, out)
         self.assertIn("regenerate manifest-state: run python3 scripts/conformance_roster_check.py --write", out)
+
+
+class Pending(unittest.TestCase):
+    """the state recorded before a crate lands: conformance/pending-state.toml"""
+    SHA = "a" * 40
+    PASSED = manifest(G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
+
+    def go(self, mains: dict, pending: str | None, at: dict, status: dict, state: str, *flags: str,
+           today: str = "2026-10-19"):
+        """mains: {repo: manifest}; at: {(repo, sha): manifest}; status: {(repo, sha): compare status}"""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "r.toml").write_text(ROSTER, encoding="utf-8")
+            (d / "g.toml").write_text(GATES, encoding="utf-8")
+            (d / "s.toml").write_text(state, encoding="utf-8")
+            if pending is not None:
+                (d / "p.toml").write_text(pending, encoding="utf-8")
+            reads = []
+
+            def at_fetch(repo, sha):
+                reads.append((repo, sha))
+                return at[(repo, sha)], set(PATHS)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
+                                 str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
+                                 "--today", today, *flags],
+                                fetch=lambda repo: (mains.get(repo), set(PATHS)),
+                                at=at_fetch, compare=lambda repo, sha: status[(repo, sha)])
+            written = (d / "s.toml").read_text(encoding="utf-8")
+            pend = (d / "p.toml").read_text(encoding="utf-8") if (d / "p.toml").exists() else None
+            return code, out.getvalue(), written, pend, reads
+
+    def state_of(self, mains: dict) -> str:
+        """the state file the roster writes for these manifests"""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "r.toml").write_text(ROSTER, encoding="utf-8")
+            (d / "g.toml").write_text(GATES, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
+                                           str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending",
+                                           str(d / "p.toml"), "--write"],
+                                          fetch=lambda repo: (mains.get(repo), set(PATHS))), 0)
+            return (d / "s.toml").read_text(encoding="utf-8")
+
+    def entry(self, sha: str = SHA, since: str = "2026-10-18", repo: str = "Alpha") -> str:
+        return f'[pending."{repo}"]\nsha = "{sha}"\nsince = "{since}"\n'
+
+    def setUp(self):
+        self.old = {"Alpha": manifest(), "Beta": manifest()}
+        self.new = {"Alpha": self.PASSED, "Beta": manifest()}
+        self.recorded = self.state_of(self.new)  # the state the regen commit records before Alpha lands
+
+    def test_a_difference_a_pending_entry_explains_passes_and_the_counts_are_computed_at_its_commit(self):
+        code, out, _, _, reads = self.go(self.old, self.entry(), {("Alpha", self.SHA): self.PASSED},
+                                         {("Alpha", self.SHA): "ahead"}, self.recorded)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"Alpha: pending: the state records {self.SHA[:12]}, not landed yet", out)
+        self.assertEqual(reads, [("Alpha", self.SHA)])
+
+    def test_without_an_entry_the_same_difference_is_a_finding(self):
+        code, out, *_ = self.go(self.old, None, {}, {}, self.recorded)
+        self.assertEqual(code, 1, out)
+        self.assertIn("differs from the manifests at main", out)
+
+    def test_an_entry_whose_commit_has_other_counts_than_the_table_is_a_finding(self):
+        # the entry names a commit whose manifest flips G2 too: the table (G3 only) is not that commit's state
+        other = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"',
+                         G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
+        code, out, *_ = self.go(self.old, self.entry(), {("Alpha", self.SHA): other},
+                                {("Alpha", self.SHA): "ahead"}, self.recorded)
+        self.assertEqual(code, 1, out)
+        self.assertIn("differs from the manifests at main", out)
+
+    def test_an_entry_that_does_not_move_the_state_is_a_finding(self):
+        code, out, *_ = self.go(self.old, self.entry(), {("Alpha", self.SHA): manifest()},
+                                {("Alpha", self.SHA): "ahead"}, self.state_of(self.old))
+        self.assertEqual(code, 1, out)
+        self.assertIn("does not move the state", out)
+
+    def test_a_landed_entry_is_a_note_in_live_and_a_finding_under_strict(self):
+        args = (self.new, self.entry(), {}, {("Alpha", self.SHA): "identical"}, self.recorded)
+        code, out, *_ = self.go(*args)
+        self.assertEqual(code, 0, out)
+        self.assertIn("has landed on main", out)
+        code, out, *_ = self.go(*args, "--strict")
+        self.assertEqual(code, 1, out)
+        self.assertIn("found: Alpha: pending entry", out)
+        # main moved past the commit: landed too
+        code, out, *_ = self.go(self.new, self.entry(), {}, {("Alpha", self.SHA): "behind"}, self.recorded, "--strict")
+        self.assertEqual(code, 1, out)
+
+    def test_a_landed_entry_older_than_three_days_is_a_finding_in_live_too(self):
+        code, out, *_ = self.go(self.new, self.entry(since="2026-10-15"), {}, {("Alpha", self.SHA): "identical"},
+                                self.recorded, today="2026-10-19")
+        self.assertEqual(code, 1, out)
+        self.assertIn("(4 days old)", out)
+
+    def test_an_entry_that_has_not_landed_in_three_days_is_a_finding(self):
+        args = (self.old, self.entry(since="2026-10-15"), {("Alpha", self.SHA): self.PASSED},
+                {("Alpha", self.SHA): "ahead"}, self.recorded)
+        code, out, *_ = self.go(*args, today="2026-10-19")
+        self.assertEqual(code, 1, out)
+        self.assertIn("more than 3 days without landing", out)
+        self.assertEqual(self.go(*args, today="2026-10-18")[0], 0)  # 3 days: still inside
+
+    def test_a_diverged_commit_is_a_finding(self):
+        code, out, *_ = self.go(self.old, self.entry(), {}, {("Alpha", self.SHA): "diverged"}, self.recorded)
+        self.assertEqual(code, 1, out)
+        self.assertIn("not on the way to main (diverged)", out)
+
+    def test_bad_entries_are_unreadable_or_findings(self):
+        for pending, why, code_want in (
+                (self.entry() + self.entry(), "Cannot declare", 2),  # two entries for one crate
+                (self.entry(sha="abc"), "full 40-hex", 2),
+                (self.entry(since="soon"), "YYYY-MM-DD", 2),
+                ('[pending."Alpha"]\nsha = "' + self.SHA + '"\n', "must be { sha, since }", 2),
+                ("[other]\n", "unknown top-level keys", 2),
+                (self.entry(repo="Gamma"), "names a repository the state does not record", 1),
+                (self.entry(since="2026-10-25"), "after today", 1)):
+            with self.subTest(why=why):
+                code, out, *_ = self.go(self.old, pending, {("Alpha", self.SHA): self.PASSED},
+                                        {("Alpha", self.SHA): "ahead", ("Gamma", self.SHA): "ahead"}, self.recorded)
+                self.assertEqual(code, code_want, out)
+                self.assertIn(why, out)
+
+    def test_write_keeps_an_entry_that_has_not_landed_and_drops_one_that_has(self):
+        both = self.entry() + "\n" + self.entry(sha="b" * 40, repo="Beta")
+        beta_new = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"')
+        code, out, written, pend, _ = self.go(
+            {"Alpha": self.PASSED, "Beta": manifest()}, both, {("Beta", "b" * 40): beta_new},
+            {("Alpha", self.SHA): "identical", ("Beta", "b" * 40): "ahead"}, self.recorded, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('"Alpha"', pend)
+        self.assertIn(f'[pending."Beta"]\nsha = "{"b" * 40}"', pend)
+        self.assertEqual(written, self.state_of({"Alpha": self.PASSED, "Beta": beta_new}))
 
 
 if __name__ == "__main__":

@@ -58,7 +58,7 @@ class Strict(unittest.TestCase):
         # the roster check finds manifest-state.toml behind the crates' mains: no receipt for a stale state
         p = self.run_with(state=(1, ""))
         self.assertEqual(p.returncode, 1, p.stderr)
-        self.assertIn("finding (conformance_roster_check.py)", p.stderr)
+        self.assertIn("finding (conformance_roster_check.py --strict)", p.stderr)
         p = self.run_with(readme=(1, ""))
         self.assertEqual(p.returncode, 1, p.stderr)
         self.assertIn("finding (gen_law_status.py --check)", p.stderr)
@@ -66,7 +66,7 @@ class Strict(unittest.TestCase):
     def test_the_state_checks_run_and_are_not_a_pass_when_they_compare_nothing(self):
         p = self.run_with(state=(2, "error: nothing was compared (0 manifests, 0 gates)\n"))
         self.assertEqual(p.returncode, 2, p.stderr)
-        self.assertIn("nothing compared (conformance_roster_check.py)", p.stderr)
+        self.assertIn("nothing compared (conformance_roster_check.py --strict)", p.stderr)
         p = self.run_with(readme=(2, "error: no README was compared\n"))
         self.assertEqual(p.returncode, 2, p.stderr)
         self.assertIn("nothing compared (gen_law_status.py --check)", p.stderr)
