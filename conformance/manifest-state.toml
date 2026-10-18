@@ -53,8 +53,8 @@ crates = ["alice-llm"]
 
 [manifest."ALICE-LOL"]
 crates = ["alice-lol", "alice-lol-macro"]
-"pass" = 6
-"fail-known" = 2
+"pass" = 7
+"fail-known" = 1
 "unverified" = 6
 "n/a" = 0
 

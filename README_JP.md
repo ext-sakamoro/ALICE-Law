@@ -188,7 +188,7 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 | ALICE-Edge | alice-edge | 13 | 1 | 0 | 0 |
 | ALICE-Kinematics | alice-kinematics | 12 | 1 | 1 | 0 |
 | ALICE-LLM | alice-llm | 12 | 1 | 1 | 0 |
-| ALICE-LOL | alice-lol, alice-lol-macro | 6 | 2 | 6 | 0 |
+| ALICE-LOL | alice-lol, alice-lol-macro | 7 | 1 | 6 | 0 |
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
 | ALICE-Physics | alice-physics | 8 | 5 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 9 | 3 | 2 | 0 |
