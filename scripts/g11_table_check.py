@@ -46,6 +46,7 @@ import argparse
 import ast
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -154,22 +155,95 @@ def enclosing_features(code: str, text: str, start: int) -> set[str]:
     return feats
 
 
-def ci_text(tree: Tree) -> str:
-    parts = []
+RUNNER_RE = re.compile(r"\bcargo\s+(?:\+\S+\s+)?(?:test|nextest\s+run)\b|\bscripts/(?:run_tests|cargo_test_nonzero)\.sh\b")
+SELECTORS = ("--lib", "--bin", "--bins", "--test", "--tests", "--example", "--examples", "--bench", "--benches",
+             "--doc", "--all-targets")
+
+
+def ci_commands(tree: Tree) -> list[str]:
+    """every command of the workflows and scripts/preflight.sh: comment lines and trailing ` # ...` dropped,
+    `\\` continuations joined, a YAML `run:` key taken off (a feature named in a comment, or on a clippy line,
+    builds nothing)"""
+    out = []
     for p in sorted(tree.paths):
-        if any(p.startswith(g + "/") and p.endswith((".yml", ".yaml")) for g in CI_GLOBS) or p in CI_FILES:
-            parts.append(tree.read(p) or "")
-    return "\n".join(parts)
+        if not (any(p.startswith(g + "/") and p.endswith((".yml", ".yaml")) for g in CI_GLOBS) or p in CI_FILES):
+            continue
+        buf = ""
+        for raw in (tree.read(p) or "").splitlines():
+            line = raw.strip()
+            if line.startswith("#"):
+                continue
+            line = re.sub(r"\s#\s.*$", "", line)
+            line = re.sub(r"^-?\s*run:\s*\|?", "", line).strip()
+            if line.endswith("\\"):
+                buf += line[:-1] + " "
+                continue
+            if buf + line:
+                out.append(buf + line)
+            buf = ""
+    return out
 
 
-def feature_built(ci: str, feature: str) -> bool:
-    if "--all-features" in ci:
+def words(cmd: str) -> list[str]:
+    try:
+        return shlex.split(cmd)
+    except ValueError:
+        return cmd.split()
+
+
+def option_values(ws: list[str], *names: str) -> list[str]:
+    vals = []
+    for i, w in enumerate(ws):
+        for n in names:
+            if w == n and i + 1 < len(ws):
+                vals.append(ws[i + 1])
+            elif w.startswith(n + "="):
+                vals.append(w[len(n) + 1:])
+    return vals
+
+
+def package_of(tree: Tree, path: str) -> tuple[str | None, dict]:
+    """(package name, its manifest) of the nearest Cargo.toml with a [package] above `path`"""
+    parts = path.split("/")[:-1]
+    while True:
+        manifest = "/".join(parts + ["Cargo.toml"])
+        if manifest in tree.paths:
+            try:
+                data = tomllib.loads(tree.read(manifest) or "")
+            except tomllib.TOMLDecodeError:
+                data = {}
+            if "package" in data:
+                return data["package"].get("name"), data
+        if not parts:
+            return None, {}
+        parts.pop()
+
+
+def command_runs(cmd: str, package: str | None, defaults: set[str], needs: set[str], target: str | None) -> bool:
+    """the command runs cargo's tests of `package` with every feature in `needs` turned on, building the lib's
+    unit tests (`target` None) or the integration test `target`"""
+    ws = words(cmd)
+    if not RUNNER_RE.search(cmd):
+        return False
+    pkgs = option_values(ws, "-p", "--package")
+    if pkgs and package not in pkgs and "--workspace" not in ws and "--all" not in ws:
+        return False
+    sel = [w for w in ws if w.split("=")[0] in SELECTORS]
+    if sel and not ({"--all-targets", "--tests"} & set(sel)):
+        if target is None and "--lib" not in sel:
+            return False
+        if target is not None and target not in option_values(ws, "--test"):
+            return False
+    if "--all-features" in ws:
         return True
-    for line in ci.splitlines():
-        if re.search(r"--features[\s=]|features:", line) and re.search(r"(?<![\w-])" + re.escape(feature) +
-                                                                        r"(?![\w-])", line):
-            return True
-    return False
+    on = set() if "--no-default-features" in ws else set(defaults)
+    for v in option_values(ws, "--features", "-F"):
+        if "${{" in v:
+            continue  # a matrix value this check cannot expand; not counted
+        for f in re.split(r"[,\s]+", v):
+            if f:
+                on.add(f.split("/")[-1] if "/" not in f or f.split("/")[0] == package else "")
+    return needs <= on
 
 
 def rs_test_gap(tree: Tree, path: str, name: str) -> str | None:
@@ -192,11 +266,20 @@ def rs_test_gap(tree: Tree, path: str, name: str) -> str | None:
     if not re.search(r"(^|/)tests/", path) and not re.search(r"#\[\s*cfg\s*\(\s*test\s*\)\s*\]",
                                                               code[:at[0].start()]):
         return f"{path}: {name} is outside tests/ and no #[cfg(test)] precedes it"
-    ci = ci_text(tree)
-    for f in sorted(enclosing_features(code, text, at[0].start())):
-        if not feature_built(ci, f):
-            return (f"{path}: {name} needs feature {f!r} and no workflow or scripts/preflight.sh builds it "
-                    f"(--features {f} or --all-features)")
+    package, manifest = package_of(tree, path)
+    needs = set(enclosing_features(code, text, at[0].start()))
+    m = re.match(r"(?:.*/)?tests/(?P<t>[\w-]+)\.rs$", path)
+    target = m["t"] if m else None
+    if target is not None:
+        for t in manifest.get("test", []):
+            if t.get("name") == target:
+                needs |= set(t.get("required-features", []))
+    defaults = set(manifest.get("features", {}).get("default", []))
+    if not any(command_runs(c, package, defaults, needs, target) for c in ci_commands(tree)):
+        what = f"the integration test {target}" if target else "the lib's unit tests"
+        feats = f" with feature(s) {sorted(needs)}" if needs else ""
+        return (f"{path}: {name}: no workflow or scripts/preflight.sh command runs {what} of {package}{feats} "
+                f"(a cargo test / run_tests.sh / cargo_test_nonzero.sh line selecting it, the features on that line)")
     return None
 
 
@@ -224,6 +307,8 @@ def py_test_gap(tree: Tree, path: str, cls: str | None, name: str) -> str | None
         return f"{path}: no {cls + '.' if cls else ''}{name}"
     if len(found) > 1:
         return f"{path}: {name} is ambiguous ({', '.join(found)}); write <Class>.<method>"
+    if not any(re.search(r"(?<![\w./-])" + re.escape(path) + r"(?![\w./-])", c) for c in ci_commands(tree)):
+        return f"{path}: no workflow or scripts/preflight.sh command runs it"
     return None
 
 
