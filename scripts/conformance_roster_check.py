@@ -289,6 +289,53 @@ def law_evidence_gap(gid: str, e: dict, paths: set[str], read) -> str | None:
     return None
 
 
+# an evidence anchor: `path#token`, a place in a file named by a string that occurs there exactly once
+# (or `path#A>B`: A once, then the first B after it), the form that replaces line numbers
+ANCHOR_RE = re.compile(r"(?P<path>(?:[\w.\-]+/)*[\w.\-]+\.[\w]+|(?:[\w.\-]+/)+[\w.\-]+)#(?P<token>.+)", re.S)
+
+
+def anchors_in(text: str):
+    """the anchors of a string: its code spans (the text between a pair of backticks) that are a path,
+    `#` and a token; a span such as `#[cfg(test)]` is code, not an anchor"""
+    for span in text.split("`")[1::2]:
+        m = ANCHOR_RE.fullmatch(span)
+        if m:
+            yield m
+
+
+def anchor_gap(path: str, token: str, paths: set[str], read) -> str | None:
+    """None when `path#token` names one place: the path is a file at the ref and the token occurs in it
+    exactly once, or it splits at a `>` into a scope A that occurs once and a B that occurs after it (the
+    whole token is tried first, so a token like `-> f32` is not read as a scope); otherwise why not"""
+    if path not in paths:
+        return f"{path} is not a file at the ref (anchors take the path from the repository root)"
+    text = read(path) if read is not None else None
+    if text is None:
+        return f"{path} could not be read"
+    n = text.count(token)
+    if n == 1:
+        return None
+    for i, ch in enumerate(token):
+        if ch == ">" and 0 < i < len(token) - 1:
+            a, b = token[:i], token[i + 1:]
+            if text.count(a) == 1 and b in text[text.index(a) + len(a):]:
+                return None
+    return f"{token!r} occurs {n} times in {path} (an anchor must name one place: lengthen it or scope it as A>B)"
+
+
+def strings_in(value, field: str):
+    """(field, string) for every string inside a gate's value: a list's items and a table's values,
+    recursively, each under the top-level field it sits in"""
+    if isinstance(value, str):
+        yield field, value
+    elif isinstance(value, list):
+        for v in value:
+            yield from strings_in(v, field)
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from strings_in(v, field)
+
+
 def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], paths: set[str],
                    warnings: list[str], at: str = "main", read=None) -> tuple[list[str], dict[str, int], int]:
     """(findings, status counts, gates compared) for one crate's manifest text; `paths` are the files at `at`,
@@ -308,6 +355,7 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
         findings.append(f"{where}: {gid} is not a gate of conformance/gates.toml")
     counts = dict.fromkeys(STATUSES, 0)
     compared = 0
+    anchors: dict[str, int] = {}
     for gid in sorted(ids & set(vocab), key=lambda g: int(g[1:])):
         e = manifest[gid]
         compared += 1
@@ -329,6 +377,14 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
         gone = sorted({t for t in named if not exists(t, paths)})
         if gone:
             findings.append(f"{where}: {gid} evidence names paths that are not at {at}: {gone}")
+        # every string of the gate's table (evidence, mutant, note, tie_tests, any later field)
+        for field in sorted(e):
+            for _, x in strings_in(e[field], field):
+                for m in anchors_in(x):
+                    anchors[field] = anchors.get(field, 0) + 1
+                    why = anchor_gap(m["path"], m["token"], paths, read)
+                    if why:
+                        findings.append(f"{where}: {gid} {field} anchor `{m['path']}#{m['token']}`: {why}")
         mutant = e.get("mutant", "")
         if "mutant" in e and not isinstance(mutant, str):
             findings.append(f"{where}: {gid} mutant is not a string")
@@ -354,6 +410,9 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
                 warnings.append(f"{where}: {gid} pass without {gap}, read as unverified")
                 status = "unverified"
         counts[status] += 1
+    if anchors:
+        per = ", ".join(f"{k} {v}" for k, v in sorted(anchors.items()))
+        warnings.append(f"{where}: {sum(anchors.values())} anchor(s) checked ({per})")
     return findings, counts, compared
 
 
