@@ -11,7 +11,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
 path = ".github/workflows/eol.yml"
-pending = { since = "2026-10-18", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "fa86e7e6f1dc9eb91f136277bbb6a1e42d5d3a04449cdc8fd59c47dc102316a3", owner = "ALICE-Kinematics", planned = "73961af210483ef472a38d9f5ffa75ecc994498b", variants = { "absent" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"], "fa86e7e6f1dc9eb91f136277bbb6a1e42d5d3a04449cdc8fd59c47dc102316a3" = ["ALICE-Crypto", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"] } }
+pending = { since = "2026-10-18", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "6a565ebd9285657f96e639ae5c4ac18d8ebaad9930a14eb087d742cb93d5badd", owner = "ALICE-Kinematics", planned = "96e8a84f1c6d4e1222c2e2bbcf65ec5d5e072dd4", moved_from = { planned = "73961af210483ef472a38d9f5ffa75ecc994498b", target = "fa86e7e6f1dc9eb91f136277bbb6a1e42d5d3a04449cdc8fd59c47dc102316a3" }, variants = { "absent" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"], "fa86e7e6f1dc9eb91f136277bbb6a1e42d5d3a04449cdc8fd59c47dc102316a3" = ["ALICE-Crypto", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
