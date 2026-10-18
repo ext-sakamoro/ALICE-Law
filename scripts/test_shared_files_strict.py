@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""tests for scripts/shared_files_strict.sh: how the exit codes of its two checks combine (a finding in either is a
-finding, a check that could not run is never a pass), with the two checks replaced by stubs
+"""tests for scripts/shared_files_strict.sh: how the exit codes of its four checks combine (a finding in any is a
+finding, a check that could not run is never a pass), with the checks replaced by stubs
 
     python3 scripts/test_shared_files_strict.py
 """
@@ -16,12 +16,15 @@ HERE = Path(__file__).resolve().parent
 
 
 class Strict(unittest.TestCase):
-    def run_with(self, first: tuple[int, str], second: tuple[int, str]) -> subprocess.CompletedProcess:
+    CHECKS = ("shared_files_check.py", "gen_shared_files.py", "conformance_roster_check.py", "gen_law_status.py")
+
+    def run_with(self, first: tuple[int, str] = (0, ""), second: tuple[int, str] = (0, ""),
+                 state: tuple[int, str] = (0, ""), readme: tuple[int, str] = (0, "")) -> subprocess.CompletedProcess:
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             (root / "scripts").mkdir()
             shutil.copy(HERE / "shared_files_strict.sh", root / "scripts" / "shared_files_strict.sh")
-            for name, (rc, err) in (("shared_files_check.py", first), ("gen_shared_files.py", second)):
+            for name, (rc, err) in zip(self.CHECKS, (first, second, state, readme)):
                 (root / "scripts" / name).write_text(f"import sys\nsys.stderr.write({err!r})\nsys.exit({rc})\n")
             return subprocess.run(["bash", str(root / "scripts" / "shared_files_strict.sh")], capture_output=True,
                                   text=True, timeout=60)
@@ -49,6 +52,26 @@ class Strict(unittest.TestCase):
         self.assertNotIn("infra", p.stderr)
         p = self.run_with((3, ""), (0, ""))
         self.assertEqual(p.returncode, 2)
+        self.assertIn("infra", p.stderr)
+
+    def test_a_stale_law_state_is_a_finding(self):
+        # the roster check finds manifest-state.toml behind the crates' mains: no receipt for a stale state
+        p = self.run_with(state=(1, ""))
+        self.assertEqual(p.returncode, 1, p.stderr)
+        self.assertIn("finding (conformance_roster_check.py)", p.stderr)
+        p = self.run_with(readme=(1, ""))
+        self.assertEqual(p.returncode, 1, p.stderr)
+        self.assertIn("finding (gen_law_status.py --check)", p.stderr)
+
+    def test_the_state_checks_run_and_are_not_a_pass_when_they_compare_nothing(self):
+        p = self.run_with(state=(2, "error: nothing was compared (0 manifests, 0 gates)\n"))
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("nothing compared (conformance_roster_check.py)", p.stderr)
+        p = self.run_with(readme=(2, "error: no README was compared\n"))
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("nothing compared (gen_law_status.py --check)", p.stderr)
+        p = self.run_with(state=(2, "error: gh api repos/x: HTTP 502\n"))
+        self.assertEqual(p.returncode, 2, p.stderr)
         self.assertIn("infra", p.stderr)
 
     def test_the_checks_stderr_is_shown(self):

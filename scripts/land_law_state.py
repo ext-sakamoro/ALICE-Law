@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Whether landing crate commits moves ALICE-Law's conformance state.
+
+Law's conformance/manifest-state.toml (and the Status blocks of README.md / README_JP.md generated from it)
+records the status counts of each release-train repository's alice-law-conformance.toml at its main, and the
+live check fails when they differ. A crate commit that changes its manifest's statuses therefore turns Law's
+main red when it lands, until a state commit follows. This script tells the lander before landing:
+
+  land_law_state.py --candidate ALICE-X=<clone dir>@<rev> [--candidate ...] [--write]
+
+reads the manifests of the candidates from their clones at <rev> and every other release-train repository's
+from its main (GitHub), through the same checks as scripts/conformance_roster_check.py, and compares the
+state that would result with the committed one. It prints `state moves: no`, or `state moves: yes` with each
+changed count. With --write it writes that state and the README Status blocks (the Law commit that the
+landing makes true).
+
+Exit 0: the state does not move; 1: it moves (a Law state commit must follow the landing); 2: not computed
+(a manifest with findings, a candidate the roster does not name, an unreadable input, or nothing compared).
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+import tomllib
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import conformance_roster_check as crc  # noqa: E402
+import gen_law_status as gls  # noqa: E402
+
+
+def parse_candidate(text: str) -> tuple[str, Path, str]:
+    name, sep, rest = text.partition("=")
+    where, at, rev = rest.rpartition("@")
+    if not sep or not name or not at or not where or not rev:
+        raise crc.InputError(f"--candidate {text!r}: needs ALICE-X=<clone dir>@<rev>")
+    return name, Path(where), rev
+
+
+def counts_of(state_text: str) -> dict[str, dict]:
+    """repository -> {"crates": [...], status: count} of a manifest-state.toml text"""
+    try:
+        data = tomllib.loads(state_text)
+    except tomllib.TOMLDecodeError as e:
+        raise crc.InputError(f"manifest-state.toml: {e}") from e
+    return data.get("manifest", {})
+
+
+def changes(old: dict[str, dict], new: dict[str, dict]) -> list[str]:
+    out = []
+    for repo in sorted(set(old) | set(new)):
+        a, b = old.get(repo), new.get(repo)
+        if a is None:
+            out.append(f"{repo}: new in the state")
+            continue
+        if b is None:
+            out.append(f"{repo}: leaves the state")
+            continue
+        moved = [f"{s} {a.get(s, 0)} -> {b.get(s, 0)}" for s in crc.STATUSES if a.get(s, 0) != b.get(s, 0)]
+        if sorted(a.get("crates", [])) != sorted(b.get("crates", [])):
+            moved.append(f"crates {sorted(a.get('crates', []))} -> {sorted(b.get('crates', []))}")
+        if moved:
+            out.append(f"{repo}: " + ", ".join(moved))
+    return out
+
+
+def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root: Path = crc.ROOT) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--candidate", action="append", default=[], metavar="ALICE-X=DIR@REV",
+                    help="a crate repository's clone and the commit about to land on its main")
+    ap.add_argument("--write", action="store_true",
+                    help="write the resulting manifest-state.toml and README Status blocks")
+    ap.add_argument("--owner", default=None, help="the GitHub owner (default: [train] github of the roster)")
+    a = ap.parse_args(argv)
+    state_path = root / "conformance" / "manifest-state.toml"
+    try:
+        if not a.candidate:
+            raise crc.InputError("no --candidate given (nothing to land, nothing to compare)")
+        roster = crc.load_toml(root / "release-train.toml")
+        gates = crc.load_toml(root / "conformance" / "gates.toml")
+        missing_path = root / "conformance" / "missing-manifests.toml"
+        missing = crc.load_toml(missing_path) if missing_path.exists() else {}
+        repos = set(crc.roster_crates(roster).values())
+        candidates = {}
+        for c in a.candidate:
+            name, where, rev = parse_candidate(c)
+            if name not in repos:
+                raise crc.InputError(f"--candidate {name}: not a release-train repository ({', '.join(sorted(repos))})")
+            if name in candidates:
+                raise crc.InputError(f"--candidate {name} given twice")
+            candidates[name] = local(where, rev)
+        if remote is None:
+            owner = a.owner or roster.get("train", {}).get("github")
+            if not owner:
+                raise crc.InputError("no GitHub owner ([train] github in the roster, or --owner)")
+            remote = crc.gh_fetcher(owner)
+
+        def fetch(repo: str):
+            return candidates[repo]() if repo in candidates else remote(repo)
+
+        findings, notes, states, read, compared, files = crc.check(roster, gates, missing, fetch)
+        current = state_path.read_text(encoding="utf-8") if state_path.exists() else ""
+        old = counts_of(current) if current else {}
+    except crc.InputError as e:
+        print(f"land_law_state: {e}", file=sys.stderr)
+        return 2
+    for n in notes:
+        print(f"note: {n}")
+    for f in findings:
+        print(f"found: {f}")
+    if read == 0 or compared == 0:
+        print(f"land_law_state: nothing was compared ({read} manifests, {compared} gates)", file=sys.stderr)
+        return 2
+    if findings:
+        print(f"land_law_state: state not computed ({len(findings)} finding(s) in the manifests)", file=sys.stderr)
+        return 2
+    rendered = crc.render_state(states)
+    new = counts_of(rendered)
+    moved = rendered != current
+    if moved:
+        print("land_law_state: state moves: yes")
+        for line in changes(old, new) or ["(the state file differs only in its form: regenerate it)"]:
+            print(f"  {line}")
+    else:
+        print("land_law_state: state moves: no")
+    print(f"land_law_state: {files} manifests read for {read} crates, {compared} gates compared "
+          f"(candidates: {', '.join(sorted(candidates))})")
+    if a.write and moved:
+        state_path.write_text(rendered, encoding="utf-8")
+        print(f"land_law_state: wrote {state_path.name}")
+        code = gls.main([], root=root)
+        if code != 0:
+            return 2
+    return 1 if moved else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

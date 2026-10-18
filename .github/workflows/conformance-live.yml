@@ -38,6 +38,9 @@ jobs:
       - name: Test the conformance roster checker
         run: python3 scripts/test_conformance_roster_check.py
 
+      - name: Test the landing check of the conformance state
+        run: python3 scripts/test_land_law_state.py
+
       - name: The committed state equals the members' mains
         env:
           GH_TOKEN: ${{ github.token }}

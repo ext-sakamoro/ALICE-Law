@@ -588,6 +588,27 @@ paths at that ref, a located `fail-known`, `pass` / `n/a` without evidence or a
 mutant read as `unverified`) and prints the counts the state file would
 record. Exit 1 on a finding, 2 when nothing was compared.
 
+### Whether a landing moves this repository's state
+
+`conformance/manifest-state.toml` and the README Status blocks record the
+counts of every release-train manifest at its main, and the live check of this
+repository fails when they differ. A crate commit that changes its manifest's
+statuses therefore needs a state commit here. Before it lands, the lander runs,
+from a clone of this repository:
+
+    python3 scripts/land_law_state.py --candidate ALICE-X=<clone of the crate>@<commit> [--candidate ...]
+
+It reads each candidate's manifest at that commit and every other repository's
+at its main, with the roster check's rules, and prints `state moves: no` or
+`state moves: yes` with each changed count. Exit 0: no move; 1: the state
+moves, so a state commit here must follow the landing; 2: not computed (a
+manifest with findings, a candidate the roster does not name, nothing
+compared). With `--write` it writes the state file and the README blocks that
+the landing makes true. The strict shared-file receipt taken before a push to
+this repository's main (`scripts/shared_files_strict.sh`) also runs the state
+check and `scripts/gen_law_status.py --check`, so a push never carries a state
+the crates' mains no longer match.
+
 ### The README block
 
 A crate states its ALICE-Law status in one place: the block between
