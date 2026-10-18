@@ -187,7 +187,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/shared_files.sh"
 sha256 = "ef52b1ab6863166916bf931147a9f309f693bdd8daab4d028df9045f38f72c52"
 source = { repo = "ALICE-DetMath", rev = "7a066173d13bb4956ed9b19cc1193eb967e115e1" }
-repos = ["ALICE-DetMath", "ALICE-Kinematics", "ALICE-Physics", "ALICE-SDF"]
+repos = ["ALICE-DetMath", "ALICE-Kinematics", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/stub_guard.sh"
@@ -338,7 +338,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/test_shared_files.py"
 sha256 = "2efebaf051e2eafb9bf44c1b1444b6064d77c839bff83b36c280e4f9b66bbf1f"
 source = { repo = "ALICE-DetMath", rev = "c9ef9717fad1f08f313b02b860b7f7ef7bd9cab8" }
-repos = ["ALICE-DetMath", "ALICE-Kinematics", "ALICE-Physics", "ALICE-SDF"]
+repos = ["ALICE-DetMath", "ALICE-Kinematics", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/test_tracked_binaries.py"
