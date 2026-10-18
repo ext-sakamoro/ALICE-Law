@@ -289,6 +289,31 @@ def law_evidence_gap(gid: str, e: dict, paths: set[str], read) -> str | None:
     return None
 
 
+# an evidence anchor: `path#token`, a place in a file named by a string that occurs there exactly once
+# (or `path#A>B`: A once, then the first B after it), the form that replaces line numbers
+ANCHOR_RE = re.compile(r"`(?P<path>[^`#\s][^`#]*?)#(?P<token>[^`]+)`")
+
+
+def anchor_gap(path: str, token: str, paths: set[str], read) -> str | None:
+    """None when `path#token` names one place: the path is a file at the ref and the token occurs in it
+    exactly once, or it splits at a `>` into a scope A that occurs once and a B that occurs after it (the
+    whole token is tried first, so a token like `-> f32` is not read as a scope); otherwise why not"""
+    if path not in paths:
+        return f"{path} is not a file at the ref (anchors take the path from the repository root)"
+    text = read(path) if read is not None else None
+    if text is None:
+        return f"{path} could not be read"
+    n = text.count(token)
+    if n == 1:
+        return None
+    for i, ch in enumerate(token):
+        if ch == ">" and 0 < i < len(token) - 1:
+            a, b = token[:i], token[i + 1:]
+            if text.count(a) == 1 and b in text[text.index(a) + len(a):]:
+                return None
+    return f"{token!r} occurs {n} times in {path} (an anchor must name one place: lengthen it or scope it as A>B)"
+
+
 def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], paths: set[str],
                    warnings: list[str], at: str = "main", read=None) -> tuple[list[str], dict[str, int], int]:
     """(findings, status counts, gates compared) for one crate's manifest text; `paths` are the files at `at`,
@@ -308,6 +333,7 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
         findings.append(f"{where}: {gid} is not a gate of conformance/gates.toml")
     counts = dict.fromkeys(STATUSES, 0)
     compared = 0
+    anchors = 0
     for gid in sorted(ids & set(vocab), key=lambda g: int(g[1:])):
         e = manifest[gid]
         compared += 1
@@ -329,6 +355,12 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
         gone = sorted({t for t in named if not exists(t, paths)})
         if gone:
             findings.append(f"{where}: {gid} evidence names paths that are not at {at}: {gone}")
+        for x in evidence:
+            for m in ANCHOR_RE.finditer(x):
+                anchors += 1
+                why = anchor_gap(m["path"], m["token"], paths, read)
+                if why:
+                    findings.append(f"{where}: {gid} evidence anchor `{m['path']}#{m['token']}`: {why}")
         mutant = e.get("mutant", "")
         if "mutant" in e and not isinstance(mutant, str):
             findings.append(f"{where}: {gid} mutant is not a string")
@@ -354,6 +386,8 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
                 warnings.append(f"{where}: {gid} pass without {gap}, read as unverified")
                 status = "unverified"
         counts[status] += 1
+    if anchors:
+        warnings.append(f"{where}: {anchors} evidence anchor(s) checked")
     return findings, counts, compared
 
 

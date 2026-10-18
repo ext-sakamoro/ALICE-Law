@@ -470,7 +470,7 @@ root) has one entry per gate, with these fields:
 | field | meaning |
 |---|---|
 | `status` | `pass`, `fail-known`, `unverified`, or `n/a` |
-| `evidence` | a list of strings: mandatory for `pass` and `n/a`; an entry whose first word is a path (it contains `/` or ends in a file extension) must exist in the repository |
+| `evidence` | a list of strings: mandatory for `pass` and `n/a`; an entry whose first word is a path (it contains `/` or ends in a file extension) must exist in the repository; a place in a file is written as an anchor `` `path#token` `` (the path from the repository root, and a string that occurs in that file exactly once; or `` `path#A>B` ``: A once, then the first B after it) instead of a line number, which moves when the file changes, and each anchor is checked against the file at the ref |
 | `mutant` | mandatory for `pass` and `n/a`: the change that turns the evidence red (the gate's **Mutant** above, as carried out in this crate) |
 | `since` | the version or commit the gate first passed |
 | `note` | mandatory for `fail-known` (what is unmet, with file:line where there is a site) and for `n/a` (what makes the gate not apply) |

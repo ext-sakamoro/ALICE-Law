@@ -185,7 +185,6 @@ class Check(unittest.TestCase):
             self.assertEqual(code, 1, (entry, out))
             self.assertIn("G1 evidence names paths that are not at main", out)
         for entry in ("tests/golden.rs:10", "tests/golden.rs::checker", "`tests/golden.rs`", "test: tests/golden.rs",
-                      "`tests/golden.rs#fn checker` runs it", "`src/lib.rs#pub fn x`",
                       "./src/lib.rs", "src/", "ci.yml clippy job", "src/lib.rs (see ALICE-Law's scripts/x.py)"):
             g1 = f'status = "pass"\nevidence = ["{entry}"]\nmutant = "m"'
             code, out, state = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()}, write=True)
@@ -335,6 +334,39 @@ class CheckManifest(unittest.TestCase):
         code, out = self.run_cm(self.repo(self.files(text)))
         self.assertEqual(code, 1, out)
         self.assertIn("G1 evidence names paths that are not at HEAD", out)
+
+    def anchored(self, entry: str, golden: str = "fn checker() {}\nfn other() {}\n"):
+        f = self.files(manifest(G1=f'status = "pass"\nevidence = ["{entry}"]\nmutant = "m"'))
+        f["tests/golden.rs"] = golden
+        return self.run_cm(self.repo(f))
+
+    def test_an_anchor_whose_token_occurs_once_passes_and_is_counted(self):
+        code, out = self.anchored("`tests/golden.rs#fn checker` runs it")
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 evidence anchor(s) checked", out)
+
+    def test_an_anchor_whose_token_is_absent_or_repeated_fails(self):
+        for golden, times in (("fn other() {}\n", 0), ("fn checker() {}\nfn checker() {}\n", 2)):
+            code, out = self.anchored("`tests/golden.rs#fn checker`", golden)
+            self.assertEqual(code, 1, (golden, out))
+            self.assertIn(f"'fn checker' occurs {times} times in tests/golden.rs", out)
+
+    def test_a_scoped_anchor_names_the_first_b_after_a_unique_a(self):
+        golden = "job a:\n  run: x\njob b:\n  run: x\n"
+        code, out = self.anchored("`tests/golden.rs#job b:>run: x`", golden)
+        self.assertEqual(code, 0, out)
+        # an A that is not unique is not a scope
+        code, out = self.anchored("`tests/golden.rs#run: x>job`", golden)
+        self.assertEqual(code, 1, out)
+
+    def test_a_token_with_an_arrow_is_read_whole_first(self):
+        code, out = self.anchored("`tests/golden.rs#fn checker() -> f32`", "fn checker() -> f32 {}\n")
+        self.assertEqual(code, 0, out)
+
+    def test_an_anchor_on_a_path_not_at_the_ref_fails(self):
+        code, out = self.anchored("`tests/gone.rs#fn checker`")
+        self.assertEqual(code, 1, out)
+        self.assertIn("tests/gone.rs is not a file at the ref", out)
 
     def test_the_ref_is_read_not_the_working_tree(self):
         d = self.repo(self.files(manifest(G1='status = "pass"\nevidence = ["src/new.rs"]\nmutant = "m"')))
