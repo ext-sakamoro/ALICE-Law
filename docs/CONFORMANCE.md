@@ -609,6 +609,21 @@ this repository's main (`scripts/shared_files_strict.sh`) also runs the state
 check and `scripts/gen_law_status.py --check`, so a push never carries a state
 the crates' mains no longer match.
 
+The state commit lands here first, before the crate: `--write` also records
+each moving candidate in `conformance/pending-state.toml` (its commit and the
+date). Until that commit reaches the crate's main, the live check accepts the
+difference only for a repository a pending entry names, only while the entry's
+commit is ahead of that main, and only when the state file equals the counts
+computed from the manifest at that commit (read there, not trusted). The
+following are findings: a difference no entry explains, a commit that diverges
+from main, an entry whose commit does not move the state, and an entry older
+than 3 days. Once the crate lands, the entry is a counted note in the live check
+(this repository stays green across the landing). It is a finding under
+`--strict` (the receipt before a push here) and after 3 days, so the next
+change here drops it. `land_law_state.py --write` and
+`conformance_roster_check.py --write` drop landed entries. A re-rolled
+candidate keeps the date its entry was first recorded.
+
 ### The README block
 
 A crate states its ALICE-Law status in one place: the block between

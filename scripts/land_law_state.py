@@ -20,6 +20,8 @@ Exit 0: the state does not move; 1: it moves (a Law state commit must follow the
 from __future__ import annotations
 
 import argparse
+import datetime
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -65,15 +67,29 @@ def changes(old: dict[str, dict], new: dict[str, dict]) -> list[str]:
     return out
 
 
-def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root: Path = crc.ROOT) -> int:
+def git_resolve(where: Path, rev: str) -> str:
+    """the full commit id of `rev` in the clone `where`"""
+    p = subprocess.run(["git", "-C", str(where), "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        raise crc.InputError(f"{where}: ref {rev!r} not found")
+    return p.stdout.strip()
+
+
+def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root: Path = crc.ROOT,
+         resolve=git_resolve, at=None, compare=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--candidate", action="append", default=[], metavar="ALICE-X=DIR@REV",
                     help="a crate repository's clone and the commit about to land on its main")
     ap.add_argument("--write", action="store_true",
-                    help="write the resulting manifest-state.toml and README Status blocks")
+                    help="write the resulting manifest-state.toml, pending-state.toml and README Status blocks")
     ap.add_argument("--owner", default=None, help="the GitHub owner (default: [train] github of the roster)")
+    ap.add_argument("--today", help="the date a new pending entry records (default: today, UTC)")
     a = ap.parse_args(argv)
     state_path = root / "conformance" / "manifest-state.toml"
+    pending_path = root / "conformance" / "pending-state.toml"
+    today = (datetime.date.fromisoformat(a.today) if a.today
+             else datetime.datetime.now(datetime.timezone.utc).date())
     try:
         if not a.candidate:
             raise crc.InputError("no --candidate given (nothing to land, nothing to compare)")
@@ -82,7 +98,7 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
         missing_path = root / "conformance" / "missing-manifests.toml"
         missing = crc.load_toml(missing_path) if missing_path.exists() else {}
         repos = set(crc.roster_crates(roster).values())
-        candidates = {}
+        candidates, shas = {}, {}
         for c in a.candidate:
             name, where, rev = parse_candidate(c)
             if name not in repos:
@@ -90,17 +106,38 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
             if name in candidates:
                 raise crc.InputError(f"--candidate {name} given twice")
             candidates[name] = local(where, rev)
-        if remote is None:
-            owner = a.owner or roster.get("train", {}).get("github")
+            shas[name] = resolve(where, rev)
+        owner = a.owner or roster.get("train", {}).get("github")
+        if remote is None or at is None or compare is None:
             if not owner:
                 raise crc.InputError("no GitHub owner ([train] github in the roster, or --owner)")
-            remote = crc.gh_fetcher(owner)
+        remote = remote or crc.gh_fetcher(owner)
+        at = at or (lambda repo, sha: crc.gh_fetcher(owner, sha)(repo))
+        compare = compare or crc.gh_compare(owner)
 
         def fetch(repo: str):
             return candidates[repo]() if repo in candidates else remote(repo)
 
-        findings, notes, states, read, compared, files = crc.check(roster, gates, missing, fetch)
+        findings, notes, landed, read, compared, files = crc.check(roster, gates, missing, fetch)
+        mfindings, _, at_main, *_ = crc.check(roster, gates, missing, remote)
+        findings += [f for f in mfindings if f not in findings]
+        # the entries of other repositories still pending (a landed one is dropped: part of the Law change)
+        pending = crc.load_pending(pending_path)
+        others = {r: e for r, e in pending.items() if r not in candidates}
+        expected, kept, pf, pn = crc.apply_pending(at_main, others, gates, at, compare, today, strict=False)
+        findings += pf
+        notes += pn
+        new_pending = dict(kept)
+        for repo in sorted(candidates):
+            if repo not in landed or repo not in at_main:
+                continue  # a manifest with findings, or none: not computed (exit 2 below)
+            expected[repo] = landed[repo]
+            if landed[repo]["counts"] != at_main[repo]["counts"]:
+                # a re-rolled candidate keeps the date its entry was first recorded
+                since = pending[repo]["since"] if repo in pending else today.isoformat()
+                new_pending[repo] = {"sha": shas[repo], "since": since}
         current = state_path.read_text(encoding="utf-8") if state_path.exists() else ""
+        current_pending = pending_path.read_text(encoding="utf-8") if pending_path.exists() else ""
         old = counts_of(current) if current else {}
     except crc.InputError as e:
         print(f"land_law_state: {e}", file=sys.stderr)
@@ -113,14 +150,20 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
         print(f"land_law_state: nothing was compared ({read} manifests, {compared} gates)", file=sys.stderr)
         return 2
     if findings:
-        print(f"land_law_state: state not computed ({len(findings)} finding(s) in the manifests)", file=sys.stderr)
+        print(f"land_law_state: state not computed ({len(findings)} finding(s))", file=sys.stderr)
         return 2
-    rendered = crc.render_state(states)
-    new = counts_of(rendered)
-    moved = rendered != current
+    rendered = crc.render_state(expected)
+    rendered_pending = crc.render_pending(new_pending) if (new_pending or current_pending) else ""
+    moved = rendered != current or rendered_pending != current_pending
+    lines = changes(old, counts_of(rendered))
+    for repo in sorted(set(pending) | set(new_pending)):
+        a_, b_ = pending.get(repo), new_pending.get(repo)
+        if a_ != b_:
+            lines.append(f"{repo}: pending " + (f"{a_['sha'][:12]} " if a_ else "") + "-> "
+                         + (f"{b_['sha'][:12]} (since {b_['since']})" if b_ else "dropped (landed)"))
     if moved:
         print("land_law_state: state moves: yes")
-        for line in changes(old, new) or ["(the state file differs only in its form: regenerate it)"]:
+        for line in lines or ["(the state files differ only in their form: regenerate them)"]:
             print(f"  {line}")
     else:
         print("land_law_state: state moves: no")
@@ -129,6 +172,9 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
     if a.write and moved:
         state_path.write_text(rendered, encoding="utf-8")
         print(f"land_law_state: wrote {state_path.name}")
+        if rendered_pending:
+            pending_path.write_text(rendered_pending, encoding="utf-8")
+            print(f"land_law_state: wrote {pending_path.name} ({len(new_pending)} pending)")
         code = gls.main([], root=root)
         if code != 0:
             return 2

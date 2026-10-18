@@ -36,6 +36,7 @@ class LandLawState(unittest.TestCase):
         for name in gls.READMES.values():
             (self.root / name).write_text(f"# t\n\n{gls.BEGIN}\n{gls.END}\n", encoding="utf-8")
         self.mains = {"Alpha": manifest(), "Beta": manifest()}
+        self.at_texts, self.statuses = {}, {}
         # the committed state is what the mains say
         states = crc.check(crc.load_toml(self.root / "release-train.toml"),
                            crc.load_toml(self.root / "conformance" / "gates.toml"), {}, self.remote)[2]
@@ -45,6 +46,12 @@ class LandLawState(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def at(self, repo, sha):
+        return self.at_texts[(repo, sha)], set(PATHS)
+
+    def compare(self, repo, sha):
+        return self.statuses[(repo, sha)]
 
     def remote(self, repo):
         self.assertNotEqual(repo, "Law")  # an exempt crate is not read
@@ -63,7 +70,8 @@ class LandLawState(unittest.TestCase):
     def run_land(self, *args: str, local=None):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            code = lls.main(list(args), remote=self.remote, local=local or self.fake_local({}), root=self.root)
+            code = lls.main(list(args), remote=self.remote, local=local or self.fake_local({}), root=self.root,
+                            resolve=lambda where, rev: (rev * 40)[:40], at=self.at, compare=self.compare)
         return code, out.getvalue()
 
     def state(self) -> str:
@@ -83,11 +91,14 @@ class LandLawState(unittest.TestCase):
         self.assertNotIn("Beta:", out)
 
     def test_the_candidate_is_read_at_its_rev_not_at_main(self):
-        # main already has the flip; the candidate rev does not: the state must follow the candidate
+        # main and the table have the flip; the candidate takes it back: the state follows the candidate's rev
         self.mains["Alpha"] = PASSED_G3
+        states = crc.check(crc.load_toml(self.root / "release-train.toml"),
+                           crc.load_toml(self.root / "conformance" / "gates.toml"), {}, self.remote)[2]
+        (self.root / "conformance" / "manifest-state.toml").write_text(crc.render_state(states), encoding="utf-8")
         code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": manifest()}))
-        self.assertEqual(code, 0, out)
-        self.assertIn("state moves: no", out)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Alpha: pass 2 -> 1, unverified 0 -> 1", out)
 
     def test_write_records_the_state_and_the_readme_blocks_the_landing_makes_true(self):
         before = (self.root / "README.md").read_text(encoding="utf-8")
@@ -161,6 +172,73 @@ class LandLawState(unittest.TestCase):
         self.assertIn("nothing was compared (0 manifests, 0 gates)", out)
         self.assertNotIn("state moves", out)
 
+    def live(self, *flags: str) -> tuple[int, str]:
+        """this repository's live check of the committed state against the fake mains"""
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = crc.main(["--roster", str(self.root / "release-train.toml"),
+                             "--gates", str(self.root / "conformance" / "gates.toml"),
+                             "--missing", str(self.root / "conformance" / "missing-manifests.toml"),
+                             "--state", str(self.root / "conformance" / "manifest-state.toml"),
+                             "--pending", str(self.root / "conformance" / "pending-state.toml"),
+                             "--today", "2026-10-19", *flags],
+                            fetch=self.remote, at=self.at, compare=self.compare)
+        return code, out.getvalue()
+
+    def pending(self) -> str | None:
+        p = self.root / "conformance" / "pending-state.toml"
+        return p.read_text(encoding="utf-8") if p.exists() else None
+
+    def test_law_first_then_the_crate_stays_green_and_the_entry_is_dropped_after(self):
+        sha = "abc" * 13 + "a"
+        self.at_texts[("Alpha", sha)] = PASSED_G3
+        self.statuses[("Alpha", sha)] = "ahead"
+        local = self.fake_local({"abc": PASSED_G3})
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", "--write", "--today", "2026-10-18", local=local)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"Alpha: pending -> {sha[:12]} (since 2026-10-18)", out)
+        self.assertIn(f'[pending."Alpha"]\nsha = "{sha}"\nsince = "2026-10-18"', self.pending())
+        # Law has the new state; Alpha's main has not moved yet: green, the difference explained
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"Alpha: pending: the state records {sha[:12]}, not landed yet", out)
+        # Alpha lands: green in live (a note), a finding under --strict, and the next Law change drops it
+        self.mains["Alpha"] = PASSED_G3
+        self.statuses[("Alpha", sha)] = "identical"
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn("has landed on main", out)
+        self.assertEqual(self.live("--strict")[0], 1)
+        code, out = self.run_land("--candidate", "Beta=/b@b1", local=self.fake_local({"b1": manifest()}))
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"Alpha: pending {sha[:12]} -> dropped (landed)", out)
+        self.run_land("--candidate", "Beta=/b@b1", "--write", local=self.fake_local({"b1": manifest()}))
+        self.assertNotIn("Alpha", self.pending())
+        code, out = self.live("--strict")
+        self.assertEqual(code, 0, out)
+
+    def test_a_stale_table_moves_even_when_no_entry_changes(self):
+        # Beta's main flipped after the last state commit; the candidate (Alpha) moves nothing itself
+        self.mains["Beta"] = PASSED_G3
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": manifest()}))
+        self.assertEqual(code, 1, out)
+        self.assertIn("Beta: pass 1 -> 2, unverified 1 -> 0", out)
+        self.assertNotIn("pending", out)
+
+    def test_a_candidate_that_does_not_move_records_no_entry(self):
+        self.run_land("--candidate", "Alpha=/c@abc", "--write", local=self.fake_local({"abc": manifest()}))
+        self.assertIsNone(self.pending())
+
+    def test_a_re_rolled_candidate_keeps_the_date_its_entry_was_recorded(self):
+        self.run_land("--candidate", "Alpha=/c@abc", "--write", "--today", "2026-10-17",
+                      local=self.fake_local({"abc": PASSED_G3}))
+        both = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"',
+                        G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
+        code, out = self.run_land("--candidate", "Alpha=/c@abd", "--write", "--today", "2026-10-19",
+                                  local=self.fake_local({"abd": both}))
+        self.assertEqual(code, 1, out)
+        self.assertIn('sha = "' + ("abd" * 14)[:40] + '"\nsince = "2026-10-17"', self.pending())
+
     def test_a_real_clone_at_a_commit(self):
         repo = Path(self.tmp.name) / "alpha"
 
@@ -182,7 +260,8 @@ class LandLawState(unittest.TestCase):
         for rev, want in ((old, 0), (new, 1)):
             with self.subTest(rev=rev[:7]):
                 with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-                    code = lls.main(["--candidate", f"Alpha={repo}@{rev}"], remote=self.remote, root=self.root)
+                    code = lls.main(["--candidate", f"Alpha={repo}@{rev}"], remote=self.remote, root=self.root,
+                                    at=self.at, compare=self.compare)
                 self.assertEqual(code, want, out.getvalue())
 
 

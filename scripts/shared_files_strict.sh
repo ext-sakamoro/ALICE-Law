@@ -21,7 +21,7 @@ finding=0
 unchecked=0
 for check in "shared_files_check.py --table conformance/shared-files.toml --live --strict" \
              "gen_shared_files.py --table conformance/shared-files.toml --check --strict" \
-             "conformance_roster_check.py" \
+             "conformance_roster_check.py --strict" \
              "gen_law_status.py --check"; do
   err=$(mktemp)
   # (stderr to a file, then shown: no process substitution, whose end bash before 4.4 cannot wait for)
