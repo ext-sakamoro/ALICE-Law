@@ -365,7 +365,10 @@ it. A crate meets (c) by running `scripts/shared_files_check.py --repo . --name
 <repository>` from this repository at a revision it pins together with the SHA-256 of the
 checker and of the table (as for `scripts/public_text_check.py`): every listed copy must be
 present and equal (or, on a pending row, one of its variants), a table path present in the
-crate but neither listed nor exempted for it is a finding, and a run that compared nothing
+crate but neither listed nor exempted for it is a finding (except a copy with exactly a uniform
+entry's bytes or a pending row's target: a crate adopting a shared file cannot be listed before
+its main has it, so that copy is a counted "adopting" note, and the strict check on this
+repository's landing path makes the next table list it), and a run that compared nothing
 fails. A crate with a pending row is not a pass for that file: its cell is `fail-known`
 naming the row. `.github/workflows/conformance-live.yml` compares every listed repository's
 main with the table on every push to main and daily (count-locked on the copies of uniform

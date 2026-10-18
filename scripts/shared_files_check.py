@@ -52,7 +52,10 @@ repository that gains the path without an exemption is a finding.
       a crate's tree: each uniform file listed for ALICE-X present with the entry's bytes;
       each pending file listed for it present as one of the row's variants (listed as
       pending, so the crate's cell is not a pass); a table path present for an entry that
-      neither lists nor exempts ALICE-X is a finding
+      neither lists nor exempts ALICE-X is a finding, except a copy with exactly a uniform
+      entry's bytes or a pending row's target, which is a counted "adopting" note (the commit
+      that adds a shared file to a crate cannot be listed first; the Law side's strict check
+      makes the next table list it)
 
 Every mode prints `compared: files N, repos M, copies K, pending P`. Exit 0 when everything
 compared is equal, 1 on a finding, 2 when nothing was compared or the input cannot be read
@@ -231,6 +234,7 @@ def check_repo(entries: list[dict], root: Path, name: str) -> tuple[list[str], l
     problems: list[str] = []
     notes: list[str] = []
     copies = files = pending = 0
+    adopting = 0
     for e in entries:
         if name in e["repos"]:
             files += 1
@@ -266,9 +270,25 @@ def check_repo(entries: list[dict], root: Path, name: str) -> tuple[list[str], l
                                 f"(the bytes of {e['source']['repo']} at {e['source']['rev'][:12]})")
         elif name not in e.get("exempt", {}):
             for rel in sorted({e["path"], *e.get("paths", {}).values()}):
-                if (root / rel).is_file():
+                if not (root / rel).is_file():
+                    continue
+                got = sha256((root / rel).read_bytes())
+                # adopting a shared file: the crate's commit that adds it cannot be listed first (the table
+                # lists only holders whose main has the path), so a copy with exactly the entry's bytes (or a
+                # pending row's target) is a counted note; the Law side's strict check makes the next table
+                # list it. A per-repository path, or any other bytes, stays a finding.
+                want = (e["sha256"] if "sha256" in e else e["pending"]["target"] if "pending" in e else None)
+                if want is not None and got == want:
+                    copies += 1
+                    adopting += 1
+                    notes.append(f"{rel}: adopting: not yet listed for {name}, the same bytes as the entry "
+                                 f"(carried by {', '.join(e['repos'])})")
+                else:
                     problems.append(f"{rel}: a shared file the table neither lists nor exempts for {name} "
-                                    f"(carried by {', '.join(e['repos'])})")
+                                    f"(carried by {', '.join(e['repos']) or 'none: per-repository data'})")
+    if adopting:
+        notes.append(f"adopting: {adopting} copy(ies) with an entry's bytes, not yet listed for {name} "
+                     "(the next table lists them)")
     if copies == 0 and not problems and not notes:
         raise Unreadable(f"the table lists no file for {name} (compared nothing)")
     return problems, notes, counts(files, 1, copies, pending)

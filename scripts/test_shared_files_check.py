@@ -247,6 +247,50 @@ class Repo(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("neither lists nor exempts", out)
 
+    def adopt(self, data: bytes):
+        """ALICE-C (not listed for scripts/s.sh) holds it with `data`"""
+        (self.w.work / "ALICE-C" / "scripts/s.sh").write_bytes(data)
+
+    def test_an_unlisted_copy_with_the_entry_bytes_is_a_counted_adopting_note(self):
+        # a crate adopting a shared file cannot be listed before its main has it
+        self.adopt(SHARED)
+        code, out = self.crate("ALICE-C")
+        self.assertEqual(code, 0, out)
+        self.assertIn("scripts/s.sh: adopting: not yet listed for ALICE-C, the same bytes as the entry", out)
+        self.assertIn("adopting: 1 copy(ies) with an entry's bytes, not yet listed for ALICE-C", out)
+        self.assertIn("copies 1", out)
+
+    def test_an_unlisted_copy_with_a_pending_target_is_adopting_too(self):
+        p = self.w.pending()
+        p["repos"] = ["ALICE-A", "ALICE-B"]
+        p["pending"] = {**p["pending"], "variants": {h(SHARED): ["ALICE-A"], h(OTHER): ["ALICE-B"]}}
+        self.adopt(SHARED)
+        code, out = self.crate("ALICE-C", self.w.table(p))
+        self.assertEqual(code, 0, out)
+        self.assertIn("adopting: not yet listed for ALICE-C", out)
+
+    def test_an_unlisted_copy_with_one_byte_changed_is_red(self):
+        data = bytearray(SHARED)
+        data[0] ^= 1
+        self.adopt(bytes(data))
+        code, out = self.crate("ALICE-C")
+        self.assertEqual(code, 1, out)
+        self.assertIn("neither lists nor exempts for ALICE-C", out)
+
+    def test_an_unlisted_copy_of_a_per_repository_path_is_red(self):
+        self.adopt(SHARED)
+        code, out = self.crate("ALICE-C", self.w.table(self.w.per_repo()))
+        self.assertEqual(code, 1, out)
+        self.assertIn("none: per-repository data", out)
+
+    def test_a_path_no_entry_names_is_not_adopted(self):
+        # only a path an entry names can be adopted: a copy elsewhere is not compared at all
+        (self.w.work / "ALICE-C" / "scripts/other.sh").write_bytes(SHARED)
+        (self.w.work / "ALICE-C" / "scripts/s.sh").unlink()
+        code, out = self.crate("ALICE-C")
+        self.assertEqual(code, 2, out)
+        self.assertNotIn("adopting", out)
+
     def test_an_exempt_repository_is_not_red_but_compares_nothing(self):
         self.assertEqual(self.crate("ALICE-C", self.w.table(exempt={"ALICE-C": "a different script of its own"}))[0], 2)
 
