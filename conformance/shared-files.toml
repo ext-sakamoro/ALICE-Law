@@ -187,7 +187,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/shared_files.sh"
 sha256 = "ef52b1ab6863166916bf931147a9f309f693bdd8daab4d028df9045f38f72c52"
 source = { repo = "ALICE-DetMath", rev = "7a066173d13bb4956ed9b19cc1193eb967e115e1" }
-repos = ["ALICE-DetMath", "ALICE-Kinematics", "ALICE-SDF"]
+repos = ["ALICE-DetMath", "ALICE-Kinematics", "ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/stub_guard.sh"
@@ -338,7 +338,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/test_shared_files.py"
 sha256 = "2efebaf051e2eafb9bf44c1b1444b6064d77c839bff83b36c280e4f9b66bbf1f"
 source = { repo = "ALICE-DetMath", rev = "c9ef9717fad1f08f313b02b860b7f7ef7bd9cab8" }
-repos = ["ALICE-DetMath", "ALICE-Kinematics", "ALICE-SDF"]
+repos = ["ALICE-DetMath", "ALICE-Kinematics", "ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/test_tracked_binaries.py"
@@ -348,7 +348,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LO
 
 [[file]]
 path = "scripts/test_version_sync.py"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "c80e26940cabe55b5263a85ccaa98282c121ec304d235e65c00fe66fa3c11844", owner = "ALICE-SDF", planned = "557e12caa3663234ff7c4f8537be679609bfa055", variants = { "9237fe6adadcf7bc92a2f30634772762a2cdbbb3d1a6e090bb20b230522ae827" = ["ALICE-Physics"], "c80e26940cabe55b5263a85ccaa98282c121ec304d235e65c00fe66fa3c11844" = ["ALICE-SDF"] } }
+sha256 = "c80e26940cabe55b5263a85ccaa98282c121ec304d235e65c00fe66fa3c11844"
+source = { repo = "ALICE-Physics", rev = "7885f7cf1a54f3193315538bf6204cb5826971ed" }
 repos = ["ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
@@ -371,7 +372,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LO
 
 [[file]]
 path = "scripts/version_sync.py"
-pending = { since = "2026-10-17", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "f595ca60f793e5a21fce4c704e0118293ac0d8e03ee6bfba434d7108fa7f64ec", owner = "ALICE-SDF", planned = "890460cce42174a728075d7f01063ed633c4e076", variants = { "9b575c9898fe0b3a21aad2eac8105e1c868e0bb9d48aed37a49ea05b1cd2a0c1" = ["ALICE-Physics"], "f595ca60f793e5a21fce4c704e0118293ac0d8e03ee6bfba434d7108fa7f64ec" = ["ALICE-SDF"] } }
+sha256 = "f595ca60f793e5a21fce4c704e0118293ac0d8e03ee6bfba434d7108fa7f64ec"
+source = { repo = "ALICE-Physics", rev = "7885f7cf1a54f3193315538bf6204cb5826971ed" }
 repos = ["ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
