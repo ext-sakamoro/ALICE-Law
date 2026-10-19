@@ -623,7 +623,10 @@ green across the landing). It is a finding under
 `--strict` (the receipt before a push here) and after 3 days, so the next
 change here drops it. `land_law_state.py --write` and
 `conformance_roster_check.py --write` drop landed entries. A re-rolled
-candidate keeps the date its entry was first recorded.
+candidate keeps the date its entry was first recorded. For `land_law_state.py`,
+a move is a change of the recorded state or of which repositories are pending:
+a rebased candidate whose counts are already recorded (another sha or date in
+its entry) is not a move, so a landing that rebased needs no second Law change.
 
 ### The README block
 

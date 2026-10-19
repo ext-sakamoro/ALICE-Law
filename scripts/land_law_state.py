@@ -154,7 +154,9 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
         return 2
     rendered = crc.render_state(expected)
     rendered_pending = crc.render_pending(new_pending) if (new_pending or current_pending) else ""
-    moved = rendered != current or rendered_pending != current_pending
+    # a move is a change of the recorded state or of which repositories are pending; an entry's sha or date alone
+    # is not (the live check matches on the counts, so a rebased candidate already recorded needs no Law change)
+    moved = rendered != current or set(new_pending) != set(pending)
     lines = changes(old, counts_of(rendered))
     for repo in sorted(set(pending) | set(new_pending)):
         a_, b_ = pending.get(repo), new_pending.get(repo)

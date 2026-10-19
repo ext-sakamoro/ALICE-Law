@@ -220,6 +220,18 @@ class LandLawState(unittest.TestCase):
         self.assertIn("Beta: pass 1 -> 2, unverified 1 -> 0", out)
         self.assertNotIn("pending", out)
 
+    def test_a_rebased_candidate_already_recorded_does_not_move(self):
+        # Law recorded Alpha's ci commit (abc); the landing rebased it to another sha with the same manifest: the
+        # recorded state already holds, so the landing gate must not ask for another Law change
+        self.run_land("--candidate", "Alpha=/c@abc", "--write", local=self.fake_local({"abc": PASSED_G3}))
+        before = self.pending()
+        code, out = self.run_land("--candidate", "Alpha=/c@abd", local=self.fake_local({"abd": PASSED_G3}))
+        self.assertEqual(code, 0, out)
+        self.assertIn("state moves: no", out)
+        # --write with no move leaves the recorded entry as it is
+        self.run_land("--candidate", "Alpha=/c@abd", "--write", local=self.fake_local({"abd": PASSED_G3}))
+        self.assertEqual(self.pending(), before)
+
     def test_a_candidate_that_does_not_move_records_no_entry(self):
         self.run_land("--candidate", "Alpha=/c@abc", "--write", local=self.fake_local({"abc": manifest()}))
         self.assertIsNone(self.pending())
