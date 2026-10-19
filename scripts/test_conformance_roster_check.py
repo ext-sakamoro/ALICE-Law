@@ -601,6 +601,64 @@ class Internal(unittest.TestCase):
         self.assertIn("regenerate manifest-state: run python3 scripts/conformance_roster_check.py --write", out)
 
 
+class NaEvidence(unittest.TestCase):
+    """an n/a is a measured absence: a scanner of scripts/ in its evidence, and a mutant marked measured"""
+    run_check = Check.run_check
+    NOTE = 'note = "the gate does not apply here"'
+
+    def na(self, evidence: list[str], mutant: str | None) -> str:
+        lines = ['status = "n/a"', "evidence = [" + ", ".join(f'"{x}"' for x in evidence) + "]", self.NOTE]
+        if mutant is not None:
+            lines.append(f'mutant = "{mutant}"')
+        return manifest(G3="\n".join(lines))
+
+    def counts_of(self, text: str) -> tuple[int, str, str]:
+        code, out, state = self.run_check({"Alpha": text, "Beta": manifest()})
+        return code, out, state.split('[manifest."Beta"]')[0] if state else ""
+
+    def test_a_measured_scan_stays_n_a(self):
+        code, out, state = self.counts_of(self.na(["scripts/lib.rs: the scan finds 0 sites here"],
+                                                  "measured 2026-10-17, reverted: adding a site fails the scan"))
+        self.assertEqual(code, 0, out)
+        self.assertIn('"n/a" = 1', state)
+        self.assertIn("1 n/a cell(s) checked for a measured scanner, 0 read as unverified", out)
+
+    def test_evidence_naming_no_scanner_is_read_as_unverified(self):
+        # the DetMath form: source files, not the check that measured the absence
+        code, out, state = self.counts_of(self.na(["src/lib.rs", "src/geom/mod.rs"],
+                                                  "measured: adding a site fails the scan"))
+        self.assertEqual(code, 0, out)
+        self.assertIn('"n/a" = 0', state)
+        self.assertIn("G3 n/a without a scanner of scripts/ at the ref in its evidence", out)
+        self.assertIn("1 read as unverified", out)
+
+    def test_a_mutant_not_marked_measured_is_read_as_unverified(self):
+        code, out, state = self.counts_of(self.na(["scripts/lib.rs"], "add a site: the scan would then fail"))
+        self.assertEqual(code, 0, out)
+        self.assertIn('"n/a" = 0', state)
+        self.assertIn("G3 n/a without a mutant marked measured", out)
+
+    def test_unmeasured_is_not_measured(self):
+        code, out, state = self.counts_of(self.na(["scripts/lib.rs"], "unmeasured: adding a site should fail the scan"))
+        self.assertIn('"n/a" = 0', state)
+
+    def test_empty_evidence_is_read_as_unverified(self):
+        code, out, state = self.counts_of(self.na([], "measured"))
+        self.assertEqual(code, 0, out)
+        self.assertIn('"n/a" = 0', state)
+        self.assertIn("read as unverified", out)
+
+    def test_a_scanner_path_that_is_not_at_the_ref_is_a_finding(self):
+        code, out, _ = self.counts_of(self.na(["scripts/missing.py"], "measured"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("evidence names paths that are not at", out)
+
+    def test_no_n_a_cell_reports_no_count(self):
+        code, out, _ = self.counts_of(manifest())
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("n/a cell(s) checked", out)
+
+
 class Pending(unittest.TestCase):
     """the state recorded before a crate lands: conformance/pending-state.toml, matched on the counts"""
     SHA = "a" * 40

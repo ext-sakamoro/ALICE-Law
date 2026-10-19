@@ -510,7 +510,11 @@ The four statuses keep "not looked at" apart from "looked and unmet":
   arithmetic at all is `n/a` for G1–G3.
 
 A `pass` or `n/a` entry without `evidence` or without `mutant` is read as
-`unverified`: a generated view never shows it as met.
+`unverified`: a generated view never shows it as met. An `n/a` whose evidence
+names no checker under `scripts/` that exists at the ref (the scanner that
+measured the absence), or whose mutant does not say it was `measured`, is read
+as `unverified` too: source files alone, or a described mutant, do not show an
+absence.
 
 A form that no layer of the gate reads (a checker hole: a spelling, a path or a
 construct none of the gate's checks sees) leaves the cell `unverified` for what

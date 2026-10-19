@@ -27,8 +27,8 @@ crates = ["alice-db"]
 crates = ["alice-det-math"]
 "pass" = 10
 "fail-known" = 2
-"unverified" = 0
-"n/a" = 2
+"unverified" = 2
+"n/a" = 0
 
 [manifest."ALICE-Edge"]
 crates = ["alice-edge"]

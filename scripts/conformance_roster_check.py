@@ -13,7 +13,8 @@ at the root of its repository's main branch, with one entry per gate of
   that exists at main (the site, with or without its line, or the file where the required thing
   is absent);
 - `pass` / `n/a` without evidence or without a mutant is read as `unverified` (a warning, as the
-  generated views read it), not as met.
+  generated views read it), not as met; an `n/a` also needs a checker of scripts/ that exists at main
+  in its evidence (the scanner that measured the absence) and a mutant that says it was measured.
 
 A crate with no manifest fails with its name, unless `conformance/missing-manifests.toml` lists
 it (with the repository whose change removes the entry and the reason): a listed crate still
@@ -263,6 +264,21 @@ def test_fn_gap(ref: str, paths: set[str], read) -> str | None:
     return None
 
 
+NA_SCANNER_DIR = "scripts/"
+MEASURED = re.compile(r"\bmeasured\b", re.IGNORECASE)
+
+
+def na_evidence_gap(named: list[str], paths: set[str], mutant: str) -> str | None:
+    """what an `n/a` lacks (docs/CONFORMANCE.md: its evidence is the scanner that catches a violation elsewhere
+    finding zero sites here, its mutant is adding one site, measured): a checker of scripts/ that exists at the ref
+    among the evidence's paths, and a mutant that says it was measured"""
+    if not any(t.startswith(NA_SCANNER_DIR) and exists(t, paths) for t in named):
+        return f"a scanner of {NA_SCANNER_DIR} at the ref in its evidence (the absence must be measured by a check)"
+    if not MEASURED.search(mutant):
+        return "a mutant marked measured (the added site must have been tried, not described)"
+    return None
+
+
 def law_evidence_gap(gid: str, e: dict, paths: set[str], read) -> str | None:
     """for a G2 or G8 `pass`: what the manifest lacks of the evidence the gate text asks for, or None"""
     if gid == "G2":
@@ -363,6 +379,7 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
         findings.append(f"{where}: {gid} is not a gate of conformance/gates.toml")
     counts = dict.fromkeys(STATUSES, 0)
     compared = 0
+    na_checked = na_downgraded = 0
     anchors: dict[str, int] = {}
     for gid in sorted(ids & set(vocab), key=lambda g: int(g[1:])):
         e = manifest[gid]
@@ -417,10 +434,20 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
             if gap:
                 warnings.append(f"{where}: {gid} pass without {gap}, read as unverified")
                 status = "unverified"
+        if status == "n/a":
+            na_checked += 1
+            gap = na_evidence_gap(named, paths, str(mutant))
+            if gap:
+                na_downgraded += 1
+                warnings.append(f"{where}: {gid} n/a without {gap}, read as unverified")
+                status = "unverified"
         counts[status] += 1
     if anchors:
         per = ", ".join(f"{k} {v}" for k, v in sorted(anchors.items()))
         warnings.append(f"{where}: {sum(anchors.values())} anchor(s) checked ({per})")
+    if na_checked:
+        warnings.append(f"{where}: {na_checked} n/a cell(s) checked for a measured scanner, "
+                        f"{na_downgraded} read as unverified")
     return findings, counts, compared
 
 
