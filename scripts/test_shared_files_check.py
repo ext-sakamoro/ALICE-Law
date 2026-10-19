@@ -745,6 +745,30 @@ class FirstMove(Base):
             self.t.write_text(self.w.table(self.first(variants=variants)), encoding="utf-8")
             self.assertEqual(self.check("--base-table", str(self.base(self.w.uniform())))[0], 1, variants)
 
+    def test_the_flag_stays_until_the_owner_lands(self):
+        unflagged = self.first()
+        del unflagged["pending"]["first_move"]
+        self.t.write_text(self.w.table(unflagged), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 1, out)
+        self.assertIn("first_move dropped while the owner ALICE-A does not hold the target", out)
+        # the owner has landed (the row records it holding the target): the flag goes
+        landed = self.first(variants={h(SHARED): ["ALICE-B"], h(V3): ["ALICE-A"]})
+        del landed["pending"]["first_move"]
+        self.t.write_text(self.w.table(landed), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 0, out)
+
+    def test_a_pending_date_after_today_is_a_finding(self):
+        self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3})
+        code, out = self.live(self.first(since="2027-10-20"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("after today (2026-10-20): a future date switches the age limits off", out)
+        # the same for a pending row that is not a first move
+        code, out = self.live(self.w.pending(since="2026-10-21"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("pending since 2026-10-21, after today", out)
+
     def test_one_planned_move_at_a_time(self):
         v4 = SHARED + b"# v4\n"
         second = self.first(target=h(v4), planned=sfc.git_blob(v4))

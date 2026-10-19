@@ -37,7 +37,8 @@ different file at the same path), and either
     until the owner's main holds the target, the owner must have the planned blob at the path
     on the tip of its main or a ci/ branch with the target's SHA-256 (the bytes are real),
     every other copy is the uniform bytes (no third value, no missing copy), and the owner
-    lands within FIRST_MOVE_MAX_DAYS days.
+    lands within FIRST_MOVE_MAX_DAYS days; the flag stays until the row shows the owner holding
+    the target (--base-table). A pending row dated after today is a finding (live).
 
 A repository that legitimately has a different file at a shared path is exempted on that
 path's entry with its reason; the discovery scope itself has no exceptions. A path that looks
@@ -491,6 +492,9 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
             pending += 1
             since = datetime.date.fromisoformat(e["pending"]["since"])
             age = (today - since).days
+            if age < 0:
+                problems.append(f"{e['path']}: pending since {e['pending']['since']}, after today ({today.isoformat()}): "
+                                "a future date switches the age limits off")
             found: dict[str, list[str]] = collections.defaultdict(list)
             owner_blob = None
             for r in e["repos"]:
@@ -672,6 +676,10 @@ def main(argv: list[str]) -> int:
                     problems.append(f"{e['path']}: a moving row records variant(s) {', '.join(k[:12] for k in added)} "
                                     "the base table does not have (a variant counts only when recorded before the "
                                     "move)")
+            if (b is not None and b.get("first_move") and b["planned"] == p["planned"] and not p.get("first_move")
+                    and p["owner"] not in p["variants"].get(p["target"], [])):
+                problems.append(f"{e['path']}: first_move dropped while the owner {p['owner']} does not hold the target "
+                                f"{p['target'][:12]} (the flag goes only when the owner has landed)")
             if b is not None and b.get("first_move") and b["planned"] != p["planned"]:
                 problems.append(f"{e['path']}: the base's first move to {b['planned'][:12]} has not landed: one planned "
                                 f"move at a time (not {p['planned'][:12]})")
