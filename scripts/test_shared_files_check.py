@@ -759,6 +759,20 @@ class FirstMove(Base):
         code, out = self.check("--base-table", str(self.base(self.first())))
         self.assertEqual(code, 0, out)
 
+    def test_a_recorded_landing_is_read_against_the_owner_s_main(self):
+        # the table claims the owner landed (and drops the flag) while its main still has SHARED and V3 is nowhere
+        forged = self.first(variants={h(SHARED): ["ALICE-B"], h(V3): ["ALICE-A"]})
+        del forged["pending"]["first_move"]
+        self.t.write_text(self.w.table(forged), encoding="utf-8")
+        self.assertEqual(self.check("--base-table", str(self.base(self.first())))[0], 0)  # the table alone agrees
+        code, out = self.live(forged)
+        self.assertEqual(code, 1, out)
+        self.assertIn("the table records the owner ALICE-A at the target", out)
+        # the owner has landed for real: live passes
+        self.w.commit("ALICE-A", {"scripts/s.sh": V3})
+        code, out = self.live(forged)
+        self.assertEqual(code, 0, out)
+
     def test_a_pending_date_after_today_is_a_finding(self):
         self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3})
         code, out = self.live(self.first(since="2027-10-20"))

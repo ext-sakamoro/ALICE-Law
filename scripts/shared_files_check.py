@@ -38,7 +38,9 @@ different file at the same path), and either
     on the tip of its main or a ci/ branch with the target's SHA-256 (the bytes are real),
     every other copy is the uniform bytes (no third value, no missing copy), and the owner
     lands within FIRST_MOVE_MAX_DAYS days; the flag stays until the row shows the owner holding
-    the target (--base-table). A pending row dated after today is a finding (live).
+    the target (--base-table), and live reads that record against the owner's main (a planned
+    row recording the owner at the target must find its main there). A pending row dated after
+    today is a finding (live).
 
 A repository that legitimately has a different file at a shared path is exempted on that
 path's entry with its reason; the discovery scope itself has no exceptions. A path that looks
@@ -508,6 +510,12 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                 m = p.get("moved_from")
                 # a planned row moved to new bytes: until its owner lands them, the owner holds the earlier pair
                 pairs = [(p["target"], p["planned"])] + ([(m["target"], m["planned"])] if m else [])
+                # the table's claim that the owner holds the target is read against the owner's main: a recorded
+                # landing that has not happened would take a first move's flag off (--base-table reads the variants)
+                if p["owner"] in p["variants"].get(p["target"], []) and (owner_blob or ("",))[0] != p["target"]:
+                    problems.append(f"{e['path']}: the table records the owner {p['owner']} at the target "
+                                    f"{p['target'][:12]}, but its main has "
+                                    + (f"sha256 {owner_blob[0][:12]}" if owner_blob else "no copy"))
                 if owner_blob not in pairs:
                     got = f"sha256 {owner_blob[0][:12]}, blob {owner_blob[1][:12]}" if owner_blob else "no copy"
                     earlier = f", or the earlier {m['target'][:12]} / {m['planned'][:12]}" if m else ""
@@ -679,7 +687,7 @@ def main(argv: list[str]) -> int:
             if (b is not None and b.get("first_move") and b["planned"] == p["planned"] and not p.get("first_move")
                     and p["owner"] not in p["variants"].get(p["target"], [])):
                 problems.append(f"{e['path']}: first_move dropped while the owner {p['owner']} does not hold the target "
-                                f"{p['target'][:12]} (the flag goes only when the owner has landed)")
+                                f"{p['target'][:12]} (gen_shared_files.py drops the flag once the owner's main has it)")
             if b is not None and b.get("first_move") and b["planned"] != p["planned"]:
                 problems.append(f"{e['path']}: the base's first move to {b['planned'][:12]} has not landed: one planned "
                                 f"move at a time (not {p['planned'][:12]})")
