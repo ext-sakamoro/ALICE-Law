@@ -20,8 +20,9 @@ different file at the same path), and either
     all of whose copies have the target is a finding (it has converged: regenerate), and one
     older than PLANNED_MAX_DAYS days is a finding. A planned row re-rolled to bytes no main
     holds yet records `moved_from` = { planned, target } of the bytes it moves from: its owner
-    may hold either pair, and a copy with a third value is a finding (a moving rollout carries
-    exactly two). With --base-table, a table with more
+    may hold either pair, a copy may hold an older variant the table recorded (a re-roll found
+    mid-rollout: a counted stale copy), and any other value is a finding; --base-table refuses a
+    moving row that records a variant the base did not have. With --base-table, a table with more
     unplanned pending rows than the base is a finding (a planned row may be born; an
     unplanned divergence may not grow), and so is a row pending in both whose `since` is
     later than the base's (the age limits cannot be restarted by editing the date), and a
@@ -450,12 +451,20 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                                     f"target (sha256 {p['target'][:12]}, blob {p['planned'][:12]}{earlier}; "
                                     f"it has {got})")
                 if m:
-                    # a moving rollout carries exactly two bytes: any third is drift, not a step of the rollout
-                    stray = sorted(k for k in found if k != "absent" and k not in moving_bytes(e))
+                    # a moving rollout carries its target, the bytes it moves from and the older variants the table
+                    # recorded (copies a re-roll found mid-rollout): any other value is drift, not a step of it
+                    known = moving_bytes(e) | {k for k in p["variants"] if k != "absent"}
+                    stray = sorted(k for k in found if k != "absent" and k not in known)
                     for k in stray:
-                        problems.append(f"{e['path']}: {', '.join(found[k])} main has sha256 {k[:12]}, neither the "
-                                        f"planned target {p['target'][:12]} nor the bytes it moves from "
-                                        f"{m['target'][:12]}")
+                        problems.append(f"{e['path']}: {', '.join(found[k])} main has sha256 {k[:12]}, none of the "
+                                        f"planned target {p['target'][:12]}, the bytes it moves from "
+                                        f"{m['target'][:12]} or a variant the table recorded")
+                    held = [r for r in found.get(p["target"], [])]
+                    present = [r for k, rs in found.items() if k != "absent" for r in rs]
+                    stale = sorted(r for k, rs in found.items() if k in known and k != p["target"] for r in rs)
+                    notes.append(f"{e['path']}: moving to {p['target'][:12]}: {len(held)} of {len(present)} copies at "
+                                 f"the target" + (f"; stale (recorded earlier bytes): {', '.join(stale)}" if stale
+                                                  else ""))
                     if m["target"] not in found:
                         notes.append(f"{e['path']}: no main holds the bytes the planned row moved from any more "
                                      "(regenerate the table: moved_from goes)")
@@ -552,11 +561,13 @@ def main(argv: list[str]) -> int:
         base_pending = None
         base_since: dict[str, str] = {}
         base_planned: dict[str, dict] = {}
+        base_variants: dict[str, dict] = {}
         if a.base_table is not None:
             base_entries = load(a.base_table.read_text(encoding="utf-8"))
             base_pending = pending_counts(base_entries)
             base_since = {e["path"]: e["pending"]["since"] for e in base_entries if "pending" in e}
             base_planned = {e["path"]: e["pending"] for e in base_entries if is_planned(e)}
+            base_variants = {e["path"]: e["pending"]["variants"] for e in base_entries if "pending" in e}
         if a.repo is not None:
             if not REPO.match(a.name):
                 raise Unreadable(f"--name {a.name!r} is not an ALICE-… repository name")
@@ -590,6 +601,13 @@ def main(argv: list[str]) -> int:
                 continue
             p, b = e["pending"], base_planned.get(e["path"])
             m = p.get("moved_from")
+            if m is not None:
+                base_known = set(base_variants.get(e["path"], {})) | {p["target"], m["target"], "absent"}
+                added = sorted(set(p["variants"]) - base_known)
+                if added:
+                    problems.append(f"{e['path']}: a moving row records variant(s) {', '.join(k[:12] for k in added)} "
+                                    "the base table does not have (a variant counts only when recorded before the "
+                                    "move)")
             if b is not None and b["planned"] != p["planned"]:
                 # from the base's planned bytes, or (a second re-roll before the owner landed the first) from the
                 # bytes the base itself was moving from, which the mains still hold

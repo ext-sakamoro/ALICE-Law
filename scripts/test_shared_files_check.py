@@ -252,6 +252,19 @@ class Schema(Base):
         with self.assertRaisesRegex(sfc.Unreadable, "belongs to a planned row"):
             sfc.load(self.w.table(unplanned))
 
+    def test_a_variant_recorded_only_in_the_move_commit_is_refused(self):
+        base = Path(self.tmp.name) / "base.toml"
+        planned_shared = self.w.moved()
+        planned_shared["pending"] = {k: v for k, v in planned_shared["pending"].items() if k != "moved_from"}
+        planned_shared["pending"].update(target=h(SHARED), planned=sfc.git_blob(SHARED))
+        base.write_text(self.w.table(planned_shared), encoding="utf-8")
+        # the move commit also records OTHER as a variant the base never had: it cannot be accepted later
+        moved = self.w.moved(variants={h(SHARED): ["ALICE-A"], h(OTHER): ["ALICE-B"]})
+        self.t.write_text(self.w.table(moved), encoding="utf-8")
+        code, out = self.check("--base-table", str(base))
+        self.assertEqual(code, 1, out)
+        self.assertIn("the base table does not have (a variant counts only when recorded before the move)", out)
+
     def test_a_planned_id_moved_without_naming_the_base_is_refused(self):
         base = Path(self.tmp.name) / "base.toml"
         planned_shared = self.w.moved()
@@ -596,7 +609,26 @@ class Planned(Base):
         self.w.commit("ALICE-B", {"scripts/s.sh": OTHER})
         code, out = self.live()
         self.assertEqual(code, 1, out)
-        self.assertIn(f"ALICE-B main has sha256 {h(OTHER)[:12]}, neither the planned target", out)
+        self.assertIn(f"ALICE-B main has sha256 {h(OTHER)[:12]}, none of the planned target", out)
+        self.assertNotIn("stale (recorded earlier bytes): ALICE-A, ALICE-B", out)
+
+    def test_a_mid_rollout_re_roll_accepts_an_older_recorded_variant_and_counts_it_stale(self):
+        # the row recorded OTHER (an older rollout's bytes) on ALICE-B; the re-roll moves from SHARED to V3
+        row = self.w.moved(variants={h(SHARED): ["ALICE-A"], h(OTHER): ["ALICE-B"]})
+        self.t.write_text(self.w.table(row), encoding="utf-8")
+        self.w.commit("ALICE-B", {"scripts/s.sh": OTHER})
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn("moving to " + h(V3)[:12] + ": 0 of 2 copies at the target; stale (recorded earlier bytes): "
+                      "ALICE-A, ALICE-B", out)
+
+    def test_a_moving_row_with_an_unrecorded_fourth_value_is_red(self):
+        row = self.w.moved(variants={h(SHARED): ["ALICE-A"], h(OTHER): ["ALICE-B"]})
+        self.t.write_text(self.w.table(row), encoding="utf-8")
+        self.w.commit("ALICE-B", {"scripts/s.sh": b"never recorded\n"})
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("or a variant the table recorded", out)
 
     def test_a_moved_row_whose_owner_holds_neither_pair_is_red(self):
         self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
