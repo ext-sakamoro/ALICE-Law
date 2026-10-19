@@ -15,8 +15,10 @@ changed count. With --write it writes that state and the README Status blocks (t
 landing makes true).
 
 It also holds each manifest to conformance/line-refs-baseline.toml: a count above its baseline is a finding
-(the landing would add a line-number reference), and a count below it lowers the baseline, which is a move
-(--write writes the lowered baseline with the state, so the slack is never left to spend).
+(the landing would add a line-number reference). A candidate below its baseline is a note, not a move: the Law
+commit comes before the landing, and a baseline lowered then would be below the crate's main until it lands
+(the live check's 3-day slack note covers the landing). Another repository's main below its baseline is a
+move, and --write lowers that baseline with the state, so the slack is closed by the next landing.
 
 Exit 0: the state does not move; 1: it moves (a Law state commit must follow the landing); 2: not computed
 (a manifest with findings, a candidate the roster does not name, an unreadable input, or nothing compared).
@@ -141,6 +143,9 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
                 findings.append(f"{repo}: {crc.MANIFEST} would hold {n} line-number reference(s), the baseline "
                                 f"allows {allowed}: name the place by an anchor `path#token` "
                                 f"(scripts/line_refs_propose.py proposes one)")
+            elif n < allowed and repo in candidates:
+                notes.append(f"{repo}: the landing lowers its line-number references from {allowed} to {n} (the "
+                             f"baseline is lowered by the Law state change after it lands)")
             elif n < allowed:
                 lowered[repo] = n
         if baseline is not None:

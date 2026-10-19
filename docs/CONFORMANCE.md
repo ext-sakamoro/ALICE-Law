@@ -594,9 +594,10 @@ note naming the crate, the baseline and the count while the crate's main has bee
 for at most 3 days (dated by the manifest's commits on main), and a finding after that,
 when the date is not known, and always under `--strict` (the receipt before a push to
 main). `scripts/land_law_state.py` (the gate before a crate lands) refuses a candidate
-whose count is above its baseline (exit 2) and treats any count below it as a move:
-`--write` lowers the baseline with the state, so the Law change that follows the landing
-closes the slack. `scripts/line_refs_ratchet.py` (branch CI and the preflight)
+whose count is above its baseline (exit 2). A candidate below its baseline moves nothing
+(the Law commit comes before the landing, and a baseline lowered then would be below the
+crate's main until it lands); once it has landed, another repository's main below its
+baseline is a move for the next landing, whose `--write` lowers that baseline with the state. `scripts/line_refs_ratchet.py` (branch CI and the preflight)
 fails a baseline that rises against main's, a new entry above 0, and the removal of the
 file. With every baseline at 0 no manifest may hold a line reference at all (a crate the
 file does not list counts as 0).

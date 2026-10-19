@@ -264,18 +264,23 @@ class LandLawState(unittest.TestCase):
                       out)
         self.assertNotIn("state moves", out)
 
-    def test_a_candidate_removing_a_line_reference_lowers_the_baseline_with_the_landing(self):
+    def test_a_candidate_removing_a_line_reference_moves_nothing_and_the_next_landing_lowers_it(self):
         anchored = manifest(G2='status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs#kernel"')
-        local = self.fake_local({"abc": anchored})
-        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=local)
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", "--write", local=self.fake_local({"abc": anchored}))
+        # the Law commit comes first: a lowered baseline would be below Alpha's main until it lands
+        self.assertEqual(code, 0, out)
+        self.assertIn("Alpha: the landing lowers its line-number references from 1 to 0", out)
+        self.assertIn('"Alpha" = 1', self.baseline())
+        # Alpha has landed; the next landing (of Beta) lowers Alpha's baseline
+        self.mains["Alpha"] = anchored
+        local = self.fake_local({"b1": manifest()})
+        code, out = self.run_land("--candidate", "Beta=/b@b1", local=local)
         self.assertEqual(code, 1, out)
         self.assertIn("Alpha: line-reference baseline 1 -> 0", out)
         self.assertIn('"Alpha" = 1', self.baseline())  # not written without --write
-        code, out = self.run_land("--candidate", "Alpha=/c@abc", "--write", local=local)
-        self.assertEqual(code, 1, out)
+        self.assertEqual(self.run_land("--candidate", "Beta=/b@b1", "--write", local=local)[0], 1)
         self.assertEqual(self.baseline(), '# the baseline\n\n[baseline]\n"Alpha" = 0\n"Beta" = 1\n')
-        # once written, the same landing moves nothing more
-        self.assertEqual(self.run_land("--candidate", "Alpha=/c@abc", local=local)[0], 0)
+        self.assertEqual(self.run_land("--candidate", "Beta=/b@b1", local=local)[0], 0)
 
     def test_a_main_below_its_baseline_is_lowered_by_any_landing(self):
         self.mains["Beta"] = manifest(G2='status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs#k"')
