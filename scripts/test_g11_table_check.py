@@ -283,5 +283,23 @@ class Table(unittest.TestCase):
         self.assertEqual(self.run_main()[0], 2)
 
 
+class Fetch(unittest.TestCase):
+    def test_a_law_file_with_non_ascii_text_is_read_as_utf8(self):
+        import subprocess
+        text = "# 日本語の行と — の記号\nimport unittest\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            run = lambda *a: subprocess.run(["git", "-C", tmp, *a], capture_output=True, check=True)
+            run("init", "-q")
+            (Path(tmp) / "scripts").mkdir()
+            (Path(tmp) / "scripts" / "t.py").write_bytes(text.encode("utf-8"))
+            run("add", "scripts/t.py")
+            run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "t")
+            rev = run("rev-parse", "HEAD").stdout.decode().strip()
+            tree = g.git_law(rev, Path(tmp).as_uri())
+        self.assertIsNotNone(tree, "the local repository could not be fetched")
+        self.assertIn("scripts/t.py", tree.paths)
+        self.assertEqual(tree.read("scripts/t.py"), text)
+
+
 if __name__ == "__main__":
     unittest.main()

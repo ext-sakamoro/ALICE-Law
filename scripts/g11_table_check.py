@@ -435,11 +435,12 @@ def pin_rev(tree: Tree, pin: str) -> tuple[str | None, str | None]:
     return revs[0], None
 
 
-def git_law(rev: str) -> Tree | None:
-    """ALICE-Law at `rev`, fetched (depth 1) into a temporary repository"""
+def git_law(rev: str, url: str = LAW_URL) -> Tree | None:
+    """ALICE-Law at `rev`, fetched (depth 1) into a temporary repository; git's output is read as UTF-8 (the
+    locale's code page on Windows cannot decode the files' text)"""
     tmp = tempfile.mkdtemp(prefix="g11-law-")
-    run = lambda *a: subprocess.run(["git", "-C", tmp, *a], capture_output=True, text=True)
-    if run("init", "-q").returncode or run("fetch", "-q", "--depth", "1", LAW_URL, rev).returncode:
+    run = lambda *a: subprocess.run(["git", "-C", tmp, *a], capture_output=True, text=True, encoding="utf-8")
+    if run("init", "-q").returncode or run("fetch", "-q", "--depth", "1", url, rev).returncode:
         return None
     ls = run("ls-tree", "-r", "--name-only", "FETCH_HEAD")
     if ls.returncode:

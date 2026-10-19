@@ -73,11 +73,6 @@ jobs:
           python3 scripts/test_workflow_gh_token_check.py
           python3 scripts/workflow_gh_token_check.py
 
-      # G11: the per-crate table of each pass gate's checker, canary, compared-nothing test and shared rows
-      # (conformance/g11.toml in a crate, which fetches this checker at a pin)
-      - name: Test the G11 table checker
-        run: python3 scripts/test_g11_table_check.py
-
       # G11 (c): the shared-file table's schema and this repository's own copies (offline);
       # the comparison with every listed repository's main is conformance-live.yml
       - name: Test the shared-file checker and its generator
@@ -203,3 +198,23 @@ jobs:
           cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/report.md"
           exit "$rc"
+
+  g11-table-check:
+    # G11: the per-crate table of each pass gate's checker, canary, compared-nothing test and shared rows
+    # (conformance/g11.toml in a crate, which fetches this checker at a pin and runs it on ubuntu, macOS
+    # and Windows), so its tests run on the same three
+    name: Test the G11 table checker (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Test the G11 table checker
+        shell: bash
+        run: |
+          py=$(command -v python3 || command -v python)
+          "$py" scripts/test_g11_table_check.py
