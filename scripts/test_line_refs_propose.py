@@ -45,6 +45,12 @@ CI = ("name: ci\n"                                  # 1
       "      - name: clippy (std, all targets)\n"   # 11
       "        run: cargo clippy --features std\n")  # 12
 DOC = "# Title\n\n## Determinism\n\nevery result is bit-exact\n"
+SCRIPT = ('"""The canary.\n'                    # 1
+          '\n'                                     # 2
+          'It plants every clippy entry.\n'        # 3
+          '"""\n'                                  # 4
+          'def plant_entry(row):\n'                # 5
+          '    return row\n')                      # 6
 SHADER = "fn sdf_sphere(p: vec3<f32>) -> f32 {\n    return length(p) - 1.0;\n}\n"
 
 
@@ -58,7 +64,7 @@ class Propose(unittest.TestCase):
     def repo(self, manifest: str | None) -> Path:
         d = Path(self.tmp.name) / "crate"
         files = {"src/lib.rs": LIB, ".github/workflows/ci.yml": CI, "docs/DESIGN.md": DOC,
-                 "shaders/sdf.wgsl": SHADER}
+                 "shaders/sdf.wgsl": SHADER, "scripts/canary.py": SCRIPT}
         for p, t in files.items():
             (d / p).parent.mkdir(parents=True, exist_ok=True)
             (d / p).write_text(t, encoding="utf-8")
@@ -128,6 +134,19 @@ class Propose(unittest.TestCase):
     def test_a_definition_encloses_only_the_lines_indented_under_it(self):
         self.assertIsNone(lrp.enclosing(LIB.splitlines(), 11, "src/lib.rs"))  # after fn other, at its indent
         self.assertEqual(lrp.enclosing(LIB.splitlines(), 8, "src/lib.rs"), (6, "fn other"))
+
+    def test_two_lines_of_a_list_on_one_construct_are_not_merged(self):
+        # line 6 is the encoder step and line 7 sits in it: one anchor would drop a place the text names
+        code, out = self.note("the clippy (encoder) step (.github/workflows/ci.yml lines 6 and 7)")
+        self.assertEqual(self.proposed(out), [])
+        self.assertIn("two of its lines resolve to one construct (.github/workflows/ci.yml#name: clippy (encoder))",
+                      out)
+
+    def test_a_line_inside_a_docstring_is_not_anchored(self):
+        code, out = self.note("every clippy entry is planted (scripts/canary.py line 3)")
+        self.assertIn("scripts/canary.py line 3 is inside a string (a docstring names no construct)", out)
+        code, out = self.note("plant_entry plants a row (scripts/canary.py line 5)")
+        self.assertEqual(self.proposed(out), ["scripts/canary.py#def plant_entry"])
 
     def test_a_drifted_line_is_not_anchored(self):
         # the text speaks of the encoder flag, line 2 is fn kernel: the number has moved

@@ -165,6 +165,8 @@ def propose(path: str | None, line: int, paths: set[str], read, context: str = "
     if not 1 <= line <= len(lines):
         return None, f"{path} has no line {line} ({len(lines)} lines)"
     here = lines[line - 1].strip()
+    if path.endswith(".py") and "\n".join(lines[:line - 1]).count('"""') % 2 == 1:
+        return None, f"{path} line {line} is inside a string (a docstring names no construct)"
     if not here:
         return None, f"{path} line {line} is empty (the reference has drifted)"
     scope = enclosing(lines, line, path)
@@ -228,6 +230,11 @@ def main(argv: list[str] | None = None) -> int:
                         continue
                     got = [propose(path, line, paths, read, context) for line in lines]
                     anchors = [anchor for anchor, _ in got if anchor]
+                    if anchors and len(set(anchors)) < len(anchors):
+                        print(f"{gid} {field}: `{written}`: unresolved (two of its lines resolve to one construct "
+                              f"({', '.join(sorted(a_ for a_ in set(anchors) if anchors.count(a_) > 1))}): anchor each "
+                              f"place it means by hand)")
+                        continue
                     if anchors and len(anchors) == len(got):
                         proposed += 1
                         compared += sum(1 for a_, ln in zip(anchors, lines) if verify(a_, ln, paths, read))
