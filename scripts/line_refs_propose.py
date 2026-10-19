@@ -12,7 +12,9 @@ names a place, not the construct the manifest means).
 Each proposal must pass two checks before it is printed: the roster's own anchor rule
 (conformance_roster_check.anchor_gap), and the oracle that the anchor resolves to the line the reference names (or
 to the definition that encloses it, when the manifest's text names that construct rather than the line) and that
-a word of the manifest's text just before the reference occurs in the line or that definition (a line number that has
+a word of the manifest's own text for the reference (from the previous reference or code span, `;`, `. `, `, ` or `(`) names
+the enclosing definition (or, for a line outside every definition, occurs on the line). The word check is a
+heuristic against drift, not a proof: every proposal is still read before it is applied (a line number that has
 drifted to another construct is reported, not anchored). A range (`lines 23 to 74`) is not proposed: it names a
 span, which an anchor of one place cannot. Everything else is reported as unresolved, for editing by hand.
 
@@ -39,7 +41,7 @@ PATH_LINE = re.compile(r"((?:[\w.\-]+/)*[\w.\-]+" + EXT + r"):(\d+)")
 PATH_ANY = re.compile(r"(?:[\w.\-]+/)*[\w.\-]+" + EXT + r"\b")
 FIRST_NUMBER = re.compile(r"\d+")
 TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]{3,}(?:::[A-Za-z_][A-Za-z0-9_]*)*")
-WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]{3,}")
+WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]{2,}")
 # the definitions that scope a token, each giving the text (unique in the file) that names the scope; `True`: it
 # encloses every line after it (a heading, a table), `False`: only the lines indented deeper than it
 DEFINITIONS = (
@@ -53,7 +55,8 @@ DEFINITIONS = (
 )
 RANGE = re.compile(r"\d+\s*(?:to|-|–)\s*L?\d+")
 # words of the manifest's text that say nothing about the construct
-STOP = {"line", "lines", "with", "that", "this", "from", "each", "every", "the", "and", "runs", "same", "sets",
+STOP = {"all", "and", "the", "for", "see", "its", "are", "not", "one", "two", "its", "has", "via", "per", "but",
+        "line", "lines", "with", "that", "this", "from", "each", "every", "the", "and", "runs", "same", "sets",
         "where", "which", "when", "then", "there", "their", "them", "they", "also", "only", "under", "over", "into",
         "after", "before", "here", "what", "file", "files", "step", "steps", "test", "tests", "check", "checks"}
 
@@ -63,11 +66,20 @@ def places(value: str, paths: set[str] | None = None) -> list[tuple[str | None, 
     every line-number reference in one string"""
     out = []
     taken = []
+    # where the text of one reference starts: after the previous reference or code span, and after a ';', '. ', ', '
+    # or '(' when that leaves a word (else only after a ';' or '. ')
+    ends = sorted([m.end() for m in PATH_LINE.finditer(value)] + [m.end() for m in crc.line_ref_matches(value)]
+                  + [m.end() for m in re.finditer(r"`[^`]*`", value)])
 
     def context(start: int) -> str:
         head = value[:start]
-        cut = max(head.rfind(";"), head.rfind(". "), 0)
-        return head[cut:][-80:]
+        hard = max([0] + [e for e in ends if e <= start])  # never the text of a previous reference
+        for marks in (("; ", ". ", ", ", "("), ("; ", ". ")):
+            cut = max([hard] + [head.rfind(c) + len(c) for c in marks if c in head])
+            text = head[cut:][-80:]
+            if WORD.search(re.sub(PATH_ANY, " ", text)):
+                return text
+        return text
     for m in PATH_LINE.finditer(value):
         out.append((m.group(1), [int(m.group(2))], m.group(0), False, context(m.start())))
         taken.append(m.span())
@@ -159,8 +171,10 @@ def propose(path: str | None, line: int, paths: set[str], read, context: str = "
     words = {w.lower() for w in WORD.findall(context)} - STOP - {p.lower() for p in re.split(r"[/.]", path)}
     if not words:
         return None, f"no word just before the reference to compare with {path} line {line}"
-    in_line = words & words_of(here)
     in_scope = words & words_of(scope[1]) if scope else set()
+    # inside a definition the text must name that definition (a word on the line alone can belong to a
+    # neighbouring construct the number has drifted into); a line outside every definition is matched itself
+    in_line = words & words_of(here) if (scope is None or in_scope or scope[0] == line) else set()
     if not in_line and not in_scope:
         return None, (f"{path} line {line} ({here[:60]!r}) shares no word with the text before the reference "
                       f"({', '.join(sorted(words)[:6])}): the line may have drifted")

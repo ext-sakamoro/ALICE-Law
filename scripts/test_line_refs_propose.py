@@ -39,7 +39,11 @@ CI = ("name: ci\n"                                  # 1
       "      # the clippy step\n"                   # 5
       "      - name: clippy (encoder)\n"            # 6
       "        working-directory: crate\n"          # 7
-      "        run: cargo clippy --features encoder\n")  # 8
+      "        run: cargo clippy --features encoder\n"  # 8
+      "      - name: clippy (all targets)\n"        # 9
+      "        run: cargo clippy --all-targets\n"    # 10
+      "      - name: clippy (std, all targets)\n"   # 11
+      "        run: cargo clippy --features std\n")  # 12
 DOC = "# Title\n\n## Determinism\n\nevery result is bit-exact\n"
 SHADER = "fn sdf_sphere(p: vec3<f32>) -> f32 {\n    return length(p) - 1.0;\n}\n"
 
@@ -103,6 +107,28 @@ class Propose(unittest.TestCase):
         self.assertTrue(lrp.verify("src/lib.rs#fn twice", 14, {"src/lib.rs"}, lambda p: LIB))
         self.assertFalse(lrp.verify("src/lib.rs#fn kernel", 14, {"src/lib.rs"}, lambda p: LIB))
 
+    def test_a_line_drifted_into_a_neighbouring_construct_is_not_anchored(self):
+        # the Kinematics sentence: each reference's text is its own ("encoder", "std", "all features"); line 8 has
+        # drifted into the encoder step, which shares `features` only on the line, not in the step's name
+        code, out = self.note("ci.yml clippy steps (encoder .github/workflows/ci.yml line 6, std line 11, "
+                              "all features line 8)")
+        self.assertIn("`line 6` -> `.github/workflows/ci.yml#- name: clippy (encoder)`".replace("#- ", "#"), out)
+        self.assertIn("`line 11` -> `.github/workflows/ci.yml#name: clippy (std, all targets)`", out)
+        self.assertIn("line 8 ('run: cargo clippy --features encoder') shares no word with the text before the "
+                      "reference (features)", out)
+
+    def test_each_bound_of_a_reference_s_text_holds_on_its_own(self):
+        # a ', ' bounds the text: without it "encoder" (said of another step) would name line 8's step
+        code, out = self.note("ci.yml clippy steps (encoder, all features: .github/workflows/ci.yml line 8)")
+        self.assertEqual(self.proposed(out), [], out)
+        # the previous reference bounds it with no punctuation between
+        code, out = self.note("encoder .github/workflows/ci.yml line 6 all features line 8")
+        self.assertEqual(self.proposed(out), [".github/workflows/ci.yml#name: clippy (encoder)"], out)
+
+    def test_a_definition_encloses_only_the_lines_indented_under_it(self):
+        self.assertIsNone(lrp.enclosing(LIB.splitlines(), 11, "src/lib.rs"))  # after fn other, at its indent
+        self.assertEqual(lrp.enclosing(LIB.splitlines(), 8, "src/lib.rs"), (6, "fn other"))
+
     def test_a_drifted_line_is_not_anchored(self):
         # the text speaks of the encoder flag, line 2 is fn kernel: the number has moved
         code, out = self.note("the decoder flag (src/lib.rs:2)")
@@ -133,7 +159,7 @@ class Propose(unittest.TestCase):
         self.assertIn("src/lib.rs has no line 90 (15 lines)", out)
 
     def test_a_hash_line_is_a_heading_only_in_markdown(self):
-        code, out = self.note("bit-exact results (docs/DESIGN.md line 5)")
+        code, out = self.note("determinism, bit-exact results (docs/DESIGN.md line 5)")
         self.assertEqual(self.proposed(out), ["docs/DESIGN.md### Determinism>result"])
         code, out = self.note("determinism (docs/DESIGN.md line 5)")
         self.assertEqual(self.proposed(out), ["docs/DESIGN.md### Determinism"])

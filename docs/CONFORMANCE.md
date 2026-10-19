@@ -607,9 +607,11 @@ line is (`fn`, a TOML table, a YAML job or step, a preflight step, a Markdown he
 scope under the enclosing definition with a token of the line, or the whole line (a token
 that merely occurs once is not proposed, nor a comment). Every proposal passes the roster's
 own rule and an oracle: the anchor resolves to the referenced line (or to its enclosing
-definition when the manifest's text names that construct), and a word of the text just
-before the reference occurs in it, so a line number that has drifted to another construct
-is reported instead of anchored. A range is not proposed (an anchor names one place). It
+definition when the manifest's text names that construct), and a word of the reference's
+own text (after the previous reference, and after a `, ` or `(` when a word remains) names
+the enclosing definition, or occurs on the line when no definition encloses it, so a line
+number that has drifted into a neighbouring construct is reported instead of anchored.
+The word check is a heuristic; a proposal is read before it is applied. A range is not proposed (an anchor names one place). It
 lists what it cannot resolve, writes nothing, and exits 1 when references exist and no
 proposal could be compared. The manifests are converted crate by crate; on the day a
 crate's conversion lands, a Law commit that changes only the baseline file lowers that
