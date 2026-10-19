@@ -602,9 +602,18 @@ fails a baseline that rises against main's, a new entry above 0, and the removal
 file. With every baseline at 0 no manifest may hold a line reference at all (a crate the
 file does not list counts as 0).
 `python3 scripts/line_refs_propose.py --repo <clone of the crate> [--ref REF]` proposes,
-for each reference, an anchor checked with the roster's own rule. It is the longest token
-of that line that occurs once in the file, or a scope under the nearest enclosing
-definition. It lists what it cannot resolve and writes nothing.
+for each reference, an anchor naming the construct the line is part of: the definition the
+line is (`fn`, a TOML table, a YAML job or step, a preflight step, a Markdown heading), a
+scope under the enclosing definition with a token of the line, or the whole line (a token
+that merely occurs once is not proposed, nor a comment). Every proposal passes the roster's
+own rule and an oracle: the anchor resolves to the referenced line (or to its enclosing
+definition when the manifest's text names that construct), and a word of the text just
+before the reference occurs in it, so a line number that has drifted to another construct
+is reported instead of anchored. A range is not proposed (an anchor names one place). It
+lists what it cannot resolve, writes nothing, and exits 1 when references exist and no
+proposal could be compared. The manifests are converted crate by crate; on the day a
+crate's conversion lands, a Law commit that changes only the baseline file lowers that
+crate's baseline to its new count.
 
 ### Checking a manifest before it lands
 

@@ -17,32 +17,52 @@ import line_refs_propose as lrp  # noqa: E402
 
 ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
        "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "GIT_CONFIG_NOSYSTEM": "1", "HOME": "/nonexistent"}
-LIB = ("//! the crate\n"                       # 1
-       "pub fn kernel_unique(x: f32) -> f32 {\n"  # 2
-       "    x * 2.0\n"                         # 3
-       "}\n"                                   # 4
-       "pub fn other(x: f32) -> f32 {\n"       # 5
-       "    x * 2.0\n"                         # 6: the same line as 3
-       "}\n")                                  # 7
+LIB = ("//! the crate\n"                            # 1
+       "pub fn kernel(x: f32) -> f32 {\n"           # 2
+       "    let y = clamp_unit(x);\n"               # 3
+       "    y * 2.0\n"                              # 4
+       "}\n"                                        # 5
+       "pub fn other(x: f32) -> f32 {\n"            # 6
+       "    let y = clamp_unit(x);\n"               # 7: the same line as 3
+       "    y * 2.0\n"                              # 8
+       "}\n"                                        # 9
+       "\n"                                         # 10
+       "// a comment about the kernel\n"            # 11
+       "pub fn twice(x: f32) -> f32 {\n"            # 12
+       "    let y = clamp_unit(x);\n"               # 13
+       "    clamp_unit(y)\n"                        # 14: clamp_unit's first place in twice is line 13
+       "}\n")                                       # 15
+CI = ("name: ci\n"                                  # 1
+      "jobs:\n"                                     # 2
+      "  lint:\n"                                   # 3
+      "    steps:\n"                                # 4
+      "      # the clippy step\n"                   # 5
+      "      - name: clippy (encoder)\n"            # 6
+      "        working-directory: crate\n"          # 7
+      "        run: cargo clippy --features encoder\n")  # 8
+DOC = "# Title\n\n## Determinism\n\nevery result is bit-exact\n"
+SHADER = "fn sdf_sphere(p: vec3<f32>) -> f32 {\n    return length(p) - 1.0;\n}\n"
 
 
 class Propose(unittest.TestCase):
-    def repo(self, manifest: str | None) -> Path:
-        d = Path(self.tmp.name) / "crate"
-        d.mkdir()
-        (d / "src").mkdir()
-        (d / "src" / "lib.rs").write_text(LIB, encoding="utf-8")
-        if manifest is not None:
-            (d / crc.MANIFEST).write_text(manifest, encoding="utf-8")
-        for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "c"]):
-            subprocess.run(["git", *args], cwd=d, env=ENV, check=True, capture_output=True)
-        return d
-
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def repo(self, manifest: str | None) -> Path:
+        d = Path(self.tmp.name) / "crate"
+        files = {"src/lib.rs": LIB, ".github/workflows/ci.yml": CI, "docs/DESIGN.md": DOC,
+                 "shaders/sdf.wgsl": SHADER}
+        for p, t in files.items():
+            (d / p).parent.mkdir(parents=True, exist_ok=True)
+            (d / p).write_text(t, encoding="utf-8")
+        if manifest is not None:
+            (d / crc.MANIFEST).write_text(manifest, encoding="utf-8")
+        for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "c"]):
+            subprocess.run(["git", *args], cwd=d, env=ENV, check=True, capture_output=True)
+        return d
 
     def run_propose(self, manifest: str | None) -> tuple[int, str]:
         d = self.repo(manifest)
@@ -51,38 +71,100 @@ class Propose(unittest.TestCase):
             code = lrp.main(["--repo", str(d)])
         return code, out.getvalue()
 
-    def test_a_line_with_a_unique_token_gets_that_token(self):
-        code, out = self.run_propose('[G1]\nstatus = "pass"\nevidence = ["src/lib.rs:2 the kernel"]\n')
-        self.assertEqual(code, 0, out)
-        self.assertIn("G1 evidence: `src/lib.rs:2` -> `src/lib.rs#kernel_unique`", out)
-        self.assertIn("1 reference(s), 1 proposed, 0 unresolved", out)
+    def note(self, text: str) -> tuple[int, str]:
+        return self.run_propose(f'[G1]\nstatus = "unverified"\nnote = "{text}"\n')
 
-    def test_a_repeated_line_is_scoped_under_its_definition(self):
-        code, out = self.run_propose('[G1]\nnote = "src/lib.rs (line 6) doubles it"\n')
+    def proposed(self, out: str) -> list[str]:
+        return [x.split("-> `", 1)[1].rstrip("`") for x in out.splitlines() if "-> `" in x]
+
+    def test_a_definition_line_is_named_by_the_definition(self):
+        code, out = self.note("the kernel doubles it (src/lib.rs:2)")
         self.assertEqual(code, 0, out)
-        self.assertIn("-> `src/lib.rs#fn other>x * 2.0`", out)
-        # and the proposal passes the roster's own anchor rule
-        anchor = out.split("-> `")[1].split("`")[0]
-        path, token = anchor.split("#", 1)
+        self.assertEqual(self.proposed(out), ["src/lib.rs#fn kernel"])
+        self.assertIn("1 reference(s), 1 proposed (1 anchors compared with their lines), 0 unresolved", out)
+
+    def test_a_line_the_text_names_is_scoped_under_its_definition(self):
+        # line 7 repeats line 3: only the scope tells them apart
+        code, out = self.note("other clamps with clamp_unit (src/lib.rs line 7)")
+        self.assertEqual(self.proposed(out), ["src/lib.rs#fn other>clamp_unit"])
+
+    def test_text_naming_the_construct_gets_the_construct(self):
+        # line 7 of ci.yml is the step's working-directory; the text means the clippy step
+        code, out = self.note("the clippy job (.github/workflows/ci.yml line 7)")
+        self.assertEqual(self.proposed(out), [".github/workflows/ci.yml#name: clippy (encoder)"])
+
+    def test_an_anchor_that_resolves_to_another_line_is_not_proposed(self):
+        # `fn twice>clamp_unit` passes the roster's rule but names line 13; line 14 needs its own text
+        code, out = self.note("twice clamps again with clamp_unit (src/lib.rs line 14)")
+        self.assertEqual(self.proposed(out), ["src/lib.rs#fn twice>clamp_unit(y)"])
+        self.assertTrue(lrp.verify("src/lib.rs#fn twice>clamp_unit(y)", 14, {"src/lib.rs"}, lambda p: LIB))
+        self.assertFalse(lrp.verify("src/lib.rs#fn twice>clamp_unit", 14, {"src/lib.rs"}, lambda p: LIB))
+        # the enclosing definition names the line only when it is the line's own scope
+        self.assertTrue(lrp.verify("src/lib.rs#fn twice", 14, {"src/lib.rs"}, lambda p: LIB))
+        self.assertFalse(lrp.verify("src/lib.rs#fn kernel", 14, {"src/lib.rs"}, lambda p: LIB))
+
+    def test_a_drifted_line_is_not_anchored(self):
+        # the text speaks of the encoder flag, line 2 is fn kernel: the number has moved
+        code, out = self.note("the decoder flag (src/lib.rs:2)")
+        self.assertEqual(self.proposed(out), [])
+        self.assertIn("shares no word with the text before the reference (decoder, flag): the line may have drifted",
+                      out)
+        self.assertEqual(code, 1, out)  # references and nothing compared
+        self.assertIn("no proposal was compared with its line", out)
+
+    def test_a_range_is_refused(self):
+        code, out = self.note("the kernel body (src/lib.rs lines 2 to 5)")
+        self.assertIn("unresolved (a range names a span: anchor each place it means by hand)", out)
+        code, out = self.note("the kernel body src/lib.rs#L2-L5")
+        self.assertIn("a range names a span", out)
+
+    def test_a_list_gets_one_anchor_per_line(self):
+        code, out = self.note("kernel and other in src/lib.rs (lines 2 and 6)")
+        self.assertEqual(self.proposed(out), ["src/lib.rs#fn kernel`, `src/lib.rs#fn other"])
+
+    def test_comments_empty_lines_missing_paths_and_lines_past_the_end(self):
+        code, out = self.note("the kernel comment (src/lib.rs:11)")
+        self.assertEqual(self.proposed(out), [])  # a comment is not an anchor
+        code, out = self.note("the kernel (src/lib.rs:10)")
+        self.assertIn("src/lib.rs line 10 is empty (the reference has drifted)", out)
+        code, out = self.note("the kernel at line 3")
+        self.assertIn("no path names the file", out)
+        code, out = self.note("the kernel (src/lib.rs:90)")
+        self.assertIn("src/lib.rs has no line 90 (15 lines)", out)
+
+    def test_a_hash_line_is_a_heading_only_in_markdown(self):
+        code, out = self.note("bit-exact results (docs/DESIGN.md line 5)")
+        self.assertEqual(self.proposed(out), ["docs/DESIGN.md### Determinism>result"])
+        code, out = self.note("determinism (docs/DESIGN.md line 5)")
+        self.assertEqual(self.proposed(out), ["docs/DESIGN.md### Determinism"])
+        # in YAML `# the clippy step` is a comment, not a scope
+        self.assertEqual(lrp.enclosing(CI.splitlines(), 5, ".github/workflows/ci.yml"), (3, "lint:"))
+        self.assertEqual(lrp.enclosing(DOC.splitlines(), 5, "docs/DESIGN.md"), (3, "## Determinism"))
+        self.assertIsNone(lrp.enclosing(DOC.splitlines(), 5, "notes.yml"))
+
+    def test_other_extensions_bare_names_and_the_github_form(self):
+        code, out = self.note("the sphere distance (shaders/sdf.wgsl:2)")
+        self.assertEqual(self.proposed(out), ["shaders/sdf.wgsl#fn sdf_sphere"])  # the text names the function
+        code, out = self.note("the sphere distance sdf.wgsl#L1")
+        self.assertEqual(self.proposed(out), ["shaders/sdf.wgsl#fn sdf_sphere"])
+
+    def test_every_proposal_passes_the_roster_rule_and_names_its_line(self):
+        code, out = self.run_propose('[G1]\nstatus = "unverified"\nnote = "the kernel (src/lib.rs:2)"\n'
+                                     'evidence = ["other clamps with clamp_unit (src/lib.rs line 7)", '
+                                     '"the clippy job (.github/workflows/ci.yml line 7)"]\n')
         d = Path(self.tmp.name) / "crate"
         text, paths, read = crc.git_fetcher(d, "HEAD")()
-        self.assertIsNone(crc.anchor_gap(path, token, paths, read))
-
-    def test_a_reference_with_no_path_or_past_the_file_is_unresolved(self):
-        code, out = self.run_propose('[G1]\nnote = "see line 3"\n[G2]\nnote = "src/lib.rs:90"\n')
-        self.assertEqual(code, 0, out)
-        self.assertIn("G1 note: `line 3`: unresolved (no path names the file)", out)
-        self.assertIn("G2 note: `src/lib.rs:90`: unresolved (src/lib.rs has no line 90 (7 lines))", out)
-        self.assertIn("2 reference(s), 0 proposed, 2 unresolved", out)
-
-    def test_a_range_is_flagged_as_naming_its_first_line(self):
-        code, out = self.run_propose('[G1]\nnote = "src/lib.rs (lines 2 to 4)"\n')
-        self.assertIn("(names the first line; a range or list needs one anchor per place)", out)
+        got = self.proposed(out)
+        self.assertEqual(len(got), 3, out)
+        for anchor in got:
+            path, token = anchor.split("#", 1)
+            self.assertIsNone(crc.anchor_gap(path, token, paths, read))
+        self.assertIn("3 proposed (3 anchors compared with their lines)", out)
 
     def test_no_reference_and_no_manifest(self):
-        code, out = self.run_propose('[G1]\nnote = "src/lib.rs#kernel_unique"\n')
+        code, out = self.note("src/lib.rs#kernel")
         self.assertEqual(code, 0, out)
-        self.assertIn("0 reference(s), 0 proposed, 0 unresolved", out)
+        self.assertIn("0 reference(s), 0 proposed (0 anchors compared with their lines), 0 unresolved", out)
         self.tmp.cleanup()
         self.tmp = tempfile.TemporaryDirectory()
         code, out = self.run_propose(None)
