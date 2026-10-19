@@ -44,7 +44,7 @@ def places(value: str) -> list[tuple[str | None, int, str]]:
     for m in PATH_LINE.finditer(value):
         out.append((m.group(1), int(m.group(2)), m.group(0)))
         taken.append(m.span())
-    for m in crc.LINE_REF.finditer(value):
+    for m in crc.line_ref_matches(value):
         if any(a <= m.start() < b for a, b in taken):
             continue
         before = [p.group(0) for p in PATH_ANY.finditer(value[:m.start()])]

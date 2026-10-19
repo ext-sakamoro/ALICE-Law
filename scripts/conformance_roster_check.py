@@ -577,7 +577,23 @@ def render_state(states: dict[str, dict]) -> str:
 
 # a line-number reference in a manifest (docs/CONFORMANCE.md: evidence names a place by an anchor `path#token`,
 # which the roster checks, never by a line number, which goes stale silently)
-LINE_REF = re.compile(r"(\(lines? \d[^)]*\)|\blines? \d+(?:\s*(?:to|and|-|–|,)\s*\d+)*|\.(?:rs|yml|sh|toml|py|md):\d+)")
+# a line-number reference: "(line 3)", "lines 3 to 9", a GitHub "#L42" / "#L3-L9" anchor, a path followed by "L42",
+# or any file extension followed by ":42" (the extension starts with a letter, so "1.5:1" and versions are not one)
+LINE_REF = re.compile(r"(\(lines? \d[^)]*\)|\blines? \d+(?:\s*(?:to|and|-|–|,)\s*\d+)*|#L\d+(?:-L?\d+)?"
+                      r"|\.[A-Za-z][A-Za-z0-9]{0,7}(?::\d+|,? L\d+\b))")
+
+
+def line_ref_matches(value: str) -> list[re.Match]:
+    """LINE_REF's matches in one string, without a host:port in a URL"""
+    out = []
+    for m in LINE_REF.finditer(value):
+        start = m.start()
+        while start > 0 and not value[start - 1].isspace() and value[start - 1] not in "(\"'`":
+            start -= 1
+        if "://" in value[start:m.start()]:
+            continue
+        out.append(m)
+    return out
 
 
 def line_refs(text: str) -> int:
@@ -591,7 +607,7 @@ def line_refs(text: str) -> int:
     def walk(v):
         nonlocal n
         if isinstance(v, str):
-            n += len(LINE_REF.findall(v))
+            n += len(line_ref_matches(v))
         elif isinstance(v, list):
             for x in v:
                 walk(x)
@@ -620,9 +636,14 @@ def load_line_baseline(path: Path) -> dict[str, int] | None:
     return out
 
 
-def line_ref_findings(texts: dict[str, str], baseline: dict[str, int] | None) -> tuple[list[str], list[str]]:
-    """(findings, notes): each manifest holds exactly its baseline's line-number references (above it: a new
-    reference; below it: lower the baseline, so the slack cannot be spent again); with no baseline file, none"""
+def line_ref_findings(texts: dict[str, str], baseline: dict[str, int] | None, strict: bool = True,
+                      below_since=None, today: datetime.date | None = None) -> tuple[list[str], list[str]]:
+    """(findings, notes): each manifest holds exactly its baseline's line-number references; with no baseline
+    file, none. Above the baseline is a finding (a new reference). Below it, the slack would let the crate add
+    references back up to the baseline, so it is a finding until the baseline is lowered: with `strict` (the
+    receipt before a push to main, the lander), or when `below_since(repo, baseline)` (the date of the crate's
+    main commit that took the count below the baseline, None if unknown) is unknown or more than
+    PENDING_MAX_DAYS days before `today`; a fresh one is a note naming the slack."""
     findings, notes = [], []
     for repo in sorted(texts):
         n = line_refs(texts[repo])
@@ -632,12 +653,49 @@ def line_ref_findings(texts: dict[str, str], baseline: dict[str, int] | None) ->
             findings.append(f"{repo}: {MANIFEST} has {n} line-number reference(s), the baseline allows {allowed}: name "
                             f"the place by an anchor `path#token` (scripts/line_refs_propose.py proposes one)")
         elif n < allowed:
-            findings.append(f"{repo}: {MANIFEST} has {n} line-number reference(s), below its baseline {allowed}: lower "
-                            f"the baseline in conformance/line-refs-baseline.toml to {n}")
+            msg = (f"{repo}: {MANIFEST} has {n} line-number reference(s), below its baseline {allowed}: lower "
+                   f"the baseline in conformance/line-refs-baseline.toml to {n}")
+            since = None if strict or below_since is None or today is None else below_since(repo, allowed)
+            if since is None:
+                findings.append(msg + ("" if strict else " (the date it went below is not known)"))
+            elif (today - since).days > PENDING_MAX_DAYS:
+                findings.append(msg + f" (below since {since.isoformat()}, {(today - since).days} days)")
+            else:
+                notes.append(f"slack: {repo}: baseline {allowed}, count {n}, below since {since.isoformat()} "
+                             f"(a finding after {PENDING_MAX_DAYS} days and under --strict)")
     if baseline is not None:
         for repo in sorted(set(baseline) - set(texts)):
             findings.append(f"{repo}: in conformance/line-refs-baseline.toml but no manifest was read for it")
     return findings, notes
+
+
+LINE_HISTORY_DEPTH = 30
+
+
+def gh_manifest_history(owner: str):
+    """repo -> [(sha, commit date)] of the commits on main that changed its manifest, newest first"""
+    def history(repo: str) -> list[tuple[str, datetime.date]]:
+        p = subprocess.run(["gh", "api", f"repos/{owner}/{repo}/commits?sha=main&path={MANIFEST}"
+                            f"&per_page={LINE_HISTORY_DEPTH}"], capture_output=True, text=True)
+        if p.returncode != 0:
+            raise InputError(f"gh api commits of {owner}/{repo}: {p.stderr.strip()[:200]}")
+        return [(c["sha"], datetime.date.fromisoformat(c["commit"]["committer"]["date"][:10]))
+                for c in json.loads(p.stdout)]
+    return history
+
+
+def below_since_from(history, at):
+    """below_since for line_ref_findings: walk the manifest's commits on main from the newest; the date of the
+    oldest commit of the newest run below `allowed` (None when the run reaches past the history read)"""
+    def below_since(repo: str, allowed: int) -> datetime.date | None:
+        since = None
+        for sha, date in history(repo):
+            text = at(repo, sha)[0]
+            if text is not None and line_refs(text) >= allowed:
+                return since
+            since = date
+        return None
+    return below_since
 
 
 PENDING_MAX_DAYS = 3
@@ -838,7 +896,7 @@ def check_state(roster: dict, gates: dict, missing: dict, text: str) -> tuple[li
     return findings, len(entries)
 
 
-def main(argv: list[str] | None = None, fetch=None, at=None) -> int:
+def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", default=str(ROOT / "release-train.toml"))
     ap.add_argument("--gates", default=str(ROOT / "conformance" / "gates.toml"))
@@ -847,7 +905,8 @@ def main(argv: list[str] | None = None, fetch=None, at=None) -> int:
     ap.add_argument("--pending", default=str(ROOT / "conformance" / "pending-state.toml"),
                     help="the crate commits the state records before they land (land_law_state.py --write)")
     ap.add_argument("--strict", action="store_true",
-                    help="a pending entry whose commit has landed is a finding (the pre-push receipt), not a note")
+                    help="a pending entry whose commit has landed, or a manifest below its line-reference "
+                         "baseline, is a finding (the pre-push receipt), not a note")
     ap.add_argument("--today", help="the date pending entries are aged against (default: today, UTC)")
     ap.add_argument("--line-baseline", default=str(ROOT / "conformance" / "line-refs-baseline.toml"),
                     help="the line-number references each manifest may still hold (absent: none may)")
@@ -905,17 +964,19 @@ def main(argv: list[str] | None = None, fetch=None, at=None) -> int:
         texts: dict[str, str] = {}
         findings, notes, states, read, compared, files = check(roster, gates, missing, fetch or gh_fetcher(owner),
                                                                texts)
-        lf, ln = line_ref_findings(texts, load_line_baseline(Path(a.line_baseline)))
+        today = (datetime.date.fromisoformat(a.today) if a.today
+                 else datetime.datetime.now(datetime.timezone.utc).date())
+        at = at or (lambda repo, sha: gh_fetcher(owner, sha)(repo))
+        lf, ln = line_ref_findings(texts, load_line_baseline(Path(a.line_baseline)), a.strict,
+                                   below_since_from(history or gh_manifest_history(owner), at), today)
         findings += lf
         notes += ln
         pending_path = Path(a.pending)
         pending = load_pending(pending_path)
-        today = (datetime.date.fromisoformat(a.today) if a.today
-                 else datetime.datetime.now(datetime.timezone.utc).date())
         state_text = Path(a.state).read_text(encoding="utf-8") if Path(a.state).exists() else ""
         expected, kept, pf, pn = apply_pending(
             states, table_counts(state_text), pending, gates,
-            at or (lambda repo, sha: gh_fetcher(owner, sha)(repo)), today, a.strict)
+            at, today, a.strict)
         findings += pf
         notes += pn
     except InputError as e:

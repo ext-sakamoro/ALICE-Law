@@ -14,6 +14,10 @@ state that would result with the committed one. It prints `state moves: no`, or 
 changed count. With --write it writes that state and the README Status blocks (the Law commit that the
 landing makes true).
 
+It also holds each manifest to conformance/line-refs-baseline.toml: a count above its baseline is a finding
+(the landing would add a line-number reference), and a count below it lowers the baseline, which is a move
+(--write writes the lowered baseline with the state, so the slack is never left to spend).
+
 Exit 0: the state does not move; 1: it moves (a Law state commit must follow the landing); 2: not computed
 (a manifest with findings, a candidate the roster does not name, an unreadable input, or nothing compared).
 """
@@ -67,6 +71,15 @@ def changes(old: dict[str, dict], new: dict[str, dict]) -> list[str]:
     return out
 
 
+def render_baseline(text: str, lowered: dict[str, int]) -> str:
+    """the baseline file's text with the entries of `lowered` set to their new counts (comments kept)"""
+    out = []
+    for line in text.splitlines(keepends=True):
+        key = line.split("=", 1)[0].strip().strip('"')
+        out.append(f'"{key}" = {lowered[key]}\n' if "=" in line and key in lowered else line)
+    return "".join(out)
+
+
 def git_resolve(where: Path, rev: str) -> str:
     """the full commit id of `rev` in the clone `where`"""
     p = subprocess.run(["git", "-C", str(where), "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
@@ -88,6 +101,7 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
     a = ap.parse_args(argv)
     state_path = root / "conformance" / "manifest-state.toml"
     pending_path = root / "conformance" / "pending-state.toml"
+    baseline_path = root / "conformance" / "line-refs-baseline.toml"
     today = (datetime.date.fromisoformat(a.today) if a.today
              else datetime.datetime.now(datetime.timezone.utc).date())
     try:
@@ -117,7 +131,21 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
         def fetch(repo: str):
             return candidates[repo]() if repo in candidates else remote(repo)
 
-        findings, notes, landed, read, compared, files = crc.check(roster, gates, missing, fetch)
+        texts: dict[str, str] = {}
+        findings, notes, landed, read, compared, files = crc.check(roster, gates, missing, fetch, texts)
+        baseline = crc.load_line_baseline(baseline_path)
+        lowered = {}
+        for repo in sorted(texts):
+            n, allowed = crc.line_refs(texts[repo]), (baseline or {}).get(repo, 0)
+            if n > allowed:
+                findings.append(f"{repo}: {crc.MANIFEST} would hold {n} line-number reference(s), the baseline "
+                                f"allows {allowed}: name the place by an anchor `path#token` "
+                                f"(scripts/line_refs_propose.py proposes one)")
+            elif n < allowed:
+                lowered[repo] = n
+        if baseline is not None:
+            findings += [f"{r}: in {baseline_path.name} but no manifest was read for it"
+                         for r in sorted(set(baseline) - set(texts))]
         mfindings, _, at_main, *_ = crc.check(roster, gates, missing, remote)
         findings += [f for f in mfindings if f not in findings]
         # the entries of other repositories still pending (a landed one is dropped: part of the Law change)
@@ -156,8 +184,9 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
     rendered_pending = crc.render_pending(new_pending) if (new_pending or current_pending) else ""
     # a move is a change of the recorded state or of which repositories are pending; an entry's sha or date alone
     # is not (the live check matches on the counts, so a rebased candidate already recorded needs no Law change)
-    moved = rendered != current or set(new_pending) != set(pending)
+    moved = rendered != current or set(new_pending) != set(pending) or bool(lowered)
     lines = changes(old, counts_of(rendered))
+    lines += [f"{r}: line-reference baseline {baseline[r]} -> {n}" for r, n in sorted(lowered.items())]
     for repo in sorted(set(pending) | set(new_pending)):
         a_, b_ = pending.get(repo), new_pending.get(repo)
         if a_ != b_:
@@ -177,6 +206,10 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
         if rendered_pending:
             pending_path.write_text(rendered_pending, encoding="utf-8")
             print(f"land_law_state: wrote {pending_path.name} ({len(new_pending)} pending)")
+        if lowered:
+            baseline_path.write_text(render_baseline(baseline_path.read_text(encoding="utf-8"), lowered),
+                                     encoding="utf-8")
+            print(f"land_law_state: wrote {baseline_path.name}")
         code = gls.main([], root=root)
         if code != 0:
             return 2

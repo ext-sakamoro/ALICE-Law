@@ -37,6 +37,11 @@ class LandLawState(unittest.TestCase):
             (self.root / name).write_text(f"# t\n\n{gls.BEGIN}\n{gls.END}\n", encoding="utf-8")
         self.mains = {"Alpha": manifest(), "Beta": manifest()}
         self.at_texts = {}
+        self.history = {}
+        # the baseline equals the mains' line-number references (manifest() holds one, G2's src/lib.rs:12)
+        (self.root / "conformance" / "line-refs-baseline.toml").write_text(
+            "# the baseline\n\n[baseline]\n" + "".join(f'"{r}" = {crc.line_refs(t)}\n' for r, t in sorted(self.mains.items())),
+            encoding="utf-8")
         # the committed state is what the mains say
         states = crc.check(crc.load_toml(self.root / "release-train.toml"),
                            crc.load_toml(self.root / "conformance" / "gates.toml"), {}, self.remote)[2]
@@ -181,7 +186,7 @@ class LandLawState(unittest.TestCase):
                              "--pending", str(self.root / "conformance" / "pending-state.toml"),
                              "--today", "2026-10-19", "--line-baseline",
                              exact_line_baseline(self.root, self.mains), *flags],
-                            fetch=self.remote, at=self.at)
+                            fetch=self.remote, at=self.at, history=lambda repo: self.history.get(repo, []))
         return code, out.getvalue()
 
     def pending(self) -> str | None:
@@ -247,6 +252,60 @@ class LandLawState(unittest.TestCase):
                                   local=self.fake_local({"abd": both}))
         self.assertEqual(code, 1, out)
         self.assertIn('sha = "' + ("abd" * 14)[:40] + '"\nsince = "2026-10-17"', self.pending())
+
+    def baseline(self) -> str:
+        return (self.root / "conformance" / "line-refs-baseline.toml").read_text(encoding="utf-8")
+
+    def test_a_candidate_adding_a_line_reference_is_refused(self):
+        added = manifest(G3='status = "unverified"\nnote = "see src/lib.rs#L40"')
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": added}))
+        self.assertEqual(code, 2, out)
+        self.assertIn("Alpha: alice-law-conformance.toml would hold 2 line-number reference(s), the baseline allows 1",
+                      out)
+        self.assertNotIn("state moves", out)
+
+    def test_a_candidate_removing_a_line_reference_lowers_the_baseline_with_the_landing(self):
+        anchored = manifest(G2='status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs#kernel"')
+        local = self.fake_local({"abc": anchored})
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=local)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Alpha: line-reference baseline 1 -> 0", out)
+        self.assertIn('"Alpha" = 1', self.baseline())  # not written without --write
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", "--write", local=local)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(self.baseline(), '# the baseline\n\n[baseline]\n"Alpha" = 0\n"Beta" = 1\n')
+        # once written, the same landing moves nothing more
+        self.assertEqual(self.run_land("--candidate", "Alpha=/c@abc", local=local)[0], 0)
+
+    def test_a_main_below_its_baseline_is_lowered_by_any_landing(self):
+        self.mains["Beta"] = manifest(G2='status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs#k"')
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": manifest()}))
+        self.assertEqual(code, 1, out)
+        self.assertIn("Beta: line-reference baseline 1 -> 0", out)
+
+    def test_live_holds_a_fresh_drop_as_a_note_and_an_old_one_or_strict_as_a_finding(self):
+        import datetime
+        lb = Path(exact_line_baseline(self.root, self.mains))
+        self.mains["Beta"] = manifest(G2='status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs#k"')
+        self.at_texts[("Beta", "b2")] = self.mains["Beta"]
+        self.at_texts[("Beta", "b1")] = manifest()
+        self.history["Beta"] = [("b2", datetime.date(2026, 10, 17)), ("b1", datetime.date(2026, 10, 1))]
+
+        def live(*flags):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = crc.main(["--roster", str(self.root / "release-train.toml"),
+                                 "--gates", str(self.root / "conformance" / "gates.toml"),
+                                 "--state", str(self.root / "conformance" / "manifest-state.toml"),
+                                 "--pending", str(self.root / "conformance" / "pending-state.toml"),
+                                 "--line-baseline", str(lb), *flags],
+                                fetch=self.remote, at=self.at, history=lambda repo: self.history.get(repo, []))
+            return code, out.getvalue()
+        code, out = live("--today", "2026-10-19")
+        self.assertEqual(code, 0, out)
+        self.assertIn("slack: Beta: baseline 1, count 0, below since 2026-10-17", out)
+        self.assertEqual(live("--today", "2026-10-21")[0], 1)
+        self.assertEqual(live("--today", "2026-10-19", "--strict")[0], 1)
 
     def test_a_real_clone_at_a_commit(self):
         repo = Path(self.tmp.name) / "alpha"

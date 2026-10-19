@@ -585,9 +585,18 @@ feature the crate does not have.
 
 A place is named by an anchor, never by a line number. The line numbers that manifests
 still hold are counted against `conformance/line-refs-baseline.toml`, which records each
-crate's current count. The roster check (at every main) fails a count above its baseline
-(a new line reference) and a count below it until the baseline is lowered to it, so the
-slack cannot be spent again. `scripts/line_refs_ratchet.py` (branch CI and the preflight)
+crate's current count. A reference is `(line 3)`, `lines 3 to 9`, a GitHub `#L42` /
+`#L3-L9` anchor, a path followed by `L42`, or any file extension followed by `:42`
+(a version, a date, a ratio or a URL's port is not one). The roster check (at every main)
+fails a count above its baseline (a new line reference). A count below it is slack that
+would let the crate add references back up to the baseline: in the live check it is a
+note naming the crate, the baseline and the count while the crate's main has been below
+for at most 3 days (dated by the manifest's commits on main), and a finding after that,
+when the date is not known, and always under `--strict` (the receipt before a push to
+main). `scripts/land_law_state.py` (the gate before a crate lands) refuses a candidate
+whose count is above its baseline (exit 2) and treats any count below it as a move:
+`--write` lowers the baseline with the state, so the Law change that follows the landing
+closes the slack. `scripts/line_refs_ratchet.py` (branch CI and the preflight)
 fails a baseline that rises against main's, a new entry above 0, and the removal of the
 file. With every baseline at 0 no manifest may hold a line reference at all (a crate the
 file does not list counts as 0).
