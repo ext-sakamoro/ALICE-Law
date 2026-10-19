@@ -68,6 +68,11 @@ jobs:
       - name: Test the landing check of the conformance state
         run: python3 scripts/test_land_law_state.py
 
+      - name: Every step that reaches gh has GH_TOKEN (tests, then check)
+        run: |
+          python3 scripts/test_workflow_gh_token_check.py
+          python3 scripts/workflow_gh_token_check.py
+
       # G11 (c): the shared-file table's schema and this repository's own copies (offline);
       # the comparison with every listed repository's main is conformance-live.yml
       - name: Test the shared-file checker and its generator

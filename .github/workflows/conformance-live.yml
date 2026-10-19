@@ -82,4 +82,7 @@ jobs:
       # right before the push, and this is the backstop for a push made without it
       - name: Strict on a push to main (scripts/shared_files_strict.sh)
         if: github.event_name == 'push'
+        env:
+          # the state checks (conformance_roster_check.py --strict) read the crates' mains through gh api
+          GH_TOKEN: ${{ github.token }}
         run: scripts/shared_files_strict.sh

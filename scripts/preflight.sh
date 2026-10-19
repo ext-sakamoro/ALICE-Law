@@ -20,6 +20,8 @@ python3 scripts/test_readme_roster_check.py
 python3 scripts/test_conformance_docs_schema_check.py
 python3 scripts/test_conformance_roster_check.py
 python3 scripts/test_land_law_state.py
+python3 scripts/test_workflow_gh_token_check.py
+python3 scripts/workflow_gh_token_check.py
 python3 scripts/test_main_mode.py
 python3 scripts/test_gen_law_status.py
 python3 scripts/test_readme_parity_check.py
