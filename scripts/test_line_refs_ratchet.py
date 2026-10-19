@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""Tests of scripts/line_refs_ratchet.py and the roster's line-number reference counts
+(python3 scripts/test_line_refs_ratchet.py)."""
+from __future__ import annotations
+
+import contextlib
+import io
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import conformance_roster_check as crc  # noqa: E402
+import line_refs_ratchet as lrr  # noqa: E402
+
+
+def baseline(**counts: int) -> str:
+    return "[baseline]\n" + "".join(f'"ALICE-{k}" = {v}\n' for k, v in counts.items())
+
+
+class Ratchet(unittest.TestCase):
+    def run_ratchet(self, new: str | None, old: str | None) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as d:
+            n, o = Path(d) / "new.toml", Path(d) / "old.toml"
+            if new is not None:
+                n.write_text(new, encoding="utf-8")
+            if old is not None:
+                o.write_text(old, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = lrr.main(["--baseline", str(n), "--base", str(o)])
+            return code, out.getvalue()
+
+    def test_an_unchanged_or_lowered_baseline_passes(self):
+        for new in (baseline(A=5, B=0), baseline(A=3, B=0)):
+            with self.subTest(new=new):
+                code, out = self.run_ratchet(new, baseline(A=5, B=0))
+                self.assertEqual(code, 0, out)
+                self.assertIn("compared 2, 0 finding(s)", out)
+
+    def test_a_raised_baseline_is_refused(self):
+        code, out = self.run_ratchet(baseline(A=6, B=0), baseline(A=5, B=0))
+        self.assertEqual(code, 1, out)
+        self.assertIn("ALICE-A: the baseline rose from 5 to 6", out)
+
+    def test_a_new_entry_starts_at_zero(self):
+        self.assertEqual(self.run_ratchet(baseline(A=5, C=0), baseline(A=5))[0], 0)
+        code, out = self.run_ratchet(baseline(A=5, C=2), baseline(A=5))
+        self.assertEqual(code, 1, out)
+        self.assertIn("a new baseline entry must start at 0, not 2", out)
+
+    def test_the_file_is_never_removed(self):
+        for old in (baseline(A=1, B=0), baseline(A=0, B=0)):
+            with self.subTest(old=old):
+                code, out = self.run_ratchet(None, old)
+                self.assertEqual(code, 1, out)
+                self.assertIn("the baseline file is removed: keep it", out)
+
+    def test_the_file_is_introduced_when_main_has_none(self):
+        code, out = self.run_ratchet(baseline(A=100, B=0), None)
+        self.assertEqual(code, 0, out)
+        self.assertIn("the baseline file is introduced (2 entries)", out)
+        self.assertEqual(self.run_ratchet(None, None)[0], 2)
+
+    def test_bad_or_empty_input_is_not_a_pass(self):
+        self.assertEqual(self.run_ratchet(baseline(A=1), "[baseline]\n")[0], 2)
+        self.assertEqual(self.run_ratchet('[baseline]\n"ALICE-A" = -1\n', baseline(A=1))[0], 2)
+        self.assertEqual(self.run_ratchet('[other]\n', baseline(A=1))[0], 2)
+
+
+class Counts(unittest.TestCase):
+    MANIFEST = ('[G1]\nstatus = "pass"\nevidence = ["src/lib.rs:12 the kernel", "tests/a.rs (lines 3-9)"]\n'
+                'note = "see line 40 and src/x.rs#kernel"\n[G2]\nstatus = "n/a"\nmutant = "anchors only: src/x.rs#f"\n')
+
+    def test_the_line_number_forms_are_counted_in_the_gate_tables(self):
+        self.assertEqual(crc.line_refs(self.MANIFEST), 3)  # src/lib.rs:12, (lines 3-9), line 40
+        self.assertEqual(crc.line_refs('[meta]\nnote = "line 5"\n[G1]\nnote = "src/x.rs#f"\n'), 0)
+
+    def test_exactly_the_baseline_passes_and_above_or_below_is_a_finding(self):
+        texts = {"ALICE-A": self.MANIFEST, "ALICE-DB": '[G1]\nnote = "src/x.rs#f"\n'}
+        f, notes = crc.line_ref_findings(texts, {"ALICE-A": 3, "ALICE-DB": 0})
+        self.assertEqual(f, [])
+        self.assertIn("ALICE-DB: 0 line-number reference(s) in alice-law-conformance.toml, baseline 0", notes)
+        f, _ = crc.line_ref_findings(texts, {"ALICE-A": 2, "ALICE-DB": 0})
+        self.assertIn("ALICE-A: alice-law-conformance.toml has 3 line-number reference(s), the baseline allows 2: "
+                      "name the place by an anchor `path#token` (scripts/line_refs_propose.py proposes one)", f)
+        f, _ = crc.line_ref_findings(texts, {"ALICE-A": 4, "ALICE-DB": 0})
+        self.assertIn("ALICE-A: alice-law-conformance.toml has 3 line-number reference(s), below its baseline 4: "
+                      "lower the baseline in conformance/line-refs-baseline.toml to 3", f)
+
+    def test_no_baseline_file_bans_every_reference_and_a_missing_entry_is_zero(self):
+        f, _ = crc.line_ref_findings({"ALICE-A": self.MANIFEST}, None)
+        self.assertEqual(len(f), 1)
+        self.assertIn("has 3 line-number reference(s), the baseline allows 0", f[0])
+        f, _ = crc.line_ref_findings({"ALICE-A": self.MANIFEST}, {})
+        self.assertIn("the baseline allows 0", f[0])
+
+    def test_a_baseline_entry_with_no_manifest_is_a_finding(self):
+        f, _ = crc.line_ref_findings({}, {"ALICE-Gone": 0})
+        self.assertIn("ALICE-Gone: in conformance/line-refs-baseline.toml but no manifest was read for it", f)
+
+    def test_the_repository_baseline_reads(self):
+        got = crc.load_line_baseline(HERE.parent / "conformance" / "line-refs-baseline.toml")
+        self.assertTrue(got, "the committed baseline file has entries")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -33,6 +33,18 @@ python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py
 python3 scripts/test_shared_files_strict.py
 
+echo "== the line-number reference baseline does not rise against origin/main"
+python3 scripts/test_line_refs_ratchet.py
+python3 scripts/test_line_refs_propose.py
+line_base=$(mktemp)
+if git cat-file -e origin/main:conformance/line-refs-baseline.toml 2>/dev/null; then
+  git show origin/main:conformance/line-refs-baseline.toml > "$line_base"
+else
+  rm -f "$line_base"
+fi
+python3 scripts/line_refs_ratchet.py --baseline conformance/line-refs-baseline.toml --base "$line_base"
+rm -f "$line_base"
+
 echo "== the shared-file table reads, and this repository's copies equal it (the comparison with
 # every listed repository's main runs on every push to main and daily, conformance-live.yml)"
 if git cat-file -e origin/main:conformance/shared-files.toml 2>/dev/null; then

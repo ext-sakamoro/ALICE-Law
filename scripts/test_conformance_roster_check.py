@@ -51,6 +51,14 @@ def manifest(**over) -> str:
     return "\n\n".join(f"[{k}]\n{v}" for k, v in entries.items() if v is not None) + "\n"
 
 
+def exact_line_baseline(d: Path, texts: dict) -> str:
+    """a line-number reference baseline equal to these manifests' counts (the live mode compares them exactly)"""
+    p = d / "lb.toml"
+    p.write_text("[baseline]\n" + "".join(f'"{r}" = {crc.line_refs(t)}\n' for r, t in sorted(texts.items())
+                                           if t is not None), encoding="utf-8")
+    return str(p)
+
+
 class Check(unittest.TestCase):
     def run_check(self, repos: dict, missing: str = "", state: str | None = None, write=True, roster=ROSTER,
                   gates=GATES):
@@ -70,7 +78,8 @@ class Check(unittest.TestCase):
                 return repos.get(repo), set(PATHS)
             out = io.StringIO()
             args = ["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing", str(d / "m.toml"),
-                    "--state", str(st), "--pending", str(d / "p.toml")] + (["--write"] if write else [])
+                    "--state", str(st), "--pending", str(d / "p.toml"),
+                    "--line-baseline", exact_line_baseline(d, repos)] + (["--write"] if write else [])
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(args, fetch=fetch)
             self.assertNotIn("Law", calls)  # an exempt crate is not read
@@ -632,7 +641,8 @@ class NaEvidence(unittest.TestCase):
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
                                  str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
-                                 "--write"], fetch=fetch)
+                                 "--write", "--line-baseline", exact_line_baseline(d, {"Alpha": text, "Beta": manifest()})],
+                                fetch=fetch)
             state = (d / "s.toml").read_text(encoding="utf-8") if (d / "s.toml").exists() else ""
             return code, out.getvalue(), state.split('[manifest."Beta"]')[0]
 
@@ -714,7 +724,7 @@ class Pending(unittest.TestCase):
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
                                  str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
-                                 "--today", today, *flags],
+                                 "--today", today, "--line-baseline", exact_line_baseline(d, mains), *flags],
                                 fetch=lambda repo: (mains.get(repo), set(PATHS)), at=at_fetch)
             written = (d / "s.toml").read_text(encoding="utf-8")
             pend = (d / "p.toml").read_text(encoding="utf-8") if (d / "p.toml").exists() else None
@@ -729,7 +739,8 @@ class Pending(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
                                            str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending",
-                                           str(d / "p.toml"), "--write"],
+                                           str(d / "p.toml"), "--write", "--line-baseline",
+                                           exact_line_baseline(d, mains)],
                                           fetch=lambda repo: (mains.get(repo), set(PATHS))), 0)
             return (d / "s.toml").read_text(encoding="utf-8")
 

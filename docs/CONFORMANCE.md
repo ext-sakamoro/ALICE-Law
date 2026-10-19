@@ -581,6 +581,21 @@ meet. A feature the table does not list is not declared, and the README block
 generator refuses a feature marked `inside` without evidence, and a listed
 feature the crate does not have.
 
+### Line-number references
+
+A place is named by an anchor, never by a line number. The line numbers that manifests
+still hold are counted against `conformance/line-refs-baseline.toml`, which records each
+crate's current count. The roster check (at every main) fails a count above its baseline
+(a new line reference) and a count below it until the baseline is lowered to it, so the
+slack cannot be spent again. `scripts/line_refs_ratchet.py` (branch CI and the preflight)
+fails a baseline that rises against main's, a new entry above 0, and the removal of the
+file. With every baseline at 0 no manifest may hold a line reference at all (a crate the
+file does not list counts as 0).
+`python3 scripts/line_refs_propose.py --repo <clone of the crate> [--ref REF]` proposes,
+for each reference, an anchor checked with the roster's own rule. It is the longest token
+of that line that occurs once in the file, or a scope under the nearest enclosing
+definition. It lists what it cannot resolve and writes nothing.
+
 ### Checking a manifest before it lands
 
 A branch's own CI does not read its manifest the way this repository's roster

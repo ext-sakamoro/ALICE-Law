@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE))
 import conformance_roster_check as crc  # noqa: E402
 import gen_law_status as gls  # noqa: E402
 import land_law_state as lls  # noqa: E402
-from test_conformance_roster_check import GATES, PATHS, ROSTER, manifest  # noqa: E402
+from test_conformance_roster_check import GATES, PATHS, ROSTER, exact_line_baseline, manifest  # noqa: E402
 
 ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
        "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "GIT_CONFIG_NOSYSTEM": "1", "HOME": "/nonexistent"}
@@ -116,7 +116,8 @@ class LandLawState(unittest.TestCase):
             code = crc.main(["--roster", str(self.root / "release-train.toml"),
                              "--gates", str(self.root / "conformance" / "gates.toml"),
                              "--missing", str(self.root / "conformance" / "missing-manifests.toml"),
-                             "--state", str(self.root / "conformance" / "manifest-state.toml")], fetch=self.remote)
+                             "--state", str(self.root / "conformance" / "manifest-state.toml"),
+                             "--line-baseline", exact_line_baseline(self.root, self.mains)], fetch=self.remote)
         self.assertEqual(code, 0, out2.getvalue())
 
     def test_write_without_a_move_leaves_the_files_alone(self):
@@ -178,7 +179,8 @@ class LandLawState(unittest.TestCase):
                              "--missing", str(self.root / "conformance" / "missing-manifests.toml"),
                              "--state", str(self.root / "conformance" / "manifest-state.toml"),
                              "--pending", str(self.root / "conformance" / "pending-state.toml"),
-                             "--today", "2026-10-19", *flags],
+                             "--today", "2026-10-19", "--line-baseline",
+                             exact_line_baseline(self.root, self.mains), *flags],
                             fetch=self.remote, at=self.at)
         return code, out.getvalue()
 

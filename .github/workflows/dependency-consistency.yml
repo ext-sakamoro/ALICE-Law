@@ -80,6 +80,21 @@ jobs:
           python3 scripts/test_shared_files_check.py
           python3 scripts/test_gen_shared_files.py
 
+      # the line-number reference baseline only goes down (each manifest holds exactly its count; the roster's
+      # comparison with every main is conformance-live.yml)
+      - name: The line-number reference baseline does not rise (tests, then check against main)
+        run: |
+          python3 scripts/test_line_refs_ratchet.py
+          python3 scripts/test_line_refs_propose.py
+          git fetch -q --depth 1 origin main
+          base="$RUNNER_TEMP/base-line-refs-baseline.toml"
+          if git cat-file -e FETCH_HEAD:conformance/line-refs-baseline.toml 2>/dev/null; then
+            git show FETCH_HEAD:conformance/line-refs-baseline.toml > "$base"
+          else
+            rm -f "$base"
+          fi
+          python3 scripts/line_refs_ratchet.py --baseline conformance/line-refs-baseline.toml --base "$base"
+
       # pending rows only go down: a change may not add one against the table on main
       - name: The shared-file table reads, this repository's copies equal it, pending does not rise
         run: |

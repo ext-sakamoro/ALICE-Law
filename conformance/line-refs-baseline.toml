@@ -1,0 +1,20 @@
+# The line-number references each crate's alice-law-conformance.toml may still hold: exactly its current
+# count (docs/CONFORMANCE.md: a place is named by an anchor `path#token`). A count above its baseline is a
+# finding (a new line reference); a count below it is a finding until the baseline is lowered to it (slack is
+# not spent again); a baseline is never raised and this file is never removed (scripts/line_refs_ratchet.py).
+# With every baseline at 0 no manifest may hold a line reference (a crate this file does not list counts as 0).
+
+[baseline]
+"ALICE-Analytics" = 31
+"ALICE-Crypto" = 58
+"ALICE-DB" = 0
+"ALICE-DetMath" = 18
+"ALICE-Edge" = 41
+"ALICE-Kinematics" = 100
+"ALICE-LLM" = 35
+"ALICE-LOL" = 17
+"ALICE-ML" = 42
+"ALICE-Physics" = 19
+"ALICE-SDF" = 3
+"ALICE-Sync" = 24
+"ALICE-Zip" = 44
