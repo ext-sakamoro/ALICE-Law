@@ -7,15 +7,15 @@
 
 [baseline]
 "ALICE-Analytics" = 31
-"ALICE-Crypto" = 58
+"ALICE-Crypto" = 0
 "ALICE-DB" = 0
 "ALICE-DetMath" = 18
 "ALICE-Edge" = 41
-"ALICE-Kinematics" = 100
+"ALICE-Kinematics" = 0
 "ALICE-LLM" = 35
 "ALICE-LOL" = 17
 "ALICE-ML" = 42
 "ALICE-Physics" = 19
 "ALICE-SDF" = 3
 "ALICE-Sync" = 24
-"ALICE-Zip" = 44
+"ALICE-Zip" = 0
