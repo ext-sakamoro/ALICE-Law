@@ -602,13 +602,13 @@ class Internal(unittest.TestCase):
 
 
 class Pending(unittest.TestCase):
-    """the state recorded before a crate lands: conformance/pending-state.toml"""
+    """the state recorded before a crate lands: conformance/pending-state.toml, matched on the counts"""
     SHA = "a" * 40
     PASSED = manifest(G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
+    OTHER = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"')
 
-    def go(self, mains: dict, pending: str | None, at: dict, status: dict, state: str, *flags: str,
-           today: str = "2026-10-19"):
-        """mains: {repo: manifest}; at: {(repo, sha): manifest}; status: {(repo, sha): compare status}"""
+    def go(self, mains: dict, pending: str | None, at: dict, state: str, *flags: str, today: str = "2026-10-19"):
+        """mains: {repo: manifest}; at: {(repo, sha): manifest}"""
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             (d / "r.toml").write_text(ROSTER, encoding="utf-8")
@@ -626,8 +626,7 @@ class Pending(unittest.TestCase):
                 code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
                                  str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
                                  "--today", today, *flags],
-                                fetch=lambda repo: (mains.get(repo), set(PATHS)),
-                                at=at_fetch, compare=lambda repo, sha: status[(repo, sha)])
+                                fetch=lambda repo: (mains.get(repo), set(PATHS)), at=at_fetch)
             written = (d / "s.toml").read_text(encoding="utf-8")
             pend = (d / "p.toml").read_text(encoding="utf-8") if (d / "p.toml").exists() else None
             return code, out.getvalue(), written, pend, reads
@@ -652,64 +651,69 @@ class Pending(unittest.TestCase):
         self.old = {"Alpha": manifest(), "Beta": manifest()}
         self.new = {"Alpha": self.PASSED, "Beta": manifest()}
         self.recorded = self.state_of(self.new)  # the state the regen commit records before Alpha lands
+        self.at = {("Alpha", self.SHA): self.PASSED}
 
     def test_a_difference_a_pending_entry_explains_passes_and_the_counts_are_computed_at_its_commit(self):
-        code, out, _, _, reads = self.go(self.old, self.entry(), {("Alpha", self.SHA): self.PASSED},
-                                         {("Alpha", self.SHA): "ahead"}, self.recorded)
+        code, out, _, _, reads = self.go(self.old, self.entry(), self.at, self.recorded)
         self.assertEqual(code, 0, out)
         self.assertIn(f"Alpha: pending: the state records {self.SHA[:12]}, not landed yet", out)
         self.assertEqual(reads, [("Alpha", self.SHA)])
 
     def test_without_an_entry_the_same_difference_is_a_finding(self):
-        code, out, *_ = self.go(self.old, None, {}, {}, self.recorded)
+        code, out, *_ = self.go(self.old, None, {}, self.recorded)
         self.assertEqual(code, 1, out)
         self.assertIn("differs from the manifests at main", out)
 
     def test_an_entry_whose_commit_has_other_counts_than_the_table_is_a_finding(self):
         # the entry names a commit whose manifest flips G2 too: the table (G3 only) is not that commit's state
-        other = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"',
-                         G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
-        code, out, *_ = self.go(self.old, self.entry(), {("Alpha", self.SHA): other},
-                                {("Alpha", self.SHA): "ahead"}, self.recorded)
+        both = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"',
+                        G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
+        code, out, *_ = self.go(self.old, self.entry(), {("Alpha", self.SHA): both}, self.recorded)
+        self.assertEqual(code, 1, out)
+        self.assertIn("neither main's nor those of pending entry", out)
+
+    def test_another_repository_with_a_stale_state_is_still_found_while_one_is_pending(self):
+        # Alpha's difference is explained; Beta's main moved too, with no entry: that is still a finding
+        code, out, *_ = self.go({"Alpha": manifest(), "Beta": self.OTHER}, self.entry(), self.at, self.recorded)
         self.assertEqual(code, 1, out)
         self.assertIn("differs from the manifests at main", out)
 
-    def test_an_entry_that_does_not_move_the_state_is_a_finding(self):
-        code, out, *_ = self.go(self.old, self.entry(), {("Alpha", self.SHA): manifest()},
-                                {("Alpha", self.SHA): "ahead"}, self.state_of(self.old))
-        self.assertEqual(code, 1, out)
-        self.assertIn("does not move the state", out)
-
     def test_a_landed_entry_is_a_note_in_live_and_a_finding_under_strict(self):
-        args = (self.new, self.entry(), {}, {("Alpha", self.SHA): "identical"}, self.recorded)
-        code, out, *_ = self.go(*args)
+        args = (self.new, self.entry(), {}, self.recorded)
+        code, out, _, _, reads = self.go(*args)
         self.assertEqual(code, 0, out)
-        self.assertIn("has landed on main", out)
+        self.assertIn("so it has landed", out)
+        self.assertEqual(reads, [])  # landed is read from main's counts, the entry's commit is not needed
         code, out, *_ = self.go(*args, "--strict")
         self.assertEqual(code, 1, out)
         self.assertIn("found: Alpha: pending entry", out)
-        # main moved past the commit: landed too
-        code, out, *_ = self.go(self.new, self.entry(), {}, {("Alpha", self.SHA): "behind"}, self.recorded, "--strict")
-        self.assertEqual(code, 1, out)
+
+    def test_a_rebased_landing_with_another_sha_but_the_same_counts_reads_as_landed(self):
+        # the entry names the ci commit; the commit that reached main is a rebase of it (another sha): only the
+        # counts matter, so this is the landing, and live stays green
+        code, out, *_ = self.go(self.new, self.entry(sha="b" * 40), {}, self.recorded)
+        self.assertEqual(code, 0, out)
+        self.assertIn("so it has landed", out)
+
+    def test_an_unrelated_commit_on_the_crate_main_does_not_read_as_landed(self):
+        # Alpha's main moved by another commit (its counts are neither the old nor the recorded ones): still
+        # pending, the recorded state is still the entry's commit's
+        code, out, *_ = self.go({"Alpha": self.OTHER, "Beta": manifest()}, self.entry(), self.at, self.recorded)
+        self.assertEqual(code, 0, out)
+        self.assertIn("not landed yet", out)
+        self.assertNotIn("has landed", out)
 
     def test_a_landed_entry_older_than_three_days_is_a_finding_in_live_too(self):
-        code, out, *_ = self.go(self.new, self.entry(since="2026-10-15"), {}, {("Alpha", self.SHA): "identical"},
-                                self.recorded, today="2026-10-19")
+        code, out, *_ = self.go(self.new, self.entry(since="2026-10-15"), {}, self.recorded, today="2026-10-19")
         self.assertEqual(code, 1, out)
         self.assertIn("(4 days old)", out)
 
     def test_an_entry_that_has_not_landed_in_three_days_is_a_finding(self):
-        args = (self.old, self.entry(since="2026-10-15"), {("Alpha", self.SHA): self.PASSED},
-                {("Alpha", self.SHA): "ahead"}, self.recorded)
+        args = (self.old, self.entry(since="2026-10-15"), self.at, self.recorded)
         code, out, *_ = self.go(*args, today="2026-10-19")
         self.assertEqual(code, 1, out)
         self.assertIn("more than 3 days without landing", out)
         self.assertEqual(self.go(*args, today="2026-10-18")[0], 0)  # 3 days: still inside
-
-    def test_a_diverged_commit_is_a_finding(self):
-        code, out, *_ = self.go(self.old, self.entry(), {}, {("Alpha", self.SHA): "diverged"}, self.recorded)
-        self.assertEqual(code, 1, out)
-        self.assertIn("not on the way to main (diverged)", out)
 
     def test_bad_entries_are_unreadable_or_findings(self):
         for pending, why, code_want in (
@@ -721,21 +725,19 @@ class Pending(unittest.TestCase):
                 (self.entry(repo="Gamma"), "names a repository the state does not record", 1),
                 (self.entry(since="2026-10-25"), "after today", 1)):
             with self.subTest(why=why):
-                code, out, *_ = self.go(self.old, pending, {("Alpha", self.SHA): self.PASSED},
-                                        {("Alpha", self.SHA): "ahead", ("Gamma", self.SHA): "ahead"}, self.recorded)
+                code, out, *_ = self.go(self.old, pending, self.at, self.recorded)
                 self.assertEqual(code, code_want, out)
                 self.assertIn(why, out)
 
     def test_write_keeps_an_entry_that_has_not_landed_and_drops_one_that_has(self):
         both = self.entry() + "\n" + self.entry(sha="b" * 40, repo="Beta")
-        beta_new = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"')
+        recorded = self.state_of({"Alpha": self.PASSED, "Beta": self.OTHER})
         code, out, written, pend, _ = self.go(
-            {"Alpha": self.PASSED, "Beta": manifest()}, both, {("Beta", "b" * 40): beta_new},
-            {("Alpha", self.SHA): "identical", ("Beta", "b" * 40): "ahead"}, self.recorded, "--write")
+            {"Alpha": self.PASSED, "Beta": manifest()}, both, {("Beta", "b" * 40): self.OTHER}, recorded, "--write")
         self.assertEqual(code, 0, out)
         self.assertNotIn('"Alpha"', pend)
         self.assertIn(f'[pending."Beta"]\nsha = "{"b" * 40}"', pend)
-        self.assertEqual(written, self.state_of({"Alpha": self.PASSED, "Beta": beta_new}))
+        self.assertEqual(written, recorded)
 
 
 if __name__ == "__main__":

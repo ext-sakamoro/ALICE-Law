@@ -77,7 +77,7 @@ def git_resolve(where: Path, rev: str) -> str:
 
 
 def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root: Path = crc.ROOT,
-         resolve=git_resolve, at=None, compare=None) -> int:
+         resolve=git_resolve, at=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--candidate", action="append", default=[], metavar="ALICE-X=DIR@REV",
                     help="a crate repository's clone and the commit about to land on its main")
@@ -108,12 +108,11 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
             candidates[name] = local(where, rev)
             shas[name] = resolve(where, rev)
         owner = a.owner or roster.get("train", {}).get("github")
-        if remote is None or at is None or compare is None:
+        if remote is None or at is None:
             if not owner:
                 raise crc.InputError("no GitHub owner ([train] github in the roster, or --owner)")
         remote = remote or crc.gh_fetcher(owner)
         at = at or (lambda repo, sha: crc.gh_fetcher(owner, sha)(repo))
-        compare = compare or crc.gh_compare(owner)
 
         def fetch(repo: str):
             return candidates[repo]() if repo in candidates else remote(repo)
@@ -124,7 +123,9 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
         # the entries of other repositories still pending (a landed one is dropped: part of the Law change)
         pending = crc.load_pending(pending_path)
         others = {r: e for r, e in pending.items() if r not in candidates}
-        expected, kept, pf, pn = crc.apply_pending(at_main, others, gates, at, compare, today, strict=False)
+        current = state_path.read_text(encoding="utf-8") if state_path.exists() else ""
+        expected, kept, pf, pn = crc.apply_pending(at_main, crc.table_counts(current), others, gates, at, today,
+                                                   strict=False)
         findings += pf
         notes += pn
         new_pending = dict(kept)
@@ -136,7 +137,6 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
                 # a re-rolled candidate keeps the date its entry was first recorded
                 since = pending[repo]["since"] if repo in pending else today.isoformat()
                 new_pending[repo] = {"sha": shas[repo], "since": since}
-        current = state_path.read_text(encoding="utf-8") if state_path.exists() else ""
         current_pending = pending_path.read_text(encoding="utf-8") if pending_path.exists() else ""
         old = counts_of(current) if current else {}
     except crc.InputError as e:

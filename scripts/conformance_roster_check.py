@@ -25,10 +25,11 @@ The status counts of each repository's manifest, with the crates it is read for,
 it, the committed file must equal what main shows (a manifest changed upstream is a finding until
 the file is regenerated), which keeps the README tables generated from it deterministic. A difference
 is explained by `conformance/pending-state.toml` (written by scripts/land_law_state.py --write before the
-crate lands): for a repository an entry names, while the entry's commit is ahead of main, the state must
-equal the counts computed from the manifest at that commit; a landed entry is a note (a finding with
-`--strict`, the receipt before a push to main, and after PENDING_MAX_DAYS days), and an entry that
-diverges, does not move the state, or is older than PENDING_MAX_DAYS days is a finding.
+crate lands). The rule is on the counts, not on the history (a landing may rebase): for a repository an
+entry names, main's counts equal to the recorded ones mean the entry has landed (a note; a finding with
+`--strict`, the receipt before a push to main, and after PENDING_MAX_DAYS days); otherwise the state must
+record the counts computed from the manifest at the entry's commit, and an entry older than
+PENDING_MAX_DAYS days is a finding.
 
     conformance_roster_check.py [--roster FILE] [--gates FILE] [--missing FILE] [--state FILE]
                                 [--owner OWNER] [--pending FILE] [--strict] [--today YYYY-MM-DD]
@@ -432,17 +433,6 @@ def gh_api(path: str) -> dict | None:
     return json.loads(p.stdout)
 
 
-def gh_compare(owner: str):
-    """repo, sha -> GitHub's comparison of the repository's main with sha (`main...sha`): "ahead" (sha is past main:
-    not landed yet), "identical" or "behind" (main has it), "diverged" (not on the way to main)"""
-    def compare(repo: str, sha: str) -> str:
-        got = gh_api(f"repos/{owner}/{repo}/compare/main...{sha}")
-        if got is None:
-            raise InputError(f"{owner}/{repo}: {sha} is not a commit of the repository")
-        return got["status"]
-    return compare
-
-
 def gh_fetcher(owner: str, ref: str = "main"):
     def api(path: str) -> dict | None:
         p = subprocess.run(["gh", "api", path], capture_output=True, text=True)
@@ -572,12 +562,24 @@ def render_pending(pending: dict[str, dict]) -> str:
     return "\n".join(out)
 
 
-def apply_pending(states: dict[str, dict], pending: dict[str, dict], gates: dict, at, compare,
+def table_counts(state_text: str) -> dict[str, dict]:
+    """repository -> status counts recorded in a manifest-state.toml text (empty for an empty text)"""
+    if not state_text.strip():
+        return {}
+    try:
+        data = tomllib.loads(state_text)
+    except tomllib.TOMLDecodeError as e:
+        raise InputError(f"manifest-state.toml: {e}") from e
+    return {r: {s: v.get(s, 0) for s in STATUSES} for r, v in data.get("manifest", {}).items()}
+
+
+def apply_pending(states: dict[str, dict], table: dict[str, dict], pending: dict[str, dict], gates: dict, at,
                   today: datetime.date, strict: bool) -> tuple[dict, dict, list[str], list[str]]:
-    """(the state the table must record, the entries still pending, findings, notes): the state at main, with each
-    repository a pending entry names replaced by its counts at the entry's commit, computed from the manifest there
-    (not trusted), while that commit has not landed. A landed entry is a note (a finding with `strict`, or after
-    PENDING_MAX_DAYS days); a diverged commit, one whose counts equal main's, and an aged entry are findings."""
+    """(the state the table must record, the entries still pending, findings, notes). The rule is on the counts,
+    not on the history (a landing may rebase, and other commits may land first): for a repository a pending entry
+    names, when main's counts equal the table's the entry has landed (a note; a finding with `strict` or after
+    PENDING_MAX_DAYS days); otherwise the table must record the counts computed from the manifest at the entry's
+    commit (read there, not trusted), within PENDING_MAX_DAYS days."""
     expected = {r: {"crates": list(v["crates"]), "counts": dict(v["counts"])} for r, v in states.items()}
     kept: dict[str, dict] = {}
     findings: list[str] = []
@@ -591,9 +593,8 @@ def apply_pending(states: dict[str, dict], pending: dict[str, dict], gates: dict
         if repo not in states:
             findings.append(f"{repo}: pending entry {sha[:12]} names a repository the state does not record")
             continue
-        status = compare(repo, sha)
-        if status in ("identical", "behind"):
-            msg = (f"{repo}: pending entry {sha[:12]} has landed on main, so the state records main again "
+        if states[repo]["counts"] == table.get(repo):
+            msg = (f"{repo}: pending entry {sha[:12]}: main's counts are the recorded ones, so it has landed "
                    f"(drop the entry: land_law_state.py --write or conformance_roster_check.py --write)")
             if strict or age > PENDING_MAX_DAYS:
                 findings.append(msg + (f" ({age} days old)" if age > PENDING_MAX_DAYS else ""))
@@ -601,9 +602,6 @@ def apply_pending(states: dict[str, dict], pending: dict[str, dict], gates: dict
                 notes.append(msg)
             continue
         kept[repo] = e
-        if status != "ahead":
-            findings.append(f"{repo}: pending entry {sha[:12]} is not on the way to main ({status})")
-            continue
         text, paths, *rest = at(repo, sha)
         if text is None:
             findings.append(f"{repo}: pending entry {sha[:12]} has no {MANIFEST}")
@@ -612,9 +610,9 @@ def apply_pending(states: dict[str, dict], pending: dict[str, dict], gates: dict
         if f or n == 0:
             findings += f or [f"{repo}: pending entry {sha[:12]}: no gate compared"]
             continue
-        if counts == states[repo]["counts"]:
-            findings.append(f"{repo}: pending entry {sha[:12]} does not move the state (its counts are main's): "
-                            f"drop it")
+        if counts != table.get(repo):
+            findings.append(f"{repo}: the state records counts that are neither main's nor those of pending entry "
+                            f"{sha[:12]} (recorded {table.get(repo)}, at {sha[:12]} {counts})")
             continue
         expected[repo]["counts"] = counts
         notes.append(f"{repo}: pending: the state records {sha[:12]}, not landed yet (since {e['since']})")
@@ -723,7 +721,7 @@ def check_state(roster: dict, gates: dict, missing: dict, text: str) -> tuple[li
     return findings, len(entries)
 
 
-def main(argv: list[str] | None = None, fetch=None, at=None, compare=None) -> int:
+def main(argv: list[str] | None = None, fetch=None, at=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", default=str(ROOT / "release-train.toml"))
     ap.add_argument("--gates", default=str(ROOT / "conformance" / "gates.toml"))
@@ -790,9 +788,10 @@ def main(argv: list[str] | None = None, fetch=None, at=None, compare=None) -> in
         pending = load_pending(pending_path)
         today = (datetime.date.fromisoformat(a.today) if a.today
                  else datetime.datetime.now(datetime.timezone.utc).date())
+        state_text = Path(a.state).read_text(encoding="utf-8") if Path(a.state).exists() else ""
         expected, kept, pf, pn = apply_pending(
-            states, pending, gates, at or (lambda repo, sha: gh_fetcher(owner, sha)(repo)),
-            compare or gh_compare(owner), today, a.strict)
+            states, table_counts(state_text), pending, gates,
+            at or (lambda repo, sha: gh_fetcher(owner, sha)(repo)), today, a.strict)
         findings += pf
         notes += pn
     except InputError as e:

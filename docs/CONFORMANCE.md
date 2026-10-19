@@ -611,14 +611,15 @@ the crates' mains no longer match.
 
 The state commit lands here first, before the crate: `--write` also records
 each moving candidate in `conformance/pending-state.toml` (its commit and the
-date). Until that commit reaches the crate's main, the live check accepts the
-difference only for a repository a pending entry names, only while the entry's
-commit is ahead of that main, and only when the state file equals the counts
-computed from the manifest at that commit (read there, not trusted). The
-following are findings: a difference no entry explains, a commit that diverges
-from main, an entry whose commit does not move the state, and an entry older
-than 3 days. Once the crate lands, the entry is a counted note in the live check
-(this repository stays green across the landing). It is a finding under
+date). The rule is on the counts, not on the history, because a landing may
+rebase the commit and other commits may land on the crate's main first. For a
+repository a pending entry names: when main's counts are the recorded ones, the
+entry has landed; otherwise the state file must record the counts computed from
+the manifest at the entry's commit (read there, not trusted). The following are
+findings: a difference no entry explains, a recorded state that is neither
+main's nor the entry's commit's, and an entry older than 3 days. Once the crate
+lands, the entry is a counted note in the live check (this repository stays
+green across the landing). It is a finding under
 `--strict` (the receipt before a push here) and after 3 days, so the next
 change here drops it. `land_law_state.py --write` and
 `conformance_roster_check.py --write` drop landed entries. A re-rolled
