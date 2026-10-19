@@ -13,8 +13,9 @@ at the root of its repository's main branch, with one entry per gate of
   that exists at main (the site, with or without its line, or the file where the required thing
   is absent);
 - `pass` / `n/a` without evidence or without a mutant is read as `unverified` (a warning, as the
-  generated views read it), not as met; an `n/a` also needs a checker of scripts/ that exists at main
-  in its evidence (the scanner that measured the absence) and a mutant that says it was measured.
+  generated views read it), not as met; an `n/a` also needs a scanner in its evidence (a checker of
+  scripts/ at main with its own test, run by a workflow, not a generic driver) and a mutant that says
+  it was measured.
 
 A crate with no manifest fails with its name, unless `conformance/missing-manifests.toml` lists
 it (with the repository whose change removes the entry and the reason): a listed crate still
@@ -266,14 +267,34 @@ def test_fn_gap(ref: str, paths: set[str], read) -> str | None:
 
 NA_SCANNER_DIR = "scripts/"
 MEASURED = re.compile(r"\bmeasured\b", re.IGNORECASE)
+# drivers that run many checks: naming one does not say which check measured the absence
+NA_GENERIC = frozenset({"preflight.sh", "run_tests.sh", "law_tests.sh", "shared_files.sh", "public_text.sh"})
 
 
-def na_evidence_gap(named: list[str], paths: set[str], mutant: str) -> str | None:
+def na_scanner(t: str, paths: set[str], read) -> bool:
+    """whether the evidence path `t` is a scanner that measures: a checker under scripts/ at the ref, not a generic
+    driver, with its own test (scripts/test_<name>.py), and run by a workflow at the ref (named on a line of a
+    workflow file that is not a comment)"""
+    if not t.startswith(NA_SCANNER_DIR) or not exists(t, paths):
+        return False
+    name = t.rsplit("/", 1)[-1]
+    stem = name.rsplit(".", 1)[0]
+    if name in NA_GENERIC or f"{NA_SCANNER_DIR}test_{stem}.py" not in paths or read is None:
+        return False
+    for w in sorted(x for x in paths if x.startswith(".github/workflows/") and x.endswith((".yml", ".yaml"))):
+        text = read(w) or ""
+        if any(t in line and not line.lstrip().startswith("#") for line in text.splitlines()):
+            return True
+    return False
+
+
+def na_evidence_gap(named: list[str], paths: set[str], mutant: str, read=None) -> str | None:
     """what an `n/a` lacks (docs/CONFORMANCE.md: its evidence is the scanner that catches a violation elsewhere
-    finding zero sites here, its mutant is adding one site, measured): a checker of scripts/ that exists at the ref
-    among the evidence's paths, and a mutant that says it was measured"""
-    if not any(t.startswith(NA_SCANNER_DIR) and exists(t, paths) for t in named):
-        return f"a scanner of {NA_SCANNER_DIR} at the ref in its evidence (the absence must be measured by a check)"
+    finding zero sites here, its mutant is adding one site, measured): a scanner (see na_scanner) among the
+    evidence's paths, and a mutant that says it was measured"""
+    if not any(na_scanner(t, paths, read) for t in named):
+        return (f"a scanner of {NA_SCANNER_DIR} at the ref in its evidence, with its own test and run by a workflow "
+                f"(the absence must be measured by a check)")
     if not MEASURED.search(mutant):
         return "a mutant marked measured (the added site must have been tried, not described)"
     return None
@@ -436,7 +457,7 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
                 status = "unverified"
         if status == "n/a":
             na_checked += 1
-            gap = na_evidence_gap(named, paths, str(mutant))
+            gap = na_evidence_gap(named, paths, str(mutant), read)
             if gap:
                 na_downgraded += 1
                 warnings.append(f"{where}: {gid} n/a without {gap}, read as unverified")

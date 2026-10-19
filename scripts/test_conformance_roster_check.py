@@ -602,9 +602,15 @@ class Internal(unittest.TestCase):
 
 
 class NaEvidence(unittest.TestCase):
-    """an n/a is a measured absence: a scanner of scripts/ in its evidence, and a mutant marked measured"""
-    run_check = Check.run_check
+    """an n/a is a measured absence: a scanner of scripts/ (its own test, run by a workflow, not a generic driver)
+    in its evidence, and a mutant marked measured"""
     NOTE = 'note = "the gate does not apply here"'
+    SCANNER_PATHS = {"scripts/scan.py", "scripts/test_scan.py", "scripts/preflight.sh", "scripts/test_preflight.py",
+                     "scripts/lonely.py", "scripts/unrun.py", "scripts/test_unrun.py"}
+    WORKFLOW = ("jobs:\n  check:\n    steps:\n      - run: python3 scripts/scan.py\n"
+                "      - run: scripts/preflight.sh\n      - run: python3 scripts/lonely.py\n"
+                "      # python3 scripts/unrun.py (not run: a comment)\n")
+    GOOD = "measured 2026-10-17, reverted: adding a site fails the scan"
 
     def na(self, evidence: list[str], mutant: str | None) -> str:
         lines = ['status = "n/a"', "evidence = [" + ", ".join(f'"{x}"' for x in evidence) + "]", self.NOTE]
@@ -613,33 +619,58 @@ class NaEvidence(unittest.TestCase):
         return manifest(G3="\n".join(lines))
 
     def counts_of(self, text: str) -> tuple[int, str, str]:
-        code, out, state = self.run_check({"Alpha": text, "Beta": manifest()})
-        return code, out, state.split('[manifest."Beta"]')[0] if state else ""
+        paths = set(PATHS) | self.SCANNER_PATHS
+
+        def fetch(repo):
+            body = {"Alpha": text, "Beta": manifest()}[repo]
+            return body, paths, (lambda path: self.WORKFLOW if path == ".github/workflows/ci.yml" else None)
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "r.toml").write_text(ROSTER, encoding="utf-8")
+            (d / "g.toml").write_text(GATES, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
+                                 str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
+                                 "--write"], fetch=fetch)
+            state = (d / "s.toml").read_text(encoding="utf-8") if (d / "s.toml").exists() else ""
+            return code, out.getvalue(), state.split('[manifest."Beta"]')[0]
 
     def test_a_measured_scan_stays_n_a(self):
-        code, out, state = self.counts_of(self.na(["scripts/lib.rs: the scan finds 0 sites here"],
-                                                  "measured 2026-10-17, reverted: adding a site fails the scan"))
+        code, out, state = self.counts_of(self.na(["scripts/scan.py: the scan finds 0 sites here"], self.GOOD))
         self.assertEqual(code, 0, out)
         self.assertIn('"n/a" = 1', state)
         self.assertIn("1 n/a cell(s) checked for a measured scanner, 0 read as unverified", out)
 
     def test_evidence_naming_no_scanner_is_read_as_unverified(self):
         # the DetMath form: source files, not the check that measured the absence
-        code, out, state = self.counts_of(self.na(["src/lib.rs", "src/geom/mod.rs"],
-                                                  "measured: adding a site fails the scan"))
+        code, out, state = self.counts_of(self.na(["src/lib.rs", "src/geom/mod.rs"], self.GOOD))
         self.assertEqual(code, 0, out)
         self.assertIn('"n/a" = 0', state)
         self.assertIn("G3 n/a without a scanner of scripts/ at the ref in its evidence", out)
         self.assertIn("1 read as unverified", out)
 
+    def test_a_scanner_without_its_own_test_is_not_a_scanner(self):
+        code, out, state = self.counts_of(self.na(["scripts/lonely.py"], self.GOOD))
+        self.assertIn('"n/a" = 0', state)
+
+    def test_a_scanner_no_workflow_runs_is_not_a_scanner(self):
+        # scripts/unrun.py has a test but appears in the workflow only in a comment
+        code, out, state = self.counts_of(self.na(["scripts/unrun.py"], self.GOOD))
+        self.assertIn('"n/a" = 0', state)
+
+    def test_a_generic_driver_is_not_a_scanner(self):
+        code, out, state = self.counts_of(self.na(["scripts/preflight.sh: runs every check"], self.GOOD))
+        self.assertIn('"n/a" = 0', state)
+
     def test_a_mutant_not_marked_measured_is_read_as_unverified(self):
-        code, out, state = self.counts_of(self.na(["scripts/lib.rs"], "add a site: the scan would then fail"))
+        code, out, state = self.counts_of(self.na(["scripts/scan.py"], "add a site: the scan would then fail"))
         self.assertEqual(code, 0, out)
         self.assertIn('"n/a" = 0', state)
         self.assertIn("G3 n/a without a mutant marked measured", out)
 
     def test_unmeasured_is_not_measured(self):
-        code, out, state = self.counts_of(self.na(["scripts/lib.rs"], "unmeasured: adding a site should fail the scan"))
+        code, out, state = self.counts_of(self.na(["scripts/scan.py"], "unmeasured: adding a site should fail the scan"))
         self.assertIn('"n/a" = 0', state)
 
     def test_empty_evidence_is_read_as_unverified(self):
