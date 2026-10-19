@@ -92,7 +92,8 @@ def cell(text: str) -> str:
     return " ".join(str(text).split()).replace("|", "\\|")
 
 
-def render(lang: str, root: Path = ROOT) -> str:
+def render(lang: str, root: Path | None = None) -> str:
+    root = ROOT if root is None else root
     L = LABELS[lang]
     roster = load(root / "release-train.toml")
     crates = roster.get("crate", {})
@@ -157,7 +158,9 @@ def splice(text: str, block: str, name: str) -> str:
     return text[:a] + block + text[b:]
 
 
-def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
+def main(argv: list[str] | None = None, root: Path | None = None) -> int:
+    # the default root is read at call time (a test can point ROOT elsewhere)
+    root = ROOT if root is None else root
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)

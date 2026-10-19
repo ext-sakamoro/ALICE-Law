@@ -18,10 +18,48 @@ import conformance_roster_check as crc  # noqa: E402
 import gen_law_status as gls  # noqa: E402
 import land_law_state as lls  # noqa: E402
 from test_conformance_roster_check import GATES, PATHS, ROSTER, exact_line_baseline, manifest  # noqa: E402
+from test_conformance_roster_check import poison_root  # noqa: E402
+
+# this module's conformance_roster_check is not the one test_conformance_roster_check loads (it imports it by
+# file), so the poisoned root is set here for this module's copy, the one land_law_state uses too; gen_law_status has
+# its own root, poisoned the same way
+_real_root, _real_gls_root = crc.ROOT, gls.ROOT
+
+
+def setUpModule():
+    assert lls.crc is crc and lls.gls is gls
+    crc.ROOT = gls.ROOT = poison_root()
+
+
+def tearDownModule():
+    crc.ROOT, gls.ROOT = _real_root, _real_gls_root
 
 ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
        "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "GIT_CONFIG_NOSYSTEM": "1", "HOME": "/nonexistent"}
 PASSED_G3 = manifest(G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
+
+
+class LeakDetector(unittest.TestCase):
+    def test_this_suite_runs_with_the_poisoned_root(self):
+        # a call that leaves a path out must read the poisoned files, not this repository's
+        self.assertEqual(crc.load_pending(crc.ROOT / "conformance" / "pending-state.toml"),
+                         {"ALICE-Leak": {"sha": "0" * 40, "since": "2026-10-19"}})
+
+    def test_a_land_call_without_root_reads_the_poisoned_root(self):
+        # the default is bound at call time: the poisoned root has no release-train.toml, and the error names it
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = lls.main(["--candidate", "Alpha=/c@abc"], remote=lambda repo: (None, set()))
+        self.assertNotEqual(code, 0, out.getvalue())
+        self.assertIn(str(crc.ROOT / "release-train.toml"), out.getvalue())
+
+    def test_a_status_call_without_root_reads_the_poisoned_root(self):
+        # the poisoned root has no README.md; this repository's would pass --check
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = gls.main(["--check"])
+        self.assertNotEqual(code, 0, out.getvalue())
+        self.assertIn("README.md is missing", out.getvalue())
 
 
 class LandLawState(unittest.TestCase):
@@ -122,6 +160,7 @@ class LandLawState(unittest.TestCase):
                              "--gates", str(self.root / "conformance" / "gates.toml"),
                              "--missing", str(self.root / "conformance" / "missing-manifests.toml"),
                              "--state", str(self.root / "conformance" / "manifest-state.toml"),
+                             "--pending", str(self.root / "conformance" / "pending-state.toml"),
                              "--line-baseline", exact_line_baseline(self.root, self.mains)], fetch=self.remote)
         self.assertEqual(code, 0, out2.getvalue())
 
@@ -301,6 +340,7 @@ class LandLawState(unittest.TestCase):
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(["--roster", str(self.root / "release-train.toml"),
                                  "--gates", str(self.root / "conformance" / "gates.toml"),
+                                 "--missing", str(self.root / "conformance" / "missing-manifests.toml"),
                                  "--state", str(self.root / "conformance" / "manifest-state.toml"),
                                  "--pending", str(self.root / "conformance" / "pending-state.toml"),
                                  "--line-baseline", str(lb), *flags],

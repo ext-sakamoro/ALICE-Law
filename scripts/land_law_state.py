@@ -91,8 +91,10 @@ def git_resolve(where: Path, rev: str) -> str:
     return p.stdout.strip()
 
 
-def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root: Path = crc.ROOT,
+def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root: Path | None = None,
          resolve=git_resolve, at=None) -> int:
+    # the default root is read at call time, so a test that points crc.ROOT elsewhere covers a call without root=
+    root = crc.ROOT if root is None else root
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--candidate", action="append", default=[], metavar="ALICE-X=DIR@REV",
                     help="a crate repository's clone and the commit about to land on its main")
