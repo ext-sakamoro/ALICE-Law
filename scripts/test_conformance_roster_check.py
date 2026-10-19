@@ -51,12 +51,49 @@ def manifest(**over) -> str:
     return "\n\n".join(f"[{k}]\n{v}" for k, v in entries.items() if v is not None) + "\n"
 
 
+# A test that leaves out a path reads conformance_roster_check's default, which is this repository's own
+# conformance/ directory: its real pending-state.toml, baseline and missing list would then decide the result
+# (a pending entry on Law's main once broke a fixture run that way). The suite points the defaults at a
+# directory whose files name a repository no fixture has, so such a leak is a finding, never a silent read.
+LEAK_REPO = "ALICE-Leak"
+_real_root = crc.ROOT
+_leak_dir: tempfile.TemporaryDirectory | None = None
+
+
+def poison_root() -> Path:
+    """a stand-in for the repository root whose conformance files all name LEAK_REPO"""
+    root = Path(tempfile.mkdtemp(prefix="crc-leak-"))
+    (root / "conformance").mkdir()
+    (root / "conformance" / "pending-state.toml").write_text(
+        f'[pending."{LEAK_REPO}"]\nsha = "{"0" * 40}"\nsince = "2026-10-19"\n', encoding="utf-8")
+    (root / "conformance" / "line-refs-baseline.toml").write_text(f'[baseline]\n"{LEAK_REPO}" = 0\n', encoding="utf-8")
+    (root / "conformance" / "missing-manifests.toml").write_text(
+        f'[missing.leak]\nfixed-in = "{LEAK_REPO}"\nwhy = "a leaked read of the repository file"\n', encoding="utf-8")
+    return root
+
+
+def setUpModule():
+    crc.ROOT = poison_root()
+
+
+def tearDownModule():
+    crc.ROOT = _real_root
+
+
 def exact_line_baseline(d: Path, texts: dict) -> str:
     """a line-number reference baseline equal to these manifests' counts (the live mode compares them exactly)"""
     p = d / "lb.toml"
     p.write_text("[baseline]\n" + "".join(f'"{r}" = {crc.line_refs(t)}\n' for r, t in sorted(texts.items())
                                            if t is not None), encoding="utf-8")
     return str(p)
+
+
+class LeakDetector(unittest.TestCase):
+    def test_a_default_path_reads_the_poisoned_root_not_the_repository(self):
+        self.assertNotEqual(crc.ROOT, _real_root)
+        self.assertEqual(crc.load_pending(crc.ROOT / "conformance" / "pending-state.toml"),
+                         {LEAK_REPO: {"sha": "0" * 40, "since": "2026-10-19"}})
+        self.assertEqual(crc.load_line_baseline(crc.ROOT / "conformance" / "line-refs-baseline.toml"), {LEAK_REPO: 0})
 
 
 class Check(unittest.TestCase):
@@ -558,7 +595,8 @@ class Internal(unittest.TestCase):
             out = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
-                                 str(d / "m.toml"), "--state", str(d / "s.toml"), "--internal"], fetch=fetch)
+                                 str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
+                                 "--internal"], fetch=fetch)
             return code, out.getvalue()
 
     def test_a_consistent_state_passes_without_reading_any_repository(self):
