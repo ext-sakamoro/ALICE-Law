@@ -73,6 +73,22 @@ class World:
         self.revs.setdefault(name, rev)
         return rev
 
+    def ci(self, name: str, branch: str, files: dict[str, bytes], prefix: str = "ci/") -> str:
+        """push files to <prefix><branch> (ci/ by default) of a repository, its main unchanged"""
+        w = self.work / name
+        branch = f"{prefix}{branch}"
+        git("checkout", "-q", "-b", branch, cwd=w)
+        for rel, data in files.items():
+            (w / rel).parent.mkdir(parents=True, exist_ok=True)
+            (w / rel).write_bytes(data)
+        git("add", "-A", cwd=w)
+        git("commit", "-q", "-m", "c", cwd=w)
+        git("push", "-q", "origin", f"HEAD:refs/heads/{branch}", cwd=w)
+        rev = git("rev-parse", "HEAD", cwd=w).strip()
+        git("checkout", "-q", "main", cwd=w)
+        git("reset", "-q", "--hard", "origin/main", cwd=w)
+        return rev
+
     def uniform(self, **override) -> dict:
         e = {"path": "scripts/s.sh", "sha256": h(SHARED), "source": {"repo": "ALICE-A", "rev": self.revs["ALICE-A"]},
              "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {}}
@@ -644,6 +660,101 @@ class Planned(Base):
         code, out = self.live()
         self.assertEqual(code, 0, out)
         self.assertIn("no main holds the bytes the planned row moved from any more", out)
+
+
+class FirstMove(Base):
+    """The first move of a uniform row (SHARED on ALICE-A and ALICE-B) to V3, which no main holds yet"""
+
+    TODAY = "2026-10-20"
+
+    def first(self, **override) -> dict:
+        return self.w.moved(**{"since": self.TODAY, "first_move": True, **override})
+
+    def live(self, *entries: dict, today: str = TODAY):
+        self.t.write_text(self.w.table(*entries), encoding="utf-8")
+        return self.check("--live", "--today", today)
+
+    def base(self, *entries: dict) -> Path:
+        b = Path(self.tmp.name) / "base.toml"
+        b.write_text(self.w.table(*entries), encoding="utf-8")
+        return b
+
+    def test_the_flag_is_only_for_a_planned_row_with_moved_from(self):
+        e = self.w.planned()
+        e["pending"]["first_move"] = True
+        self.t.write_text(self.w.table(e), encoding="utf-8")
+        code, out = self.check()
+        self.assertEqual(code, 2, out)
+        self.assertIn("pending.first_move must be true, on a planned row with moved_from", out)
+
+    def test_the_planned_bytes_must_exist_with_the_target_s_sha256(self):
+        code, out = self.live(self.first())
+        self.assertEqual(code, 1, out)
+        self.assertIn("on the tip of neither its main nor a ci/ branch", out)
+        # a ci/ branch of another repository does not count, nor a branch of the owner outside main and ci/
+        self.w.ci("ALICE-B", "s-v3", {"scripts/s.sh": V3})
+        self.assertEqual(self.live(self.first())[0], 1)
+        self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3}, prefix="wip/")
+        self.assertEqual(self.live(self.first())[0], 1)
+        self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3})
+        code, out = self.live(self.first())
+        self.assertEqual(code, 0, out)
+        # a typo'd target (the blob is there, its SHA-256 is not the table's)
+        code, out = self.live(self.first(target="e" * 64))
+        self.assertEqual(code, 1, out)
+        self.assertIn("not the target eeeeeeeeeeee", out)
+
+    def test_the_owner_lands_within_three_days(self):
+        self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3})
+        self.assertEqual(self.live(self.first(since="2026-10-17"))[0], 0)
+        code, out = self.live(self.first(since="2026-10-16"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("has not landed", out)
+        # once the owner has landed, the planned bytes are on its main and the 3 days no longer apply
+        self.w.commit("ALICE-A", {"scripts/s.sh": V3})
+        landed = self.first(since="2026-10-16", variants={h(SHARED): ["ALICE-B"], h(V3): ["ALICE-A"]})
+        code, out = self.live(landed)
+        self.assertEqual(code, 0, out)
+
+    def test_no_third_value_and_no_missing_copy_while_it_moves(self):
+        self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3})
+        self.w.commit("ALICE-B", {"scripts/s.sh": OTHER})
+        code, out = self.live(self.first())
+        self.assertEqual(code, 1, out)
+        self.assertIn("first move: ALICE-B main has sha256", out)
+        self.w.commit("ALICE-B", {"scripts/s.sh": None})
+        code, out = self.live(self.first())
+        self.assertEqual(code, 1, out)
+        self.assertIn("first move: ALICE-B has no copy", out)
+
+    def test_the_base_must_be_uniform_with_exactly_the_bytes_it_moves_from(self):
+        self.t.write_text(self.w.table(self.first()), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.w.uniform())))
+        self.assertEqual(code, 0, out)
+        self.assertIn("pending 1 (planned 1, unplanned 0), the base table 0 (planned 0, unplanned 0)", out)
+        # the base row is not uniform (pending), or uniform with other bytes
+        self.assertEqual(self.check("--base-table", str(self.base(self.w.planned())))[0], 1)
+        self.assertEqual(self.check("--base-table", str(self.base(self.w.uniform(sha256=h(OTHER)))))[0], 1)
+        # the same shape without the flag is refused as before
+        self.t.write_text(self.w.table(self.w.moved()), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.w.uniform())))
+        self.assertEqual(code, 1, out)
+        self.assertIn("not the base table's planned id", out)
+        # a copy recorded at other bytes or absent: not the first move of a uniform row
+        for variants in ({h(SHARED): ["ALICE-A"], h(OTHER): ["ALICE-B"]}, {h(SHARED): ["ALICE-A"], "absent": ["ALICE-B"]}):
+            self.t.write_text(self.w.table(self.first(variants=variants)), encoding="utf-8")
+            self.assertEqual(self.check("--base-table", str(self.base(self.w.uniform())))[0], 1, variants)
+
+    def test_one_planned_move_at_a_time(self):
+        v4 = SHARED + b"# v4\n"
+        second = self.first(target=h(v4), planned=sfc.git_blob(v4))
+        self.t.write_text(self.w.table(second), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 1, out)
+        self.assertIn("one planned move at a time", out)
+        # the same first move again (the next commit) is fine
+        self.t.write_text(self.w.table(self.first()), encoding="utf-8")
+        self.assertEqual(self.check("--base-table", str(self.base(self.first())))[0], 0)
 
 
 class TheTable(unittest.TestCase):

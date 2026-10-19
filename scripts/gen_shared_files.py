@@ -29,7 +29,10 @@ the date it became planned when its id moves to newer bytes (a re-rolled target 
 the age limit). A planned row whose next= moves to bytes no main holds yet (a re-roll after some
 mains already took the earlier bytes) stays planned only with --target PATH=SHA256@ALICE-X for
 the new bytes: it records `moved_from` (the earlier planned id and target) until no main holds
-those; without --target it is an error, never a silent drop to an unplanned divergence.
+those; without --target it is an error, never a silent drop to an unplanned divergence. The
+first move of a uniform row to bytes no main holds (the --next-from id, with --target for the
+bytes and their owner) is planned too, marked `first_move` with `moved_from` = the uniform
+bytes; it is not re-rolled before its owner lands (an error).
 
   gen_shared_files.py --table conformance/shared-files.toml (--write | --check)
                       [--registry FILE] [--discover] [--checkouts DIR] [--today YYYY-MM-DD]
@@ -92,6 +95,8 @@ def render(entries: list[dict]) -> str:
             if "moved_from" in p:
                 m = p["moved_from"]
                 planned += f", moved_from = {{ planned = {q(m['planned'])}, target = {q(m['target'])} }}"
+            if p.get("first_move"):
+                planned += ", first_move = true"
             out.append(f"pending = {{ since = {q(p['since'])}, exit = {q(p['exit'])}, target = {q(p['target'])}, "
                        f"owner = {q(p['owner'])}{planned}, variants = {{ {variants} }} }}\n")
         else:
@@ -236,6 +241,9 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
             if nxt == prev["planned"] and "moved_from" in prev:
                 entries.append({**base, "pending": {**prev, "variants": variants}})
                 continue
+            if prev.get("first_move"):
+                raise sfc.Unreadable(f"{row['path']}: the first move to {prev['planned'][:12]} has not landed: one "
+                                     f"planned move at a time (land it, or end it by hand, before next= {nxt[:12]})")
             if nxt == prev["planned"]:
                 raise sfc.Unreadable(f"{row['path']}: the planned bytes {nxt[:12]} are on no listed main any more "
                                      "(the owner moved off them: give the bytes the rollout goes to with --target "
@@ -254,6 +262,20 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
                 raise sfc.Unreadable(f"{row['path']}: no listed main holds the bytes the planned row moves from")
             entries.append({**base, "pending": {"since": prev["since"], "exit": EXIT_NEXT, "target": target,
                                                 "owner": owner, "planned": nxt, "moved_from": moved,
+                                                "variants": variants}})
+            continue
+        if (nxt and not prev and nxt == (planned_ids or {}).get(row["path"]) and row["path"] in targets
+                and len(found) == 1 and "absent" not in found):
+            # the first move of a uniform row to bytes no main holds yet: without a planned row no copy could take
+            # them (each repository's own check refuses a copy the table does not record), so it is planned now,
+            # moving from the bytes every main has (moved_from), to the --target bytes
+            target, owner = targets[row["path"]]
+            if owner not in base["repos"]:
+                raise sfc.Unreadable(f"{row['path']}: the owner {owner} is not one of the listed repositories")
+            sha = next(iter(found))
+            moved = {"planned": next(b for b, h in blobs.items() if h == sha), "target": sha}
+            entries.append({**base, "pending": {"since": today, "exit": EXIT_NEXT, "target": target, "owner": owner,
+                                                "planned": nxt, "moved_from": moved, "first_move": True,
                                                 "variants": variants}})
             continue
         if nxt and (not prev):

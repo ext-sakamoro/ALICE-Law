@@ -29,6 +29,16 @@ different file at the same path), and either
     planned row whose planned id differs from the base's without `moved_from` naming the
     base's planned id and target (or a `moved_from` the base does not explain).
 
+    The first move of a uniform row (`first_move = true`): the row is planned before any main
+    holds the new bytes, because no copy could take them first (each repository's check
+    refuses a copy the table does not record). --base-table accepts it only from a base row
+    that is uniform with exactly the bytes `moved_from` names and with every copy recorded at
+    them, and refuses a second planned move of the row before the first has landed. Live:
+    until the owner's main holds the target, the owner must have the planned blob at the path
+    on the tip of its main or a ci/ branch with the target's SHA-256 (the bytes are real),
+    every other copy is the uniform bytes (no third value, no missing copy), and the owner
+    lands within FIRST_MOVE_MAX_DAYS days.
+
 A repository that legitimately has a different file at a shared path is exempted on that
 path's entry with its reason; the discovery scope itself has no exceptions. A path that looks
 shared but is per-repository data (each repository's own content) is an entry with `repos =
@@ -180,10 +190,13 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
             pass
         elif "pending" in f:
             p = f["pending"]
-            if (not isinstance(p, dict) or set(p) - {"planned", "moved_from"} != {"since", "exit", "target", "owner",
-                                                                                  "variants"}):
+            if (not isinstance(p, dict) or set(p) - {"planned", "moved_from", "first_move"}
+                    != {"since", "exit", "target", "owner", "variants"}):
                 raise Unreadable(f"{where}: pending must be {{ since, exit, target, owner, variants[, planned"
-                                 "[, moved_from]] }")
+                                 "[, moved_from[, first_move]]] }")
+            if "first_move" in p and (p["first_move"] is not True or "moved_from" not in p):
+                raise Unreadable(f"{where}: pending.first_move must be true, on a planned row with moved_from (the "
+                                 "first move of a uniform row to bytes no main holds yet)")
             if not isinstance(p["target"], str) or not HEX64.match(p["target"]):
                 raise Unreadable(f"{where}: pending.target must be the SHA-256 that becomes the file's bytes")
             if not isinstance(p["owner"], str) or not REPO.match(p["owner"]) or p["owner"] not in repos:
@@ -412,6 +425,53 @@ def fetch_sources(entries: list[dict], remote: Remote) -> tuple[list[str], list[
                                 sum("pending" in e for e in entries))
 
 
+FIRST_MOVE_MAX_DAYS = 3
+
+
+def owner_tips(g: Path) -> list[str]:
+    """the owner's main and ci/ branch tips (blob-less), the refs a planned first move's bytes may sit on"""
+    r = subprocess.run(["git", "-C", str(g), "fetch", "-q", "--filter=blob:none", "origin",
+                        "+refs/heads/ci/*:refs/remotes/origin/ci/*"], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise Unreadable(f"{g.name}: fetching the ci/ branches failed: {r.stderr.strip()}")
+    out = subprocess.run(["git", "-C", str(g), "for-each-ref", "--format=%(refname)", "refs/remotes/origin/main",
+                          "refs/remotes/origin/ci/"], capture_output=True, text=True, check=True).stdout.split()
+    return out
+
+
+def first_move_problems(e: dict, found: dict[str, list[str]], remote: Remote, age: int) -> list[str]:
+    """A first move (a uniform row planned to bytes no main holds yet): the planned bytes are real (the owner has the
+    blob at the path on the tip of its main or a ci/ branch, with the target's SHA-256), every other copy is still
+    the uniform bytes it moves from (no third value, no missing copy), and the owner lands within FIRST_MOVE_MAX_DAYS
+    days"""
+    p, m = e["pending"], e["pending"]["moved_from"]
+    problems = []
+    others = sorted(k for k in found if k not in (p["target"], m["target"]))
+    for k in others:
+        problems.append(f"{e['path']}: first move: {', '.join(found[k])} "
+                        + ("has no copy" if k == "absent" else f"main has sha256 {k[:12]}")
+                        + f", not the uniform bytes {m['target'][:12]} it moves from or the target {p['target'][:12]}")
+    if p["owner"] in found.get(p["target"], []):
+        return problems  # the owner has landed the bytes: they are real
+    if age > FIRST_MOVE_MAX_DAYS:
+        problems.append(f"{e['path']}: first move planned since {p['since']} and the owner {p['owner']} has not landed "
+                        f"{p['planned'][:12]} in more than {FIRST_MOVE_MAX_DAYS} days")
+    g = remote(p["owner"])
+    rel = path_in(e, p["owner"])
+    tips = [t for t in owner_tips(g)
+            if subprocess.run(["git", "-C", str(g), "rev-parse", "-q", "--verify", f"{t}:{rel}"],
+                              capture_output=True, text=True).stdout.strip() == p["planned"]]
+    if not tips:
+        problems.append(f"{e['path']}: first move: the owner {p['owner']} has blob {p['planned'][:12]} at {rel} on the "
+                        "tip of neither its main nor a ci/ branch (the planned bytes must exist before they are planned)")
+        return problems
+    data = show(g, tips[0], rel)
+    if data is None or sha256(data) != p["target"]:
+        problems.append(f"{e['path']}: first move: blob {p['planned'][:12]} on {tips[0]} of {p['owner']} has sha256 "
+                        f"{sha256(data)[:12] if data is not None else 'none'}, not the target {p['target'][:12]}")
+    return problems
+
+
 def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False):
     """Every listed repository's main against the table, and the discovery pass."""
     problems: list[str] = []
@@ -471,6 +531,8 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                 if set(found) == {p["target"]}:
                     problems.append(f"{e['path']}: planned row whose every copy has the target: it has converged "
                                     "(regenerate the table)")
+                if p.get("first_move"):
+                    problems += first_move_problems(e, found, remote, age)
                 if age > PLANNED_MAX_DAYS:
                     problems.append(f"{e['path']}: planned since {p['since']}, more than {PLANNED_MAX_DAYS} days "
                                     f"(the rollout to {p['planned'][:12]} has not finished)")
@@ -562,12 +624,14 @@ def main(argv: list[str]) -> int:
         base_since: dict[str, str] = {}
         base_planned: dict[str, dict] = {}
         base_variants: dict[str, dict] = {}
+        base_uniform: dict[str, str] = {}
         if a.base_table is not None:
             base_entries = load(a.base_table.read_text(encoding="utf-8"))
             base_pending = pending_counts(base_entries)
             base_since = {e["path"]: e["pending"]["since"] for e in base_entries if "pending" in e}
             base_planned = {e["path"]: e["pending"] for e in base_entries if is_planned(e)}
             base_variants = {e["path"]: e["pending"]["variants"] for e in base_entries if "pending" in e}
+            base_uniform = {e["path"]: e["sha256"] for e in base_entries if "sha256" in e}
         if a.repo is not None:
             if not REPO.match(a.name):
                 raise Unreadable(f"--name {a.name!r} is not an ALICE-… repository name")
@@ -608,12 +672,18 @@ def main(argv: list[str]) -> int:
                     problems.append(f"{e['path']}: a moving row records variant(s) {', '.join(k[:12] for k in added)} "
                                     "the base table does not have (a variant counts only when recorded before the "
                                     "move)")
-            if b is not None and b["planned"] != p["planned"]:
+            if b is not None and b.get("first_move") and b["planned"] != p["planned"]:
+                problems.append(f"{e['path']}: the base's first move to {b['planned'][:12]} has not landed: one planned "
+                                f"move at a time (not {p['planned'][:12]})")
+            elif b is not None and b["planned"] != p["planned"]:
                 # from the base's planned bytes, or (a second re-roll before the owner landed the first) from the
                 # bytes the base itself was moving from, which the mains still hold
                 if m != {"planned": b["planned"], "target": b["target"]} and (m is None or m != b.get("moved_from")):
                     problems.append(f"{e['path']}: the planned id moved from {b['planned'][:12]} to "
                                     f"{p['planned'][:12]} without moved_from naming the base's planned id and target")
+            elif (m is not None and b is None and p.get("first_move") and base_uniform.get(e["path"]) == m["target"]
+                  and set(p["variants"]) == {m["target"]}):
+                pass  # the first move of a row the base records as uniform, from exactly those bytes, every copy there
             elif m is not None and (b is None or b.get("moved_from") != m):
                 problems.append(f"{e['path']}: moved_from names {m['planned'][:12]}, which is not the base table's "
                                 "planned id for this row")
