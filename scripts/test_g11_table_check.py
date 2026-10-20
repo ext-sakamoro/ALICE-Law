@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """tests for scripts/g11_table_check.py: a crate whose table is complete passes; each finding F1-F6 is
-raised by the edit that should raise it; no row or no pass gate is compared nothing (exit 2)
+raised by the edit that should raise it (F7: a run_tests.sh leg names the binaries of the canary and of a Rust zero test, its floors can be met); no row or no pass gate is compared nothing (exit 2)
 
     python3 scripts/test_g11_table_check.py
 """
@@ -268,6 +268,87 @@ class Table(unittest.TestCase):
     def test_f6_shared_must_be_a_list_or_a_reason(self):
         self.edit("conformance/g11.toml", 'shared = "n/a: this crate\'s own ban list"', 'shared = "n/a:"')
         self.assertFinding("F6", "non-empty list")
+
+    # F7: a leg that runs scripts/run_tests.sh names the binary of the row's canary and of a Rust zero test
+    def test_f7_the_canary_binary_dropped_from_the_names(self):
+        write(self.crate, {"tests/other.rs": "#[test]\nfn o() {}\n"})
+        self.edit(".github/workflows/ci.yml", "run_tests.sh golden -- cargo test --test golden",
+                  "run_tests.sh other -- cargo test --test golden --test other")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#run: scripts/run_tests.sh other")
+        self.assertFinding("F7", "tests/golden.rs::a_wrong_digest_is_refused is not a test of a binary")
+
+    def named_steps(self, first_run):
+        """two named steps: `Golden` runs `first_run`, `Next` runs scripts/run_tests.sh golden"""
+        self.edit(".github/workflows/ci.yml",
+                  "      - run: scripts/run_tests.sh golden -- cargo test --test golden\n",
+                  f"      - name: Golden\n        run: {first_run}\n"
+                  "      - name: Next\n        run: scripts/run_tests.sh golden -- cargo test --test golden\n")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#- name: Golden>scripts/run_tests.sh")
+
+    def test_f3_a_step_anchor_does_not_reach_into_the_next_step(self):
+        self.named_steps("cargo test")
+        self.assertFinding("F3", "is not in the step")
+
+    def test_a_step_anchor_resolves_inside_its_step(self):
+        self.named_steps("scripts/run_tests.sh golden -- cargo test --test golden")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+
+    def test_f7_a_floor_above_the_test_count(self):
+        self.edit(".github/workflows/ci.yml", "run_tests.sh golden --", "run_tests.sh golden=3 --")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#run: scripts/run_tests.sh golden=3")
+        self.assertFinding("F7", "at most the 2 #[test] functions of tests/golden.rs")
+
+    def test_a_floor_within_the_test_count(self):
+        self.edit(".github/workflows/ci.yml", "run_tests.sh golden --", "run_tests.sh golden=2 --")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#run: scripts/run_tests.sh golden=2")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+
+    def test_f7_a_floor_of_zero(self):
+        self.edit(".github/workflows/ci.yml", "run_tests.sh golden --", "run_tests.sh golden=0 --")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#run: scripts/run_tests.sh golden=0")
+        self.assertFinding("F7", "the floor must be at least 1")
+
+    def test_f7_a_rust_zero_test_whose_binary_is_not_named(self):
+        write(self.crate, {"tests/zero.rs": "#[test]\nfn nothing_compared_fails() {}\n"})
+        self.edit(".github/workflows/ci.yml", "run_tests.sh golden -- cargo test --test golden",
+                  "run_tests.sh golden -- cargo test --test golden --test zero")
+        self.edit("conformance/g11.toml", 'zero = "scripts/test_run_tests.py::RunTests.test_no_test_ran_fails"',
+                  'zero = "tests/zero.rs::nothing_compared_fails"')
+        self.assertFinding("F7", "tests/zero.rs::nothing_compared_fails is not a test of a binary")
+
+    def test_f7_a_named_binary_without_its_file(self):
+        self.edit(".github/workflows/ci.yml", "run_tests.sh golden --", "run_tests.sh golden,gone --")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#run: scripts/run_tests.sh golden,gone")
+        self.assertFinding("F7", "no tests/gone.rs is in the tree")
+
+    def test_a_workspace_package_test_binary_is_found_with_its_count(self):
+        write(self.crate, {"pkg/tests/member.rs": "#[test]\nfn one() {}\n#[test]\nfn two() {}\n"})
+        self.edit(".github/workflows/ci.yml", "run_tests.sh golden --", "run_tests.sh golden,member=2 --")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#run: scripts/run_tests.sh golden,member=2")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+        self.edit(".github/workflows/ci.yml", "golden,member=2 --", "golden,member=3 --")
+        self.edit("conformance/g11.toml", "golden,member=2", "golden,member=3")
+        self.assertFinding("F7", "at most the 2 #[test] functions of pkg/tests/member.rs")
+
+    def test_f7_names_without_a_separator_on_the_line(self):
+        self.edit(".github/workflows/ci.yml", "run_tests.sh golden -- cargo test --test golden",
+                  "run_tests.sh golden")
+        self.assertFinding("F7", "has no `--` after its names on that line")
+
+    def test_the_second_run_tests_line_of_a_step_is_read_for_its_own_names(self):
+        write(self.crate, {"tests/other.rs": "#[test]\nfn o() {}\n"})
+        self.edit(".github/workflows/ci.yml",
+                  "      - run: scripts/run_tests.sh golden -- cargo test --test golden\n",
+                  "      - name: Law\n        run: |\n          scripts/run_tests.sh other -- cargo test --test other\n"
+                  "          scripts/run_tests.sh golden -- cargo test --test golden\n")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", "#- name: Law>scripts/run_tests.sh golden")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+        self.edit("conformance/g11.toml", "#- name: Law>scripts/run_tests.sh golden", "#- name: Law>scripts/run_tests.sh other")
+        self.assertFinding("F7", "is not a test of a binary this run_tests.sh line names (other)")
 
     def test_no_row_is_compared_nothing(self):
         (self.crate / "conformance/g11.toml").write_text("")

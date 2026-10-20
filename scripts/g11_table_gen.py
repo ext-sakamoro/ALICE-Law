@@ -78,35 +78,14 @@ def render(rows: list[dict]) -> str:
     return "".join(out)
 
 
-RUN_TESTS_RE = re.compile(r"scripts/run_tests\.sh\s+(?P<names>\S+)\s+--(?:\s|$)")
 
 
-def leg_gap(tree, checker: str, canary: str) -> str | None:
-    """When the checker is a place in a workflow or in scripts/preflight.sh that runs scripts/run_tests.sh,
-    the canary must be a test of a binary that line names: run_tests.sh's zero test says nothing about a leg
-    the canary does not run in. A run_tests.sh line whose names are not followed by `--` on that line is a gap.
-    None otherwise, or when the place cannot be read (the check names that)."""
-    m = chk.ANCHOR_REF_RE.match(checker or "")
-    if not m or chk.anchor_gap(tree, m["path"], m["token"]):
-        return None
-    text = tree.read(m["path"]) or ""
-    token = m["token"].split(">")[-1]
-    at = text.find(token, text.find(m["token"].split(">")[0]) if ">" in m["token"] else 0)
-    line = text[text.rfind("\n", 0, at) + 1:text.find("\n", at) if text.find("\n", at) >= 0 else len(text)]
-    leg = RUN_TESTS_RE.search(line)
-    if not leg:
-        if "scripts/run_tests.sh" in line and not line.lstrip().startswith("#"):
-            # the names and the command are read from this one line; without the separator on it (or with the
-            # separator only on a continued next line) the binaries the leg runs cannot be read
-            return f"the run_tests.sh line of {checker} has no `--` after its names on that line"
-        return None
-    names = {n.split("=")[0] for n in leg["names"].split(",")}
-    c = chk.RS_REF_RE.match(canary or "")
-    binary = Path(c["path"]).stem if c and "/tests/" in "/" + c["path"] else None
-    if binary not in names:
-        return f"canary {canary} is not a test of a binary this run_tests.sh line names ({', '.join(sorted(names))})"
-    return None
-
+def leg_gap(tree, checker: str, canary: str, zero: str | None = None) -> str | None:
+    """When the checker is a place on a line that runs scripts/run_tests.sh, what g11_table_check.py's F7
+    finds there (the canary, and a Rust zero test, in a binary the line names; the line's floors can be met;
+    `--` after the names on that line), joined; None otherwise"""
+    found = chk.leg_findings(tree, checker, [canary, zero])
+    return "; ".join(found) if found else None
 
 def load_catalog(text: str) -> list[dict]:
     entries = tomllib.loads(text).get("checker", [])
@@ -187,7 +166,7 @@ def generate(tree, name: str, law_at, catalog: list[dict]) -> tuple[list[dict], 
             gap = chk.ref_gap(tree, r[field], law)
             if gap:
                 gaps.append(f"{r['gate']} {r['checker']}: {field} {gap}")
-        gap = leg_gap(tree, r["checker"], r["canary"])
+        gap = leg_gap(tree, r["checker"], r["canary"], r["zero"])
         if gap:
             gaps.append(f"{r['gate']} {r['checker']}: {gap}")
     covered = {r["gate"] for r in rows}
