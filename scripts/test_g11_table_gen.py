@@ -187,6 +187,17 @@ class Gen(unittest.TestCase):
                   "tests/other.rs::refused")
         self.assertGap("is not a test of a binary this run_tests.sh line names (golden)")
 
+    def test_a_run_tests_line_without_a_separator_is_a_gap(self):
+        self.edit(self.crate / ".github/workflows/ci.yml", "run: scripts/run_tests.sh golden -- cargo test --test golden\n",
+                  "run: scripts/run_tests.sh golden\n")
+        self.assertGap("has no `--` after its names on that line")
+
+    def test_a_run_tests_line_with_the_separator_only_on_a_continued_line_is_a_gap(self):
+        self.edit(self.crate / ".github/workflows/ci.yml", "run: scripts/run_tests.sh golden -- cargo test --test golden\n",
+                  "run: |\n          scripts/run_tests.sh golden \\\n            -- cargo test --test golden\n")
+        self.edit(self.crate / "conformance/g11-own.toml", "#run: scripts/run_tests.sh golden", "#scripts/run_tests.sh golden")
+        self.assertGap("has no `--` after its names on that line")
+
     def test_an_own_row_for_a_generated_checker_is_a_gap(self):
         own = self.crate / "conformance/g11-own.toml"
         own.write_bytes((own.read_bytes().decode("utf-8") + '\n[[row]]\ngate = "G1"\nchecker = "scripts/ban.py"\n'

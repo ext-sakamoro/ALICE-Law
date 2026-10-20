@@ -84,7 +84,8 @@ RUN_TESTS_RE = re.compile(r"scripts/run_tests\.sh\s+(?P<names>\S+)\s+--(?:\s|$)"
 def leg_gap(tree, checker: str, canary: str) -> str | None:
     """When the checker is a place in a workflow or in scripts/preflight.sh that runs scripts/run_tests.sh,
     the canary must be a test of a binary that line names: run_tests.sh's zero test says nothing about a leg
-    the canary does not run in. None otherwise, or when the line cannot be read (the check names that)."""
+    the canary does not run in. A run_tests.sh line whose names are not followed by `--` on that line is a gap.
+    None otherwise, or when the place cannot be read (the check names that)."""
     m = chk.ANCHOR_REF_RE.match(checker or "")
     if not m or chk.anchor_gap(tree, m["path"], m["token"]):
         return None
@@ -94,6 +95,10 @@ def leg_gap(tree, checker: str, canary: str) -> str | None:
     line = text[text.rfind("\n", 0, at) + 1:text.find("\n", at) if text.find("\n", at) >= 0 else len(text)]
     leg = RUN_TESTS_RE.search(line)
     if not leg:
+        if "scripts/run_tests.sh" in line and not line.lstrip().startswith("#"):
+            # the names and the command are read from this one line; without the separator on it (or with the
+            # separator only on a continued next line) the binaries the leg runs cannot be read
+            return f"the run_tests.sh line of {checker} has no `--` after its names on that line"
         return None
     names = {n.split("=")[0] for n in leg["names"].split(",")}
     c = chk.RS_REF_RE.match(canary or "")
