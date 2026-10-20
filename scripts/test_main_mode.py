@@ -76,6 +76,160 @@ class Raise(unittest.TestCase):
             mm.raise_requirements(MANIFEST.replace("main-mode = []\n", ""), {"alice-db": "0.6.0"})
 
 
+def write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def package(name: str, version: str = "1.0.0", extra: str = "") -> str:
+    return f'[package]\nname = "{name}"\nversion = "{version}"\n{extra}'
+
+
+def checkouts(d: Path, physics: str = "split") -> None:
+    """every core repository side by side: the single-package ones at their root, ALICE-LOL a
+    virtual workspace, ALICE-Physics either one package at the root ("one") or the core at the
+    root with the alice-physics facade as a member ("split")"""
+    for crate, repo in mm.CRATES.items():
+        if repo not in ("ALICE-LOL", "ALICE-Physics"):
+            write(d / repo / "Cargo.toml", package(crate))
+    write(d / "ALICE-LOL" / "Cargo.toml", '[workspace]\nmembers = ["alice-lol-macro", "alice-lol", "tools/*"]\n')
+    write(d / "ALICE-LOL" / "alice-lol" / "Cargo.toml", package("alice-lol", "0.9.0"))
+    write(d / "ALICE-LOL" / "alice-lol-macro" / "Cargo.toml", package("alice-lol-macro", "0.9.0"))
+    write(d / "ALICE-LOL" / "tools" / "ui" / "Cargo.toml", package("alice-lol-ui"))
+    if physics == "one":
+        write(d / "ALICE-Physics" / "Cargo.toml", package("alice-physics", "3.1.0"))
+    else:
+        write(d / "ALICE-Physics" / "Cargo.toml", package(
+            "alice-physics-core", "4.0.0", '\n[workspace]\nmembers = [".", "crates/alice-physics", "crates/ffi"]\n'))
+        write(d / "ALICE-Physics" / "crates" / "alice-physics" / "Cargo.toml", package("alice-physics", "4.0.0"))
+        write(d / "ALICE-Physics" / "crates" / "ffi" / "Cargo.toml", package("alice-physics-ffi", "4.0.0"))
+
+
+class CrateDir(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.d = Path(self.tmp.name)
+
+    def test_a_package_at_the_root_is_found_there(self):
+        checkouts(self.d, physics="one")
+        self.assertEqual(mm.crate_dir(self.d / "ALICE-Physics", "alice-physics"), self.d / "ALICE-Physics")
+
+    def test_a_crate_moved_from_the_root_to_a_member_is_found_by_its_name(self):
+        # the root package is renamed (alice-physics-core) and alice-physics becomes a member: the root
+        # is not the crate any more, and the other member whose name starts the same is not it either
+        checkouts(self.d)
+        self.assertEqual(mm.crate_dir(self.d / "ALICE-Physics", "alice-physics"),
+                         self.d / "ALICE-Physics" / "crates" / "alice-physics")
+
+    def test_the_root_package_of_a_workspace_is_a_candidate(self):
+        checkouts(self.d)
+        self.assertEqual(mm.crate_dir(self.d / "ALICE-Physics", "alice-physics-core"), self.d / "ALICE-Physics")
+
+    def test_the_root_listed_as_a_member_too_is_one_package(self):
+        # members = [".", "crates/*"]: the root is listed and globbed members sit beside it; "." is the
+        # root package, not a second one
+        checkouts(self.d)
+        write(self.d / "ALICE-Physics" / "Cargo.toml", package(
+            "alice-physics-core", "4.0.0", '\n[workspace]\nmembers = [".", "crates/*"]\n'))
+        phys = self.d / "ALICE-Physics"
+        self.assertEqual(mm.crate_dir(phys, "alice-physics-core"), phys)
+        self.assertEqual(mm.crate_dir(phys, "alice-physics"), phys / "crates" / "alice-physics")
+
+    def test_two_packages_with_the_name_are_refused(self):
+        checkouts(self.d)
+        write(self.d / "ALICE-Physics" / "crates" / "ffi" / "Cargo.toml", package("alice-physics"))
+        with self.assertRaises(LookupError) as e:
+            mm.crate_dir(self.d / "ALICE-Physics", "alice-physics")
+        self.assertIn("2 packages named alice-physics", str(e.exception))
+
+    def test_members_of_a_virtual_workspace_and_globbed_members(self):
+        checkouts(self.d)
+        lol = self.d / "ALICE-LOL"
+        self.assertEqual(mm.crate_dir(lol, "alice-lol"), lol / "alice-lol")
+        self.assertEqual(mm.crate_dir(lol, "alice-lol-macro"), lol / "alice-lol-macro")
+        self.assertEqual(mm.crate_dir(lol, "alice-lol-ui"), lol / "tools" / "ui")
+
+    def test_no_package_of_that_name_is_refused_naming_what_is_there(self):
+        checkouts(self.d)
+        with self.assertRaises(LookupError) as e:
+            mm.crate_dir(self.d / "ALICE-Physics", "alice-physic")
+        self.assertIn("alice-physics-core", str(e.exception))
+        self.assertIn("alice-physics-ffi", str(e.exception))
+
+    def test_an_excluded_member_is_not_read(self):
+        checkouts(self.d)
+        write(self.d / "ALICE-LOL" / "Cargo.toml",
+              '[workspace]\nmembers = ["alice-lol-macro", "alice-lol", "tools/*"]\nexclude = ["tools/ui"]\n')
+        with self.assertRaises(LookupError):
+            mm.crate_dir(self.d / "ALICE-LOL", "alice-lol-ui")
+
+    def test_a_member_manifest_without_a_package_is_refused_as_a_lookup(self):
+        checkouts(self.d)
+        write(self.d / "ALICE-Physics" / "crates" / "ffi" / "Cargo.toml", "[lib]\n")
+        with self.assertRaises(LookupError) as e:  # not a bare KeyError from the missing table
+            mm.crate_dir(self.d / "ALICE-Physics", "alice-physics")
+        self.assertIn("crates/ffi/Cargo.toml has no [package] name", str(e.exception))
+
+    def test_a_listed_member_without_a_manifest_is_refused(self):
+        checkouts(self.d)
+        (self.d / "ALICE-Physics" / "crates" / "ffi" / "Cargo.toml").unlink()
+        with self.assertRaises(LookupError):
+            mm.crate_dir(self.d / "ALICE-Physics", "alice-physics")
+
+
+class Patch(unittest.TestCase):
+    def run_patch(self, physics: str, change=None) -> tuple[int, str, str]:
+        # the e2e paths point into a temporary directory: a patch must never write the repository's own
+        import contextlib
+        import io
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        d = Path(tmp.name)
+        checkouts(d / "core", physics)
+        if change:
+            change(d / "core")
+        for name in ("ROOT", "E2E", "CONFIG"):
+            self.addCleanup(setattr, mm, name, getattr(mm, name))
+        mm.ROOT, mm.E2E, mm.CONFIG = d, d / "e2e", d / "e2e" / ".cargo" / "config.toml"
+        write(mm.E2E / "Cargo.toml", MANIFEST)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = mm.patch(d / "core")
+        config = mm.CONFIG.read_text(encoding="utf-8") if mm.CONFIG.is_file() else ""
+        return code, config, err.getvalue()
+
+    def test_the_facade_member_is_patched_after_the_rename(self):
+        code, config, err = self.run_patch("split")
+        self.assertEqual(code, 0, err)
+        line = next(x for x in config.splitlines() if x.startswith("alice-physics ="))
+        self.assertTrue(line.endswith('ALICE-Physics/crates/alice-physics" }'), line)
+        self.assertEqual(sum(x.split(" = ")[0] in mm.CRATES for x in config.splitlines()), len(mm.CRATES))
+
+    def test_the_root_package_is_patched_before_the_rename(self):
+        code, config, err = self.run_patch("one")
+        self.assertEqual(code, 0, err)
+        self.assertIn('ALICE-Physics" }', next(x for x in config.splitlines() if x.startswith("alice-physics =")))
+
+    def test_a_crate_two_packages_name_fails_the_patch(self):
+        def twin(core: Path) -> None:
+            write(core / "ALICE-Physics" / "crates" / "ffi" / "Cargo.toml", package("alice-physics"))
+        code, config, err = self.run_patch("split", twin)
+        self.assertEqual(code, 2)
+        self.assertEqual(config, "")
+        self.assertIn("2 packages named alice-physics", err)
+
+    def test_a_crate_no_member_names_fails_the_patch(self):
+        def rename(core: Path) -> None:
+            write(core / "ALICE-Physics" / "crates" / "alice-physics" / "Cargo.toml", package("alice-physics-facade"))
+        code, config, err = self.run_patch("split", rename)
+        self.assertEqual(code, 2)
+        self.assertEqual(config, "")  # nothing written for the crates before or after it
+        self.assertIn("0 packages named alice-physics", err)
+
+
 class Problems(unittest.TestCase):
     def all_from_main(self) -> list[dict]:
         return [pkg(c, "1.0.0", None) for c in mm.CRATES]

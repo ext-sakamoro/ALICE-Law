@@ -5,7 +5,9 @@ Main mode runs the same test as the published mode, with every core crate replac
 by a checkout of its repository's main branch. The checkouts sit side by side in
 one directory (as the repositories expect: alice-lol depends on ../../ALICE-SDF and
 others by path), and this script writes a Cargo `[patch.crates-io]` table that
-points each crate at its checkout.
+points each crate at its checkout. A crate is found in its checkout by its package name
+(the root package or a workspace member), so a crate that moves inside its repository
+is still patched from where it is.
 
     python3 scripts/main_mode.py patch  <checkouts>   # writes e2e/.cargo/config.toml
     python3 scripts/main_mode.py verify               # after `cargo metadata` can resolve
@@ -40,18 +42,20 @@ ROOT = Path(__file__).resolve().parent.parent
 E2E = ROOT / "e2e"
 CONFIG = E2E / ".cargo" / "config.toml"
 
-# crate -> (repository, directory of the crate inside it)
+# crate -> repository; the crate's directory is found by its package name (crate_dir), so a
+# crate that moves inside its repository (ALICE-Physics: the root package became
+# alice-physics-core and alice-physics a member) is still patched from where it is
 CRATES = {
-    "alice-det-math": ("ALICE-DetMath", "."),
-    "alice-crypto": ("ALICE-Crypto", "."),
-    "alice-zip": ("ALICE-Zip", "."),
-    "alice-analytics": ("ALICE-Analytics", "."),
-    "alice-db": ("ALICE-DB", "."),
-    "alice-physics": ("ALICE-Physics", "."),
-    "alice-sdf": ("ALICE-SDF", "."),
-    "alice-lol": ("ALICE-LOL", "alice-lol"),
-    "alice-lol-macro": ("ALICE-LOL", "alice-lol-macro"),
-    "alice-edge": ("ALICE-Edge", "."),
+    "alice-det-math": "ALICE-DetMath",
+    "alice-crypto": "ALICE-Crypto",
+    "alice-zip": "ALICE-Zip",
+    "alice-analytics": "ALICE-Analytics",
+    "alice-db": "ALICE-DB",
+    "alice-physics": "ALICE-Physics",
+    "alice-sdf": "ALICE-SDF",
+    "alice-lol": "ALICE-LOL",
+    "alice-lol-macro": "ALICE-LOL",
+    "alice-edge": "ALICE-Edge",
 }
 
 # checked out next to the core repositories because alice-lol names them by path
@@ -127,22 +131,52 @@ def raise_requirements(manifest: str, versions: dict[str, str]) -> tuple[str, li
     return out, changed
 
 
+def crate_dir(checkout: Path, crate: str) -> Path:
+    """the directory of the package named `crate` in a repository checkout: the root package or a
+    workspace member (`members` globs expanded, `exclude` left out, as Cargo reads them); exactly
+    one must have the name, and a listed member without a manifest is refused (LookupError)"""
+    manifest = checkout / "Cargo.toml"
+    if not manifest.is_file():
+        raise LookupError(f"no {manifest}")
+    root = tomllib.loads(manifest.read_text(encoding="utf-8"))
+    dirs = [checkout] if "package" in root else []
+    ws = root.get("workspace", {})
+    excluded = {(checkout / e).resolve() for e in ws.get("exclude", [])}
+    for pattern in ws.get("members", []):
+        globbed = any(c in pattern for c in "*?[")
+        hits = sorted(p for p in checkout.glob(pattern) if p.is_dir()) if globbed else [checkout / pattern]
+        for d in hits:
+            if d.resolve() in excluded:
+                continue
+            if not (d / "Cargo.toml").is_file():
+                raise LookupError(f"{checkout.name}: workspace member {d.relative_to(checkout)} has no Cargo.toml")
+            dirs.append(d)
+    names = {}  # by directory: a member "." is the root package, read once
+    for d in dirs:
+        name = tomllib.loads((d / "Cargo.toml").read_text(encoding="utf-8")).get("package", {}).get("name")
+        if name is None:
+            raise LookupError(f"{checkout.name}: {(d / 'Cargo.toml').relative_to(checkout)} has no [package] name")
+        names[d] = name
+    found = [d for d, n in names.items() if n == crate]
+    if len(found) != 1:
+        raise LookupError(f"{checkout.name}: {len(found)} packages named {crate} (packages: "
+                          f"{', '.join(sorted(set(names.values()))) or 'none'})")
+    return found[0]
+
+
 def patch(checkouts: Path) -> int:
     lines = [
         "# Written by scripts/main_mode.py: the core crates from their main branches",
         "[patch.crates-io]",
     ]
     versions: dict[str, str] = {}
-    for crate, (repo, sub) in CRATES.items():
-        path = (checkouts / repo / sub).resolve()
+    for crate, repo in CRATES.items():
+        try:
+            path = crate_dir(checkouts / repo, crate).resolve()
+        except LookupError as e:
+            print(f"main mode: {e}", file=sys.stderr)
+            return 2
         manifest = path / "Cargo.toml"
-        if not manifest.is_file():
-            print(f"main mode: no {manifest}", file=sys.stderr)
-            return 2
-        name = tomllib.loads(manifest.read_text(encoding="utf-8"))["package"]["name"]
-        if name != crate:
-            print(f"main mode: {manifest} is {name}, not {crate}", file=sys.stderr)
-            return 2
         lines.append(f'{crate} = {{ path = "{path.as_posix()}" }}')
         versions[crate] = tomllib.loads(manifest.read_text(encoding="utf-8"))["package"]["version"]
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
