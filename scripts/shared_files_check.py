@@ -34,8 +34,12 @@ different file at the same path), and either
     refuses a copy the table does not record). --base-table accepts it only from a base row
     that is uniform with exactly the bytes `moved_from` names and with every copy recorded at
     them, and refuses a second planned move of the row before the first has landed. Live:
-    until the owner's main holds the target, the owner must have the planned blob at the path
-    on the tip of its main or a ci/ branch with the target's SHA-256 (the bytes are real),
+    until the owner's main holds the target, the planned bytes must be real: either the owner has
+    the planned blob at the path on the tip of its main or a ci/ branch with the target's SHA-256,
+    or the table's own repository carries them as `planned/<blob>` next to the table (a file whose
+    git blob id is the row's `planned` and whose SHA-256 is its `target`; the owner's check refuses
+    a copy its pinned table does not record, so once the crates carry that check the owner cannot
+    push the bytes to a ci/ branch before the row exists),
     every other copy is the uniform bytes (no third value, no missing copy), and the owner
     lands within FIRST_MOVE_MAX_DAYS days; the flag stays until the row shows the owner holding
     the target (--base-table), and live reads that record against the owner's main (a planned
@@ -121,6 +125,43 @@ class Unreadable(Exception):
 def git_blob(data: bytes) -> str:
     """the git blob id of `data` (what the shared-file registry's next= names)"""
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+PLANNED_DIR = "planned"  # next to the table: the bytes of planned rows, by git blob id
+
+
+def planned_proofs(table: Path) -> dict[str, bytes]:
+    """name -> bytes of each file in the planned-bytes directory next to the table (empty when there is none)"""
+    d = table.parent / PLANNED_DIR
+    if not d.is_dir():
+        return {}
+    out = {}
+    for f in sorted(d.iterdir()):
+        if not f.is_file():
+            raise Unreadable(f"{f}: the planned-bytes directory holds files only")
+        out[f.name] = f.read_bytes()
+    return out
+
+
+def planned_proof_problems(entries: list[dict], proofs: dict[str, bytes]) -> list[str]:
+    """each planned-bytes file is named by a pending row's planned id and has that row's bytes, both ways: its git
+    blob id is the name and its SHA-256 the row's target. A file no pending row names (a move that converged and was
+    regenerated to uniform, or one planted) is a finding, so the directory holds only moves in flight"""
+    problems = []
+    by_planned = {e["pending"]["planned"]: e for e in entries if is_planned(e)}
+    for name, data in sorted(proofs.items()):
+        where = f"{PLANNED_DIR}/{name}"
+        e = by_planned.get(name)
+        if e is None:
+            problems.append(f"{where}: no planned row names it (a converged move or a stray file: remove it)")
+            continue
+        p = e["pending"]
+        if git_blob(data) != name:
+            problems.append(f"{where}: its git blob id is {git_blob(data)[:12]}, not its name (the row's planned id)")
+        if sha256(data) != p["target"]:
+            problems.append(f"{where}: sha256 {sha256(data)[:12]}, not the target {p['target'][:12]} of "
+                            f"{e['path']}")
+    return problems
 
 
 def is_planned(e: dict) -> bool:
@@ -467,7 +508,8 @@ def owner_tips(g: Path) -> list[str]:
     return out
 
 
-def first_move_problems(e: dict, found: dict[str, list[str]], remote: Remote, age: int) -> list[str]:
+def first_move_problems(e: dict, found: dict[str, list[str]], remote: Remote, age: int,
+                        proof: bytes | None = None) -> list[str]:
     """A first move (a uniform row planned to bytes no main holds yet): the planned bytes are real (the owner has the
     blob at the path on the tip of its main or a ci/ branch, with the target's SHA-256), every other copy is still
     the uniform bytes it moves from (no third value, no missing copy), and the owner lands within FIRST_MOVE_MAX_DAYS
@@ -484,6 +526,10 @@ def first_move_problems(e: dict, found: dict[str, list[str]], remote: Remote, ag
     if age > FIRST_MOVE_MAX_DAYS:
         problems.append(f"{e['path']}: first move planned since {p['since']} and the owner {p['owner']} has not landed "
                         f"{p['planned'][:12]} in more than {FIRST_MOVE_MAX_DAYS} days")
+    if proof is not None:
+        # the table's repository carries the planned bytes: they are real (planned_proof_problems holds the file to
+        # this row, its git blob id and its SHA-256, in every mode)
+        return problems
     g = remote(p["owner"])
     rel = path_in(e, p["owner"])
     tips = [t for t in owner_tips(g)
@@ -491,7 +537,8 @@ def first_move_problems(e: dict, found: dict[str, list[str]], remote: Remote, ag
                               capture_output=True, text=True).stdout.strip() == p["planned"]]
     if not tips:
         problems.append(f"{e['path']}: first move: the owner {p['owner']} has blob {p['planned'][:12]} at {rel} on the "
-                        "tip of neither its main nor a ci/ branch (the planned bytes must exist before they are planned)")
+                        f"tip of neither its main nor a ci/ branch, and there is no {PLANNED_DIR}/{p['planned']} with "
+                        "its bytes (the planned bytes must exist before they are planned)")
         return problems
     data = show(g, tips[0], rel)
     if data is None or sha256(data) != p["target"]:
@@ -500,7 +547,8 @@ def first_move_problems(e: dict, found: dict[str, list[str]], remote: Remote, ag
     return problems
 
 
-def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False):
+def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False,
+         proofs: dict[str, bytes] | None = None):
     """Every listed repository's main against the table, and the discovery pass."""
     problems: list[str] = []
     notes: list[str] = []
@@ -569,7 +617,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                     problems.append(f"{e['path']}: planned row whose every copy has the target: it has converged "
                                     "(regenerate the table)")
                 if p.get("first_move"):
-                    problems += first_move_problems(e, found, remote, age)
+                    problems += first_move_problems(e, found, remote, age, (proofs or {}).get(p["planned"]))
                 if age > PLANNED_MAX_DAYS:
                     problems.append(f"{e['path']}: planned since {p['since']}, more than {PLANNED_MAX_DAYS} days "
                                     f"(the rollout to {p['planned'][:12]} has not finished)")
@@ -661,6 +709,7 @@ def main(argv: list[str]) -> int:
     try:
         entries = load(a.table.read_text(encoding="utf-8"))
         lock = None if a.lock_file is None else lock_in(a.lock_file.read_text(encoding="utf-8"), str(a.lock_file))
+        proofs = planned_proofs(a.table)
         base_pending = None
         base_since: dict[str, str] = {}
         base_planned: dict[str, dict] = {}
@@ -685,7 +734,7 @@ def main(argv: list[str]) -> int:
                 else:
                     today = (datetime.date.fromisoformat(a.today) if a.today
                              else datetime.datetime.now(datetime.timezone.utc).date())
-                    problems, notes, c, locked = live(entries, remote, today, strict=a.strict)
+                    problems, notes, c, locked = live(entries, remote, today, strict=a.strict, proofs=proofs)
         else:
             problems = []
             c = counts(len(entries), len({r for e in entries for r in e["repos"]}),
@@ -742,6 +791,9 @@ def main(argv: list[str]) -> int:
         else:
             print(f"shared_files_check: pending {c[3]} (planned {planned}, unplanned {unplanned}), the base table "
                   f"{sum(base_pending)} (planned {base_pending[0]}, unplanned {base_pending[1]})")
+    if proofs:
+        problems = planned_proof_problems(entries, proofs) + problems
+        print(f"shared_files_check: planned bytes: {len(proofs)} file(s) in {PLANNED_DIR}/ compared with their rows")
     if lock is not None:
         listed = uniform_copies(entries)
         if lock != listed:

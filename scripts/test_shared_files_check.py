@@ -736,6 +736,68 @@ class FirstMove(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("not the target eeeeeeeeeeee", out)
 
+    def proof(self, data: bytes, name: str | None = None) -> Path:
+        d = Path(self.tmp.name) / sfc.PLANNED_DIR
+        d.mkdir(exist_ok=True)
+        f = d / (name or sfc.git_blob(data))
+        f.write_bytes(data)
+        return f
+
+    def test_the_planned_bytes_may_be_carried_next_to_the_table(self):
+        # the owner cannot push them first once it runs the crate check: the table's repository carries them
+        self.proof(V3)
+        code, out = self.live(self.first())
+        self.assertEqual(code, 0, out)
+        self.assertIn("planned bytes: 1 file(s) in planned/ compared with their rows", out)
+        # offline too: the file is checked against its row in every mode
+        self.t.write_text(self.w.table(self.first()), encoding="utf-8")
+        code, out = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("planned bytes: 1 file(s)", out)
+
+    def test_a_carried_file_with_one_byte_changed_is_red(self):
+        f = self.proof(V3)
+        f.write_bytes(V3[:-1] + b"X")  # its name still says V3's blob
+        code, out = self.live(self.first())
+        self.assertEqual(code, 1, out)
+        self.assertIn("its git blob id is", out)
+        self.assertIn("not the target", out)
+
+    def test_a_carried_file_with_the_right_sha256_under_another_blob_name_is_red(self):
+        # the bytes hash to the target, but the row plans another blob: the name binds the file to the row
+        row = self.first(planned="1" * 40)
+        self.proof(V3, name="1" * 40)
+        code, out = self.live(row)
+        self.assertEqual(code, 1, out)
+        self.assertIn("its git blob id is", out)
+        self.assertIn("not its name", out)
+
+    def test_a_carried_file_with_the_blob_name_but_another_target_is_red(self):
+        self.proof(V3)
+        code, out = self.live(self.first(target="e" * 64))
+        self.assertEqual(code, 1, out)
+        self.assertIn("not the target eeeeeeeeeeee", out)
+
+    def test_a_planted_file_no_row_names_is_red(self):
+        self.proof(V3)
+        self.proof(b"planted\n")
+        code, out = self.live(self.first())
+        self.assertEqual(code, 1, out)
+        self.assertIn("no planned row names it", out)
+
+    def test_a_carried_file_left_after_the_row_converged_is_red(self):
+        # the move landed everywhere and the table was regenerated to uniform: the file is stale
+        self.proof(V3)
+        self.t.write_text(self.w.table(self.w.uniform(sha256=h(V3))), encoding="utf-8")
+        code, out = self.check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("no planned row names it", out)
+
+    def test_the_planned_directory_holds_files_only(self):
+        (Path(self.tmp.name) / sfc.PLANNED_DIR / "sub").mkdir(parents=True)
+        self.t.write_text(self.w.table(self.first()), encoding="utf-8")
+        self.assertEqual(self.check()[0], 2)
+
     def test_the_owner_lands_within_three_days(self):
         self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3})
         self.assertEqual(self.live(self.first(since="2026-10-17"))[0], 0)
