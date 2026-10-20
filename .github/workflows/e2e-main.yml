@@ -89,8 +89,11 @@ jobs:
         if: steps.patch.outputs.expected != 'true'
         run: python3 scripts/main_mode.py verify | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # after the check of the crates' sources whatever its result, but only when the patch step
+      # wrote the lock file (`--locked` cannot create it; a skipped or failed patch would only add
+      # a second failure that hides the first): scripts/locked_lockfile_check.py holds this
       - name: Test
-        if: always() && steps.patch.outputs.expected != 'true'
+        if: always() && steps.patch.outcome == 'success' && steps.patch.outputs.expected != 'true'
         working-directory: e2e
         run: cargo test --release --locked -- --nocapture
 

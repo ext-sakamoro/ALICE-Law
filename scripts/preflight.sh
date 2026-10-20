@@ -30,6 +30,8 @@ python3 scripts/test_readme_parity_check.py
 python3 scripts/test_gen_law_readme_block.py
 python3 scripts/test_workflow_concurrency.py
 python3 scripts/workflow_concurrency.py
+python3 scripts/test_locked_lockfile_check.py
+python3 scripts/locked_lockfile_check.py
 python3 scripts/test_measure_conformance.py
 python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py

@@ -138,6 +138,11 @@ jobs:
           python3 scripts/test_workflow_concurrency.py
           python3 scripts/workflow_concurrency.py
 
+      - name: A --locked step that may follow a failed lock file generation requires its success
+        run: |
+          python3 scripts/test_locked_lockfile_check.py
+          python3 scripts/locked_lockfile_check.py
+
       - name: Test the conformance measurement
         run: python3 scripts/test_measure_conformance.py
 
