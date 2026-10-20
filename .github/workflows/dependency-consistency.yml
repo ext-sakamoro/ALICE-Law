@@ -201,9 +201,9 @@ jobs:
 
   g11-table-check:
     # G11: the per-crate table of each pass gate's checker, canary, compared-nothing test and shared rows
-    # (conformance/g11.toml in a crate, which fetches this checker at a pin and runs it on ubuntu, macOS
-    # and Windows), so its tests run on the same three
-    name: Test the G11 table checker (${{ matrix.os }})
+    # (conformance/g11.toml in a crate, which fetches this checker and its generator at a pin and runs them
+    # on ubuntu, macOS and Windows), so their tests run on the same three
+    name: Test the G11 table checker and generator (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
@@ -218,3 +218,9 @@ jobs:
         run: |
           py=$(command -v python3 || command -v python)
           "$py" scripts/test_g11_table_check.py
+
+      - name: Test the G11 table generator
+        shell: bash
+        run: |
+          py=$(command -v python3 || command -v python)
+          "$py" scripts/test_g11_table_gen.py

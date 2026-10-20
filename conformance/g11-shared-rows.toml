@@ -1,0 +1,95 @@
+# ALICE-Law G11: the self-tests of each checker that conformance/shared-files.toml keeps byte-identical
+# across crates. scripts/g11_table_gen.py writes a crate's conformance/g11.toml from this file: a crate
+# gets a row for one of these checkers when its alice-law-conformance.toml names the checker in the
+# evidence of a pass gate and the shared-files table lists the checker for that crate. The test files are
+# shared too, so the same canary and zero hold in every crate that carries them.
+#
+#   path    the checker
+#   canary  the test that plants a case the checker must flag
+#   zero    the test that fails when the checker compared nothing
+#   shared  the paths of the shared-files table that keep the checker and its tests identical (a crate
+#           lists those of them the table lists for it)
+
+[[checker]]
+path = "scripts/api_boundary.py"
+canary = "scripts/test_api_boundary.py::CheckTest.test_listed_items_pass_and_drift_fails"
+zero = "scripts/test_api_boundary.py::CheckTest.test_nothing_enumerated_fails"
+shared = ["scripts/api_boundary.py", "scripts/test_api_boundary.py"]
+
+[[checker]]
+path = "scripts/boundary_guard.py"
+canary = "scripts/test_boundary_guard.py::BoundaryGuardTest.test_a_new_ffi_entry_point_without_a_decision_fails"
+zero = "scripts/test_boundary_guard.py::BoundaryGuardTest.test_no_entry_point_fails"
+shared = ["scripts/boundary_guard.py", "scripts/test_boundary_guard.py"]
+
+[[checker]]
+path = "scripts/build_config_guard.py"
+canary = "scripts/test_build_config_guard.py::EveryRuleEveryPlace.test_each_flag_fires_at_its_line"
+zero = "scripts/test_build_config_guard.py::FailClosed.test_nothing_read_is_exit_2"
+shared = ["scripts/build_config_guard.py", "scripts/test_build_config_guard.py"]
+
+[[checker]]
+path = "scripts/build_flags_check.py"
+canary = "scripts/test_build_flags_check.py::Parse.test_each_rule"
+zero = "scripts/test_build_flags_check.py::Main.test_nothing_seen_fails"
+shared = ["scripts/build_flags_check.py", "scripts/test_build_flags_check.py"]
+
+[[checker]]
+path = "scripts/changed_paths.py"
+canary = "scripts/test_changed_paths.py::PushCases.test_new_branch_with_a_matching_commit_runs"
+zero = "scripts/test_changed_paths.py::PushCases.test_missing_main_ref_runs_fail_closed"
+shared = ["scripts/changed_paths.py", "scripts/test_changed_paths.py"]
+
+[[checker]]
+path = "scripts/clippy_canary.py"
+canary = "scripts/test_clippy_canary.py::Check.test_a_row_without_its_diagnostic_fails"
+zero = "scripts/test_clippy_canary.py::Check.test_no_planted_rows_compares_nothing"
+shared = ["scripts/clippy_canary.py", "scripts/test_clippy_canary.py"]
+
+[[checker]]
+path = "scripts/clippy_external_coverage.py"
+canary = "scripts/test_clippy_external_coverage.py::Compare.test_unlisted_public_function_fails"
+zero = "scripts/test_clippy_external_coverage.py::Compare.test_no_public_function_fails"
+shared = ["scripts/clippy_external_coverage.py", "scripts/test_clippy_external_coverage.py"]
+
+[[checker]]
+path = "scripts/clippy_lib_gate.py"
+canary = "scripts/test_clippy_lib_gate.py::Judge.test_a_missing_diagnostic_is_red"
+zero = "scripts/test_clippy_lib_gate.py::Judge.test_no_forms_and_a_clean_exit_are_red"
+shared = ["scripts/clippy_lib_gate.py", "scripts/test_clippy_lib_gate.py"]
+
+[[checker]]
+path = "scripts/fneg_fma_ir_check.py"
+canary = "scripts/test_fneg_fma_ir_check.py::Probes.test_a_finding_points_at_the_probe_line_that_negates"
+zero = "scripts/test_fneg_fma_ir_check.py::ProbeProof.test_no_probe_run_fails"
+shared = ["scripts/fneg_fma_ir_check.py", "scripts/test_fneg_fma_ir_check.py"]
+
+[[checker]]
+path = "scripts/gen_clippy_canary_calls.py"
+canary = "scripts/test_gen_clippy_canary_calls.py::Main.test_check_fails_on_a_new_clippy_toml_entry"
+zero = "scripts/test_gen_clippy_canary_calls.py::Main.test_no_entries_compares_nothing"
+shared = ["scripts/gen_clippy_canary_calls.py", "scripts/test_gen_clippy_canary_calls.py"]
+
+[[checker]]
+path = "scripts/id_move_check.py"
+canary = "scripts/test_id_move_check.py::Rules.test_no_bump_and_the_old_value_not_kept_fails"
+zero = "scripts/test_id_move_check.py::Rules.test_a_config_without_identifiers_fails_as_comparing_nothing"
+shared = ["scripts/id_move_check.py", "scripts/test_id_move_check.py"]
+
+[[checker]]
+path = "scripts/libm_ban_check.py"
+canary = "scripts/test_libm_ban_check.py::Check.test_unbanned_export_fails"
+zero = "scripts/test_libm_ban_check.py::Check.test_no_exports_compares_nothing"
+shared = ["scripts/libm_ban_check.py", "scripts/test_libm_ban_check.py"]
+
+[[checker]]
+path = "scripts/order_guard.py"
+canary = "scripts/test_order_guard.py::OrderGuardTest.test_an_order_dependency_fails_unless_listed"
+zero = "scripts/test_order_guard.py::OrderGuardTest.test_no_source_file_fails"
+shared = ["scripts/order_guard.py", "scripts/test_order_guard.py"]
+
+[[checker]]
+path = "scripts/public_text.sh"
+canary = "law@public-text-pin:scripts/test_public_text_check.py::Tree.test_internal_words_in_text_or_path_are_found"
+zero = "law@public-text-pin:scripts/test_public_text_check.py::Range.test_an_empty_range_compares_nothing_and_exits_2"
+shared = ["scripts/public_text.sh", "scripts/test_public_text.py", ".github/workflows/public-text.yml"]
