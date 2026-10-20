@@ -32,7 +32,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 path = "scripts/api_boundary.py"
 sha256 = "540583bab4b1d39275803f1c043ec7b5973a50f6c7a5b7b388a8ae0b8f4474a4"
 source = { repo = "ALICE-Analytics", rev = "1ae54461ac9c1be0d7126cc34d2613064f890186" }
-repos = ["ALICE-Analytics", "ALICE-Edge", "ALICE-SDF", "ALICE-Sync"]
+repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-Edge", "ALICE-SDF", "ALICE-Sync"]
 
 [[file]]
 path = "scripts/boundary_guard.py"
@@ -205,7 +205,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 path = "scripts/test_api_boundary.py"
 sha256 = "ce87275c03ab372ddbc729f1e12b32c4830c30a3a0ea807eb58cbea1164e6422"
 source = { repo = "ALICE-Analytics", rev = "1ae54461ac9c1be0d7126cc34d2613064f890186" }
-repos = ["ALICE-Analytics", "ALICE-Edge", "ALICE-SDF", "ALICE-Sync"]
+repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-Edge", "ALICE-SDF", "ALICE-Sync"]
 
 [[file]]
 path = "scripts/test_boundary_guard.py"

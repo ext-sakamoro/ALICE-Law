@@ -6,16 +6,16 @@
 # With every baseline at 0 no manifest may hold a line reference (a crate this file does not list counts as 0).
 
 [baseline]
-"ALICE-Analytics" = 31
+"ALICE-Analytics" = 0
 "ALICE-Crypto" = 0
 "ALICE-DB" = 0
-"ALICE-DetMath" = 18
-"ALICE-Edge" = 41
+"ALICE-DetMath" = 0
+"ALICE-Edge" = 0
 "ALICE-Kinematics" = 0
-"ALICE-LLM" = 35
-"ALICE-LOL" = 17
-"ALICE-ML" = 42
+"ALICE-LLM" = 0
+"ALICE-LOL" = 16
+"ALICE-ML" = 0
 "ALICE-Physics" = 19
-"ALICE-SDF" = 3
+"ALICE-SDF" = 0
 "ALICE-Sync" = 0
 "ALICE-Zip" = 0
