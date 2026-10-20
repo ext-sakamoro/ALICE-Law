@@ -425,7 +425,11 @@ marks `pass` (other than G11) with no row (F1), a row for a gate that is not `pa
 checker path or anchor that is not in the tree (F3), a canary or zero reference that does not
 resolve (F4), a row whose canary and zero are one reference (F5), and a shared path that the
 shared-file table at the crate's `.github/shared-files-pin` revision does not list for the crate,
-or `"n/a"` where it lists the checker (F6), each exit 1; no row or no `pass` gate exits 2. A crate
+or `"n/a"` where it lists the checker (F6), and a checker on a `scripts/run_tests.sh` line that does
+not name the binary (`tests/<name>.rs` of the root or of a workspace package) of the canary (which
+must be such an integration test) or of a Rust zero test, names a binary with no such file, or asks a `name=N` floor below 1 or above that file's
+`#[test]` functions (F7), each exit 1; no row or no `pass` gate exits 2. An anchor `A>B` in a workflow
+resolves B only inside the step the line of A opens. A crate
 fetches the checker at a revision it pins with the checker's SHA-256, as it does the shared-file
 checker. The table is a prerequisite: it does not make G11 `pass` by itself, and the evidence
 below is still required.

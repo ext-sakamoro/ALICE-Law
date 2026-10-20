@@ -33,6 +33,13 @@ Findings (each fails the run, exit 1):
   F6  a shared path is not a row of ALICE-Law's conformance/shared-files.toml (at the revision
       .github/shared-files-pin names) listing this crate, or shared is "n/a" while that table lists the
       checker's path for this crate
+  F7  the checker is a place on a scripts/run_tests.sh line, and the canary is not a test of a binary
+      (tests/<name>.rs of the root or of a workspace package) that line names, or a Rust zero test is in a
+      binary it does not name, or the line names a
+      binary with no such file, asks a `name=N` floor below 1 or above the #[test] functions of that file,
+      or has no `--` after its names on that line
+An anchor `A>B` in a workflow resolves B only inside the step (or block) the line of A opens: a step that
+does not run B never borrows the next step's.
 It exits 2 when it compared nothing (no row, or no pass gate) or cannot read what it needs.
 
 The table does not make G11 pass by itself: it is the prerequisite the conformance roster reads.
@@ -97,21 +104,105 @@ def rust_code(text: str) -> str:
     return RUST_NON_CODE_RE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
 
 
-def anchor_gap(tree: Tree, path: str, token: str) -> str | None:
+def step_block(text: str, at: int) -> tuple[int, int]:
+    """The YAML block that the line holding offset `at` opens: that line and the lines after it that are
+    indented deeper (blank lines and comments included), up to the next line at its indentation or less (the
+    next step of a list, or the next key of its parent)"""
+    start = text.rfind("\n", 0, at) + 1
+    first = text[start:text.find("\n", start) if text.find("\n", start) >= 0 else len(text)]
+    indent = len(first) - len(first.lstrip(" "))
+    end = text.find("\n", start)
+    while end >= 0:
+        nxt = text.find("\n", end + 1)
+        line = text[end + 1:nxt if nxt >= 0 else len(text)]
+        body = line.lstrip(" ")
+        if body and not body.startswith("#") and len(line) - len(body) <= indent:
+            return start, end
+        if nxt < 0:
+            return start, len(text)
+        end = nxt
+    return start, len(text)
+
+
+def anchor_at(tree: Tree, path: str, token: str) -> tuple[int | None, str | None]:
+    """(offset of the place the anchor names, None), or (None, why it names no single place). A token
+    `A>B` names the first B after the one A; in a workflow (.yml / .yaml) B must be inside the step or block
+    the line of A opens, so a step without B never borrows the next step's"""
     if path not in tree.paths:
-        return f"{path} is not in the tree"
+        return None, f"{path} is not in the tree"
     text = tree.read(path)
     if text is None:
-        return f"{path} could not be read"
+        return None, f"{path} could not be read"
     n = text.count(token)
     if n == 1:
-        return None
+        return text.index(token), None
     for i, ch in enumerate(token):
         if ch == ">" and 0 < i < len(token) - 1:
             a, b = token[:i], token[i + 1:]
-            if text.count(a) == 1 and b in text[text.index(a) + len(a):]:
-                return None
-    return f"{token!r} occurs {n} times in {path} (an anchor names one place)"
+            if text.count(a) != 1:
+                continue
+            after = text.index(a) + len(a)
+            end = step_block(text, text.index(a))[1] if path.endswith((".yml", ".yaml")) else len(text)
+            at = text.find(b, after, end)
+            if at >= 0:
+                return at, None
+            if path.endswith((".yml", ".yaml")) and b in text[after:]:
+                return None, f"{b!r} is not in the step {a!r} opens in {path} (it occurs only after that step)"
+    return None, f"{token!r} occurs {n} times in {path} (an anchor names one place)"
+
+
+def anchor_gap(tree: Tree, path: str, token: str) -> str | None:
+    return anchor_at(tree, path, token)[1]
+
+
+# a scripts/run_tests.sh invocation: its comma separated binary names (each `name` or `name=N`), then `--`
+RUN_TESTS_RE = re.compile(r"scripts/run_tests\.sh\s+(?P<names>\S+)\s+--(?:\s|$)")
+RUST_TEST_ATTR_RE = re.compile(r"#\[\s*(?:\w+\s*::\s*)*test\s*\]")
+
+
+def leg_findings(tree: Tree, checker: str | None, canary: str | None, zero: str | None) -> list[str]:
+    """When the checker is a place on a line that runs scripts/run_tests.sh: the line's names are followed by
+    `--` on that line, each `name=N` floor is at least 1 and at most the `#[test]` functions of tests/<name>.rs
+    (so the floor can be met), the canary is a test of an integration binary the line names
+    (tests/<name>.rs::...; a unit test or a Python test is not run by the leg, so run_tests.sh's zero test says
+    nothing about it), and a zero that is an integration test is one of a named binary too (the zero may also
+    be run_tests.sh's own test). Empty otherwise, or when the place cannot be read (the anchor check says so)"""
+    m = ANCHOR_REF_RE.match(checker or "")
+    if not m:
+        return []
+    at, why = anchor_at(tree, m["path"], m["token"])
+    if why or at is None:
+        return []
+    text = tree.read(m["path"]) or ""
+    end = text.find("\n", at)
+    line = text[text.rfind("\n", 0, at) + 1:end if end >= 0 else len(text)]
+    if "scripts/run_tests.sh" not in line or line.lstrip().startswith("#"):
+        return []
+    leg = RUN_TESTS_RE.search(line)
+    if not leg:
+        return [f"the run_tests.sh line of {checker} has no `--` after its names on that line"]
+    out = []
+    names = []
+    for spec in leg["names"].split(","):
+        name, _, floor = spec.partition("=")
+        names.append(name)
+        # the integration test file of that binary: tests/<name>.rs of the root or of a workspace package
+        files = sorted(p for p in tree.paths if p == f"tests/{name}.rs" or p.endswith(f"/tests/{name}.rs"))
+        if not files:
+            out.append(f"the run_tests.sh line of {checker} names {name}, and no tests/{name}.rs is in the tree")
+            continue
+        if floor:
+            count = max(len(RUST_TEST_ATTR_RE.findall(rust_code(tree.read(f) or ""))) for f in files)
+            if not floor.isdigit() or int(floor) < 1 or int(floor) > count:
+                out.append(f"the run_tests.sh line of {checker} asks {spec}: the floor must be at least 1 and at "
+                           f"most the {count} #[test] functions of {' / '.join(files)}")
+    shown = ", ".join(sorted(names))
+    for ref, must in ((canary, True), (zero, False)):
+        r = RS_REF_RE.match(ref or "")
+        integration = bool(r) and "/tests/" in "/" + r["path"]
+        if (must and not integration) or (integration and Path(r["path"]).stem not in names):
+            out.append(f"{ref} is not a test of a binary this run_tests.sh line names ({shown})")
+    return out
 
 
 def attributes_above(code: str, start: int) -> str:
@@ -514,6 +605,8 @@ def check(tree: Tree, name: str, law_at) -> tuple[list[str], int, int]:
             gap = ref_gap(tree, r.get(field), law)
             if gap:
                 out.append(f"F4 {where}: {field} {gap}")
+        for finding in leg_findings(tree, chk if isinstance(chk, str) else None, r.get("canary"), r.get("zero")):
+            out.append(f"F7 {where}: {finding}")
         if r.get("canary") and r.get("canary") == r.get("zero"):
             out.append(f"F5 {where}: canary and zero are the same reference")
         sh = r.get("shared")
