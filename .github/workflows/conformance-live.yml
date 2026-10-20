@@ -73,10 +73,10 @@ jobs:
         run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --fetch
 
       - name: Every listed repository's main carries each copy
-        run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies 950
+        run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies 952
 
       - name: The table is the generated one
-        run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check
+        run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
 
       # the strict pair on every push to main (an unlisted holder of the same bytes is a finding too): it also runs
       # right before the push, and this is the backstop for a push made without it

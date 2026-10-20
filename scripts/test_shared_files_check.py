@@ -146,6 +146,38 @@ class Base(unittest.TestCase):
 
 
 class Schema(Base):
+    def lock(self, text: str) -> Path:
+        p = Path(self.tmp.name) / "live.yml"
+        p.write_text(text, encoding="utf-8")
+        return p
+
+    def test_a_count_lock_equal_to_the_table_s_uniform_copies_passes(self):
+        self.t.write_text(self.w.table(), encoding="utf-8")
+        code, out = self.check("--lock-file", str(self.lock("run: x --live --expect-copies 2\n")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("count lock in", out)
+
+    def test_a_count_lock_that_did_not_move_with_the_table_is_red(self):
+        # a row gained a holder (3 listed copies) and the workflow still says 2: red offline, not first on main
+        self.t.write_text(self.w.table(repos=["ALICE-A", "ALICE-B", "ALICE-C"]), encoding="utf-8")
+        code, out = self.check("--lock-file", str(self.lock("--expect-copies 2\n")))
+        self.assertEqual(code, 1, out)
+        self.assertIn("the count lock says 2, the table lists 3", out)
+
+    def test_the_count_lock_file_counts_only_uniform_rows(self):
+        c_row = {"path": "scripts/c.sh", "sha256": h(b"c\n"), "source": {"repo": "ALICE-C", "rev": "0" * 40},
+                 "repos": ["ALICE-A", "ALICE-C"], "paths": {}, "exempt": {}}
+        self.t.write_text(self.w.table(c_row, self.w.pending()), encoding="utf-8")
+        self.assertEqual(self.check("--lock-file", str(self.lock("--expect-copies 2")))[0], 0)
+        self.assertEqual(self.check("--lock-file", str(self.lock("--expect-copies 5")))[0], 1)
+
+    def test_a_lock_file_without_exactly_one_lock_is_not_read(self):
+        self.t.write_text(self.w.table(), encoding="utf-8")
+        for text in ("no lock here\n", "--expect-copies 2\n--expect-copies 2\n"):
+            code, out = self.check("--lock-file", str(self.lock(text)))
+            self.assertEqual(code, 2, out)
+            self.assertIn("needs exactly one", out)
+
     def test_a_good_table_reads(self):
         self.t.write_text(self.w.table(), encoding="utf-8")
         code, out = self.check()

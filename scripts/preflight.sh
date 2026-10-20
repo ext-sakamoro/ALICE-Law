@@ -52,10 +52,10 @@ echo "== the shared-file table reads, and this repository's copies equal it (the
 if git cat-file -e origin/main:conformance/shared-files.toml 2>/dev/null; then
   base_table=$(mktemp)
   git show origin/main:conformance/shared-files.toml > "$base_table"
-  python3 scripts/shared_files_check.py --table conformance/shared-files.toml --base-table "$base_table"
+  python3 scripts/shared_files_check.py --table conformance/shared-files.toml --base-table "$base_table" --lock-file .github/workflows/conformance-live.yml
   rm -f "$base_table"
 else
-  python3 scripts/shared_files_check.py --table conformance/shared-files.toml
+  python3 scripts/shared_files_check.py --table conformance/shared-files.toml --lock-file .github/workflows/conformance-live.yml
 fi
 python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
 
@@ -65,7 +65,7 @@ echo "== the shared-file table against every listed main (other bytes, a missing
 # too, is scripts/shared_files_strict.sh: it runs on the tree to be pushed right before a push to main, and
 # conformance-live.yml on every push to main)"
 python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live
-python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check
+python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
 
 echo "== README names every release-train repository"
 python3 scripts/readme_roster_check.py

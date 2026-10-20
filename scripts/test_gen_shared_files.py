@@ -393,6 +393,41 @@ class Generate(Base):
         out, held = gen.unlisted_same_bytes(old, gained)
         self.assertEqual((out, held), (old, [("scripts/s.sh", ["ALICE-C"])]))
 
+    def lock(self, n: int) -> Path:
+        p = Path(self.tmp.name) / "live.yml"
+        p.write_text(f"      - run: check --live --expect-copies {n}\n        # kept\n", encoding="utf-8")
+        return p
+
+    def test_write_sets_the_count_lock_and_check_compares_it(self):
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")
+        lock = self.lock(1)
+        self.assertEqual(self.gen("--write", "--registry", str(reg), "--lock-file", str(lock))[0], 0)
+        self.assertEqual(lock.read_text(encoding="utf-8"), "      - run: check --live --expect-copies 2\n        # kept\n")
+        self.assertEqual(self.gen("--check", "--lock-file", str(lock))[0], 0)
+        lock.write_text("--expect-copies 3\n", encoding="utf-8")
+        code, out = self.gen("--check", "--lock-file", str(lock))
+        self.assertEqual(code, 1, out)
+        self.assertIn("the count lock says 3, the table has 2", out)
+
+    def test_a_regeneration_that_adds_a_holder_without_the_lock_is_red_in_the_strict_check(self):
+        # the landing path's shape: a holder landed, --write widened the row, the lock stayed
+        self.gained_holder(SHARED)
+        lock = self.lock(4)
+        self.assertEqual(self.gen("--check", "--strict", "--lock-file", str(lock))[0], 1)
+        self.assertEqual(self.gen("--write")[0], 0)
+        self.assertEqual(self.gen("--check", "--strict", "--lock-file", str(lock))[0], 1)
+        self.assertEqual(run(sfc.main, ["--table", str(self.t), "--lock-file", str(lock)])[0], 1)
+        self.assertEqual(self.gen("--write", "--lock-file", str(lock))[0], 0)
+        self.assertIn("--expect-copies 5", lock.read_text(encoding="utf-8"))
+        self.assertEqual(self.gen("--check", "--strict", "--lock-file", str(lock))[0], 0)
+
+    def test_a_lock_file_without_one_lock_is_not_written(self):
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")
+        lock = Path(self.tmp.name) / "live.yml"
+        lock.write_text("nothing\n", encoding="utf-8")
+        self.assertEqual(self.gen("--write", "--registry", str(reg), "--lock-file", str(lock))[0], 2)
+        self.assertFalse(self.t.exists() and self.t.read_text(encoding="utf-8").strip())
+
     def test_strict_check_fails_on_an_unlisted_holder(self):
         self.gained_holder(SHARED)
         self.assertEqual(self.gen("--check", "--strict")[0], 1)

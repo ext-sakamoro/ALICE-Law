@@ -67,6 +67,12 @@ repository that gains the path without an exemption is a finding.
       makes it a finding: the regeneration and landing path of this repository and the
       pre-publish gate run strict, so the table cannot stay stale into a release) (a shared copy outside DISCOVERED, under tests/ or src/, is checked only once a
       row names it)
+  shared_files_check.py --table TABLE ... --lock-file FILE
+      in any mode, also the count lock written in FILE (the one `--expect-copies N` of
+      .github/workflows/conformance-live.yml) against the table: N must be the number of
+      copies of uniform rows the table lists, so a table change that moves it without the
+      lock is red offline (preflight, branch CI and the strict pair) instead of only on main
+      (gen_shared_files.py --write --lock-file FILE writes both)
   shared_files_check.py --table TABLE --repo DIR --name ALICE-X
       a crate's tree: each uniform file listed for ALICE-X present with the entry's bytes;
       each pending file listed for it present as one of the row's variants (listed as
@@ -101,6 +107,8 @@ GITHUB = "https://github.com/ext-sakamoro/"
 MIN_REASON = 12
 PENDING_MAX_DAYS = 21
 PLANNED_MAX_DAYS = 14
+# the count lock in a workflow: exactly one `--expect-copies N`
+LOCK = re.compile(r"--expect-copies[ =]+(\d+)")
 DISCOVERED = ("scripts/", "tools/", ".github/workflows/", ".github/actions/")
 UNIFORM_KEYS = {"path", "sha256", "source", "repos", "paths", "exempt"}
 PENDING_KEYS = {"path", "pending", "repos", "paths", "exempt"}
@@ -263,6 +271,23 @@ def load(text: str) -> list[dict]:
 
 def path_in(entry: dict, name: str) -> str:
     return entry.get("paths", {}).get(name, entry["path"])
+
+
+def uniform_copies(entries: list[dict]) -> int:
+    """the copies of uniform rows the table lists: what --live --expect-copies compares when no copy is missing"""
+    return sum(len(e["repos"]) for e in entries if "sha256" in e and "pending" not in e)
+
+
+def lock_in(text: str, where: str) -> int:
+    found = LOCK.findall(text)
+    if len(found) != 1:
+        raise Unreadable(f"{where}: {len(found)} `--expect-copies N` found, the count lock needs exactly one")
+    return int(found[0])
+
+
+def with_lock(text: str, where: str, n: int) -> str:
+    lock_in(text, where)
+    return LOCK.sub(lambda m: m.group(0)[: m.start(1) - m.start(0)] + str(n), text)
 
 
 def counts(files: int, repos: int, copies: int, pending: int) -> tuple[int, int, int, int]:
@@ -620,6 +645,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--expect-copies", type=int,
                     help="with --live: the number of copies that must be compared (count lock)")
     ap.add_argument("--today", help="with --live: the date pending rows are aged against (default: today, UTC)")
+    ap.add_argument("--lock-file", type=Path,
+                    help="a file holding the count lock (`--expect-copies N`): N must equal the copies of uniform "
+                         "rows the table lists")
     ap.add_argument("--strict", action="store_true",
                     help="with --live: an unlisted holder is a finding even with the same bytes (the regeneration "
                          "and landing path of this repository, and the pre-publish gate)")
@@ -632,6 +660,7 @@ def main(argv: list[str]) -> int:
     locked: int | None = None
     try:
         entries = load(a.table.read_text(encoding="utf-8"))
+        lock = None if a.lock_file is None else lock_in(a.lock_file.read_text(encoding="utf-8"), str(a.lock_file))
         base_pending = None
         base_since: dict[str, str] = {}
         base_planned: dict[str, dict] = {}
@@ -713,6 +742,13 @@ def main(argv: list[str]) -> int:
         else:
             print(f"shared_files_check: pending {c[3]} (planned {planned}, unplanned {unplanned}), the base table "
                   f"{sum(base_pending)} (planned {base_pending[0]}, unplanned {base_pending[1]})")
+    if lock is not None:
+        listed = uniform_copies(entries)
+        if lock != listed:
+            problems.append(f"{a.lock_file}: the count lock says {lock}, the table lists {listed} copies of uniform "
+                            "rows (regenerate with gen_shared_files.py --write --lock-file, which writes both)")
+        else:
+            print(f"shared_files_check: count lock in {a.lock_file}: {lock}, the table's copies of uniform rows")
     if a.expect_copies is not None:
         # with --live the lock is on the copies of uniform rows, which change only with the
         # table; the copies of a pending row come and go as its rollout lands

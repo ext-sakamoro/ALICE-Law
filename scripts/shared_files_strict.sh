@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 finding=0
 unchecked=0
 for check in "shared_files_check.py --table conformance/shared-files.toml --live --strict" \
-             "gen_shared_files.py --table conformance/shared-files.toml --check --strict" \
+             "gen_shared_files.py --table conformance/shared-files.toml --check --strict --lock-file .github/workflows/conformance-live.yml" \
              "conformance_roster_check.py --strict" \
              "gen_law_status.py --check"; do
   err=$(mktemp)

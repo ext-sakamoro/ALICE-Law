@@ -37,6 +37,11 @@ bytes; it is not re-rolled before its owner lands (an error).
   gen_shared_files.py --table conformance/shared-files.toml (--write | --check)
                       [--registry FILE] [--discover] [--checkouts DIR] [--today YYYY-MM-DD]
                       [--target PATH=SHA256@ALICE-X ...] [--next-from REGISTRY]
+                      [--lock-file .github/workflows/conformance-live.yml]
+
+--lock-file names the file holding the live check's count lock (`--expect-copies N`, the copies
+of uniform rows): --write sets N from the table it writes, and --check is red when N is not
+the regenerated table's (so is shared_files_check.py --lock-file, offline, against the table).
 
 --check regenerates in memory and exits 1 when the table differs, except for the variants
 of a pending row, which are reported (the copies of a pending file are moving by
@@ -372,6 +377,8 @@ def main(argv: list[str]) -> int:
                     help="PATH=SHA256@ALICE-X: the bytes a pending row moves to and their owner")
     ap.add_argument("--next-from", type=Path,
                     help="a shared-file registry whose next= blob ids mark rollouts (planned rows)")
+    ap.add_argument("--lock-file", type=Path,
+                    help="the file holding the count lock (`--expect-copies N`): --write sets N, --check compares it")
     a = ap.parse_args(argv)
     today = a.today or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     try:
@@ -432,10 +439,32 @@ def main(argv: list[str]) -> int:
         if cur_plain != new_plain:
             print(f"gen_shared_files: {a.table} is out of date (regenerate with --write)", file=sys.stderr)
             return 1
+        if a.lock_file is not None:
+            try:
+                lock = sfc.lock_in(a.lock_file.read_text(encoding="utf-8"), str(a.lock_file))
+            except (sfc.Unreadable, OSError) as e:
+                print(f"gen_shared_files: {e}", file=sys.stderr)
+                return 2
+            want = sfc.uniform_copies(sfc.load(text))
+            if lock != want:
+                print(f"gen_shared_files: {a.lock_file}: the count lock says {lock}, the table has {want} copies of "
+                      "uniform rows (regenerate with --write --lock-file)", file=sys.stderr)
+                return 1
         print(f"gen_shared_files: {a.table} is current ({len(entries)} files, {n} copies, {p} pending)")
         return 0
+    lock_text = None
+    if a.lock_file is not None:
+        try:
+            lock_text = sfc.with_lock(a.lock_file.read_text(encoding="utf-8"), str(a.lock_file),
+                                      sfc.uniform_copies(entries))
+        except (sfc.Unreadable, OSError) as e:
+            print(f"gen_shared_files: {e}", file=sys.stderr)
+            return 2
     a.table.write_text(text, encoding="utf-8")
     print(f"gen_shared_files: wrote {a.table} ({len(entries)} files, {n} copies, {p} pending)")
+    if lock_text is not None:
+        a.lock_file.write_text(lock_text, encoding="utf-8")
+        print(f"gen_shared_files: wrote the count lock {sfc.uniform_copies(entries)} to {a.lock_file}")
     return 0
 
 

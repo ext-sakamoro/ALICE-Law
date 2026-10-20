@@ -102,10 +102,10 @@ jobs:
           if git cat-file -e FETCH_HEAD:conformance/shared-files.toml 2>/dev/null; then
             git show FETCH_HEAD:conformance/shared-files.toml > "$RUNNER_TEMP/base-shared-files.toml"
             python3 scripts/shared_files_check.py --table conformance/shared-files.toml \
-              --base-table "$RUNNER_TEMP/base-shared-files.toml"
+              --base-table "$RUNNER_TEMP/base-shared-files.toml" --lock-file .github/workflows/conformance-live.yml
           else
             echo "main has no conformance/shared-files.toml yet: no ratchet base"
-            python3 scripts/shared_files_check.py --table conformance/shared-files.toml
+            python3 scripts/shared_files_check.py --table conformance/shared-files.toml --lock-file .github/workflows/conformance-live.yml
           fi
           python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
 
