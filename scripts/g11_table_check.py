@@ -35,7 +35,8 @@ Findings (each fails the run, exit 1):
       checker's path for this crate
   F7  the checker is a place on a scripts/run_tests.sh line, and the canary is not a test of a binary
       (tests/<name>.rs of the root or of a workspace package) that line names, or a Rust zero test is in a
-      binary it does not name, or the line names a
+      binary it does not name (a unit test of the lib counts as named when the line names `lib`, run_tests.sh's
+      `Running unittests src/lib.rs` section, and the line's own command runs that test), or the line names a
       binary with no such file, asks a `name=N` floor below 1 or above the #[test] functions of that file,
       or has no `--` after its names on that line
 An anchor `A>B` in a workflow resolves B only inside the step (or block) the line of A opens: a step that
@@ -186,20 +187,34 @@ def leg_findings(tree: Tree, checker: str | None, canary: str | None, zero: str 
     for spec in leg["names"].split(","):
         name, _, floor = spec.partition("=")
         names.append(name)
-        # the integration test file of that binary: tests/<name>.rs of the root or of a workspace package
-        files = sorted(p for p in tree.paths if p == f"tests/{name}.rs" or p.endswith(f"/tests/{name}.rs"))
+        if name == "lib":
+            # the library's unit tests (run_tests.sh counts cargo's `Running unittests src/lib.rs` section):
+            # the lib files of the packages the line's command tests
+            files = sorted(f for root in lib_packages(tree, line) for f in lib_files(tree, root))
+        else:
+            # the integration test file of that binary: tests/<name>.rs of the root or of a workspace package
+            files = sorted(p for p in tree.paths if p == f"tests/{name}.rs" or p.endswith(f"/tests/{name}.rs"))
         if not files:
             out.append(f"the run_tests.sh line of {checker} names {name}, and no tests/{name}.rs is in the tree")
             continue
         if floor:
-            count = max(len(RUST_TEST_ATTR_RE.findall(rust_code(tree.read(f) or ""))) for f in files)
+            counts = [len(RUST_TEST_ATTR_RE.findall(rust_code(tree.read(f) or ""))) for f in files]
+            count = sum(counts) if name == "lib" else max(counts)
             if not floor.isdigit() or int(floor) < 1 or int(floor) > count:
                 out.append(f"the run_tests.sh line of {checker} asks {spec}: the floor must be at least 1 and at "
                            f"most the {count} #[test] functions of {' / '.join(files)}")
     shown = ", ".join(sorted(names))
     for ref, must in ((canary, True), (zero, False)):
+        if not ref:
+            continue  # a missing reference is F4's
         r = RS_REF_RE.match(ref or "")
         integration = bool(r) and "/tests/" in "/" + r["path"]
+        if r and not integration and "lib" in names:
+            # a unit test of the lib: the line names `lib` and its own command runs that test
+            if not unit_test_run_by(tree, ref, line):
+                out.append(f"{ref} is a unit test this run_tests.sh line names `lib` for, but the line's command "
+                           f"does not run it (package, --lib or no target selection, features, filters)")
+            continue
         if (must and not integration) or (integration and Path(r["path"]).stem not in names):
             out.append(f"{ref} is not a test of a binary this run_tests.sh line names ({shown})")
     return out
@@ -426,6 +441,92 @@ def command_runs(cmd: str, package: str | None, defaults: set[str], needs: set[s
     return needs <= on
 
 
+def rs_test_needs(tree: Tree, path: str, text: str, code: str, start: int):
+    """(package, default features, features the test needs, integration target or None for the lib's unit
+    tests, module path) of the test whose `fn` is at `start` in `path`"""
+    package, manifest = package_of(tree, path)
+    needs = set(enclosing_features(code, text, start))
+    m = re.match(r"(?:.*/)?tests/(?P<t>[\w-]+)\.rs$", path)
+    target = m["t"] if m else None
+    if target is not None:
+        for t in manifest.get("test", []):
+            if t.get("name") == target:
+                needs |= set(t.get("required-features", []))
+    defaults = set(manifest.get("features", {}).get("default", []))
+    return package, defaults, needs, target, module_path(tree, path, code, start)
+
+
+def package_root(tree: Tree, path: str) -> str | None:
+    """the directory (with a trailing / unless it is the root, "") of the nearest Cargo.toml with a [package]
+    above `path`"""
+    parts = path.split("/")[:-1]
+    while True:
+        manifest = "/".join(parts + ["Cargo.toml"])
+        if manifest in tree.paths:
+            try:
+                data = tomllib.loads(tree.read(manifest) or "")
+            except tomllib.TOMLDecodeError:
+                data = {}
+            if "package" in data:
+                return "/".join(parts) + "/" if parts else ""
+        if not parts:
+            return None
+        parts.pop()
+
+
+def lib_files(tree: Tree, root: str) -> list[str]:
+    """the .rs files of the lib target of the package at `root`: its src/ without src/main.rs, src/bin/ and
+    the paths of its [[bin]] targets (their tests are binary targets, run in their own `Running unittests
+    src/bin/...` sections, not in the lib's)"""
+    try:
+        manifest = tomllib.loads(tree.read(root + "Cargo.toml") or "")
+    except tomllib.TOMLDecodeError:
+        manifest = {}
+    bins = {root + b["path"] for b in manifest.get("bin", []) if isinstance(b, dict) and b.get("path")}
+    return sorted(f for f in tree.paths
+                  if f.startswith(root + "src/") and f.endswith(".rs") and f != root + "src/main.rs"
+                  and not f.startswith(root + "src/bin/") and f not in bins
+                  and package_root(tree, f) == root)
+
+
+def lib_packages(tree: Tree, cmd: str) -> list[str]:
+    """the package roots whose lib a test command runs: its -p / --package packages, every package with
+    --workspace / --all, otherwise the package of the repository root (every package when the root manifest
+    is a virtual workspace)"""
+    ws = words(cmd)
+    roots = {}
+    for m in (f for f in tree.paths if f == "Cargo.toml" or f.endswith("/Cargo.toml")):
+        try:
+            data = tomllib.loads(tree.read(m) or "")
+        except tomllib.TOMLDecodeError:
+            continue
+        if "package" in data:
+            roots[data["package"].get("name")] = m[:-len("Cargo.toml")]
+    pkgs = option_values(ws, "-p", "--package")
+    if pkgs:
+        return sorted(roots[p] for p in pkgs if p in roots)
+    if "--workspace" in ws or "--all" in ws or "" not in roots.values():
+        return sorted(roots.values())
+    return [""]
+
+
+def unit_test_run_by(tree: Tree, ref: str, cmd: str) -> bool:
+    """`ref` (path::name) is a unit test of a package's lib that `cmd` runs (package, features, filters)"""
+    r = RS_REF_RE.match(ref or "")
+    if not r or "/tests/" in "/" + r["path"] or r["path"] not in tree.paths:
+        return False
+    root = package_root(tree, r["path"])
+    if root is None or r["path"] not in lib_files(tree, root) or root not in lib_packages(tree, cmd):
+        return False  # a test of a binary target, or of a package the command does not test
+    text = tree.read(r["path"]) or ""
+    code = rust_code(text)
+    at = list(re.finditer(r"\bfn\s+" + r["name"] + r"\b", code))
+    if len(at) != 1:
+        return False
+    package, defaults, needs, target, tpath = rs_test_needs(tree, r["path"], text, code, at[0].start())
+    return target is None and command_runs(cmd, package, defaults, needs, None, tpath)
+
+
 def rs_test_gap(tree: Tree, path: str, name: str) -> str | None:
     if path not in tree.paths:
         return f"{path} is not in the tree"
@@ -446,16 +547,7 @@ def rs_test_gap(tree: Tree, path: str, name: str) -> str | None:
     if not re.search(r"(^|/)tests/", path) and not re.search(r"#\[\s*cfg\s*\(\s*test\s*\)\s*\]",
                                                               code[:at[0].start()]):
         return f"{path}: {name} is outside tests/ and no #[cfg(test)] precedes it"
-    package, manifest = package_of(tree, path)
-    needs = set(enclosing_features(code, text, at[0].start()))
-    m = re.match(r"(?:.*/)?tests/(?P<t>[\w-]+)\.rs$", path)
-    target = m["t"] if m else None
-    if target is not None:
-        for t in manifest.get("test", []):
-            if t.get("name") == target:
-                needs |= set(t.get("required-features", []))
-    defaults = set(manifest.get("features", {}).get("default", []))
-    tpath = module_path(tree, path, code, at[0].start())
+    package, defaults, needs, target, tpath = rs_test_needs(tree, path, text, code, at[0].start())
     if not any(command_runs(c, package, defaults, needs, target, tpath) for c in ci_commands(tree)):
         what = f"the integration test {target}" if target else "the lib's unit tests"
         feats = f" with feature(s) {sorted(needs)}" if needs else ""
