@@ -173,6 +173,7 @@ class Gen(unittest.TestCase):
         self.assertGap("is not a test of a binary this run_tests.sh line names (golden)")
 
     def test_a_run_tests_leg_with_a_minimum_names_its_binary(self):
+        write(self.crate, {"tests/x.rs": "#[test]\nfn x() {}\n"})
         self.edit(self.crate / ".github/workflows/ci.yml", "run_tests.sh golden --", "run_tests.sh x,golden=1 --")
         self.edit(self.crate / "conformance/g11-own.toml", "run_tests.sh golden", "run_tests.sh x,golden=1")
         rc, out = self.run_main()
