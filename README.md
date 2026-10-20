@@ -192,7 +192,7 @@ One row per repository: crates that share a repository share its one manifest at
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
 | ALICE-Physics | alice-physics | 8 | 5 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 9 | 3 | 2 | 0 |
-| ALICE-Sync | alice-sync | 11 | 1 | 2 | 0 |
+| ALICE-Sync | alice-sync | 12 | 1 | 1 | 0 |
 | ALICE-Zip | alice-zip, alice-zip-cli | 13 | 1 | 0 | 0 |
 
 ### Crates whose manifest is not written yet

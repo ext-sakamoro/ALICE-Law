@@ -81,9 +81,9 @@ crates = ["alice-sdf"]
 
 [manifest."ALICE-Sync"]
 crates = ["alice-sync"]
-"pass" = 11
+"pass" = 12
 "fail-known" = 1
-"unverified" = 2
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-Zip"]

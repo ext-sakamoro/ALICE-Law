@@ -101,7 +101,7 @@ repos = ["ALICE-Crypto", "ALICE-DB"]
 path = "scripts/clippy_lib_gate.py"
 sha256 = "db8b5b18f02fe444355c69586b61e3dfa5157454de3d9f0e0ffa5654e261db5e"
 source = { repo = "ALICE-SDF", rev = "aae53c605ee078b5f1332806f915228cd3b887e5" }
-repos = ["ALICE-LOL", "ALICE-Physics", "ALICE-SDF"]
+repos = ["ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync"]
 
 [[file]]
 path = "scripts/fneg_fma_ir_check.py"
@@ -252,7 +252,7 @@ repos = ["ALICE-Crypto", "ALICE-DB"]
 path = "scripts/test_clippy_lib_gate.py"
 sha256 = "0ab22071fade341ecfe67ec304c0fac2f018f1b960c1768964ddc9f7624c0851"
 source = { repo = "ALICE-SDF", rev = "aae53c605ee078b5f1332806f915228cd3b887e5" }
-repos = ["ALICE-LOL", "ALICE-Physics", "ALICE-SDF"]
+repos = ["ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync"]
 
 [[file]]
 path = "scripts/test_fneg_fma_ir_check.py"
