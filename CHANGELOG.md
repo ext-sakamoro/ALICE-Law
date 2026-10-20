@@ -117,6 +117,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `release-train.toml` `consumer-expected-failure` `expect.label`: the primary span's label, so a new error on the same text elsewhere is refused (alice-db's entry pins it)
 
 ### Changed
+- `conformance/shared-files.toml`: `scripts/shared_files.sh` と `scripts/test_shared_files.py` の行に、entry の bytes を main に持つようになった ALICE-Analytics / ALICE-Crypto / ALICE-DB / ALICE-Edge / ALICE-ML / ALICE-Sync / ALICE-Zip を足す uniform な写しが 14 増えるので conformance-live の --expect-copies を 952 から 966 にする (`gen_shared_files.py --write --lock-file` で表と同時に書いた) manifest の状態と行番号参照の baseline は動かない
 - `conformance/shared-files.toml`: `scripts/fneg_fma_ir_check.py` を最初の移動の計画された行にする (owner ALICE-Edge、planned 9d4029a7、IR の半分と構文木の半分の分担を書いた docstring と probe 48 / 49 / 50 の版) uniform な写しが 11 減るので conformance-live の --expect-copies を 959 から 948 にする
 - `conformance/line-refs-baseline.toml`: ALICE-ML 42 -> 0、ALICE-Edge 41 -> 0、ALICE-LLM 35 -> 0、ALICE-Analytics 31 -> 0、ALICE-DetMath 18 -> 0、ALICE-SDF 3 -> 0、ALICE-LOL 17 -> 16 (manifest の行番号参照を anchor にした変更の取り込みの後、残り 35)
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml` / README の Status: ALICE-LOL の G7 の commit が main に着地したので pending の entry を外し、ALICE-DetMath の G7 / G8 を main の manifest どおり n/a 2 にする
