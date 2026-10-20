@@ -349,6 +349,36 @@ class Table(unittest.TestCase):
                   'canary = "scripts/test_run_tests.py::RunTests.test_ok"')
         self.assertFinding("F7", "scripts/test_run_tests.py::RunTests.test_ok is not a test of a binary")
 
+    def lib_leg(self, run, canary):
+        """the G4 leg becomes `run` (a run_tests.sh line naming lib) and its canary the unit test `canary`"""
+        self.edit(".github/workflows/ci.yml", "      - run: scripts/run_tests.sh golden -- cargo test --test golden\n",
+                  f"      - run: {run}\n")
+        self.edit("conformance/g11.toml", "#run: scripts/run_tests.sh golden", f"#run: {run.split(' --')[0]}")
+        self.edit("conformance/g11.toml", "tests/golden.rs::a_wrong_digest_is_refused", f"src/lib.rs::{canary}")
+
+    def test_a_lib_leg_that_runs_the_unit_test_canary(self):
+        self.lib_leg("scripts/run_tests.sh lib -- cargo test --features extra --lib", "gated_built")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+
+    def test_f7_a_lib_leg_whose_command_selects_only_an_integration_target(self):
+        self.lib_leg("scripts/run_tests.sh lib,golden -- cargo test --features extra --test golden", "gated_built")
+        self.assertFinding("F7", "does not run it")
+
+    def test_f7_a_lib_leg_without_the_feature_the_unit_test_needs(self):
+        self.lib_leg("scripts/run_tests.sh lib -- cargo test --features extra --lib", "gated_unbuilt")
+        self.assertFinding("F7", "does not run it")
+
+    def test_f7_a_lib_floor_above_the_unit_tests_of_src(self):
+        self.lib_leg("scripts/run_tests.sh lib=3 -- cargo test --features extra --lib", "gated_built")
+        self.assertFinding("F7", "at most the 2 #[test] functions of src/lib.rs")
+
+    def test_a_missing_canary_is_f4_alone(self):
+        self.edit("conformance/g11.toml", 'canary = "tests/golden.rs::a_wrong_digest_is_refused"\n', "")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 1, out)
+        self.assertFalse([l for l in out.splitlines() if l.startswith("error: F7")], out)
+
     def test_f7_names_without_a_separator_on_the_line(self):
         self.edit(".github/workflows/ci.yml", "run_tests.sh golden -- cargo test --test golden",
                   "run_tests.sh golden")
