@@ -536,6 +536,29 @@ class Shapes(unittest.TestCase):
         self.assertEqual([f for f in ptc.scan_text("a.py", text, "a.py") if f.endswith("internal note")],
                          ["a.py:3: internal note"])
 
+    def test_note_names_in_unquoted_shell_words_template_literals_and_after_char_literals_are_found(self):
+        # shell, Makefile, Dockerfile and PowerShell pass words unquoted, so they are prose
+        for line, path in (("echo see feedback_release_steps for the steps", "scripts/a.sh"),
+                           ('echo "see the note" feedback_release_steps', "a.bash"),
+                           ("\techo see feedback_release_steps", "Makefile"), ("\techo feedback_release_steps", "a.mk"),
+                           ("RUN echo feedback_release_steps", "Dockerfile"), ("Write-Host feedback_release_steps", "a.ps1"),
+                           ("const msg = `see feedback_release_steps`;", "a.ts"),
+                           ("log(`details in feedback_release_steps`)", "a.js"),
+                           ("let q = '\"'; let s = \"feedback_secret_note_x\";", "src/a.rs"),
+                           ("let c = '\\''; let s = \"feedback_secret_note_x\";", "src/a.rs"),
+                           ("const s = 'feedback_secret_note_x';", "a.ts")):
+            self.assertIn("internal note", ptc.kinds(line, path), (line, path))
+        # a lifetime, a loop label or a byte literal does not open a string
+        for line in ("fn f<'a>(x: &'a str) { let success_count = 1; }", "let feedback_gain = b'x';",
+                     "'outer: loop { handoff_queue.pop(); }"):
+            self.assertNotIn("internal note", ptc.kinds(line, "src/a.rs"), line)
+        # a heredoc body, a template literal and a string spread over lines
+        for path, text, want in (("a.sh", "cat <<EOF\nsee feedback_release_steps\nEOF\n", "a.sh:2"),
+                                 ("a.ts", "const s = `\n  see feedback_release_steps\n`;\nconst feedback_gain = 2;\n", "a.ts:2"),
+                                 ("a.rs", 'let s = "one\nsee feedback_release_steps";\nlet feedback_gain = 2;\n', "a.rs:2")):
+            self.assertEqual([f for f in ptc.scan_text(path, text, path) if f.endswith("internal note")],
+                             [want + ": internal note"], path)
+
     def test_link_like_code_and_toml_headers_pass(self):
         for line, path in (("[[package]]", "Cargo.lock"), ("[[kv_namespaces]]", "wrangler.toml"),
                            ("  [[bin]]  # main", "Cargo.toml"), ("[[gate]] entry", "docs/a.md"),

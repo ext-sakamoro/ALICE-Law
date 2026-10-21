@@ -981,30 +981,36 @@ NOTE_NAME_RE = re.compile(r"(?<![A-Za-z0-9_])(?:feedback|discipline|success|hand
 SLASH_COMMENT_EXTS = (".rs", ".c", ".h", ".cc", ".cpp", ".hpp", ".cxx", ".m", ".mm", ".js", ".mjs", ".cjs", ".ts",
                       ".tsx", ".jsx", ".go", ".java", ".kt", ".kts", ".swift", ".cs", ".dart", ".scala", ".zig",
                       ".wgsl", ".glsl", ".hlsl", ".metal", ".proto", ".gradle")
-# (YAML is not here: its values are mostly unquoted text, such as a step name or a block scalar, so it is prose)
-HASH_COMMENT_EXTS = (".py", ".pyi", ".sh", ".bash", ".zsh", ".rb", ".pl", ".r", ".toml", ".cfg",
-                     ".mk", ".cmake", ".nix", ".tf", ".ps1")
-HASH_COMMENT_NAMES = ("Makefile", "Dockerfile", "Gemfile", "Rakefile", ".gitignore", ".gitattributes")
+# slash-style languages where '…' is a string (elsewhere it is a char literal or a lifetime)
+SINGLE_QUOTE_STRING_EXTS = (".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".dart")
+# Only languages whose text sits in quotes are here  Shell, Makefile, Dockerfile, PowerShell, YAML,
+# INI, Ruby / Perl / Nix / Terraform (heredocs) and the like pass words unquoted, so they are prose
+HASH_COMMENT_EXTS = (".py", ".pyi", ".toml")
+CHAR_LITERAL_RE = re.compile(r"'(?:\\(?:u\{[0-9A-Fa-f]+\}|x[0-9A-Fa-f]{2}|.)|[^'\\\n])'")
 
 
 def comment_style(path: str | None) -> str | None:
-    """"slash" / "hash" for a code file whose comments and strings are read apart from its code;
-    None for prose (Markdown, text) and other files, where the whole line is prose"""
+    """"slash" / "slash'" (where '…' is a string) / "hash" for a code file whose comments and
+    strings are read apart from its code; None for prose and every other file (the whole line)"""
     if path is None:
         return None
-    name = path.rsplit("/", 1)[-1]
-    low = name.lower()
+    low = path.rsplit("/", 1)[-1].lower()
+    if low.endswith(SINGLE_QUOTE_STRING_EXTS):
+        return "slash'"
     if low.endswith(SLASH_COMMENT_EXTS):
         return "slash"
-    if low.endswith(HASH_COMMENT_EXTS) or name in HASH_COMMENT_NAMES:
+    if low.endswith(HASH_COMMENT_EXTS):
         return "hash"
     return None
 
 
 def prose_spans(line: str, style: str, state: dict) -> list[tuple[int, int]]:
-    """the comment and string parts of a code line as [start, end) spans; `state` carries an open
-    block comment (slash style) or triple-quoted string (hash style) on to the next line"""
+    """the comment and string parts of a code line as [start, end) spans; `state` carries what is
+    still open at the end of the line (a block comment, a triple-quoted string, a template literal
+    or an unclosed string) on to the next line"""
     spans: list[tuple[int, int]] = []
+    slash = style.startswith("slash")
+    quotes = "\"`'" if style == "slash'" else ("\"`" if slash else "\"'")
     i, n = 0, len(line)
     while i < n:
         if state.get("block"):
@@ -1022,11 +1028,20 @@ def prose_spans(line: str, style: str, state: dict) -> list[tuple[int, int]]:
             state["triple"] = q if end < 0 else None
             i = stop
             continue
+        if state.get("quote"):
+            q = state["quote"]
+            j = i
+            while j < n and line[j] != q:
+                j += 2 if line[j] == "\\" else 1
+            spans.append((i, min(j + 1, n)))
+            state["quote"] = q if j >= n else None
+            i = j + 1
+            continue
         c = line[i]
-        if style == "slash" and line.startswith("//", i):
+        if slash and line.startswith("//", i):
             spans.append((i, n))
             break
-        if style == "slash" and line.startswith("/*", i):
+        if slash and line.startswith("/*", i):
             state["block"] = True
             continue
         if style == "hash" and c == "#":
@@ -1037,12 +1052,15 @@ def prose_spans(line: str, style: str, state: dict) -> list[tuple[int, int]]:
             spans.append((i, i + 3))
             i += 3
             continue
-        if c == '"' or (style == "hash" and c == "'"):
-            j = i + 1
-            while j < n and line[j] != c:
-                j += 2 if line[j] == "\\" else 1
-            spans.append((i, min(j + 1, n)))
-            i = j + 1
+        if style == "slash" and c == "'":
+            # a char literal ('x', '\\'', '"') is skipped whole; any other ' is a lifetime or a label
+            m = CHAR_LITERAL_RE.match(line, i)
+            i = m.end() if m else i + 1
+            continue
+        if c in quotes:
+            state["quote"] = c
+            spans.append((i, i + 1))
+            i += 1
             continue
         i += 1
     return spans
