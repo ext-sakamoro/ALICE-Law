@@ -559,6 +559,96 @@ class Shapes(unittest.TestCase):
             self.assertEqual([f for f in ptc.scan_text(path, text, path) if f.endswith("internal note")],
                              [want + ": internal note"], path)
 
+    # every code language read apart from its code, by the place a note name stands in it: the name is
+    # found in a comment or any string form, and not as (part of) an identifier; {N} is a note name,
+    # {I} an identifier that starts like one
+    NOTE_MATRIX = {
+        ".rs": {"line": "x(); // {N}", "block": "x(); /* {N} */ y();", "string": 'let s = "{N}";',
+                "raw": 'let j = r#"{"k": "{N}"}"#;', "raw-quote": 'let s = r#"a " {N}"#;', "byte-raw": 'let b = br"a {N}";',
+                "char": "let q = '\"'; let s = \"{N}\";", "char-esc": "let q = '\\''; let s = \"{N}\";",
+                "ident": "let {I} = 1;", "lifetime": "fn f<'a>(x: &'a str) { let {I} = 1; }"},
+        ".c": {"line": "x(); // {N}", "block": "x(); /* {N} */", "string": 'char *s = "{N}";',
+               "char": "char q = '\"'; char *s = \"{N}\";", "ident": "int {I} = 1;"},
+        ".cpp": {"line": "x(); // {N}", "string": 'auto s = "{N}";', "raw": 'auto s = R"(a " {N})";',
+                 "raw-delim": 'auto s = R"x(a )" {N})x";', "char": "char q = '\"'; auto s = \"{N}\";",
+                 "ident": "int {I} = 1;"},
+        ".cs": {"line": "x(); // {N}", "string": 'var s = "{N}";', "verbatim": 'var s = @"C:\\d\\" + " {N}";',
+                "verbatim-quote": 'var s = @"a "" b {N}";', "interp-verbatim": 'var s = $@"{x} " + " {N}";',
+                "raw": 'var s = """ a " {N} """;', "ident": "var {I} = 1;"},
+        ".java": {"line": "x(); // {N}", "string": 'String s = "{N}";', "char": "char q = '\"'; String s = \"{N}\";",
+                  "ident": "int {I} = 1;"},
+        ".kt": {"line": "x() // {N}", "string": 'val s = "{N}"', "raw": 'val s = """ a " {N} """', "ident": "val {I} = 1"},
+        ".swift": {"line": "x() // {N}", "string": 'let s = "{N}"', "raw": 'let s = #"a " {N}"#', "ident": "let {I} = 1"},
+        ".go": {"line": "x() // {N}", "string": 's := "{N}"', "raw": 's := `a " {N}`',
+                "char": "q := '\"'; s := \"{N}\"", "ident": "{I} := 1"},
+        ".js": {"line": "x(); // {N}", "string": 'const s = "{N}";', "single": "const s = '{N}';",
+                "template": "const s = `a \" {N}`;", "ident": "const {I} = 1;"},
+        ".ts": {"line": "x(); // {N}", "single": "const s = 'it\"s {N}';", "template": "log(`a ${x} {N}`);",
+                "ident": "let {I}: number = 1;"},
+        ".py": {"line": "x()  # {N}", "string": 's = "{N}"', "single": "s = 'it\"s {N}'", "raw": 's = r"a \\" {N}"',
+                "fstring": 's = f"{d["{N}"]}"', "triple": 's = """ a " {N} """', "ident": "{I} = 1"},
+        ".toml": {"line": "a = 1  # {N}", "string": 'a = "{N}"', "literal": "a = 'C:\\' # {N}", "ident": "{I} = 1"},
+    }
+    # multi-line forms: (text, the one line the name is found on)
+    NOTE_MULTILINE = {
+        ".rs": ('let s = r#"\n  "x" {N}\n"#;\nlet {I} = 1;\n', 2),
+        ".cpp": ('auto s = R"x(\n  )" {N}\n)x";\nint {I} = 1;\n', 2),
+        ".cs": ('var s = @"a\n  "" {N}\n";\nvar {I} = 1;\n', 2),
+        ".java": ('String s = """\n  a " {N}\n  """;\nint {I} = 1;\n', 2),
+        ".swift": ('let s = #"""\n  a " {N}\n  """#\nlet {I} = 1\n', 2),
+        ".go": ('s := `\n  " {N}\n`\n{I} := 1\n', 2),
+        ".ts": ('const s = `\n  " {N}\n`;\nconst {I} = 1;\n', 2),
+        ".py": ("s = '" "''\n  ' {N}\n'" "''\n{I} = 1\n", 2),
+        ".c": ("x(); /*\n  {N}\n*/\nint {I} = 1;\n", 2),
+        ".kt": ('val s = "unclosed\n  {N}"\nval {I} = 1\n', 2),
+        ".toml": ("a = 'C:\\' # {N}\n{I} = 1\n", 1),
+    }
+
+    def test_note_name_matrix_over_languages_and_places(self):
+        name, ident = "feedback_secret_note_x", "feedback_gain_value"
+        for ext, places in self.NOTE_MATRIX.items():
+            for place, template in places.items():
+                line = template.replace("{N}", name).replace("{I}", ident)
+                found = "internal note" in ptc.kinds(line, "src/a" + ext)
+                self.assertEqual(found, place not in ("ident", "lifetime"), (ext, place, line))
+                # the lexer itself puts the name in a comment or a string (not only the fail-safe),
+                # except in an f-string with the same quote nested, which only the fail-safe reads
+                at = line.find(name)
+                spans = ptc.prose_spans(line, ptc.comment_style("src/a" + ext), ptc.lexer_state("src/a" + ext))
+                in_span = at >= 0 and any(lo <= at < hi for lo, hi in spans)
+                self.assertEqual(in_span, place not in ("ident", "lifetime", "fstring"), (ext, place, line, spans))
+        for ext, (template, want) in self.NOTE_MULTILINE.items():
+            text = template.replace("{N}", name).replace("{I}", ident)
+            got = [f for f in ptc.scan_text("src/a" + ext, text, "src/a" + ext) if f.endswith("internal note")]
+            self.assertEqual(got, [f"src/a{ext}:{want}: internal note"], (ext, text))
+
+    def test_note_names_in_jsx_text_nested_comments_continued_comments_and_if0_are_found(self):
+        name, ident = "feedback_secret_note_x", "feedback_gain_value"
+        for line, path in (("return <p>it's here, and it's " + name + " too</p>;", "src/a.tsx"),
+                           ("return <p>it's " + name + "</p>;", "src/a.jsx"),
+                           ("description = 'a \"b\" c " + name + " d'", "build.gradle"),
+                           ("x(); /* outer /* inner */ see " + name + " */", "src/a.rs"),
+                           ("/* a /* b */ c " + name + " */", "Sources/a.swift")):
+            self.assertIn("internal note", ptc.kinds(line, path), (line, path))
+        for path, text, want in (
+                ("src/a.tsx", "<p>\n  it's fine. It's " + name + "\n</p>\n", 2),
+                ("src/a.rs", "/* outer\n  /* inner */\n  " + name + "\n*/\nlet " + ident + " = 1;\n", 3),
+                ("src/a.c", "x(); // see \\\n  " + name + "\nint " + ident + " = 1;\n", 2),
+                ("src/a.c", "#if 0\n#ifdef X\n#endif\n" + name + "\n#endif\nint " + ident + " = 1;\n", 4),
+                ("src/a.c", "#if 0\n" + name + "\n#else\nint " + ident + " = 1;\n#endif\n", 2),
+                ("src/a.c", "#if (0)\n" + name + "\n#endif\nint " + ident + " = 1;\n", 2),
+                ("src/A.cs", "#if false\n" + name + "\n#endif\nvar " + ident + " = 1;\n", 2)):
+            got = [f for f in ptc.scan_text(path, text, path) if f.endswith("internal note")]
+            self.assertEqual(got, [f"{path}:{want}: internal note"], (path, text))
+        # C does not nest: after the first */ the line is code again
+        self.assertNotIn("internal note", ptc.kinds("/* a /* b */ int " + ident + " = 1;", "src/a.c"))
+
+    def test_a_note_name_next_to_a_quote_in_code_is_found(self):
+        # failing safe: where the quotes may have been read wrong, a name beside one is counted
+        for line, path in (('let s = c"x" feedback_secret_note_x;', "a.rs"), ('x = "" feedback_secret_note_x', "a.py"),
+                           ('let a = feedback_secret_note_x"', "a.rs")):
+            self.assertIn("internal note", ptc.kinds(line, path), (line, path))
+
     def test_link_like_code_and_toml_headers_pass(self):
         for line, path in (("[[package]]", "Cargo.lock"), ("[[kv_namespaces]]", "wrangler.toml"),
                            ("  [[bin]]  # main", "Cargo.toml"), ("[[gate]] entry", "docs/a.md"),

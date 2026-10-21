@@ -978,11 +978,13 @@ def private_paths(line: str) -> bool:
 
 NOTE_NAME_RE = re.compile(r"(?<![A-Za-z0-9_])(?:feedback|discipline|success|handoff)_[a-z0-9_]{4,}")
 # code files whose comments and strings are read apart from their code tokens, by comment style
+# (JSX / TSX are not here: their element text is unquoted prose with apostrophes in it; nor
+# Groovy / Gradle, whose single-quoted, triple-quoted and slashy strings are not modelled)
 SLASH_COMMENT_EXTS = (".rs", ".c", ".h", ".cc", ".cpp", ".hpp", ".cxx", ".m", ".mm", ".js", ".mjs", ".cjs", ".ts",
-                      ".tsx", ".jsx", ".go", ".java", ".kt", ".kts", ".swift", ".cs", ".dart", ".scala", ".zig",
-                      ".wgsl", ".glsl", ".hlsl", ".metal", ".proto", ".gradle")
+                      ".go", ".java", ".kt", ".kts", ".swift", ".cs", ".dart", ".scala", ".zig",
+                      ".wgsl", ".glsl", ".hlsl", ".metal", ".proto")
 # slash-style languages where '…' is a string (elsewhere it is a char literal or a lifetime)
-SINGLE_QUOTE_STRING_EXTS = (".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".dart")
+SINGLE_QUOTE_STRING_EXTS = (".js", ".mjs", ".cjs", ".ts", ".dart")
 # Only languages whose text sits in quotes are here  Shell, Makefile, Dockerfile, PowerShell, YAML,
 # INI, Ruby / Perl / Nix / Terraform (heredocs) and the like pass words unquoted, so they are prose
 HASH_COMMENT_EXTS = (".py", ".pyi", ".toml")
@@ -1004,35 +1006,99 @@ def comment_style(path: str | None) -> str | None:
     return None
 
 
+# raw and verbatim string openers of the slash-style languages, each with how it closes:
+# Rust r"…" / r#"…"# / br#"…"#, Swift #"…"#, C++ R"d(…)d", C# @"…" / $@"…" / @$"…" (where ""
+# is the escape), and the triple-quote forms ("""…""" of C# 11, Java, Kotlin and Swift)
+RAW_OPEN_RE = {
+    ".rs": re.compile(r'(?<![A-Za-z0-9_])b?r(#*)"'),
+    ".swift": re.compile(r'(#+)"'),
+    ".cs": re.compile(r'(?<![A-Za-z0-9_])(\$*@\$*)"'),
+}
+CPP_EXTS = (".cc", ".cpp", ".cxx", ".hpp", ".hh", ".h", ".mm")
+CPP_RAW_OPEN_RE = re.compile(r'(?<![A-Za-z0-9_])(?:u8|u|U|L)?R"([^()\\\s"]{0,16})\(')
+# languages whose block comments nest (/* a /* b */ c */ is one comment)
+NESTED_COMMENT_EXTS = (".rs", ".swift", ".scala", ".kt", ".kts", ".dart")
+# C-family files where `#if 0` ... `#endif` is text the compiler never reads
+PREPROCESSOR_EXTS = (".c", ".h", ".cc", ".cpp", ".hpp", ".hh", ".cxx", ".m", ".mm", ".cs")
+PP_IF_RE = re.compile(r"\s*#\s*if(?:n?def)?\b")
+PP_IF0_RE = re.compile(r"\s*#\s*if\s*(?:\(\s*)?(?:0|false)\b")
+PP_END_RE = re.compile(r"\s*#\s*endif\b")
+PP_ELSE_RE = re.compile(r"\s*#\s*(?:else|elif)\b")
+# languages with a """…""" string (C# 11 raw, Java / Kotlin text blocks, Swift, Scala, Dart)
+TRIPLE_QUOTE_EXTS = (".cs", ".java", ".kt", ".kts", ".swift", ".scala", ".dart")
+QUOTE_RUN_RE = re.compile(r'"{3,}')
+QUOTE_CHARS = "\"'`"
+
+
+def lexer_state(path: str | None) -> dict:
+    """the state prose_spans starts a file with: its extension, which picks the string forms"""
+    name = (path or "").rsplit("/", 1)[-1].lower()
+    return {"ext": name[name.rfind("."):] if "." in name else ""}
+
+
 def prose_spans(line: str, style: str, state: dict) -> list[tuple[int, int]]:
     """the comment and string parts of a code line as [start, end) spans; `state` carries what is
-    still open at the end of the line (a block comment, a triple-quoted string, a template literal
-    or an unclosed string) on to the next line"""
+    still open at the end of the line (a block comment, a raw or triple-quoted string, a template
+    literal or an unclosed string) on to the next line"""
     spans: list[tuple[int, int]] = []
     slash = style.startswith("slash")
     quotes = "\"`'" if style == "slash'" else ("\"`" if slash else "\"'")
     i, n = 0, len(line)
+    ext = state.get("ext", "")
+    if slash and ext in PREPROCESSOR_EXTS and not state.get("block") and not state.get("close"):
+        depth = state.get("if0", 0)
+        if depth:
+            if PP_IF_RE.match(line):
+                depth += 1
+            elif PP_END_RE.match(line) or (depth == 1 and PP_ELSE_RE.match(line)):
+                depth -= 1
+            state["if0"] = depth
+            return [(0, n)]
+        if PP_IF0_RE.match(line):
+            state["if0"] = 1
+            return [(0, n)]
+    if state.pop("continued", False):
+        # the line comment above ended in a backslash, so this whole line is part of it
+        state["continued"] = line.endswith("\\")
+        return [(0, n)]
     while i < n:
         if state.get("block"):
-            end = line.find("*/", i)
-            stop = n if end < 0 else end + 2
+            nest = ext in NESTED_COMMENT_EXTS
+            j = i
+            while j < n and state["block"]:
+                if line.startswith("*/", j):
+                    state["block"] -= 1
+                    j += 2
+                elif nest and line.startswith("/*", j):
+                    state["block"] += 1
+                    j += 2
+                else:
+                    j += 1
+            spans.append((i, j))
+            i = j
+            continue
+        if state.get("close"):
+            # a raw string closes only on its own closing text, with no escapes
+            end = line.find(state["close"], i)
+            stop = n if end < 0 else end + len(state["close"])
             spans.append((i, stop))
-            state["block"] = end < 0
+            state["close"] = state["close"] if end < 0 else None
             i = stop
             continue
-        if state.get("triple"):
-            q = state["triple"]
-            end = line.find(q, i)
-            stop = n if end < 0 else end + 3
-            spans.append((i, stop))
-            state["triple"] = q if end < 0 else None
-            i = stop
+        if state.get("verbatim"):
+            # C# @"…": "" is a quote inside, and a backslash is an ordinary character
+            j = i
+            while j < n and not (line[j] == '"' and not line.startswith('""', j)):
+                j += 2 if line.startswith('""', j) else 1
+            spans.append((i, min(j + 1, n)))
+            state["verbatim"] = j >= n
+            i = j + 1
             continue
         if state.get("quote"):
-            q = state["quote"]
+            q, raw = state["quote"], state.get("literal")
             j = i
             while j < n and line[j] != q:
-                j += 2 if line[j] == "\\" else 1
+                j += 2 if (line[j] == "\\" and not raw) else 1
             spans.append((i, min(j + 1, n)))
             state["quote"] = q if j >= n else None
             i = j + 1
@@ -1040,25 +1106,50 @@ def prose_spans(line: str, style: str, state: dict) -> list[tuple[int, int]]:
         c = line[i]
         if slash and line.startswith("//", i):
             spans.append((i, n))
+            state["continued"] = line.endswith("\\")
             break
         if slash and line.startswith("/*", i):
-            state["block"] = True
+            state["block"] = 1
+            spans.append((i, i + 2))
+            i += 2
             continue
         if style == "hash" and c == "#":
             spans.append((i, n))
             break
+        if slash and ext in RAW_OPEN_RE and (m := RAW_OPEN_RE[ext].match(line, i)):
+            spans.append((i, m.end()))
+            if ext == ".cs":
+                state["verbatim"] = True
+            else:
+                state["close"] = '"' + m.group(1)
+            i = m.end()
+            continue
+        if slash and ext in CPP_EXTS and (m := CPP_RAW_OPEN_RE.match(line, i)):
+            spans.append((i, m.end()))
+            state["close"] = ")" + m.group(1) + '"'
+            i = m.end()
+            continue
+        if slash and ext in TRIPLE_QUOTE_EXTS:
+            m = QUOTE_RUN_RE.match(line, i)
+            if m:
+                state["close"] = m.group(0)
+                spans.append((i, m.end()))
+                i = m.end()
+                continue
         if style == "hash" and (line.startswith('"' * 3, i) or line.startswith("'" * 3, i)):
-            state["triple"] = line[i:i + 3]
+            state["close"] = line[i:i + 3]
             spans.append((i, i + 3))
             i += 3
             continue
         if style == "slash" and c == "'":
-            # a char literal ('x', '\\'', '"') is skipped whole; any other ' is a lifetime or a label
+            # a char literal ('x', '\'', '"') is skipped whole; any other ' is a lifetime or a label
             m = CHAR_LITERAL_RE.match(line, i)
             i = m.end() if m else i + 1
             continue
         if c in quotes:
             state["quote"] = c
+            # a TOML '…' is a literal string: a backslash in it is an ordinary character
+            state["literal"] = ext == ".toml" and c == "'"
             spans.append((i, i + 1))
             i += 1
             continue
@@ -1066,9 +1157,18 @@ def prose_spans(line: str, style: str, state: dict) -> list[tuple[int, int]]:
     return spans
 
 
+def beside_quote(line: str, start: int, end: int) -> bool:
+    """whether the nearest character before or after [start, end), past spaces, is a quote: in
+    code an identifier does not stand next to one, so the reading of the quotes is in doubt"""
+    before = line[:start].rstrip()
+    after = line[end:].lstrip()
+    return (before[-1:] in tuple(QUOTE_CHARS)) or (after[:1] in tuple(QUOTE_CHARS))
+
+
 def note_names(line: str, path: str | None, spans: list[tuple[int, int]] | None = None) -> list[str]:
-    """bare note names (`feedback_…`): every one in prose; in a code file only those inside a
-    comment or a string (`spans` from prose_spans, else the line is read on its own)"""
+    """bare note names (`feedback_…`): every one in prose; in a code file those inside a comment
+    or a string (`spans` from prose_spans, else the line is read on its own), and, failing safe,
+    any one whose reading as code is in doubt (it stands next to a quote)"""
     hits = list(NOTE_NAME_RE.finditer(line))
     if not hits:
         return []
@@ -1076,8 +1176,9 @@ def note_names(line: str, path: str | None, spans: list[tuple[int, int]] | None 
     if style is None:
         return [m.group(0) for m in hits]
     if spans is None:
-        spans = prose_spans(line, style, {})
-    return [m.group(0) for m in hits if any(a <= m.start() < b for a, b in spans)]
+        spans = prose_spans(line, style, lexer_state(path))
+    return [m.group(0) for m in hits
+            if any(a <= m.start() < b for a, b in spans) or beside_quote(line, m.start(), m.end())]
 
 
 ALLOWABLE = ("private name", "agent process", "note link")
@@ -1139,7 +1240,7 @@ COMMENT_LEAD_RE = re.compile(r"^\s*(?://[/!]?|#+|\*+|--|;+|>+)?\s*")
 def scan_text(where: str, text: str, path: str | None = None) -> list[str]:
     out = []
     lines = text.splitlines()
-    style, state = comment_style(path), {}
+    style, state = comment_style(path), lexer_state(path)
     for n, line in enumerate(lines, 1):
         found = kinds(line, path, prose_spans(line, style, state) if style else None)
         if RELEASE_RE.search(line) and any(DEVICE_RE.search(lines[k]) for k in range(max(0, n - 2), min(len(lines), n + 1))):
