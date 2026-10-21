@@ -5,7 +5,7 @@ gh in a GitHub Actions job reads its token only from the environment (GH_TOKEN o
 every call fails with "set the GH_TOKEN environment variable", which a check reports as unreadable input, so
 the job goes red on a push that broke nothing. The check finds the scripts that call gh (a `"gh"` argv in
 Python, a `gh <command>` line in shell, or a call of a function of scripts/ that runs one), then each workflow
-step whose `run` runs such a script in a mode that reaches gh (GH_FREE lists the invocations that do not:
+step whose `run` runs such a script (by file name, or as `python3 -m <module>`) in a mode that reaches gh (GH_FREE lists the invocations that do not:
 the roster check's `--internal`, for example), directly or through a shell script of scripts/ it runs, or
 calls gh itself, and requires GH_TOKEN in the env of that step, its job or the workflow. Tests (test_*) are
 not callers: their gh is a stub.
@@ -26,6 +26,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PY_GH = re.compile(r"""\[\s*["']gh["']\s*,""")
 SH_GH = re.compile(r"(?:^|[\s;&|(`])gh\s+(?:api|run|workflow|pr|release|repo|issue|auth)\b", re.M)
 SCRIPT_REF = re.compile(r"\b([\w\-]+\.(?:py|sh))\b")
+# `python3 -m <module>` (run from scripts/, or `-m scripts.<module>`) runs scripts/<module>.py
+MODULE_REF = re.compile(r"(?:^|\s)-m\s+((?:scripts\.)?(\w+))(?=\s|$|[;&|)])")
 PY_IMPORT = re.compile(r"^\s*(?:import\s+([\w, ]+)|from\s+(\w+)\s+import)", re.M)
 
 
@@ -61,14 +63,20 @@ def gh_callers(scripts: Path) -> set[str]:
     return callers
 
 
+def script_refs(line: str) -> list[tuple[str, int]]:
+    """(script name, end of the reference) of every script this line names: by file name, or run as a module"""
+    refs = [(m.group(1), m.end()) for m in SCRIPT_REF.finditer(line)]
+    refs += [(m.group(2) + ".py", m.end(1)) for m in MODULE_REF.finditer(line)]
+    return sorted(refs, key=lambda r: r[1])
+
+
 def line_reaches(line: str, callers: set[str]) -> list[str]:
     """the gh-calling scripts this command line runs in a gh mode"""
     out = []
-    for m in SCRIPT_REF.finditer(line):
-        name = m.group(1)
+    for name, end in script_refs(line):
         if name not in callers:
             continue
-        after = line[m.end():].split()
+        after = line[end:].split()
         free = GH_FREE.get(name, ())
         if any(f in after for f in free if f.startswith("--")) or (after and after[0] in free):
             continue
