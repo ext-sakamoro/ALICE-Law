@@ -92,6 +92,29 @@ class GhToken(unittest.TestCase):
             with self.subTest(run=run):
                 self.assertEqual(self.check(workflow(run), scripts)[0], 1)
 
+    def test_a_script_run_as_a_module_is_read(self):
+        for run in ("cd scripts && python3 -m caller --x", "python3 -m scripts.caller", "python -m caller",
+                    'bash -c "cd scripts && python3 -m caller"', "bash -c 'cd scripts && python3 -m caller'",
+                    "cd scripts && python3 -m caller>out.txt", "cd scripts && python3 -mcaller",
+                    'cd scripts && python3 "-mcaller"'):
+            with self.subTest(run=run):
+                code, out = self.check(workflow(run))
+                self.assertEqual(code, 1, out)
+                self.assertIn("reaches gh (caller.py)", out)
+                self.assertEqual(self.check(workflow(run, step_env=True))[0], 0)
+        # a module that is not a gh caller, a mode that does not reach gh, and a module of another package
+        scripts = {"caller.py": CALLER, "quiet.py": QUIET, "release_train.py": CALLER}
+        for run in ("cd scripts && python3 -m quiet", "cd scripts && python3 -m release_train next",
+                    "python3 -m pip install x", "python3 -m other.caller", "python3 -m caller.tools",
+                    "python3 -c caller"):
+            with self.subTest(run=run):
+                self.assertEqual(self.check(workflow(run), scripts)[0], 0)
+        # through a shell script of scripts/
+        scripts["wrap.sh"] = "#!/bin/sh\ncd scripts && python3 -m caller\n"
+        code, out = self.check(workflow("scripts/wrap.sh"), scripts)
+        self.assertEqual(code, 1, out)
+        self.assertIn("(wrap.sh -> caller.py)", out)
+
     def test_gh_in_the_step_itself_needs_the_token(self):
         code, out = self.check(workflow("gh api repos/o/r"))
         self.assertEqual(code, 1, out)
