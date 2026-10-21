@@ -507,6 +507,35 @@ class Shapes(unittest.TestCase):
             self.assertIn("internal note", ptc.kinds(line, "a.rs"), line)
         self.assertIn("internal tracker", ptc.kinds("`memory/text-to-print.md`", "a.rs"))
 
+    def test_note_prefixed_identifiers_in_code_pass(self):
+        # a field or variable whose name starts like a note name is code, not a note (real lines)
+        for line in ("        success_count: usize,", "                success_count: 4,", "                success_count,",
+                     "                    | (*success_count as u64) << 16", "let handoff_queue = Vec::new();",
+                     "fn feedback_gain(x: f32) -> f32 { x }"):
+            self.assertNotIn("internal note", ptc.kinds(line, "src/journal.rs"), line)
+        self.assertNotIn("internal note", ptc.kinds("success_rate = 0.5", "tools/a.py"))
+        self.assertEqual([f for f in ptc.scan_text("src/a.rs", "struct S {\n    success_count: usize,\n}\n", "src/a.rs")
+                          if f.endswith("internal note")], [])
+
+    def test_note_names_in_comments_strings_and_prose_are_found(self):
+        # the template lines that name a note in a comment, and the other real forms
+        for line, path in (("# Dependabot 設定 (feedback_dependabot_major_bump_initial_wave 準拠)", ".github/dependabot.yml"),
+                           ("# Rust toolchain pin (feedback_clippy_rust_version_drift 準拠)", "rust-toolchain.toml"),
+                           ("// see feedback_ci_pitfall_x", "src/a.rs"), ("x = 1 // see feedback_ci_pitfall_x", "src/a.rs"),
+                           ('println!("see feedback_ci_pitfall_x");', "src/a.rs"), ("x = 1; // feedback_ci_pitfall_x.md", "src/a.rs"), ('let p = "feedback_ci_pitfall_x.md";', "src/a.rs"),
+                           ("feedback_ci_pitfall_x を参照", "docs/a.md"), ("# discipline_multi_session_model", "a.py"),
+                           ("detail: success_alice_lol_fix", "README.md"),
+                           ("      - name: see feedback_ci_pitfall_x", ".github/workflows/ci.yml"),
+                           ("      private dep (feedback_ci_workspace_transitive_path_dep), so", ".github/actions/x/action.yml")):
+            self.assertIn("internal note", ptc.kinds(line, path), (line, path))
+        # inside a block comment or a docstring spread over lines
+        text = "/*\n * see handoff_20261022_note\n */\nfn f() {}\n"
+        self.assertEqual([f for f in ptc.scan_text("src/a.rs", text, "src/a.rs") if f.endswith("internal note")],
+                         ["src/a.rs:2: internal note"])
+        text = 'def f():\n    """\n    see feedback_x_yz\n    """\n    feedback_gain = 1\n'
+        self.assertEqual([f for f in ptc.scan_text("a.py", text, "a.py") if f.endswith("internal note")],
+                         ["a.py:3: internal note"])
+
     def test_link_like_code_and_toml_headers_pass(self):
         for line, path in (("[[package]]", "Cargo.lock"), ("[[kv_namespaces]]", "wrangler.toml"),
                            ("  [[bin]]  # main", "Cargo.toml"), ("[[gate]] entry", "docs/a.md"),

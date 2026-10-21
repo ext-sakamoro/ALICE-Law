@@ -99,7 +99,9 @@ FORBIDDEN = [
     # array-of-tables header at the start of a line in a .toml file is not one (kinds())
     ("note link", re.compile(r"\[\[[A-Za-z][A-Za-z0-9.]*[_\-][A-Za-z0-9_.\-]*\]\]")),
     # names of private notes in prose: the note-file prefixes, "memory `<name>`", `<name>.md`
-    ("internal note", re.compile(r"(?<![A-Za-z0-9_])(?:feedback|discipline|success|handoff)_[a-z0-9_]{4,}"
+    # (a bare `feedback_…` / `success_…` name without `.md` is NOTE_NAME_RE: in a code file it is read
+    # only inside a comment or a string, since a field such as `success_count` is code, not a note)
+    ("internal note", re.compile(r"(?<![A-Za-z0-9_])(?:feedback|discipline|success|handoff)_[a-z0-9_]{4,}\.md"
                                  r"|(?<![A-Za-z0-9_])(?:project|reference)_alice_[a-z0-9_]+"
                                  r"|(?<![A-Za-z0-9_])(?:project|reference)_[a-z0-9_]{4,}\.md"
                                  r"|(?<![A-Za-z\-])(?i:memory|memo)\s*`[A-Za-z0-9_\-]+(?:\.md)?`"
@@ -974,6 +976,92 @@ def private_paths(line: str) -> bool:
                for m in HOME_PATH_RE.finditer(line))
 
 
+NOTE_NAME_RE = re.compile(r"(?<![A-Za-z0-9_])(?:feedback|discipline|success|handoff)_[a-z0-9_]{4,}")
+# code files whose comments and strings are read apart from their code tokens, by comment style
+SLASH_COMMENT_EXTS = (".rs", ".c", ".h", ".cc", ".cpp", ".hpp", ".cxx", ".m", ".mm", ".js", ".mjs", ".cjs", ".ts",
+                      ".tsx", ".jsx", ".go", ".java", ".kt", ".kts", ".swift", ".cs", ".dart", ".scala", ".zig",
+                      ".wgsl", ".glsl", ".hlsl", ".metal", ".proto", ".gradle")
+# (YAML is not here: its values are mostly unquoted text, such as a step name or a block scalar, so it is prose)
+HASH_COMMENT_EXTS = (".py", ".pyi", ".sh", ".bash", ".zsh", ".rb", ".pl", ".r", ".toml", ".cfg",
+                     ".mk", ".cmake", ".nix", ".tf", ".ps1")
+HASH_COMMENT_NAMES = ("Makefile", "Dockerfile", "Gemfile", "Rakefile", ".gitignore", ".gitattributes")
+
+
+def comment_style(path: str | None) -> str | None:
+    """"slash" / "hash" for a code file whose comments and strings are read apart from its code;
+    None for prose (Markdown, text) and other files, where the whole line is prose"""
+    if path is None:
+        return None
+    name = path.rsplit("/", 1)[-1]
+    low = name.lower()
+    if low.endswith(SLASH_COMMENT_EXTS):
+        return "slash"
+    if low.endswith(HASH_COMMENT_EXTS) or name in HASH_COMMENT_NAMES:
+        return "hash"
+    return None
+
+
+def prose_spans(line: str, style: str, state: dict) -> list[tuple[int, int]]:
+    """the comment and string parts of a code line as [start, end) spans; `state` carries an open
+    block comment (slash style) or triple-quoted string (hash style) on to the next line"""
+    spans: list[tuple[int, int]] = []
+    i, n = 0, len(line)
+    while i < n:
+        if state.get("block"):
+            end = line.find("*/", i)
+            stop = n if end < 0 else end + 2
+            spans.append((i, stop))
+            state["block"] = end < 0
+            i = stop
+            continue
+        if state.get("triple"):
+            q = state["triple"]
+            end = line.find(q, i)
+            stop = n if end < 0 else end + 3
+            spans.append((i, stop))
+            state["triple"] = q if end < 0 else None
+            i = stop
+            continue
+        c = line[i]
+        if style == "slash" and line.startswith("//", i):
+            spans.append((i, n))
+            break
+        if style == "slash" and line.startswith("/*", i):
+            state["block"] = True
+            continue
+        if style == "hash" and c == "#":
+            spans.append((i, n))
+            break
+        if style == "hash" and (line.startswith('"' * 3, i) or line.startswith("'" * 3, i)):
+            state["triple"] = line[i:i + 3]
+            spans.append((i, i + 3))
+            i += 3
+            continue
+        if c == '"' or (style == "hash" and c == "'"):
+            j = i + 1
+            while j < n and line[j] != c:
+                j += 2 if line[j] == "\\" else 1
+            spans.append((i, min(j + 1, n)))
+            i = j + 1
+            continue
+        i += 1
+    return spans
+
+
+def note_names(line: str, path: str | None, spans: list[tuple[int, int]] | None = None) -> list[str]:
+    """bare note names (`feedback_…`): every one in prose; in a code file only those inside a
+    comment or a string (`spans` from prose_spans, else the line is read on its own)"""
+    hits = list(NOTE_NAME_RE.finditer(line))
+    if not hits:
+        return []
+    style = comment_style(path)
+    if style is None:
+        return [m.group(0) for m in hits]
+    if spans is None:
+        spans = prose_spans(line, style, {})
+    return [m.group(0) for m in hits if any(a <= m.start() < b for a, b in spans)]
+
+
 ALLOWABLE = ("private name", "agent process", "note link")
 
 
@@ -982,7 +1070,7 @@ def allowed_entry(path: str, token: str) -> str | None:
     return next((h for h in (allow_hash(sc, token) for sc in scopes(path)) if h in ALLOW_STATE["allowed"]), None)
 
 
-def kinds(line: str, path: str | None = None) -> list[str]:
+def kinds(line: str, path: str | None = None, spans: list[tuple[int, int]] | None = None) -> list[str]:
     """the kinds of internal word in a line (labels, not the words); a private name, an agent
     word or a note link that this repository's allow-list allows in `path` is not a finding"""
     tokens: dict[str, list[str]] = {}
@@ -998,6 +1086,9 @@ def kinds(line: str, path: str | None = None) -> list[str]:
                 and TOML_TABLE_RE.match(line):
             continue  # a TOML array-of-tables header ("[[bin]]", "[[kv_namespaces]]")
         tokens.setdefault(label, []).extend(hits)
+    notes = note_names(line, path, spans)
+    if notes:
+        tokens.setdefault("internal note", []).extend(notes)
     names = private_names(line)
     if names:
         tokens["private name"] = names
@@ -1030,8 +1121,9 @@ COMMENT_LEAD_RE = re.compile(r"^\s*(?://[/!]?|#+|\*+|--|;+|>+)?\s*")
 def scan_text(where: str, text: str, path: str | None = None) -> list[str]:
     out = []
     lines = text.splitlines()
+    style, state = comment_style(path), {}
     for n, line in enumerate(lines, 1):
-        found = kinds(line, path)
+        found = kinds(line, path, prose_spans(line, style, state) if style else None)
         if RELEASE_RE.search(line) and any(DEVICE_RE.search(lines[k]) for k in range(max(0, n - 2), min(len(lines), n + 1))):
             found.append("device detail")
         if NEXT_SESSION_RE.search(line):
