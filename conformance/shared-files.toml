@@ -24,8 +24,7 @@ exempt = { "ALICE-Law" = "runs its own scripts/public_text_check.py in place; th
 
 [[file]]
 path = "scripts/alice_siblings_check.py"
-sha256 = "9b887f1b081ac3ece0c9d341d5d7ddc828f74ba29a467216f33e0a9e7b64c04e"
-source = { repo = "ALICE-Analytics", rev = "2e1607252a1eac29bcf68f35acd8976b158101e9" }
+pending = { since = "2026-10-21", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "9aed732fc243df38538d163d49c8c9b8d743bf596b0dc5350f8911dfe5e5dc40", owner = "ALICE-Analytics", planned = "d26213f50db9ba82f56cedc47603381fd5a57af4", moved_from = { planned = "ce427375eee3183d239ec57efebfd9e791bb2b99", target = "9b887f1b081ac3ece0c9d341d5d7ddc828f74ba29a467216f33e0a9e7b64c04e" }, first_move = true, variants = { "9b887f1b081ac3ece0c9d341d5d7ddc828f74ba29a467216f33e0a9e7b64c04e" = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
@@ -196,8 +195,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge"]
 
 [[file]]
 path = "scripts/test_alice_siblings_check.py"
-sha256 = "1b14558054eba8b3c7c4b1af9c50d6ebabe4be205568c7f06129f60a0278f2c3"
-source = { repo = "ALICE-Analytics", rev = "12630d7e24575bd27022d137a69785d5d196f550" }
+pending = { since = "2026-10-21", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "2bce68b5ea840e056aa29ac0e60d99797afe4e69b5025a2629d9d7f79f19a00e", owner = "ALICE-Analytics", planned = "b191fb9225eed96cf73b20344fc9d2196b2a95ab", moved_from = { planned = "baf6bd537db18ef4e0688f36e8931908dac9cbf2", target = "1b14558054eba8b3c7c4b1af9c50d6ebabe4be205568c7f06129f60a0278f2c3" }, first_move = true, variants = { "1b14558054eba8b3c7c4b1af9c50d6ebabe4be205568c7f06129f60a0278f2c3" = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
