@@ -118,6 +118,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `release-train.toml` `consumer-expected-failure` `expect.label`: the primary span's label, so a new error on the same text elsewhere is refused (alice-db's entry pins it)
 
 ### Changed
+- `conformance/shared-files.toml`: 各 main から再生成 `scripts/run_tests.sh` / `scripts/test_run_tests.py` / `scripts/test_public_text.py` の新しい bytes を ALICE-Physics 以外の main が持った (variants が移った) `scripts/test_public_text.py` は owner の main が target を持ったので moved_from を外す 3 行とも pending のまま、古い bytes は ALICE-Physics だけ 写しの数 931 は不変
 - `conformance/shared-files.toml`: `scripts/test_public_text.py` (owner ALICE-SDF) の計画された行を新しい bytes (planned 18abebe1、target sha256 7ed40dbc) に移す moved_from は ALICE-SDF の main が持つ 687b66e5 / 06943fbf 新しい版は試験用の tree の setUp が pin の rev と sha256 だけを使い、3 行の pin (config-sha256 を含む) を別の試験で見る (.public-text.toml を持つ repo で setUp が落ちていた) 移動の起点が main にあるので `conformance/planned/687b66e5…` を除き、新しい bytes を `conformance/planned/18abebe1…` に置く
 - `conformance/shared-files.toml`: 各 main から再生成 `scripts/run_tests.sh` / `scripts/test_run_tests.py` (owner ALICE-LLM) と `scripts/test_public_text.py` (owner ALICE-SDF) は owner の main が target を持ったので first_move を外す (ALICE-Crypto と ALICE-Zip の写しも target) ALICE-LLM が `scripts/shared_files.sh` / `scripts/test_shared_files.py` を持ったので両行に加える conformance-live の --expect-copies を 929 から 931 にする
 - `conformance/line-refs-baseline.toml`: ALICE-Physics 18 -> 0 (manifest の行番号参照をすべて anchor にした ALICE-Physics の main c3b7ba2 の後)
