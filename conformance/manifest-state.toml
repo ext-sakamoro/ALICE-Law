@@ -67,8 +67,8 @@ crates = ["alice-ml"]
 
 [manifest."ALICE-Physics"]
 crates = ["alice-physics"]
-"pass" = 8
-"fail-known" = 5
+"pass" = 9
+"fail-known" = 4
 "unverified" = 1
 "n/a" = 0
 
