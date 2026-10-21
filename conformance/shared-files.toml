@@ -173,7 +173,8 @@ repos = ["ALICE-Law", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/run_tests.sh"
-pending = { since = "2026-10-20", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "30f6c55ec1ac9ae8a958fcbd687cdb0cac6ae1057120978ca5348650c5188a7e", owner = "ALICE-LLM", planned = "432d148c1c4294c755588514740222e8846ffd2d", moved_from = { planned = "1c3d0346e51d048176ab8462b57e8f752701b130", target = "58e6ce9e1182ace89475c5175441ff026a673565108ea83b9e0d300f926d3c9f" }, variants = { "30f6c55ec1ac9ae8a958fcbd687cdb0cac6ae1057120978ca5348650c5188a7e" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"], "58e6ce9e1182ace89475c5175441ff026a673565108ea83b9e0d300f926d3c9f" = ["ALICE-Physics"] } }
+sha256 = "30f6c55ec1ac9ae8a958fcbd687cdb0cac6ae1057120978ca5348650c5188a7e"
+source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -311,7 +312,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
 path = "scripts/test_public_text.py"
-pending = { since = "2026-10-20", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "7ed40dbcb935dd91cf7482177a90c491bf8021d51258995c759e5c39ffa6722e", owner = "ALICE-SDF", planned = "18abebe1e69aba26d544df197f1c6f3cece0d409", variants = { "5b579f13185d78766fc30c465f287b6af69004c9d21f3e3131837ee15ca527cf" = ["ALICE-Physics"], "7ed40dbcb935dd91cf7482177a90c491bf8021d51258995c759e5c39ffa6722e" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"] } }
+sha256 = "7ed40dbcb935dd91cf7482177a90c491bf8021d51258995c759e5c39ffa6722e"
+source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -322,7 +324,8 @@ repos = ["ALICE-Law", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_run_tests.py"
-pending = { since = "2026-10-20", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "2653a094c4393add2b665204ae0c0acfee9e5793ece9ca85f9e71ea5ceed72c0", owner = "ALICE-LLM", planned = "3ed55399469228d74df29db86520df1d36417f19", moved_from = { planned = "5669ae04f4b272c56d9aea920cf27d8e28002583", target = "0cabbc6e748e5aa8fbe350f4cec4b071f7b46dcae98dda7ebf4bc3742724887e" }, variants = { "0cabbc6e748e5aa8fbe350f4cec4b071f7b46dcae98dda7ebf4bc3742724887e" = ["ALICE-Physics"], "2653a094c4393add2b665204ae0c0acfee9e5793ece9ca85f9e71ea5ceed72c0" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Sync", "ALICE-Zip"] } }
+sha256 = "2653a094c4393add2b665204ae0c0acfee9e5793ece9ca85f9e71ea5ceed72c0"
+source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
