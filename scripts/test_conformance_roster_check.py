@@ -114,7 +114,7 @@ class Check(unittest.TestCase):
                 calls.append(repo)
                 return repos.get(repo), set(PATHS)
             out = io.StringIO()
-            args = ["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing", str(d / "m.toml"),
+            args = ["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing", str(d / "m.toml"),
                     "--state", str(st), "--pending", str(d / "p.toml"),
                     "--line-baseline", exact_line_baseline(d, repos)] + (["--write"] if write else [])
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
@@ -594,7 +594,7 @@ class Internal(unittest.TestCase):
                 raise AssertionError(f"--internal read {repo}")
             out = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-                code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
+                code = crc.main(["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
                                  str(d / "m.toml"), "--state", str(d / "s.toml"), "--internal"], fetch=fetch)
             return code, out.getvalue()
 
@@ -676,7 +676,7 @@ class NaEvidence(unittest.TestCase):
             (d / "g.toml").write_text(GATES, encoding="utf-8")
             out = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-                code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
+                code = crc.main(["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
                                  str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
                                  "--write", "--line-baseline", exact_line_baseline(d, {"Alpha": text, "Beta": manifest()})],
                                 fetch=fetch)
@@ -774,7 +774,7 @@ class Pending(unittest.TestCase):
             (d / "r.toml").write_text(ROSTER, encoding="utf-8")
             (d / "g.toml").write_text(GATES, encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
+                self.assertEqual(crc.main(["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
                                            str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending",
                                            str(d / "p.toml"), "--write", "--line-baseline",
                                            exact_line_baseline(d, mains)],

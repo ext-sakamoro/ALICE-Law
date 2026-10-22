@@ -49,7 +49,7 @@ class LeakDetector(unittest.TestCase):
         # the default is bound at call time: the poisoned root has no release-train.toml, and the error names it
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            code = lls.main(["--candidate", "Alpha=/c@abc"], remote=lambda repo: (None, set()))
+            code = lls.main(["--today", "2026-10-19", "--candidate", "Alpha=/c@abc"], remote=lambda repo: (None, set()))
         self.assertNotEqual(code, 0, out.getvalue())
         self.assertIn(str(crc.ROOT / "release-train.toml"), out.getvalue())
 
@@ -110,7 +110,7 @@ class LandLawState(unittest.TestCase):
     def run_land(self, *args: str, local=None):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            code = lls.main(list(args), remote=self.remote, local=local or self.fake_local({}), root=self.root,
+            code = lls.main(list(args) if "--today" in args else ["--today", "2026-10-19", *args], remote=self.remote, local=local or self.fake_local({}), root=self.root,
                             resolve=lambda where, rev: (rev * 40)[:40], at=self.at)
         return code, out.getvalue()
 
@@ -156,7 +156,7 @@ class LandLawState(unittest.TestCase):
         self.mains["Alpha"] = PASSED_G3
         out2 = io.StringIO()
         with contextlib.redirect_stdout(out2), contextlib.redirect_stderr(out2):
-            code = crc.main(["--roster", str(self.root / "release-train.toml"),
+            code = crc.main(["--today", "2026-10-19", "--roster", str(self.root / "release-train.toml"),
                              "--gates", str(self.root / "conformance" / "gates.toml"),
                              "--missing", str(self.root / "conformance" / "missing-manifests.toml"),
                              "--state", str(self.root / "conformance" / "manifest-state.toml"),
@@ -338,7 +338,7 @@ class LandLawState(unittest.TestCase):
         def live(*flags):
             out = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-                code = crc.main(["--roster", str(self.root / "release-train.toml"),
+                code = crc.main(["--today", "2026-10-19", "--roster", str(self.root / "release-train.toml"),
                                  "--gates", str(self.root / "conformance" / "gates.toml"),
                                  "--missing", str(self.root / "conformance" / "missing-manifests.toml"),
                                  "--state", str(self.root / "conformance" / "manifest-state.toml"),
@@ -373,7 +373,7 @@ class LandLawState(unittest.TestCase):
         for rev, want in ((old, 0), (new, 1)):
             with self.subTest(rev=rev[:7]):
                 with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-                    code = lls.main(["--candidate", f"Alpha={repo}@{rev}"], remote=self.remote, root=self.root,
+                    code = lls.main(["--today", "2026-10-19", "--candidate", f"Alpha={repo}@{rev}"], remote=self.remote, root=self.root,
                                     at=self.at)
                 self.assertEqual(code, want, out.getvalue())
 

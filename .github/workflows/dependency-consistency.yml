@@ -68,6 +68,12 @@ jobs:
       - name: Test the landing check of the conformance state
         run: python3 scripts/test_land_law_state.py
 
+      # a test that leaves the date to the wall clock goes red days after it was written
+      - name: The date-aging tests with the clock 10 days ahead (tests, then the run)
+        run: |
+          python3 scripts/test_run_tests_shifted_clock.py
+          python3 scripts/run_tests_shifted_clock.py
+
       - name: Every step that reaches gh has GH_TOKEN (tests, then check)
         run: |
           python3 scripts/test_workflow_gh_token_check.py

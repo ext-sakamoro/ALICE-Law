@@ -20,6 +20,8 @@ python3 scripts/test_readme_roster_check.py
 python3 scripts/test_conformance_docs_schema_check.py
 python3 scripts/test_conformance_roster_check.py
 python3 scripts/test_land_law_state.py
+python3 scripts/test_run_tests_shifted_clock.py
+python3 scripts/run_tests_shifted_clock.py
 python3 scripts/test_workflow_gh_token_check.py
 python3 scripts/workflow_gh_token_check.py
 python3 scripts/test_g11_table_check.py
