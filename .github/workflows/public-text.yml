@@ -32,6 +32,13 @@ jobs:
       - name: Test the checker
         run: python scripts/test_public_text_check.py
 
+      - name: Test the licence files checker
+        run: python scripts/test_licence_files_check.py
+
+      # the declared licences have their full texts in this repository
+      - name: The licence files
+        run: python scripts/licence_files_check.py --repo .
+
       - name: The tree
         run: python scripts/public_text_check.py --tree HEAD
 
