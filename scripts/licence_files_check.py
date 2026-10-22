@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Check that a repository's licence files are the licences its Cargo.toml declares.
+"""Check that a repository's licence files are the licences its manifest declares.
 
     licence_files_check.py --repo DIR [--ref REF] [--agpl-report-only]
 
 The declaration is the `license` of [package] (else [workspace.package]) in Cargo.toml at REF (default HEAD),
-an SPDX expression. For each licence in it:
+an SPDX expression; a repository with no such declaration (a Node shell) uses the `license` of package.json at the
+root or one directory down (frontend/package.json), and package.json files that disagree are a finding.
+For each licence in it:
   MIT               a root file LICENSE-MIT or LICENSE holding the MIT licence: the standard text word for word
                     from "Permission is hereby granted" to the end, before it only an optional "MIT License"
                     title and copyright lines (a text with clauses added is not the MIT licence)
@@ -17,13 +19,14 @@ TRADEMARK_NOTICE, when present, must not name a licence file the repository does
 ("(see <files> and the `license` field …)"; "the LICENSE-* files" needs at least one LICENSE-* file).
 
 --agpl-report-only prints the AGPL findings but does not fail on them.
-Exit 0 when every declared licence has its file, 1 on a finding, 2 when nothing was compared (no Cargo.toml, no
-declaration) or git failed.
+Exit 0 when every declared licence has its file, 1 on a finding, 2 when nothing was compared (no Cargo.toml or
+package.json declaration) or git failed.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -72,16 +75,30 @@ def check(repo: str, ref: str, agpl_report_only: bool = False) -> tuple[int, lis
     """(compared, findings, reports): one finding per declared licence without its file"""
     root = [p for p in git(repo, "ls-tree", "--name-only", ref).split("\n") if p]
     show = lambda p: git(repo, "show", f"{ref}:{p}")  # noqa: E731
-    if "Cargo.toml" not in root:
-        return 0, [], []
-    manifest = tomllib.loads(show("Cargo.toml"))
-    expr = (manifest.get("package") or {}).get("license") or ((manifest.get("workspace") or {}).get("package") or {}).get("license")
-    if not isinstance(expr, str) or not expr.strip():
-        return 0, [], []
-    files = {p: show(p) for p in root if re.match(r"(?i)^licen[cs]e", p)}
     findings: list[str] = []
     reports: list[str] = []
     compared = 0
+    expr = None
+    if "Cargo.toml" in root:
+        manifest = tomllib.loads(show("Cargo.toml"))
+        expr = (manifest.get("package") or {}).get("license") or ((manifest.get("workspace") or {}).get("package") or {}).get("license")
+    if not isinstance(expr, str) or not expr.strip():
+        # no Cargo.toml declaration (a Node shell): the `license` of package.json at the root or one directory down
+        tracked = [p for p in git(repo, "ls-tree", "-r", "--name-only", ref).split("\n")
+                   if p == "package.json" or re.fullmatch(r"[^/]+/package\.json", p)]
+        declared = {}
+        for p in tracked:
+            lic = json.loads(show(p)).get("license")
+            if isinstance(lic, str) and lic.strip():
+                declared[p] = lic.strip()
+        if not declared:
+            return 0, [], []
+        expr = next(iter(declared.values()))
+        if len(set(declared.values())) > 1:
+            compared += 1
+            findings.append("the package.json files disagree on the licence: "
+                            + ", ".join(f"{p} {v}" for p, v in declared.items()))
+    files = {p: show(p) for p in root if re.match(r"(?i)^licen[cs]e", p)}
     for lid in dict.fromkeys(spdx_ids(expr)):
         compared += 1
         if lid == "MIT":
@@ -129,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     try:
         compared, findings, reports = check(a.repo, a.ref, a.agpl_report_only)
-    except (subprocess.CalledProcessError, tomllib.TOMLDecodeError) as e:
+    except (subprocess.CalledProcessError, tomllib.TOMLDecodeError, json.JSONDecodeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     for r in reports:
@@ -138,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"found: {f}")
     print(f"licence files: {len(findings)} findings, {len(reports)} reports in {compared} checks at {a.ref}")
     if compared == 0:
-        print("error: nothing was compared (no Cargo.toml or no licence declared)", file=sys.stderr)
+        print("error: nothing was compared (no licence declared in Cargo.toml or package.json)", file=sys.stderr)
         return 2
     return 1 if findings else 0
 

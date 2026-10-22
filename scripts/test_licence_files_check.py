@@ -156,6 +156,46 @@ class Declared(unittest.TestCase):
         self.assertEqual(f, [])
 
 
+def package_json(licence: str | None) -> str:
+    return "{\n  \"name\": \"x\",\n  \"private\": true" + (f",\n  \"license\": \"{licence}\"" if licence else "") + "\n}\n"
+
+
+class NodeShell(unittest.TestCase):
+    """a repository with no Cargo.toml (a Next.js shell) declares its licence in package.json, at the root or one
+    directory down (frontend/package.json); before, the check compared nothing there and exited 2"""
+
+    def run_check(self, files, **kw):
+        return lfc.check(repo(files), "HEAD", **kw)
+
+    def test_frontend_package_json_with_the_agpl_text(self):
+        n, f, _ = self.run_check({"frontend/package.json": package_json("AGPL-3.0-or-later"), "LICENSE": AGPL})
+        self.assertEqual((n, f), (1, []))
+
+    def test_root_package_json_without_its_text(self):
+        n, f, _ = self.run_check({"package.json": package_json("MIT"), "LICENSE": AGPL})
+        self.assertEqual(n, 1)
+        self.assertEqual(len(f), 1)
+        self.assertIn("MIT", f[0])
+
+    def test_package_jsons_that_disagree(self):
+        n, f, _ = self.run_check({"frontend/package.json": package_json("AGPL-3.0-or-later"),
+                                  "admin/package.json": package_json("MIT"), "LICENSE": AGPL})
+        self.assertTrue(any("disagree" in x for x in f), f)
+
+    def test_a_deeper_package_json_is_not_the_declaration(self):
+        n, _, _ = self.run_check({"frontend/vendor/x/package.json": package_json("MIT"), "LICENSE": AGPL})
+        self.assertEqual(n, 0)
+
+    def test_a_package_json_without_a_licence_declares_nothing(self):
+        n, _, _ = self.run_check({"frontend/package.json": package_json(None), "LICENSE": AGPL})
+        self.assertEqual(n, 0)
+
+    def test_cargo_toml_is_read_first(self):
+        n, f, _ = self.run_check({"Cargo.toml": cargo("AGPL-3.0-or-later"), "frontend/package.json": package_json("MIT"),
+                                  "LICENSE": AGPL})
+        self.assertEqual((n, f), (1, []))
+
+
 class Trademark(unittest.TestCase):
     def test_generic_wording_with_licence_files(self):
         _, f, _ = lfc.check(repo({"Cargo.toml": cargo("MIT"), "LICENSE-MIT": MIT,
@@ -184,6 +224,12 @@ class Exit(unittest.TestCase):
     def test_nothing_declared_exits_2(self):
         self.assertEqual(self.cli({"README.md": "x\n"}).returncode, 2)
         self.assertEqual(self.cli({"Cargo.toml": '[package]\nname = "x"\n'}).returncode, 2)
+
+    def test_node_shell_exits_0(self):
+        files = {"frontend/package.json": package_json("AGPL-3.0-or-later"), "LICENSE": AGPL}
+        p = self.cli(files)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("in 1 checks", p.stdout)
 
     def test_finding_exits_1_and_ok_exits_0(self):
         self.assertEqual(self.cli({"Cargo.toml": cargo("MIT")}).returncode, 1)
