@@ -167,6 +167,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - This repository requires alice-edge 0.2; `release-train.toml`: alice-edge 0.2.0 is published (its pending entry removed, 7 expected problems remain until alice-lol 0.4.0) and alice-ml is held at its published 0.2.0
 - `alice-lol` is required as `>=0.4.1, <0.6` instead of `0.4`, in Cargo.toml and e2e/Cargo.toml, so the 0.5 series resolves. Main mode's `[patch.crates-io]` (scripts/main_mode.py) now takes the ALICE-LOL main branch once it is 0.5; with `0.4` Cargo would leave that patch unused and take 0.4 from crates.io. Cargo.lock moves alice-lol from 0.4.0 to 0.4.1
 - `conformance/shared-files.toml`: 各 main から再生成 `scripts/package_integrity.py` / `scripts/test_package_integrity.py` は ALICE-DB (af756b63) と ALICE-Edge (f2ccfe5e) の main も target を持ったので uniform の行に戻し、`conformance/planned/` の 4cd9d627 / 0c67c84b を外す 写しの数の固定は 960 から 968 (4 + 4)
+- `conformance/shared-files.toml`: `scripts/package_integrity.py` と `scripts/test_package_integrity.py` (owner ALICE-Analytics) を次の移動の計画された行にし、計画した bytes を `conformance/planned/` に置く (planned 7704460e / b8f1ee85、target sha256 5e1f3809 / 121560f8、crates.io の sparse index が 404 を返す crate を未公開として読み、それ以外の失敗は従来どおり止める版) moved_from は 4 repo の main が持つ e3624ab7 / 417efd25 写しの数の固定は 968 から 960 (2 行 × 4 repo が uniform でなくなる)
 
 ### Fixed
 - `scripts/test_land_law_state.py` と `scripts/test_conformance_roster_check.py`: tool を呼ぶ試験はすべて `--today` を渡す 2026-10-18 の fixture を日付なしで読む試験が、2026-10-22 (UTC) から "4 days old" で exit 2 になり、main の試験が落ちていた
