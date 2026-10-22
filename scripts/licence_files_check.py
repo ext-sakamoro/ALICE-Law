@@ -88,7 +88,10 @@ def check(repo: str, ref: str, agpl_report_only: bool = False) -> tuple[int, lis
                    if p == "package.json" or re.fullmatch(r"[^/]+/package\.json", p)]
         declared = {}
         for p in tracked:
-            lic = json.loads(show(p)).get("license")
+            doc = json.loads(show(p))
+            if not isinstance(doc, dict):
+                raise ValueError(f"{p} is not a JSON object")
+            lic = doc.get("license")  # npm's old `{"type": ...}` form is not a declaration
             if isinstance(lic, str) and lic.strip():
                 declared[p] = lic.strip()
         if not declared:
@@ -146,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     try:
         compared, findings, reports = check(a.repo, a.ref, a.agpl_report_only)
-    except (subprocess.CalledProcessError, tomllib.TOMLDecodeError, json.JSONDecodeError) as e:
+    except (subprocess.CalledProcessError, tomllib.TOMLDecodeError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     for r in reports:

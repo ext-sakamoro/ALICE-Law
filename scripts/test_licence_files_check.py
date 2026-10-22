@@ -190,6 +190,12 @@ class NodeShell(unittest.TestCase):
         n, _, _ = self.run_check({"frontend/package.json": package_json(None), "LICENSE": AGPL})
         self.assertEqual(n, 0)
 
+    def test_an_object_licence_is_not_a_declaration(self):
+        # npm's old form `"license": {"type": "MIT"}`
+        files = {"frontend/package.json": '{"name": "x", "license": {"type": "MIT"}}\n', "LICENSE": AGPL}
+        n, f, _ = self.run_check(files)
+        self.assertEqual((n, f), (0, []))
+
     def test_cargo_toml_is_read_first(self):
         n, f, _ = self.run_check({"Cargo.toml": cargo("AGPL-3.0-or-later"), "frontend/package.json": package_json("MIT"),
                                   "LICENSE": AGPL})
@@ -230,6 +236,11 @@ class Exit(unittest.TestCase):
         p = self.cli(files)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertIn("in 1 checks", p.stdout)
+
+    def test_a_package_json_that_is_not_an_object_exits_2(self):
+        for text in ("[1, 2]\n", "{not json\n"):
+            p = self.cli({"frontend/package.json": text, "LICENSE": AGPL})
+            self.assertEqual(p.returncode, 2, text + p.stdout + p.stderr)
 
     def test_finding_exits_1_and_ok_exits_0(self):
         self.assertEqual(self.cli({"Cargo.toml": cargo("MIT")}).returncode, 1)
