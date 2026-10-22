@@ -196,10 +196,65 @@ class NodeShell(unittest.TestCase):
         n, f, _ = self.run_check(files)
         self.assertEqual((n, f), (0, []))
 
-    def test_cargo_toml_is_read_first(self):
-        n, f, _ = self.run_check({"Cargo.toml": cargo("AGPL-3.0-or-later"), "frontend/package.json": package_json("MIT"),
+    def test_cargo_and_package_json_that_agree(self):
+        n, f, _ = self.run_check({"Cargo.toml": cargo("AGPL-3.0-or-later"),
+                                  "frontend/package.json": package_json("AGPL-3.0-or-later"), "LICENSE": AGPL})
+        self.assertEqual((n, f), (2, []))  # the package.json and the AGPL text
+
+    def test_a_package_json_that_differs_from_cargo_names_both(self):
+        n, f, _ = self.run_check({"Cargo.toml": cargo("AGPL-3.0-only"), "frontend/package.json": package_json("MIT"),
                                   "LICENSE": AGPL})
-        self.assertEqual((n, f), (1, []))
+        self.assertEqual(f, ["frontend/package.json declares MIT and Cargo.toml declares AGPL-3.0-only"])
+
+    def test_root_package_json_is_compared_too(self):
+        _, f, _ = self.run_check({"Cargo.toml": cargo("AGPL-3.0-or-later OR LicenseRef-Commercial"),
+                                  "package.json": package_json("AGPL-3.0-or-later"), "LICENSE": AGPL,
+                                  "LICENSE-COMMERCIAL": "terms\n"})
+        self.assertEqual(len(f), 1)
+        self.assertIn("package.json declares AGPL-3.0-or-later", f[0])
+
+
+class PackageJsonExemption(unittest.TestCase):
+    """a package that is its own distribution may declare another licence, only where listed (repository, path)"""
+
+    def sdf(self, with_package=True, licence="SEE LICENSE IN LICENSE.md"):
+        files = {"Cargo.toml": cargo("Apache-2.0"), "LICENSE": APACHE}
+        if with_package:
+            files["vrchat-package/package.json"] = package_json(licence)
+        return files
+
+    def test_each_listed_exemption_has_a_reason(self):
+        self.assertGreater(len(lfc.PACKAGE_JSON_EXEMPT), 0)
+        for key, why in lfc.PACKAGE_JSON_EXEMPT.items():
+            self.assertGreaterEqual(len(why.split()), 6, key)
+
+    def test_the_sdf_vrchat_package(self):
+        _, f, _ = lfc.check(repo(self.sdf()), "HEAD", repo_name="ALICE-SDF")
+        self.assertEqual(f, [])
+
+    def test_the_font_scripts_package(self):
+        files = {"Cargo.toml": cargo("AGPL-3.0-only OR LicenseRef-Commercial"), "LICENSE-AGPL": AGPL,
+                 "LICENSE-COMMERCIAL": "terms\n", "scripts/package.json": package_json("ISC")}
+        _, f, _ = lfc.check(repo(files), "HEAD", repo_name="ALICE-Font")
+        self.assertEqual(f, [])
+
+    def test_the_same_path_in_another_repository_is_a_finding(self):
+        _, f, _ = lfc.check(repo(self.sdf()), "HEAD", repo_name="ALICE-Other")
+        self.assertEqual(len(f), 1)
+        self.assertIn("vrchat-package/package.json declares", f[0])
+
+    def test_an_unused_exemption_is_a_finding(self):
+        for files in (self.sdf(with_package=False), self.sdf(licence="Apache-2.0")):
+            _, f, _ = lfc.check(repo(files), "HEAD", repo_name="ALICE-SDF")
+            self.assertEqual(len(f), 1, f)
+            self.assertIn("is not used", f[0])
+
+    def test_the_name_comes_from_origin(self):
+        d = repo(self.sdf())
+        subprocess.run(["git", "-C", d, "remote", "add", "origin", "git@github.com:someone/ALICE-SDF.git"], check=True)
+        self.assertEqual(lfc.repo_name_of(d), "ALICE-SDF")
+        _, f, _ = lfc.check(d, "HEAD")
+        self.assertEqual(f, [])
 
 
 class Trademark(unittest.TestCase):

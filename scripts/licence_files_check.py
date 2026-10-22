@@ -5,7 +5,10 @@
 
 The declaration is the `license` of [package] (else [workspace.package]) in Cargo.toml at REF (default HEAD),
 an SPDX expression; a repository with no such declaration (a Node shell) uses the `license` of package.json at the
-root or one directory down (frontend/package.json), and package.json files that disagree are a finding.
+root or one directory down (frontend/package.json), and package.json files that disagree are a finding. When
+Cargo.toml declares a licence, each of those package.json files must declare the same one (a finding names both),
+unless the package is a separate distribution in PACKAGE_JSON_EXEMPT (by repository and path, with the reason; an
+entry the repository does not use is a finding).
 For each licence in it:
   MIT               a root file LICENSE-MIT or LICENSE holding the MIT licence: the standard text word for word
                     from "Permission is hereby granted" to the end, before it only an optional "MIT License"
@@ -45,6 +48,23 @@ MIT_START = "Permission is hereby granted"
 MIT_HEAD = re.compile(r"(?:MIT License )?(?:Copyright (?:\(c\)|©) [^.!?]{1,120}?(?:\. [^.!?]{0,40}?)? ?)*")
 
 
+# package.json files that are separate distributions with their own licence, by (repository, path): why each is not
+# the repository's licence. An entry the repository no longer needs (the file is gone or now agrees) is a finding.
+PACKAGE_JSON_EXEMPT = {
+    ("ALICE-SDF", "vrchat-package/package.json"):
+        "the VRChat / Unity package is distributed on its own and points at its own LICENSE.md",
+    ("ALICE-Font", "scripts/package.json"):
+        "a private helper package of the build scripts, not distributed (npm's default ISC)",
+}
+
+
+def repo_name_of(repo: str) -> str:
+    """the repository's name: the last part of the origin URL, else the checkout's directory name"""
+    r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"], capture_output=True, text=True)
+    url = r.stdout.strip() if r.returncode == 0 else git(repo, "rev-parse", "--show-toplevel").strip()
+    return re.sub(r"\.git$", "", url.rstrip("/").split("/")[-1].split(":")[-1])
+
+
 def words(text: str) -> str:
     return " ".join(text.split())
 
@@ -71,7 +91,8 @@ def spdx_ids(expr: str) -> list[str]:
     return [t for t in re.split(r"[\s()]+", expr) if t and t not in ("OR", "AND", "WITH")]
 
 
-def check(repo: str, ref: str, agpl_report_only: bool = False) -> tuple[int, list[str], list[str]]:
+def check(repo: str, ref: str, agpl_report_only: bool = False,
+          repo_name: str | None = None) -> tuple[int, list[str], list[str]]:
     """(compared, findings, reports): one finding per declared licence without its file"""
     root = [p for p in git(repo, "ls-tree", "--name-only", ref).split("\n") if p]
     show = lambda p: git(repo, "show", f"{ref}:{p}")  # noqa: E731
@@ -82,18 +103,29 @@ def check(repo: str, ref: str, agpl_report_only: bool = False) -> tuple[int, lis
     if "Cargo.toml" in root:
         manifest = tomllib.loads(show("Cargo.toml"))
         expr = (manifest.get("package") or {}).get("license") or ((manifest.get("workspace") or {}).get("package") or {}).get("license")
-    if not isinstance(expr, str) or not expr.strip():
-        # no Cargo.toml declaration (a Node shell): the `license` of package.json at the root or one directory down
-        tracked = [p for p in git(repo, "ls-tree", "-r", "--name-only", ref).split("\n")
-                   if p == "package.json" or re.fullmatch(r"[^/]+/package\.json", p)]
-        declared = {}
-        for p in tracked:
-            doc = json.loads(show(p))
-            if not isinstance(doc, dict):
-                raise ValueError(f"{p} is not a JSON object")
-            lic = doc.get("license")  # npm's old `{"type": ...}` form is not a declaration
-            if isinstance(lic, str) and lic.strip():
-                declared[p] = lic.strip()
+    # the `license` of package.json at the root or one directory down (a Node shell's frontend/package.json)
+    tracked = [p for p in git(repo, "ls-tree", "-r", "--name-only", ref).split("\n")
+               if p == "package.json" or re.fullmatch(r"[^/]+/package\.json", p)]
+    declared: dict[str, str] = {}
+    for p in tracked:
+        doc = json.loads(show(p))
+        if not isinstance(doc, dict):
+            raise ValueError(f"{p} is not a JSON object")
+        lic = doc.get("license")  # npm's old `{"type": ...}` form is not a declaration
+        if isinstance(lic, str) and lic.strip():
+            declared[p] = words(lic)
+    name = repo_name or repo_name_of(repo)
+    if isinstance(expr, str) and expr.strip():
+        # the Cargo declaration is the repository's: a package.json that declares another licence is a finding,
+        # unless that package is a separate distribution listed in PACKAGE_JSON_EXEMPT
+        for p, lic in declared.items():
+            compared += 1
+            if lic != words(expr) and (name, p) not in PACKAGE_JSON_EXEMPT:
+                findings.append(f"{p} declares {lic} and Cargo.toml declares {words(expr)}")
+        for (r, p), why in PACKAGE_JSON_EXEMPT.items():
+            if r == name and (p not in declared or declared[p] == words(expr)):
+                findings.append(f"the exemption for {p} ({why}) is not used: remove it")
+    else:
         if not declared:
             return 0, [], []
         expr = next(iter(declared.values()))
@@ -146,9 +178,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", default=".")
     ap.add_argument("--ref", default="HEAD")
     ap.add_argument("--agpl-report-only", action="store_true")
+    ap.add_argument("--repo-name", help="the repository's name for PACKAGE_JSON_EXEMPT (default: from origin)")
     a = ap.parse_args(argv)
     try:
-        compared, findings, reports = check(a.repo, a.ref, a.agpl_report_only)
+        compared, findings, reports = check(a.repo, a.ref, a.agpl_report_only, a.repo_name)
     except (subprocess.CalledProcessError, tomllib.TOMLDecodeError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
