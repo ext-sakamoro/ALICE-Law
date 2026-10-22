@@ -156,7 +156,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/package_integrity.py"
-pending = { since = "2026-10-21", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e3624ab75da878430a5b600ab299ccffff603abf656285341988973bb920bb6c", owner = "ALICE-Analytics", planned = "4cd9d6270ee92abdbdbaea127525f010074e94c3", moved_from = { planned = "f76f9e87c01a13c68d7d6127044f88e85a9aa9ce", target = "c1e4fc51a7b20abc554f46e864f47dc7227b788adbdaed7bb65a4451c5a61466" }, variants = { "c1e4fc51a7b20abc554f46e864f47dc7227b788adbdaed7bb65a4451c5a61466" = ["ALICE-DB", "ALICE-Edge"], "e3624ab75da878430a5b600ab299ccffff603abf656285341988973bb920bb6c" = ["ALICE-Analytics", "ALICE-LOL"] } }
+sha256 = "e3624ab75da878430a5b600ab299ccffff603abf656285341988973bb920bb6c"
+source = { repo = "ALICE-Analytics", rev = "2c2f73c214f94b5db503d71d9ebb47db8fee3413" }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
@@ -307,7 +308,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/test_package_integrity.py"
-pending = { since = "2026-10-21", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "417efd2569fca3d648dd75e828757bb7275577ed4f2572288487862b72270bea", owner = "ALICE-Analytics", planned = "0c67c84b207a1b3073c97e2da7ed6124c221cc0c", moved_from = { planned = "306ab5991e2275dcbc18eacda5120f8d1307c497", target = "d99a0968b565a092483c17a01c0ad4356fb45f0d0f49b428291092061dd75a8c" }, variants = { "417efd2569fca3d648dd75e828757bb7275577ed4f2572288487862b72270bea" = ["ALICE-Analytics", "ALICE-LOL"], "d99a0968b565a092483c17a01c0ad4356fb45f0d0f49b428291092061dd75a8c" = ["ALICE-DB", "ALICE-Edge"] } }
+sha256 = "417efd2569fca3d648dd75e828757bb7275577ed4f2572288487862b72270bea"
+source = { repo = "ALICE-Analytics", rev = "2c2f73c214f94b5db503d71d9ebb47db8fee3413" }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
