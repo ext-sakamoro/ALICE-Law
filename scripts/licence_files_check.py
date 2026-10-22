@@ -29,7 +29,10 @@ import subprocess
 import sys
 import tomllib
 
-# SHA-256 of the words of the official texts (apache.org LICENSE-2.0.txt, gnu.org agpl-3.0.txt)
+# SHA-256 of the words of the official texts (apache.org LICENSE-2.0.txt, gnu.org agpl-3.0.txt). The comparison is of
+# words only: a copy with other line breaks or spacing is the same text. The AGPL copies in the ALICE repositories
+# (git blob fe6b9036) are byte-different from gnu.org's file (git blob be3f7b28) and equal to it once whitespace is
+# collapsed; the Apache copy in scripts/testdata is byte-identical to apache.org's.
 APACHE_2_0 = "0ffddef9e48f8a09aed5caf2d44f7ba1c1be2d9b8e0a6f693b1635b2d5566645"
 AGPL_3_0 = "2cd0fb7883a3b3553dedbb0bad171646d46f51e2642951aae7c59cb5cec86c46"
 # SHA-256 of the words of the MIT text from "Permission is hereby granted" to its end (spdx.org/licenses/MIT)
