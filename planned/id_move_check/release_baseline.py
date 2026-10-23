@@ -15,8 +15,11 @@ commit included, is what HEAD's version is judged against.
   bump, a merge whose first parent had another version is one;
 - `version.workspace = true` is read from the workspace root at the same commit;
 - a renamed crate is followed through `base_package` (its name before the rename);
-- the crate absent at the parent (or a root commit, which has none) is "introduced": there is no
-  older version to compare with;
+- the crate absent at the parent (or a root commit, which has none) is "introduced", there is no
+  older version to compare with, only when it is new: the manifest at the parent does not hold a
+  package under another name (a rename without `base_package`), and no Cargo.toml on the first-parent
+  line up to the parent ever named the package (a moved manifest). Either of those is an error;
+- a manifest that is there but does not parse is an error, never "absent";
 - the crate absent at HEAD, or main / HEAD unreadable, is an error: never "no base, so nothing to
   compare".
 
@@ -58,19 +61,21 @@ def _show(root: Path, commit: str, path: str) -> str | None:
     return r.stdout if r.returncode == 0 else None
 
 
-def _toml(text: str | None) -> dict | None:
+def _toml(text: str | None, where: str = "a manifest") -> dict | None:
+    """the parsed manifest, None when the file is not there; a file that is there and does not parse is an error
+    (reading it as "absent" would make the crate look introduced, and the gate would compare nothing)"""
     if text is None:
         return None
     try:
         return tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        return None
+    except tomllib.TOMLDecodeError as e:
+        raise BaselineError(f"{where} is not TOML: {e}") from None
 
 
 def version_at(root: Path, commit: str, manifest: str, names: tuple[str, ...]) -> str | None:
     """the version of the crate named one of `names` in `manifest` at `commit`; None when the manifest or
     the crate is not there"""
-    doc = _toml(_show(root, commit, manifest))
+    doc = _toml(_show(root, commit, manifest), f"{manifest} at {commit[:12]}")
     pkg = (doc or {}).get("package") or {}
     if pkg.get("name") not in names:
         return None
@@ -80,7 +85,8 @@ def version_at(root: Path, commit: str, manifest: str, names: tuple[str, ...]) -
     if isinstance(v, dict) and v.get("workspace") is True:
         d = PurePosixPath(manifest).parent
         while True:
-            ws = _toml(_show(root, commit, str(d / "Cargo.toml") if str(d) != "." else "Cargo.toml"))
+            ws_path = str(d / "Cargo.toml") if str(d) != "." else "Cargo.toml"
+            ws = _toml(_show(root, commit, ws_path), f"{ws_path} at {commit[:12]}")
             wv = (((ws or {}).get("workspace") or {}).get("package") or {}).get("version")
             if isinstance(wv, str):
                 return wv
@@ -97,8 +103,41 @@ def _rev(root: Path, ref: str, what: str) -> str:
     return r.stdout.strip()
 
 
+def _version_paths(manifest: str) -> list[str]:
+    """the files a commit must touch to change the crate's version: its manifest and every Cargo.toml above it
+    (a workspace root holding `[workspace.package].version`)"""
+    paths = [manifest]
+    d = PurePosixPath(manifest).parent
+    while str(d) not in (".", ""):
+        d = d.parent
+        paths.append("Cargo.toml" if str(d) in (".", "") else str(d / "Cargo.toml"))
+    return list(dict.fromkeys(paths))
+
+
+def _introduced(root: Path, commit: str, manifest: str, names: tuple[str, ...]) -> None:
+    """raise unless the crate, absent at `commit`, is new there: the manifest at `commit` holds no package under
+    another name, and no Cargo.toml on the first-parent line up to `commit` ever named one of `names`"""
+    doc = _toml(_show(root, commit, manifest), f"{manifest} at {commit[:12]}")
+    other = ((doc or {}).get("package") or {}).get("name")
+    if isinstance(other, str):
+        raise BaselineError(f"{manifest} at {commit[:12]} holds the package {other!r}, not {names[0]!r}: a rename "
+                            f"needs base_package (the name before it), or it is another crate")
+    pattern = "^[[:space:]]*name[[:space:]]*=[[:space:]]*[\"\'](" + "|".join(n.replace(".", "\\.") for n in names) + ")[\"\']"
+    hits = _git(root, "log", "--first-parent", "--format=%H", "-G", pattern, commit, "--", "*Cargo.toml")
+    if hits.returncode != 0:
+        raise BaselineError(f"the history before {commit[:12]} cannot be read: {hits.stderr.strip()}")
+    first = hits.stdout.split()
+    if first:
+        raise BaselineError(f"{names[0]} is absent from {manifest} at {commit[:12]} but an earlier commit "
+                            f"({first[0][:12]}) named it in a Cargo.toml: a moved manifest (give the manifest path "
+                            f"at that commit) or a rename (base_package), not a new crate")
+
+
 def bump_baseline(root: Path | str, manifest: str, package: str, *, base_package: str | None = None,
-                  main_ref: str = "origin/main", head: str = "HEAD") -> Baseline:
+                  main_ref: str = "origin/main", head: str = "HEAD", prefilter: bool = True) -> Baseline:
+    """`prefilter` reads only the first-parent commits whose diff against their first parent touches the version
+    files (`_version_paths`): only those can change the version; False reads every first-parent commit (the
+    definition, kept for the test that the two agree)"""
     root = Path(root)
     head_sha = _rev(root, head, "HEAD")
     if version_at(root, head_sha, manifest, (package,)) is None:
@@ -109,17 +148,27 @@ def bump_baseline(root: Path | str, manifest: str, package: str, *, base_package
     if mb.returncode != 0 or not mb.stdout.strip():
         raise BaselineError(f"{head} and {main_ref} have no common commit in {root}")
     names = (package,) + ((base_package,) if base_package else ())
-    commits = _git(root, "rev-list", "--first-parent", mb.stdout.strip()).stdout.split()
+    start = mb.stdout.strip()
+    if version_at(root, start, manifest, names) is None:
+        # the crate is not on main at the merge base (it came on HEAD's branch)
+        _introduced(root, start, manifest, names)
+        return Baseline(start, None, True)
+    if prefilter:
+        commits = _git(root, "rev-list", "--first-parent", start, "--", *_version_paths(manifest)).stdout.split()
+    else:
+        commits = _git(root, "rev-list", "--first-parent", start).stdout.split()
     for c in commits:
         v = version_at(root, c, manifest, names)
         if v is None:
             # the crate is not on main at this point of the line (it came on HEAD's branch)
+            _introduced(root, c, manifest, names)
             return Baseline(c, None, True)
         parents = _git(root, "rev-list", "--parents", "-n", "1", c).stdout.split()[1:]
         if not parents:
             return Baseline(None, None, True)
         pv = version_at(root, parents[0], manifest, names)
         if pv is None:
+            _introduced(root, parents[0], manifest, names)
             return Baseline(parents[0], None, True)
         if pv != v:
             return Baseline(parents[0], pv, False)

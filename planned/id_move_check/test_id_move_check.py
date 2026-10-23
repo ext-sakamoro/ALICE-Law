@@ -390,7 +390,7 @@ class EndToEnd(unittest.TestCase):
         after = subprocess.run(["git", "-C", str(d), "status", "--porcelain"], capture_output=True, text=True).stdout
         # the build of the working tree may write its Cargo.lock; nothing else of the repository moves
         self.assertEqual(before, "".join(ln for ln in after.splitlines(True) if "Cargo.lock" not in ln))
-        self.assertEqual([p.name for p in d.parent.glob(f".{d.name}.id-move-base-*")], [])
+        self.assertEqual([p.name for p in d.parent.glob(f".id-move-base-{os.getpid()}")], [])
 
     def renamed(self, byte: str, base_package: bool = True) -> Path:
         """released as probe-crate 0.3.0, then renamed to probe-crate-core 1.0.0 (lib probe_crate_core)"""
@@ -756,8 +756,10 @@ class SiblingPointsBack(unittest.TestCase):
         self.git(self.back, "add", "-A")
         self.git(self.back, "commit", "-qm", "back")
         self.d = self.parent / "ALICE-Probe"
-        for sub in ("probe/src", "probe/tests", "robot/src", "scripts"):
+        for sub in ("probe/src", "probe/tests", "robot/src", "scripts", ".github"):
             (self.d / sub).mkdir(parents=True)
+        (self.d / ".github" / "alice-siblings").write_text(
+            f"ALICE-Back {self.git(self.back, 'rev-parse', 'HEAD')}\n")
         (self.d / "Cargo.toml").write_text('[workspace]\nmembers = ["probe", "robot"]\nresolver = "2"\n')
         (self.d / "probe" / "Cargo.toml").write_text(
             '[package]\nname = "probe-crate"\nversion = "0.3.0"\nedition = "2021"\n')
@@ -804,7 +806,9 @@ class SiblingPointsBack(unittest.TestCase):
         passed, problems = self.verify()
         self.assertEqual(problems, [])
         self.assertEqual(passed, [self.REF])
-        self.assertEqual(self.git(self.d, "status", "--porcelain"), before)
+        after = self.git(self.d, "status", "--porcelain")
+        # the build of the working tree may write its Cargo.lock; nothing else of the repository moves
+        self.assertEqual(before, "\n".join(ln for ln in after.splitlines() if "Cargo.lock" not in ln))
         self.assertEqual(sorted(p.name for p in self.parent.iterdir()), ["ALICE-Back", "ALICE-Probe"])
 
     def test_the_base_tree_is_read_with_a_sibling_that_points_back(self):
@@ -818,10 +822,214 @@ class SiblingPointsBack(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.parent.iterdir()), ["ALICE-Back", "ALICE-Probe"])
 
     def test_a_named_sibling_that_is_not_checked_out_fails(self):
+        doc = imc.rustdoc_json(self.d / "probe", self.cfg)
         self.back.rename(self.parent / "elsewhere")
-        passed, problems = self.verify()
+        passed, problems = imc.PreviousVerifier(self.d, self.cfg, doc, self.target)(self.cfg.ids[0], "11" * 32)
         self.assertEqual(passed, [])
         self.assertTrue(any("names ../ALICE-Back, which is not checked out" in p for p in problems), problems)
+
+
+@unittest.skipUnless(shutil.which("cargo") and shutil.which("git"), "needs cargo and git")
+class BaseTreeAtItsPins(unittest.TestCase):
+    """The base tree path-depends on a sibling that has since taken a major version: the base is
+    built against the sibling commit the base tree pins in .github/alice-siblings, not today's
+    checkout"""
+
+    ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@t")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.target = Path(tempfile.mkdtemp(prefix="id-move-pins-target-"))
+        os.environ["ID_MOVE_TARGET_DIR"] = str(cls.target)
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ.pop("ID_MOVE_TARGET_DIR", None)
+        shutil.rmtree(cls.target, ignore_errors=True)
+
+    def git(self, d: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(d), *args], check=True, env=self.ENV,
+                              capture_output=True, text=True).stdout.strip()
+
+    def up_version(self, version: str):
+        (self.up / "Cargo.toml").write_text(
+            f'[package]\nname = "alice-up"\nversion = "{version}"\nedition = "2021"\n\n[workspace]\n')
+        self.git(self.up, "add", "-A")
+        self.git(self.up, "commit", "-qm", version)
+        return self.git(self.up, "rev-parse", "HEAD")
+
+    def probe(self, version: str, up_req: str, pin: str | None):
+        (self.d / "Cargo.toml").write_text(
+            f'[package]\nname = "probe-crate"\nversion = "{version}"\nedition = "2021"\n\n[dependencies]\n'
+            f'alice-up = {{ path = "../ALICE-Up", version = "{up_req}" }}\n\n[workspace]\n')
+        if pin is None:
+            (self.d / ".github" / "alice-siblings").unlink(missing_ok=True)
+        else:
+            (self.d / ".github" / "alice-siblings").write_text(f"ALICE-Up {pin}\n")
+
+    def setUp(self):
+        self.parent = Path(tempfile.mkdtemp(prefix="id-move-pins-"))
+        self.up = self.parent / "ALICE-Up"
+        (self.up / "src").mkdir(parents=True)
+        (self.up / "src" / "lib.rs").write_text("pub fn f() {}\n")
+        self.git(self.up, "init", "-q")
+        self.git(self.up, "config", "maintenance.auto", "false")
+        self.v1 = self.up_version("1.0.0")
+        self.d = self.parent / "ALICE-Probe"
+        (self.d / "src").mkdir(parents=True)
+        (self.d / "scripts").mkdir()
+        (self.d / ".github").mkdir()
+        (self.d / "scripts" / "id_move.toml").write_text(
+            'package = "probe-crate"\nmanifest = "Cargo.toml"\ntags = ["v{version}"]\n'
+            '[[id]]\npath = "probe_crate::SEMANTICS_ID"\n')
+        (self.d / "src" / "lib.rs").write_text("pub const SEMANTICS_ID: [u8; 32] = [0x11; 32];\n")
+        (self.d / "CHANGELOG.md").write_text("# Changelog\n")
+        self.probe("0.3.0", "^1", self.v1)
+        self.git(self.d, "init", "-q")
+        self.git(self.d, "add", "-A")
+        self.git(self.d, "commit", "-qm", "release")
+        self.git(self.d, "tag", "v0.3.0")
+        # the sibling takes a major version and the working tree follows it
+        self.v2 = self.up_version("2.0.0")
+        self.probe("0.4.0", "^2", self.v2)
+
+    def tearDown(self):
+        shutil.rmtree(self.parent, ignore_errors=True)
+
+    def test_the_base_tree_builds_against_the_sibling_it_pins(self):
+        problems, report = imc.check(self.d, None, "tag")
+        self.assertEqual(problems, [])
+        self.assertIn("unchanged (11111111)", report[1])
+        self.assertEqual(self.git(self.up, "rev-parse", "HEAD"), self.v2)
+        self.assertEqual(sorted(p.name for p in self.parent.iterdir()), ["ALICE-Probe", "ALICE-Up"])
+
+    def test_a_base_tree_path_dependency_without_a_pin_fails(self):
+        self.probe("0.3.0", "^1", None)
+        self.git(self.d, "add", "-A")
+        self.git(self.d, "commit", "-qm", "no pin")
+        self.git(self.d, "tag", "-f", "v0.3.0")
+        self.probe("0.4.0", "^2", self.v2)
+        with self.assertRaises(imc.CheckError) as e:
+            imc.check(self.d, None, "tag")
+        self.assertIn("../ALICE-Up", str(e.exception))
+        self.assertIn("no pin", str(e.exception))
+
+    def test_a_pin_that_is_not_in_the_sibling_fails(self):
+        self.probe("0.3.0", "^1", "ab" * 20)
+        self.git(self.d, "add", "-A")
+        self.git(self.d, "commit", "-qm", "bad pin")
+        self.git(self.d, "tag", "-f", "v0.3.0")
+        self.probe("0.4.0", "^2", self.v2)
+        with self.assertRaises(imc.CheckError) as e:
+            imc.check(self.d, None, "tag")
+        self.assertIn("abababababab", str(e.exception))
+
+
+@unittest.skipUnless(shutil.which("cargo") and shutil.which("git"), "needs cargo and git")
+class GitRevPreviousList(unittest.TestCase):
+    """The crate re-exports the previous list of a dependency it takes by git + rev (not a path
+    sibling): the old value is taken out of an archive of that rev laid out next to the copy, which
+    the copy uses through a [patch] of the git source"""
+
+    ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@t")
+    REF = "tests/previous.rs::old"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.target = Path(tempfile.mkdtemp(prefix="id-move-gitrev-target-"))
+        os.environ["ID_MOVE_TARGET_DIR"] = str(cls.target)
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ.pop("ID_MOVE_TARGET_DIR", None)
+        shutil.rmtree(cls.target, ignore_errors=True)
+
+    def git(self, d: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(d), *args], check=True, env=self.ENV,
+                              capture_output=True, text=True).stdout.strip()
+
+    def upstream_list(self, prev: str):
+        (self.up / "src" / "lib.rs").write_text(
+            "pub const SEMANTICS_ID: [u8; 32] = [0x22; 32];\n"
+            f"pub const PREVIOUS_SEMANTICS_IDS: &[[u8; 32]] = &[{prev}];\n")
+
+    def consumer(self, rev: str,
+                 test_body: str = "assert!(probe_crate::PREVIOUS_SEMANTICS_IDS.contains(&[0x11; 32]));"):
+        (self.d / "Cargo.toml").write_text(
+            '[package]\nname = "probe-crate"\nversion = "0.6.0"\nedition = "2021"\n\n[dependencies]\n'
+            f'alice-zz = {{ git = "{self.url}", rev = "{rev}", version = "0.11" }}\n\n[workspace]\n')
+        (self.d / "tests" / "previous.rs").write_text(f"#[test]\nfn old() {{ {test_body} }}\n")
+
+    def setUp(self):
+        self.parent = Path(tempfile.mkdtemp(prefix="id-move-gitrev-"))
+        bare = self.parent / "remote" / "ALICE-Zz.git"
+        bare.mkdir(parents=True)
+        self.git(bare, "init", "-q", "--bare")
+        self.up = self.parent / "ALICE-Zz"
+        (self.up / "src").mkdir(parents=True)
+        (self.up / "Cargo.toml").write_text(
+            '[package]\nname = "alice-zz"\nversion = "0.11.0"\nedition = "2021"\n\n[workspace]\n')
+        self.upstream_list("[0x11; 32]")
+        self.git(self.up, "init", "-q")
+        self.git(self.up, "config", "maintenance.auto", "false")
+        self.git(self.up, "add", "-A")
+        self.git(self.up, "commit", "-qm", "one")
+        self.first = self.git(self.up, "rev-parse", "HEAD")
+        (self.up / "README").write_text("two\n")
+        self.git(self.up, "add", "-A")
+        self.git(self.up, "commit", "-qm", "two")
+        self.rev = self.git(self.up, "rev-parse", "HEAD")
+        self.git(self.up, "remote", "add", "origin", str(bare))
+        self.git(self.up, "pu" + "sh", "-q", "origin", "HEAD:refs/heads/main")
+        self.git(self.up, "fetch", "-q", "origin")
+        # cargo fetches the rev from the clone itself; the checker reads the clone's origin branches
+        self.url = self.up.as_uri()
+        self.d = self.parent / "ALICE-Probe"
+        (self.d / "src").mkdir(parents=True)
+        (self.d / "tests").mkdir()
+        (self.d / "src" / "lib.rs").write_text("pub use alice_zz::{PREVIOUS_SEMANTICS_IDS, SEMANTICS_ID};\n")
+        self.consumer(self.rev)
+        self.git(self.d, "init", "-q")
+        self.git(self.d, "add", "-A")
+        self.git(self.d, "commit", "-qm", "probe")
+        self.cfg = imc.Config("probe-crate", "Cargo.toml", (), True, ("v{version}",),
+                              (imc.IdSpec("probe_crate::SEMANTICS_ID", "probe_crate::PREVIOUS_SEMANTICS_IDS",
+                                          (self.REF,)),))
+
+    def tearDown(self):
+        shutil.rmtree(self.parent, ignore_errors=True)
+
+    def verify(self):
+        doc = imc.rustdoc_json(self.d, self.cfg)
+        return imc.PreviousVerifier(self.d, self.cfg, doc, self.target)(self.cfg.ids[0], "11" * 32)
+
+    def test_the_old_value_is_taken_out_of_the_pinned_rev(self):
+        # the shared clone's HEAD is elsewhere: the checker neither reads nor moves it
+        self.git(self.up, "checkout", "-q", "--detach", self.first)
+        before = (self.up / "src" / "lib.rs").read_text()
+        passed, problems = self.verify()
+        self.assertEqual(problems, [])
+        self.assertEqual(passed, [self.REF])
+        self.assertEqual(self.git(self.up, "rev-parse", "HEAD"), self.first)
+        self.assertEqual((self.up / "src" / "lib.rs").read_text(), before)
+        self.assertEqual(sorted(p.name for p in self.parent.iterdir()), ["ALICE-Probe", "ALICE-Zz", "remote"])
+
+    def test_a_rev_not_on_an_origin_branch_fails(self):
+        (self.up / "NOTES").write_text("local only\n")
+        self.git(self.up, "add", "-A")
+        self.git(self.up, "commit", "-qm", "local")
+        self.consumer(self.git(self.up, "rev-parse", "HEAD"))
+        passed, problems = self.verify()
+        self.assertEqual(passed, [])
+        self.assertTrue(any("not on an origin branch" in p for p in problems), problems)
+
+    def test_a_test_that_does_not_depend_on_the_old_value_fails(self):
+        self.consumer(self.rev, "let _ = probe_crate::PREVIOUS_SEMANTICS_IDS;")
+        passed, problems = self.verify()
+        self.assertEqual(passed, [])
+        self.assertTrue(any("still passes" in p for p in problems), problems)
 
 
 if __name__ == "__main__":
