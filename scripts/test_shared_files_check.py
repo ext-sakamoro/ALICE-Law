@@ -629,6 +629,33 @@ class Planned(Base):
     def live(self, *argv: str, today: str = "2026-10-17"):
         return self.check("--live", "--today", today, *argv)
 
+    def new_file(self, since: str = "2026-10-17") -> dict:
+        """scripts/n.sh, planned into ALICE-A (the owner) and ALICE-B, no main holds it yet"""
+        return {"path": "scripts/n.sh", "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {},
+                "pending": {"since": since, "exit": "every listed repository's main has the bytes the registry row "
+                            "moves to", "target": h(V3), "owner": "ALICE-A", "planned": sfc.git_blob(V3),
+                            "variants": {"absent": ["ALICE-A", "ALICE-B"]}}}
+
+    def test_a_new_file_s_owner_lands_within_three_days(self):
+        self.w.ci("ALICE-A", "n-v3", {"scripts/n.sh": V3})
+        self.t.write_text(self.w.table(self.w.uniform(), self.new_file(since="2026-10-14")), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.t.write_text(self.w.table(self.w.uniform(), self.new_file(since="2026-10-13")), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/n.sh: new file planned since 2026-10-13", out)
+
+    def test_a_new_file_s_copy_with_other_bytes_is_red(self):
+        # while the row is all absent the table records no copy: a non-owner main with any bytes but the target is a
+        # finding, whatever else the live check says about it
+        self.w.ci("ALICE-A", "n-v3", {"scripts/n.sh": V3})
+        self.w.commit("ALICE-B", {"scripts/n.sh": OTHER})
+        self.t.write_text(self.w.table(self.w.uniform(), self.new_file()), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"scripts/n.sh: new file: ALICE-B main has sha256 {h(OTHER)[:12]}, not the target", out)
+
     def test_a_planned_row_whose_owner_holds_the_target_passes(self):
         self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
         code, out = self.live()
