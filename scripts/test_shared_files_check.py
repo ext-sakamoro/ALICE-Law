@@ -1020,6 +1020,13 @@ class FirstMove(Base):
         self.t.write_text(self.w.table(self.w.uniform(), landed), encoding="utf-8")
         code, out = self.check("--base-table", str(self.base(self.w.uniform(), self.new_file(v))))
         self.assertEqual(code, 1, out)
+        # a base whose owner already held the planned bytes is not a new file any more: re-rolled to a table that
+        # records every copy absent, it would move from nothing although a main had a copy
+        held = self.new_file(v, variants={h(v): ["ALICE-A"], "absent": ["ALICE-B"]})
+        self.t.write_text(self.w.table(self.w.uniform(), self.new_file(v2)), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.w.uniform(), held)))
+        self.assertEqual(code, 1, out)
+        self.assertIn("without moved_from naming the base's planned id and target", out)
         # and removing the new file's row is refused
         self.t.write_text(self.w.table(self.w.uniform()), encoding="utf-8")
         code, out = self.check("--base-table", str(self.base(self.w.uniform(), self.new_file(v))))
