@@ -1153,6 +1153,29 @@ class BaseBeforePins(unittest.TestCase):
             imc.check(self.d, None, "tag")
         self.assertIn("broken base", str(e.exception))
 
+    def test_a_pin_file_only_on_a_merged_side_branch_falls_back_by_date(self):
+        # the file was added and removed on a side branch merged before the base; main's
+        # first-parent line never had it, so CI built the base without pins: the date fallback
+        pin = self.d / ".github" / "alice-siblings"
+        pin.unlink()
+        self.probe("0.3.0", "^1")
+        self.git(self.d, "checkout", "-q", "-b", "side")
+        pin.write_text(f"ALICE-Up {self.v1}\n")
+        self.git(self.d, "add", "-A", date="2026-03-02T00:00:00Z")
+        self.git(self.d, "commit", "-qm", "pins on a side branch", date="2026-03-02T00:00:00Z")
+        pin.unlink()
+        self.git(self.d, "add", "-A", date="2026-03-03T00:00:00Z")
+        self.git(self.d, "commit", "-qm", "pins removed on the side branch", date="2026-03-03T00:00:00Z")
+        self.git(self.d, "checkout", "-q", "-")
+        self.git(self.d, "merge", "-q", "--no-ff", "-m", "merge side", "side", date="2026-03-04T00:00:00Z")
+        self.git(self.d, "tag", "-f", "v0.3.0", date="2026-03-04T00:00:00Z")
+        self.probe("0.4.0", "^2")
+        pin.write_text(f"ALICE-Up {self.v2}\n")
+        problems, report = imc.check(self.d, None, "tag")
+        self.assertEqual(problems, [])
+        self.assertTrue(any(f"../ALICE-Up at {self.v1[:12]}" in r and "base predates pins" in r for r in report),
+                        report)
+
     def test_the_sibling_is_read_on_its_first_parent_line_not_a_merged_side_branch(self):
         # a side-branch commit dated before the base, merged into main after it: main as of the
         # base date was v1, not the side commit
