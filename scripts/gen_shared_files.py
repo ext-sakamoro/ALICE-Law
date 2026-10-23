@@ -3,7 +3,8 @@
 
 The rows (path, repositories, alternative paths, exemptions) come from the existing table,
 or with --registry from a registry of shared files: lines `path<TAB>repo,repo[:alt-path]
-[<TAB>state[<TAB>next=<blob>]]`, `#` comments. With --discover, every file under
+[<TAB>state[<TAB>next=<blob>]]` (`-` for the repositories of a row every copy of which is exempted, the
+exemptions kept from the table), `#` comments. With --discover, every file under
 shared_files_check.DISCOVERED that is byte-identical in two or more of the rows'
 repositories and has no row becomes a row too. Every row lists each of the rows'
 repositories that has the path on main (a different file there shows as a variant until it
@@ -127,7 +128,8 @@ def rows_from_registry(text: str) -> list[dict]:
         nxt = cols[3].strip()[len("next="):] if len(cols) > 3 and cols[3].strip().startswith("next=") else ""
         order: list[str] = []
         paths: dict[str, str] = {}
-        for item in cols[1].split(","):
+        # `-`: a row that lists no repository (every copy is exempted; the exemptions come from the table)
+        for item in ([] if cols[1].strip() == "-" else cols[1].split(",")):
             repo, _, alt = item.strip().partition(":")
             order.append(repo)
             if alt:
@@ -243,7 +245,8 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
             # the planned bytes are on no main: a re-roll to bytes no main holds yet. The row stays planned
             # with the new target only when its bytes are given (or already recorded); it is never dropped
             # to what the copies say (that would turn a rollout into an unplanned divergence silently)
-            if nxt == prev["planned"] and "moved_from" in prev:
+            if nxt == prev["planned"] and ("moved_from" in prev or set(found) == {"absent"}):
+                # moved from recorded bytes, or a new file no main holds yet: the plan stands until the owner lands
                 entries.append({**base, "pending": {**prev, "variants": variants}})
                 continue
             if prev.get("first_move"):
@@ -282,6 +285,16 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
             entries.append({**base, "pending": {"since": today, "exit": EXIT_NEXT, "target": target, "owner": owner,
                                                 "planned": nxt, "moved_from": moved, "first_move": True,
                                                 "variants": variants}})
+            continue
+        if (nxt and not prev and nxt == (planned_ids or {}).get(row["path"]) and row["path"] in targets
+                and set(found) == {"absent"}):
+            # a new file, in no listed main yet: planned from the start, to the --target bytes and owner (nothing to
+            # move from), so the rollout is explicit instead of an unplanned divergence
+            target, owner = targets[row["path"]]
+            if owner not in base["repos"]:
+                raise sfc.Unreadable(f"{row['path']}: the owner {owner} is not one of the listed repositories")
+            entries.append({**base, "pending": {"since": today, "exit": EXIT_NEXT, "target": target, "owner": owner,
+                                                "planned": nxt, "variants": variants}})
             continue
         if nxt and (not prev):
             row = {**row, "hold": ""}  # a next= no main holds (yet) holds nothing back

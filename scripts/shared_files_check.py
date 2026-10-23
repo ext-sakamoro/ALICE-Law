@@ -282,6 +282,8 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
                     if m["planned"] == p["planned"] or m["target"] == p["target"]:
                         raise Unreadable(f"{where}: pending.moved_from must name other bytes than the target")
                     held.append(m["target"])  # the owner lands the new bytes after the table records them
+                if set(v) == {"absent"}:
+                    held.append("absent")  # a new file no listed main holds yet: nothing to move from
                 if not any(p["owner"] in v.get(t, []) for t in held):
                     raise Unreadable(f"{where}: a planned row's owner must hold the target in its variants")
             elif "moved_from" in p:
