@@ -656,6 +656,25 @@ class Planned(Base):
         self.assertEqual(code, 1, out)
         self.assertIn(f"scripts/n.sh: new file: ALICE-B main has sha256 {h(OTHER)[:12]}, not the target", out)
 
+    def test_a_new_file_s_owner_landed_is_past_the_three_days(self):
+        # once the owner's main holds the planned bytes the row is an ordinary planned one: the 3 days of a new file
+        # no longer apply (the table, not regenerated yet, still records every copy absent)
+        self.w.commit("ALICE-A", {"scripts/n.sh": V3})
+        self.t.write_text(self.w.table(self.w.uniform(), self.new_file(since="2026-10-13")), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+
+    def test_a_moved_row_recorded_all_absent_is_not_read_as_a_new_file(self):
+        # a row that moves from earlier bytes is a rollout, not a new file, even when the table records every copy
+        # absent: its owner's main must hold the target (or the earlier bytes), a ci/ tip is not enough
+        self.w.ci("ALICE-A", "n-v3", {"scripts/n.sh": V3})
+        e = self.new_file()
+        e["pending"]["moved_from"] = {"planned": sfc.git_blob(SHARED), "target": h(SHARED)}
+        self.t.write_text(self.w.table(self.w.uniform(), e), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/n.sh: planned row, but the owner ALICE-A main does not hold the target", out)
+
     def test_a_planned_row_whose_owner_holds_the_target_passes(self):
         self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
         code, out = self.live()
