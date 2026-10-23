@@ -47,6 +47,56 @@ class Generate(Base):
         self.assertEqual(p["variants"], {h(SHARED): ["ALICE-A", "ALICE-B"], h(OTHER): ["ALICE-C"]})
         self.assertEqual((p["target"], p["owner"], p["since"]), (h(SHARED), "ALICE-A", TODAY))
 
+    def test_a_registry_line_can_carry_an_exempt_only_row(self):
+        # a row every copy of which is exempted lists no repository; `-` in the repositories column says so, and the
+        # exemptions come from the table as for every registry row (a registry run must not drop such a row)
+        self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
+        text = self.t.read_text(encoding="utf-8") + (
+            '\n[[file]]\npath = "scripts/own.toml"\nrepos = []\nexempt = { "ALICE-A" = "this repository\'s own list '
+            'of its own files", "ALICE-B" = "this repository\'s own list of its own files" }\n')
+        self.t.write_text(text, encoding="utf-8")
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\nscripts/own.toml\t-\n")
+        code, out = self.gen("--write", "--registry", str(reg))
+        self.assertEqual(code, 0, out)
+        e = self.entries()["scripts/own.toml"]
+        self.assertEqual((e["repos"], sorted(e["exempt"])), ([], ["ALICE-A", "ALICE-B"]))
+        self.assertEqual(self.gen("--check")[0], 0)
+
+    def test_a_new_path_is_born_as_a_planned_row(self):
+        # a file no main holds yet, moving into every listed repository: planned from the start (the registry's
+        # next= and --target name its bytes and owner), so the rollout is explicit and the ratchet allows it
+        v = b"#!/bin/sh\n# new shared file\n"
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
+        self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
+        code, out = self.gen("--write", "--registry", str(reg), "--next-from", str(reg),
+                             "--target", f"scripts/n.sh={h(v)}@ALICE-A")
+        self.assertEqual(code, 0, out)
+        p = self.entries()["scripts/n.sh"]["pending"]
+        self.assertEqual((p["planned"], p["target"], p["owner"], p["since"], p["exit"]),
+                         (sfc.git_blob(v), h(v), "ALICE-A", TODAY, gen.EXIT_NEXT))
+        self.assertNotIn("first_move", p)
+        self.assertNotIn("moved_from", p)
+        self.assertEqual(p["variants"], {"absent": ["ALICE-A", "ALICE-B"]})
+        # regenerating before the owner lands keeps the plan (from the table, as CI does)
+        self.assertEqual(self.gen("--check", "--next-from", str(reg))[0], 0)
+        self.assertEqual(self.gen("--check")[0], 0)
+        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        self.assertEqual(code, 0, out)
+        # live: the bytes must be real, on the owner's ci/ branch until its main holds them
+        self.assertEqual(run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])[0], 1)
+        self.w.ci("ALICE-A", "n-v1", {"scripts/n.sh": v})
+        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])
+        self.assertEqual(code, 0, out)
+        # the owner lands: still planned; every main has the file: uniform
+        self.w.commit("ALICE-A", {"scripts/n.sh": v})
+        self.assertEqual(self.gen("--write", "--next-from", str(reg))[0], 0)
+        self.assertEqual(self.entries()["scripts/n.sh"]["pending"]["planned"], sfc.git_blob(v))
+        self.w.commit("ALICE-B", {"scripts/n.sh": v})
+        self.assertEqual(self.gen("--write", "--next-from", str(reg))[0], 0)
+        self.assertEqual(self.entries()["scripts/n.sh"]["sha256"], h(v))
+
     def test_a_target_can_be_named(self):
         reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\n")
         self.gen("--write", "--registry", str(reg), "--target", f"scripts/s.sh={h(OTHER)}@ALICE-C")
