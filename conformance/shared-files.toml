@@ -156,7 +156,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/package_integrity.py"
-pending = { since = "2026-10-22", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "5e1f38090dd0c0c284c8c57795ffe63de4644b3574abc99c746ce18c2e02eb77", owner = "ALICE-Analytics", planned = "7704460e4f46bd0d068b72aa78956ad98024b819", moved_from = { planned = "4cd9d6270ee92abdbdbaea127525f010074e94c3", target = "e3624ab75da878430a5b600ab299ccffff603abf656285341988973bb920bb6c" }, first_move = true, variants = { "e3624ab75da878430a5b600ab299ccffff603abf656285341988973bb920bb6c" = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"] } }
+pending = { since = "2026-10-22", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "5e1f38090dd0c0c284c8c57795ffe63de4644b3574abc99c746ce18c2e02eb77", owner = "ALICE-Analytics", planned = "7704460e4f46bd0d068b72aa78956ad98024b819", moved_from = { planned = "4cd9d6270ee92abdbdbaea127525f010074e94c3", target = "e3624ab75da878430a5b600ab299ccffff603abf656285341988973bb920bb6c" }, variants = { "5e1f38090dd0c0c284c8c57795ffe63de4644b3574abc99c746ce18c2e02eb77" = ["ALICE-Analytics"], "e3624ab75da878430a5b600ab299ccffff603abf656285341988973bb920bb6c" = ["ALICE-DB", "ALICE-Edge", "ALICE-LOL"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
@@ -307,7 +307,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/test_package_integrity.py"
-pending = { since = "2026-10-22", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "121560f8fa14453be00c6d6593ccdc6e8a81b08619040cc4b90c89c3166e3853", owner = "ALICE-Analytics", planned = "b8f1ee8507007ce01cc04f400c243fb928141650", moved_from = { planned = "0c67c84b207a1b3073c97e2da7ed6124c221cc0c", target = "417efd2569fca3d648dd75e828757bb7275577ed4f2572288487862b72270bea" }, first_move = true, variants = { "417efd2569fca3d648dd75e828757bb7275577ed4f2572288487862b72270bea" = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"] } }
+pending = { since = "2026-10-22", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "121560f8fa14453be00c6d6593ccdc6e8a81b08619040cc4b90c89c3166e3853", owner = "ALICE-Analytics", planned = "b8f1ee8507007ce01cc04f400c243fb928141650", moved_from = { planned = "0c67c84b207a1b3073c97e2da7ed6124c221cc0c", target = "417efd2569fca3d648dd75e828757bb7275577ed4f2572288487862b72270bea" }, variants = { "121560f8fa14453be00c6d6593ccdc6e8a81b08619040cc4b90c89c3166e3853" = ["ALICE-Analytics"], "417efd2569fca3d648dd75e828757bb7275577ed4f2572288487862b72270bea" = ["ALICE-DB", "ALICE-Edge", "ALICE-LOL"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
