@@ -528,25 +528,44 @@ def first_move_problems(e: dict, found: dict[str, list[str]], remote: Remote, ag
     if age > FIRST_MOVE_MAX_DAYS:
         problems.append(f"{e['path']}: first move planned since {p['since']} and the owner {p['owner']} has not landed "
                         f"{p['planned'][:12]} in more than {FIRST_MOVE_MAX_DAYS} days")
+    return problems + planned_bytes_problems(e, remote, proof, "first move")
+
+
+def planned_bytes_problems(e: dict, remote: Remote, proof: bytes | None, label: str) -> list[str]:
+    """the planned bytes of a row whose owner has not landed them are real: the table's repository carries them as
+    planned/<blob> (planned_proof_problems holds that file to the row in every mode), or the owner has the blob at the
+    path on the tip of its main or a ci/ branch, with the target's SHA-256"""
+    p = e["pending"]
     if proof is not None:
-        # the table's repository carries the planned bytes: they are real (planned_proof_problems holds the file to
-        # this row, its git blob id and its SHA-256, in every mode)
-        return problems
+        return []
     g = remote(p["owner"])
     rel = path_in(e, p["owner"])
     tips = [t for t in owner_tips(g)
             if subprocess.run(["git", "-C", str(g), "rev-parse", "-q", "--verify", f"{t}:{rel}"],
                               capture_output=True, text=True).stdout.strip() == p["planned"]]
     if not tips:
-        problems.append(f"{e['path']}: first move: the owner {p['owner']} has blob {p['planned'][:12]} at {rel} on the "
-                        f"tip of neither its main nor a ci/ branch, and there is no {PLANNED_DIR}/{p['planned']} with "
-                        "its bytes (the planned bytes must exist before they are planned)")
-        return problems
+        return [f"{e['path']}: {label}: the owner {p['owner']} has blob {p['planned'][:12]} at {rel} on the tip of "
+                f"neither its main nor a ci/ branch, and there is no {PLANNED_DIR}/{p['planned']} with its bytes (the "
+                "planned bytes must exist before they are planned)"]
     data = show(g, tips[0], rel)
     if data is None or sha256(data) != p["target"]:
-        problems.append(f"{e['path']}: first move: blob {p['planned'][:12]} on {tips[0]} of {p['owner']} has sha256 "
-                        f"{sha256(data)[:12] if data is not None else 'none'}, not the target {p['target'][:12]}")
-    return problems
+        return [f"{e['path']}: {label}: blob {p['planned'][:12]} on {tips[0]} of {p['owner']} has sha256 "
+                f"{sha256(data)[:12] if data is not None else 'none'}, not the target {p['target'][:12]}"]
+    return []
+
+
+def introduction_problems(e: dict, found: dict[str, list[str]], remote: Remote, age: int,
+                          proof: bytes | None = None) -> list[str]:
+    """A new file planned into every listed repository, its owner not landed yet: every copy is absent or already the
+    target, the planned bytes are real (the owner's ci/ branch tip or the table's planned/ file, as for a first move),
+    and the owner lands within FIRST_MOVE_MAX_DAYS days"""
+    p = e["pending"]
+    problems = [f"{e['path']}: new file: {', '.join(found[k])} main has sha256 {k[:12]}, not the target "
+                f"{p['target'][:12]} (the table records no copy yet)" for k in sorted(found) if k not in ("absent", p["target"])]
+    if age > FIRST_MOVE_MAX_DAYS:
+        problems.append(f"{e['path']}: new file planned since {p['since']} and the owner {p['owner']} has not landed "
+                        f"{p['planned'][:12]} in more than {FIRST_MOVE_MAX_DAYS} days")
+    return problems + planned_bytes_problems(e, remote, proof, "new file")
 
 
 def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False,
@@ -591,7 +610,11 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                     problems.append(f"{e['path']}: the table records the owner {p['owner']} at the target "
                                     f"{p['target'][:12]}, but its main has "
                                     + (f"sha256 {owner_blob[0][:12]}" if owner_blob else "no copy"))
-                if owner_blob not in pairs:
+                if not m and set(p["variants"]) == {"absent"} and owner_blob is None:
+                    # a new file planned into every listed repository (the table recorded no copy): until the owner
+                    # lands it, its bytes must be real as for a first move, and no copy may hold other bytes
+                    problems += introduction_problems(e, found, remote, age, (proofs or {}).get(p["planned"]))
+                elif owner_blob not in pairs:
                     got = f"sha256 {owner_blob[0][:12]}, blob {owner_blob[1][:12]}" if owner_blob else "no copy"
                     earlier = f", or the earlier {m['target'][:12]} / {m['planned'][:12]}" if m else ""
                     problems.append(f"{e['path']}: planned row, but the owner {p['owner']} main does not hold the "
