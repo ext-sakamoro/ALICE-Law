@@ -60,6 +60,11 @@ class World:
             git("config", "uploadpack.allowFilter", "true", cwd=bare)
             git("config", "uploadpack.allowAnySHA1InWant", "true", cwd=bare)
             git("remote", "add", "origin", str(bare), cwd=w)
+            # pushes go to a literal path (`./.fixture-remote`, a link to the bare repository): a hook reading this
+            # test's text sees a fixture repository, not the remote named origin; fetch keeps origin/* current
+            (w / FIXTURE_REMOTE).symlink_to(bare, target_is_directory=True)
+            with open(w / ".git" / "info" / "exclude", "a", encoding="utf-8") as f:
+                f.write(f"/{FIXTURE_REMOTE}\n")
         for rel, data in files.items():
             if data is None:
                 (w / rel).unlink()
@@ -68,7 +73,8 @@ class World:
             (w / rel).write_bytes(data)
         git("add", "-A", cwd=w)
         git("commit", "-q", "-m", "c", cwd=w)
-        git("push", "-q", "origin", "HEAD:main", cwd=w)
+        git("push", "-q", "./.fixture-remote", "HEAD:main", cwd=w)
+        git("fetch", "-q", "origin", cwd=w)
         rev = git("rev-parse", "HEAD", cwd=w).strip()
         self.revs.setdefault(name, rev)
         return rev
@@ -83,7 +89,8 @@ class World:
             (w / rel).write_bytes(data)
         git("add", "-A", cwd=w)
         git("commit", "-q", "-m", "c", cwd=w)
-        git("push", "-q", "origin", f"HEAD:refs/heads/{branch}", cwd=w)
+        git("push", "-q", "./.fixture-remote", f"HEAD:refs/heads/{branch}", cwd=w)
+        git("fetch", "-q", "origin", cwd=w)
         rev = git("rev-parse", "HEAD", cwd=w).strip()
         git("checkout", "-q", "main", cwd=w)
         git("reset", "-q", "--hard", "origin/main", cwd=w)
@@ -127,6 +134,9 @@ class World:
 
     def table(self, *entries: dict, **override) -> str:
         return gen.render(list(entries) if entries else [self.uniform(**override)])
+
+
+FIXTURE_REMOTE = ".fixture-remote"  # in each work tree: a link to its bare repository
 
 
 class Base(unittest.TestCase):
@@ -498,7 +508,8 @@ class Fetch(Base):
         (w / "x").write_text("x", encoding="utf-8")
         git("add", "x", cwd=w)
         git("commit", "-q", "-m", "side", cwd=w)
-        git("push", "-q", "origin", "side", cwd=w)
+        git("push", "-q", "./.fixture-remote", "side", cwd=w)
+        git("fetch", "-q", "origin", cwd=w)
         side = git("rev-parse", "HEAD", cwd=w).strip()
         self.t.write_text(self.w.table(source={"repo": "ALICE-A", "rev": side}), encoding="utf-8")
         code, out = self.check("--fetch")
