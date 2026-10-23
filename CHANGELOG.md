@@ -195,3 +195,6 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/gen-law-readme-block.py`: the block of alice-det-math itself says "this crate is alice-det-math" instead of "this crate requires no alice-det-math"
 - `scripts/public_text_check.py`: file names git quotes (non-ASCII) or ends with a tab in a diff header (a space) were skipped in `--range` and stopped `--tree`; the paths now come from NUL-separated listings (`ls-tree -z`, `diff-tree -z`, the root commit included) and each file's added lines from its own diff with a literal pathspec
 
+### Security
+- 依存: `ctutils` を 0.4.3 から 0.4.5 に上げた (RUSTSEC-2026-0385、0.4.4 未満の mask / u128 の演算が定数時間でない、blake3 → digest 0.11 経由で lock に入る、`Cargo.lock` のみの変更で ignore は足さない)
+
