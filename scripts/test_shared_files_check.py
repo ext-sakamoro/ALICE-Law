@@ -946,16 +946,85 @@ class FirstMove(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("pending since 2026-10-21, after today", out)
 
-    def test_one_planned_move_at_a_time(self):
+    def test_a_first_move_is_re_rolled_from_the_same_bytes_on_the_same_date(self):
+        # a wrong plan rolls forward in one commit: from the bytes the base moves from, the flag and the date kept
         v4 = SHARED + b"# v4\n"
         second = self.first(target=h(v4), planned=sfc.git_blob(v4))
         self.t.write_text(self.w.table(second), encoding="utf-8")
         code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 0, out)
+        # a later date restarts the clock
+        self.t.write_text(self.w.table(self.first(target=h(v4), planned=sfc.git_blob(v4), since="2026-10-29")),
+                          encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 1, out)
+        self.assertIn("only stays or goes back", out)
+        # from other bytes than the base's move: a second move before the first has landed
+        other = self.first(target=h(v4), planned=sfc.git_blob(v4),
+                           moved_from={"planned": sfc.git_blob(OTHER), "target": h(OTHER)},
+                           variants={h(OTHER): ["ALICE-A", "ALICE-B"]})
+        self.t.write_text(self.w.table(other), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
         self.assertEqual(code, 1, out)
         self.assertIn("one planned move at a time", out)
+        # without the flag while the owner does not hold the new target
+        unflagged = self.first(target=h(v4), planned=sfc.git_blob(v4))
+        del unflagged["pending"]["first_move"]
+        self.t.write_text(self.w.table(unflagged), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 1, out)
+        self.assertIn("first_move dropped", out)
         # the same first move again (the next commit) is fine
         self.t.write_text(self.w.table(self.first()), encoding="utf-8")
         self.assertEqual(self.check("--base-table", str(self.base(self.first())))[0], 0)
+
+    def test_a_planned_row_leaves_the_table_only_at_its_target(self):
+        # closing a plan by hand (back to the bytes it moves from) and planning it again later would restart its
+        # clock: a planned row of the base is uniform only at its own target, and stays in the table
+        self.t.write_text(self.w.table(self.w.uniform()), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: planned to", out)
+        self.assertIn("leaves the table only at its target", out)
+        self.t.write_text(self.w.table(self.w.uniform(path="scripts/t.sh")), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: planned to", out)
+        # converged at the target: fine
+        self.t.write_text(self.w.table(self.w.uniform(sha256=h(V3))), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 0, out)
+        # the same for a planned row that is not a first move
+        self.t.write_text(self.w.table(self.w.uniform(sha256=h(OTHER))), encoding="utf-8")
+        self.assertEqual(self.check("--base-table", str(self.base(self.w.planned())))[0], 1)
+        self.t.write_text(self.w.table(self.w.uniform()), encoding="utf-8")
+        self.assertEqual(self.check("--base-table", str(self.base(self.w.planned())))[0], 0)
+
+    def new_file(self, data: bytes, **override) -> dict:
+        e = {"path": "scripts/n.sh", "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {},
+             "pending": {"since": self.TODAY, "exit": "every listed repository's main has the bytes the registry "
+                         "row moves to", "target": h(data), "owner": "ALICE-A", "planned": sfc.git_blob(data),
+                         "variants": {"absent": ["ALICE-A", "ALICE-B"]}}}
+        e["pending"].update(override)
+        return e
+
+    def test_a_new_file_is_re_rolled_before_it_lands_on_the_same_date(self):
+        v, v2 = b"#!/bin/sh\n# new\n", b"#!/bin/sh\n# new v2\n"
+        self.t.write_text(self.w.table(self.w.uniform(), self.new_file(v2)), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.w.uniform(), self.new_file(v))))
+        self.assertEqual(code, 0, out)
+        self.t.write_text(self.w.table(self.w.uniform(), self.new_file(v2, since="2026-10-29")), encoding="utf-8")
+        self.assertEqual(self.check("--base-table", str(self.base(self.w.uniform(), self.new_file(v))))[0], 1)
+        # once a copy is on a main it is not a new file any more: the owner holding bytes the base did not plan
+        landed = self.new_file(v2, variants={h(v2): ["ALICE-A"], "absent": ["ALICE-B"]})
+        self.t.write_text(self.w.table(self.w.uniform(), landed), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.w.uniform(), self.new_file(v))))
+        self.assertEqual(code, 1, out)
+        # and removing the new file's row is refused
+        self.t.write_text(self.w.table(self.w.uniform()), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.w.uniform(), self.new_file(v))))
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/n.sh: planned to", out)
 
 
 class TheTable(unittest.TestCase):
