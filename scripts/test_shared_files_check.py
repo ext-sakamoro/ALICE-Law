@@ -278,6 +278,18 @@ class Schema(Base):
                 self.assertEqual(self.check()[0], 2)
 
 
+    def test_a_planned_new_file_no_main_holds_yet_loads(self):
+        # a file moving into every listed repository: every copy is absent, so the owner holds "absent" (nothing to
+        # move from); absent next to a present copy is still refused for the owner
+        new = {"path": "scripts/n.sh", "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {},
+               "pending": {"since": "2026-10-10", "exit": "every listed repository's main has the bytes the registry "
+                           "row moves to", "target": h(V3), "owner": "ALICE-A", "planned": sfc.git_blob(V3),
+                           "variants": {"absent": ["ALICE-A", "ALICE-B"]}}}
+        self.assertEqual(len(sfc.load(self.w.table(new))), 1)
+        half = {**new, "pending": {**new["pending"], "variants": {"absent": ["ALICE-A"], h(SHARED): ["ALICE-B"]}}}
+        with self.assertRaisesRegex(sfc.Unreadable, "owner must hold the target"):
+            sfc.load(self.w.table(half))
+
     def test_moved_defects_are_refused(self):
         self.assertEqual(len(sfc.load(self.w.table(self.w.moved()))), 1)
         old = {"planned": sfc.git_blob(SHARED), "target": h(SHARED)}
