@@ -910,10 +910,10 @@ class BaseTreeAtItsPins(unittest.TestCase):
         self.git(self.d, "commit", "-qm", "no pin")
         self.git(self.d, "tag", "-f", "v0.3.0")
         self.probe("0.4.0", "^2", self.v2)
+        # the pin file is in the history of the base but not at it: a broken base, never a fallback
         with self.assertRaises(imc.CheckError) as e:
             imc.check(self.d, None, "tag")
-        self.assertIn("../ALICE-Up", str(e.exception))
-        self.assertIn("no pin", str(e.exception))
+        self.assertIn("broken base", str(e.exception))
 
     def test_a_pin_that_is_not_in_the_sibling_fails(self):
         self.probe("0.3.0", "^1", "ab" * 20)
@@ -1030,6 +1030,127 @@ class GitRevPreviousList(unittest.TestCase):
         passed, problems = self.verify()
         self.assertEqual(passed, [])
         self.assertTrue(any("still passes" in p for p in problems), problems)
+
+
+@unittest.skipUnless(shutil.which("cargo") and shutil.which("git"), "needs cargo and git")
+class BaseBeforePins(unittest.TestCase):
+    """A base tree from before the repository had .github/alice-siblings: each sibling it reaches
+    by path is taken at the newest commit of its origin main (first parent) whose committer date is
+    not later than the base commit's, what CI cloned when the base was built"""
+
+    def env(self, date: str) -> dict:
+        return dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+                    GIT_COMMITTER_EMAIL="t@t", GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.target = Path(tempfile.mkdtemp(prefix="id-move-prepin-target-"))
+        os.environ["ID_MOVE_TARGET_DIR"] = str(cls.target)
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ.pop("ID_MOVE_TARGET_DIR", None)
+        shutil.rmtree(cls.target, ignore_errors=True)
+
+    def git(self, d: Path, *args: str, date: str = "2026-01-01T00:00:00Z") -> str:
+        return subprocess.run(["git", "-C", str(d), *args], check=True, env=self.env(date),
+                              capture_output=True, text=True).stdout.strip()
+
+    def up_commit(self, version: str, date: str) -> str:
+        (self.up / "Cargo.toml").write_text(
+            f'[package]\nname = "alice-up"\nversion = "{version}"\nedition = "2021"\n\n[workspace]\n')
+        self.git(self.up, "add", "-A", date=date)
+        self.git(self.up, "commit", "-qm", version, date=date)
+        self.git(self.up, "pu" + "sh", "-q", "origin", "HEAD:refs/heads/main", date=date)
+        return self.git(self.up, "rev-parse", "HEAD")
+
+    def probe(self, version: str, up_req: str):
+        (self.d / "Cargo.toml").write_text(
+            f'[package]\nname = "probe-crate"\nversion = "{version}"\nedition = "2021"\n\n[dependencies]\n'
+            f'alice-up = {{ path = "../ALICE-Up", version = "{up_req}" }}\n\n[workspace]\n')
+
+    def release(self, date: str):
+        self.git(self.d, "add", "-A", date=date)
+        self.git(self.d, "commit", "-qm", "release", date=date)
+        self.git(self.d, "tag", "-f", "v0.3.0", date=date)
+
+    def setUp(self):
+        self.parent = Path(tempfile.mkdtemp(prefix="id-move-prepin-"))
+        bare = self.parent / "remote" / "ALICE-Up.git"
+        bare.mkdir(parents=True)
+        self.git(bare, "init", "-q", "--bare")
+        self.up = self.parent / "ALICE-Up"
+        (self.up / "src").mkdir(parents=True)
+        (self.up / "src" / "lib.rs").write_text("pub fn f() {}\n")
+        self.git(self.up, "init", "-q")
+        self.git(self.up, "config", "maintenance.auto", "false")
+        self.git(self.up, "remote", "add", "origin", str(bare))
+        self.v1 = self.up_commit("1.0.0", "2026-02-01T00:00:00Z")
+        self.d = self.parent / "ALICE-Probe"
+        (self.d / "src").mkdir(parents=True)
+        (self.d / "scripts").mkdir()
+        (self.d / ".github").mkdir()
+        (self.d / "scripts" / "id_move.toml").write_text(
+            'package = "probe-crate"\nmanifest = "Cargo.toml"\ntags = ["v{version}"]\n'
+            '[[id]]\npath = "probe_crate::SEMANTICS_ID"\n')
+        (self.d / "src" / "lib.rs").write_text("pub const SEMANTICS_ID: [u8; 32] = [0x11; 32];\n")
+        (self.d / "CHANGELOG.md").write_text("# Changelog\n")
+        self.probe("0.3.0", "^1")
+        self.git(self.d, "init", "-q")
+        self.release("2026-03-01T00:00:00Z")
+        # later: the sibling takes a major version, and the working tree follows it with a pin
+        self.v2 = self.up_commit("2.0.0", "2026-04-01T00:00:00Z")
+        self.probe("0.4.0", "^2")
+        (self.d / ".github" / "alice-siblings").write_text(f"ALICE-Up {self.v2}\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.parent, ignore_errors=True)
+
+    def test_each_sibling_is_taken_at_its_main_as_of_the_base_commit(self):
+        problems, report = imc.check(self.d, None, "tag")
+        self.assertEqual(problems, [])
+        self.assertTrue(any(f"../ALICE-Up at {self.v1[:12]}" in r and "base predates pins" in r for r in report),
+                        report)
+        self.assertEqual(sorted(p.name for p in self.parent.iterdir()), ["ALICE-Probe", "ALICE-Up", "remote"])
+
+    def test_the_summary_counts_bases_not_sibling_lines(self):
+        import contextlib
+        import io as _io
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(imc.main(["--root", str(self.d), "--base-from", "tag"]), 0)
+        out = buf.getvalue()
+        self.assertIn("sibling ../ALICE-Up", out)
+        self.assertIn("against 1 base(s), 0 problems", out)
+
+    def test_a_base_whose_history_has_the_pin_file_but_not_at_the_base_fails(self):
+        (self.d / ".github" / "alice-siblings").write_text(f"ALICE-Up {self.v1}\n")
+        self.git(self.d, "add", "-A", date="2026-02-15T00:00:00Z")
+        self.git(self.d, "commit", "-qm", "pins", date="2026-02-15T00:00:00Z")
+        (self.d / ".github" / "alice-siblings").unlink()
+        self.probe("0.3.0", "^1")
+        self.release("2026-03-02T00:00:00Z")
+        self.probe("0.4.0", "^2")
+        (self.d / ".github" / "alice-siblings").write_text(f"ALICE-Up {self.v2}\n")
+        with self.assertRaises(imc.CheckError) as e:
+            imc.check(self.d, None, "tag")
+        self.assertIn("broken base", str(e.exception))
+
+    def test_a_shallow_sibling_fails(self):
+        shutil.rmtree(self.up)
+        subprocess.run(["git", "clone", "-q", "--depth", "1", (self.parent / "remote" / "ALICE-Up.git").as_uri(),
+                        str(self.up)], check=True, capture_output=True)
+        with self.assertRaises(imc.CheckError) as e:
+            imc.check(self.d, None, "tag")
+        self.assertIn("shallow", str(e.exception))
+
+    def test_no_sibling_commit_before_the_base_fails(self):
+        # the release commit dated before the sibling's first commit
+        self.git(self.d, "commit", "-q", "--amend", "--no-edit", "--only", date="2026-01-15T00:00:00Z")
+        self.git(self.d, "tag", "-f", "v0.3.0", date="2026-01-15T00:00:00Z")
+        with self.assertRaises(imc.CheckError) as e:
+            imc.check(self.d, None, "tag")
+        self.assertIn("no commit of its origin main", str(e.exception))
 
 
 if __name__ == "__main__":

@@ -770,22 +770,61 @@ def _sibling_path_deps(repo: Path) -> list[str]:
     return names
 
 
-def materialize_pinned_siblings(tree: Path, real_parent: Path, work: Path) -> None:
+def _sibling_at_date(name: str, real: Path, date: str) -> str:
+    """the newest commit of `real`'s origin main (first parent) whose committer date is not later
+    than `date`: what CI cloned before the repository pinned its siblings"""
+    if git(real, "rev-parse", "--is-shallow-repository").strip() == "true":
+        raise CheckError(f"../{name} is a shallow clone: its main as of {date} cannot be read")
+    subprocess.run(["git", "-C", str(real), "fetch", "-q", "origin"], capture_output=True)
+    r = subprocess.run(["git", "-C", str(real), "rev-list", "-1", "--first-parent", f"--before={date}",
+                        "origin/main"], capture_output=True, text=True)
+    sha = r.stdout.strip()
+    if r.returncode != 0 or not sha:
+        raise CheckError(f"../{name} has no commit of its origin main committed at or before {date} "
+                         f"(the base predates the sibling)")
+    return sha
+
+
+def materialize_pinned_siblings(tree: Path, real_parent: Path, work: Path,
+                                root: Path | None = None, base_ref: str | None = None) -> list[str]:
     """write next to `tree` (a base tree under a fresh parent) every sibling its manifests reach by
     path dependency, at the commit `tree`'s .github/alice-siblings pins, and the siblings those
     reach in turn: the base is built against the siblings it was built against, not today's
-    checkouts (a sibling may since have taken another major version)"""
+    checkouts (a sibling may since have taken another major version)
+
+    A base from before the repository added the pin file (its first add is not an ancestor of
+    `base_ref`) takes each sibling at its origin main as of the base commit's committer date; a
+    base that misses the file although its history has it is broken. Returns what was resolved, as
+    report lines"""
     pins, problems = listed_siblings(tree)
+    as_of = None
+    if not (tree / SIBLINGS_FILE).is_file() and root is not None and base_ref is not None:
+        adds = git(root, "log", "--diff-filter=A", "--format=%H", "--", SIBLINGS_FILE).split()
+        if adds and subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", adds[-1], base_ref],
+                                   capture_output=True).returncode == 0:
+            raise CheckError(f"broken base {base_ref}: {SIBLINGS_FILE} was added in {adds[-1][:12]}, an ancestor "
+                             f"of the base, but the base tree has none")
+        as_of = git(root, "show", "-s", "--format=%cI", base_ref).strip()
+    resolved = []
     own, done, queue = tree.name, set(), [tree]
     while queue:
         repo = queue.pop()
         for name in _sibling_path_deps(repo):
             if name == own or name in done:
                 continue
-            if name not in pins:
+            real = real_parent / name
+            if as_of is not None:
+                if not (real / ".git").exists():
+                    raise CheckError(f"the base tree path-depends on ../{name}, which is not checked out next "
+                                     f"to the repository ({real})")
+                sha = _sibling_at_date(name, real, as_of)
+                resolved.append(f"../{name} at {sha[:12]} (sibling main as of {as_of}, base predates pins)")
+            elif name not in pins:
                 why = "; ".join(problems) if problems else f"{SIBLINGS_FILE} lists no {name}"
                 raise CheckError(f"the base tree path-depends on ../{name} but has no pin for it ({why})")
-            sha, real = pins[name], real_parent / name
+            else:
+                sha = pins[name]
+                resolved.append(f"../{name} at {sha[:12]} (pinned by the base tree)")
             if not (real / ".git").exists():
                 raise CheckError(f"the base tree pins ../{name} at {sha[:12]}, which is not checked out next "
                                  f"to the repository ({real})")
@@ -804,6 +843,7 @@ def materialize_pinned_siblings(tree: Path, real_parent: Path, work: Path) -> No
                     raise CheckError(f"git {args[0]} {sha[:12]} in ../{name}: {r.stderr.strip()}")
             done.add(name)
             queue.append(dst)
+    return resolved
 
 
 def git_rev_dependency(root: Path, crate_dir: Path, crate: str) -> dict | str | None:
@@ -1163,6 +1203,7 @@ def check_against(root: Path, base_ref: str | None, kind: str, base_from: str = 
     # to what the base was built against
     fresh = root.resolve().parent / f".id-move-base-{os.getpid()}"
     wt = fresh / root.resolve().name
+    siblings: list[str] = []
     try:
         # every file of the tag, written through a throwaway index: the repository's own index and
         # checkout are not touched, nothing is registered, and unlike `git archive` no file marked
@@ -1173,7 +1214,7 @@ def check_against(root: Path, base_ref: str | None, kind: str, base_from: str = 
             r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, env=env)
             if r.returncode != 0:
                 raise CheckError(f"git {args[0]} {base_ref}: {r.stderr.strip()}")
-        materialize_pinned_siblings(wt, root.resolve().parent, work)
+        siblings = materialize_pinned_siblings(wt, root.resolve().parent, work, root, base_ref)
         base = read_ids(wt, cfg, target, with_previous=False, is_base=True)
         shutil.rmtree(fresh, ignore_errors=True)
         head = read_ids(root, cfg, target)
@@ -1184,6 +1225,7 @@ def check_against(root: Path, base_ref: str | None, kind: str, base_from: str = 
         shutil.rmtree(work, ignore_errors=True)
     what = ("the commit before the newest version bump on " + main_ref) if kind == "bump" else "the tag's tree"
     report.insert(0, f"base {base_ref}: {what} ({base_version}), working tree {head_version}")
+    report.extend(f"base {base_ref} sibling {line}" for line in siblings)
     return problems, report
 
 
@@ -1225,7 +1267,8 @@ def main(argv: list[str] | None = None) -> int:
     if not compared:
         print("id_move_check: compared no identifier", file=sys.stderr)
         return 1
-    bases = len(report) - len(compared)
+    # one header line per base ("base <ref>: ..." / "no base ..."); a sibling line names its base too
+    bases = sum(1 for r in report if r.startswith("no base") or re.match(r"base \S+: ", r))
     print(f"id_move_check: {len(compared)} identifier comparison(s) against {bases} base(s), 0 problems")
     return 0
 
