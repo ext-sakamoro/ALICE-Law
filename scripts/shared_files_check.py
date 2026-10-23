@@ -25,15 +25,20 @@ different file at the same path), and either
     moving row that records a variant the base did not have. With --base-table, a table with more
     unplanned pending rows than the base is a finding (a planned row may be born; an
     unplanned divergence may not grow), and so is a row pending in both whose `since` is
-    later than the base's (the age limits cannot be restarted by editing the date), and a
+    later than the base's (the age limits cannot be restarted by editing the date), a
     planned row whose planned id differs from the base's without `moved_from` naming the
-    base's planned id and target (or a `moved_from` the base does not explain).
+    base's planned id and target (or a `moved_from` the base does not explain), and a planned
+    row of the base that the table no longer lists or lists as uniform at other bytes than its
+    target: a planned row leaves the table only at its target (closed by hand and planned
+    again later, its clock would restart), so a wrong plan is rolled forward.
 
     The first move of a uniform row (`first_move = true`): the row is planned before any main
     holds the new bytes, because no copy could take them first (each repository's check
     refuses a copy the table does not record). --base-table accepts it only from a base row
     that is uniform with exactly the bytes `moved_from` names and with every copy recorded at
-    them, and refuses a second planned move of the row before the first has landed. Live:
+    them. Before the owner lands it, a first move (and a new file) may be re-rolled to other
+    bytes in one commit, from the same bytes as the base's move, keeping its date and the flag;
+    a second planned move from other bytes is refused until the first has landed. Live:
     until the owner's main holds the target, the planned bytes must be real: either the owner has
     the planned blob at the path on the tip of its main or a ci/ branch with the target's SHA-256,
     or the table's own repository carries them as `planned/<blob>` next to the table (a file whose
@@ -787,17 +792,24 @@ def main(argv: list[str]) -> int:
                     problems.append(f"{e['path']}: a moving row records variant(s) {', '.join(k[:12] for k in added)} "
                                     "the base table does not have (a variant counts only when recorded before the "
                                     "move)")
-            if (b is not None and b.get("first_move") and b["planned"] == p["planned"] and not p.get("first_move")
+            if (b is not None and b.get("first_move") and not p.get("first_move")
                     and p["owner"] not in p["variants"].get(p["target"], [])):
                 problems.append(f"{e['path']}: first_move dropped while the owner {p['owner']} does not hold the target "
                                 f"{p['target'][:12]} (gen_shared_files.py drops the flag once the owner's main has it)")
             if b is not None and b.get("first_move") and b["planned"] != p["planned"]:
+                # re-rolled before the owner landed it: still the one move, from the bytes the base moves from
+                if m == b.get("moved_from"):
+                    continue
                 problems.append(f"{e['path']}: the base's first move to {b['planned'][:12]} has not landed: one planned "
                                 f"move at a time (not {p['planned'][:12]})")
             elif b is not None and b["planned"] != p["planned"]:
                 # from the base's planned bytes, or (a second re-roll before the owner landed the first) from the
                 # bytes the base itself was moving from, which the mains still hold
-                if m != {"planned": b["planned"], "target": b["target"]} and (m is None or m != b.get("moved_from")):
+                # (a new file re-rolled before any main holds it moves from nothing: no copy is anywhere yet)
+                fresh = (m is None and "moved_from" not in b and set(p["variants"]) == {"absent"}
+                         and set(base_variants.get(e["path"], {})) == {"absent"})
+                if (not fresh and m != {"planned": b["planned"], "target": b["target"]}
+                        and (m is None or m != b.get("moved_from"))):
                     problems.append(f"{e['path']}: the planned id moved from {b['planned'][:12]} to "
                                     f"{p['planned'][:12]} without moved_from naming the base's planned id and target")
             elif (m is not None and b is None and p.get("first_move") and base_uniform.get(e["path"]) == m["target"]
@@ -806,6 +818,16 @@ def main(argv: list[str]) -> int:
             elif m is not None and (b is None or b.get("moved_from") != m):
                 problems.append(f"{e['path']}: moved_from names {m['planned'][:12]}, which is not the base table's "
                                 "planned id for this row")
+        # a planned row leaves the table only at its target: closing it by hand (back to the bytes it moves from,
+        # or dropping the row) and planning it again later would restart its clock, so a wrong plan rolls forward
+        now = {e["path"]: e for e in entries}
+        for path, b in sorted(base_planned.items()):
+            e = now.get(path)
+            if e is not None and ("pending" in e or e.get("sha256") == b["target"]):
+                continue
+            where = "is not in the table" if e is None else f"is uniform at {str(e.get('sha256'))[:12]}"
+            problems.append(f"{path}: planned to {b['target'][:12]} in the base table, and {where} (a planned row "
+                            "leaves the table only at its target: a wrong plan is re-rolled with --target)")
         planned, unplanned = pending_counts(entries)
         if planned + unplanned != c[3]:
             problems.append(f"the pending rows counted ({c[3]}) are not the planned and unplanned ones "

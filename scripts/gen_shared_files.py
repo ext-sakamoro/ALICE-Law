@@ -254,13 +254,30 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
                 # moving off the planned bytes, refused below, not a new file)
                 entries.append({**base, "pending": {**prev, "variants": variants}})
                 continue
-            if prev.get("first_move"):
-                raise sfc.Unreadable(f"{row['path']}: the first move to {prev['planned'][:12]} has not landed: one "
-                                     f"planned move at a time (land it, or end it by hand, before next= {nxt[:12]})")
+            fresh = "moved_from" not in prev and set(found) == set(prev.get("variants", {})) == {"absent"}
+            if prev.get("first_move") or fresh:
+                # the owner has not landed the plan: it is re-rolled in place, on the date it became planned (closing
+                # it by hand and planning it again later would restart its clock, and the table refuses that)
+                if row["path"] not in targets:
+                    raise sfc.Unreadable(f"{row['path']}: the registry's next= {nxt[:12]} re-rolls the plan to "
+                                         f"{prev['planned'][:12]}, which has not landed: give the new bytes' SHA-256 "
+                                         "and owner with --target PATH=SHA256@ALICE-X")
+                target, owner = targets[row["path"]]
+                if owner not in base["repos"]:
+                    raise sfc.Unreadable(f"{row['path']}: the owner {owner} is not one of the listed repositories")
+                pending = {"since": prev["since"], "exit": EXIT_NEXT, "target": target, "owner": owner,
+                           "planned": nxt}
+                if prev.get("first_move"):
+                    if set(found) != {prev["moved_from"]["target"]}:
+                        raise sfc.Unreadable(f"{row['path']}: the first move is from {prev['moved_from']['target'][:12]}"
+                                             ", which not every listed main holds any more")
+                    pending.update({"moved_from": prev["moved_from"], "first_move": True})
+                entries.append({**base, "pending": {**pending, "variants": variants}})
+                continue
             if nxt == prev["planned"]:
                 raise sfc.Unreadable(f"{row['path']}: the planned bytes {nxt[:12]} are on no listed main any more "
                                      "(the owner moved off them: give the bytes the rollout goes to with --target "
-                                     "and the registry's next=, or end the rollout by hand)")
+                                     "and the registry's next=; a planned row leaves the table only at its target)")
             if row["path"] not in targets:
                 raise sfc.Unreadable(f"{row['path']}: the registry's next= {nxt[:12]} moves the planned row to bytes "
                                      "no listed main holds yet: give their SHA-256 and owner with --target "
