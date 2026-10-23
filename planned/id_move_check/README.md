@@ -11,3 +11,4 @@ shared-files move lands in the repositories. Nothing in this repository runs the
   name and a link to every sibling repository the manifests reach by path dependency (read from
   every `Cargo.toml`, also the siblings' own), so a sibling that points back at this repository
   builds against the copy; a named sibling that is not checked out fails
+- a base tree that has no `.github/alice-siblings` takes each sibling at its origin main (first-parent line) as of the base commit's committer date, but only when no commit of the base's first-parent history has the file; a base that lacks it after a removal fails as broken

@@ -1136,6 +1136,39 @@ class BaseBeforePins(unittest.TestCase):
             imc.check(self.d, None, "tag")
         self.assertIn("broken base", str(e.exception))
 
+    def test_a_base_after_a_removal_fails_even_when_the_file_is_added_again_later(self):
+        # add -> remove -> base -> add again: the newest add is not an ancestor of the base, but
+        # the base's history had the file, so the fallback does not apply
+        (self.d / ".github" / "alice-siblings").write_text(f"ALICE-Up {self.v1}\n")
+        self.git(self.d, "add", "-A", date="2026-02-15T00:00:00Z")
+        self.git(self.d, "commit", "-qm", "pins", date="2026-02-15T00:00:00Z")
+        (self.d / ".github" / "alice-siblings").unlink()
+        self.probe("0.3.0", "^1")
+        self.release("2026-03-02T00:00:00Z")
+        self.probe("0.4.0", "^2")
+        (self.d / ".github" / "alice-siblings").write_text(f"ALICE-Up {self.v2}\n")
+        self.git(self.d, "add", "-A", date="2026-04-02T00:00:00Z")
+        self.git(self.d, "commit", "-qm", "pins again", date="2026-04-02T00:00:00Z")
+        with self.assertRaises(imc.CheckError) as e:
+            imc.check(self.d, None, "tag")
+        self.assertIn("broken base", str(e.exception))
+
+    def test_the_sibling_is_read_on_its_first_parent_line_not_a_merged_side_branch(self):
+        # a side-branch commit dated before the base, merged into main after it: main as of the
+        # base date was v1, not the side commit
+        self.git(self.up, "checkout", "-q", "-b", "side", self.v1)
+        (self.up / "src" / "side.rs").write_text("// side\n")
+        self.git(self.up, "add", "-A", date="2026-02-20T00:00:00Z")
+        self.git(self.up, "commit", "-qm", "side", date="2026-02-20T00:00:00Z")
+        side = self.git(self.up, "rev-parse", "HEAD")
+        self.git(self.up, "checkout", "-q", "main")
+        self.git(self.up, "merge", "-q", "--no-ff", "-m", "merge side", "side", date="2026-04-10T00:00:00Z")
+        self.git(self.up, "pu" + "sh", "-q", "origin", "HEAD:refs/heads/main", date="2026-04-10T00:00:00Z")
+        problems, report = imc.check(self.d, None, "tag")
+        self.assertEqual(problems, [])
+        self.assertTrue(any(f"../ALICE-Up at {self.v1[:12]}" in r for r in report), report)
+        self.assertFalse(any(f"../ALICE-Up at {side[:12]}" in r for r in report), report)
+
     def test_a_shallow_sibling_fails(self):
         shutil.rmtree(self.up)
         subprocess.run(["git", "clone", "-q", "--depth", "1", (self.parent / "remote" / "ALICE-Up.git").as_uri(),

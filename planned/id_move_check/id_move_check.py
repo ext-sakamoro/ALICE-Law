@@ -792,18 +792,19 @@ def materialize_pinned_siblings(tree: Path, real_parent: Path, work: Path,
     reach in turn: the base is built against the siblings it was built against, not today's
     checkouts (a sibling may since have taken another major version)
 
-    A base from before the repository added the pin file (its first add is not an ancestor of
-    `base_ref`) takes each sibling at its origin main as of the base commit's committer date; a
-    base that misses the file although its history has it is broken. Returns what was resolved, as
+    A base from before the repository had the pin file (no commit of `base_ref`'s first-parent
+    history has it) takes each sibling at its origin main as of the base commit's committer date;
+    a base that misses the file although its first-parent history has it is broken. Returns what was resolved, as
     report lines"""
     pins, problems = listed_siblings(tree)
     as_of = None
     if not (tree / SIBLINGS_FILE).is_file() and root is not None and base_ref is not None:
-        adds = git(root, "log", "--diff-filter=A", "--format=%H", "--", SIBLINGS_FILE).split()
-        if adds and subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", adds[-1], base_ref],
-                                   capture_output=True).returncode == 0:
-            raise CheckError(f"broken base {base_ref}: {SIBLINGS_FILE} was added in {adds[-1][:12]}, an ancestor "
-                             f"of the base, but the base tree has none")
+        # the fallback is for a base from before the pins only: if any commit of the base's
+        # first-parent history has the file, the base lacks it because it was removed, and is broken
+        touched = git(root, "log", "--first-parent", "--format=%H", base_ref, "--", SIBLINGS_FILE).split()
+        if touched:
+            raise CheckError(f"broken base {base_ref}: {SIBLINGS_FILE} is in the base's first-parent history "
+                             f"(last changed in {touched[0][:12]}), but the base tree has none")
         as_of = git(root, "show", "-s", "--format=%cI", base_ref).strip()
     resolved = []
     own, done, queue = tree.name, set(), [tree]
