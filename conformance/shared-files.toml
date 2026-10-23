@@ -7,7 +7,7 @@
 path = ".github/actions/alice-siblings/action.yml"
 sha256 = "ab023fb96ca6a25d31032b59debde1a599970f729120ecb5d56e40d1339ecdab"
 source = { repo = "ALICE-Analytics", rev = "12630d7e24575bd27022d137a69785d5d196f550" }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL"]
 
 [[file]]
 path = ".github/workflows/eol.yml"
