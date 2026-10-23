@@ -425,14 +425,14 @@ def main(argv: list[str]) -> int:
             widen(rows, repo_of)
             planned_ids = next_ids(a.next_from.read_text(encoding="utf-8")) if a.next_from else None
             entries = build(rows, repo_of, old, today, targets, planned_ids)
+        if not entries:
+            print("gen_shared_files: no entry to write (compared nothing)", file=sys.stderr)
+            return 2
+        text = render(entries)
+        sfc.load_all(text)  # what is written must read back under the schema (a refusal, not a crash)
     except (sfc.Unreadable, OSError, ValueError, subprocess.CalledProcessError) as e:
         print(f"gen_shared_files: {e}", file=sys.stderr)
         return 2
-    if not entries:
-        print("gen_shared_files: no entry to write (compared nothing)", file=sys.stderr)
-        return 2
-    text = render(entries)
-    sfc.load_all(text)  # what is written must read back under the schema
     n = sum(len(e["repos"]) for e in entries)
     p = sum("pending" in e for e in entries)
     if a.check:
