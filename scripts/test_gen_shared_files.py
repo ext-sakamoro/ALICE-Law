@@ -352,6 +352,22 @@ class Generate(Base):
         self.assertIn("on no listed main any more", out)
         self.assertEqual(self.t.read_text(encoding="utf-8"), before, "the table is not rewritten")
 
+    def test_a_table_that_would_not_read_back_exits_2_and_is_not_written(self):
+        # a new file recorded all absent, then a non-owner lands other bytes: the rows built would not load under the
+        # schema (the owner holds neither the target nor "absent"), and that is a refusal with a message, not a crash
+        v = b"#!/bin/sh\n# new shared file\n"
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
+        code, out = self.gen("--write", "--registry", str(reg), "--next-from", str(reg),
+                             "--target", f"scripts/n.sh={h(v)}@ALICE-A")
+        self.assertEqual(code, 0, out)
+        before = self.t.read_text(encoding="utf-8")
+        self.w.commit("ALICE-B", {"scripts/n.sh": OTHER})
+        code, out = self.gen("--write", "--next-from", str(reg))
+        self.assertEqual(code, 2, out)
+        self.assertIn("gen_shared_files: ", out)
+        self.assertIn("scripts/n.sh", out)
+        self.assertEqual(self.t.read_text(encoding="utf-8"), before, "the table is not rewritten")
+
     def test_a_new_path_s_owner_must_be_listed(self):
         v = b"#!/bin/sh\n# new shared file\n"
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
