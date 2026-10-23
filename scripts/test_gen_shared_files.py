@@ -340,6 +340,26 @@ class Generate(Base):
         self.assertEqual(code, 2, out)
         self.assertIn("on no listed main any more", out)
 
+    def test_a_planned_row_deleted_from_every_main_is_refused_not_relabelled_new(self):
+        # the copies were there when the row was planned: all absent now is the owner moving off the bytes, not a
+        # new file no main holds yet (that is only a row whose recorded variants were all absent too)
+        self.landed_v2()
+        before = self.t.read_text(encoding="utf-8")
+        self.w.commit("ALICE-A", {"scripts/s.sh": None})
+        self.w.commit("ALICE-B", {"scripts/s.sh": None})
+        code, out = self.gen("--write")
+        self.assertEqual(code, 2, out)
+        self.assertIn("on no listed main any more", out)
+        self.assertEqual(self.t.read_text(encoding="utf-8"), before, "the table is not rewritten")
+
+    def test_a_new_path_s_owner_must_be_listed(self):
+        v = b"#!/bin/sh\n# new shared file\n"
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
+        code, out = self.gen("--write", "--registry", str(reg), "--next-from", str(reg),
+                             "--target", f"scripts/n.sh={h(v)}@ALICE-C")
+        self.assertEqual(code, 2, out)
+        self.assertIn("scripts/n.sh: the owner ALICE-C is not one of the listed repositories", out)
+
     def test_a_next_id_that_no_copy_has_does_not_make_a_planned_row(self):
         reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tenforced\tnext=" + "1" * 40 + "\n")
         self.gen("--write", "--registry", str(reg))
