@@ -230,6 +230,8 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
             target = blobs[nxt]
             if set(found) != {target}:
                 holders = [r for r in row["order"] if r in found[target]]
+                # the owner is whoever holds the planned bytes: the recorded one while it does, else the first holder
+                # (a non-owner landing a new file first becomes its owner: the bytes, not the name, are the plan)
                 owner = prev["owner"] if prev and prev["owner"] in holders else holders[0]
                 # the clock runs from when the row became planned, under whatever id: a re-rolled target does not
                 # restart it (it resets only when the row leaves the planned state)
@@ -245,8 +247,11 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
             # the planned bytes are on no main: a re-roll to bytes no main holds yet. The row stays planned
             # with the new target only when its bytes are given (or already recorded); it is never dropped
             # to what the copies say (that would turn a rollout into an unplanned divergence silently)
-            if nxt == prev["planned"] and ("moved_from" in prev or set(found) == {"absent"}):
-                # moved from recorded bytes, or a new file no main holds yet: the plan stands until the owner lands
+            if nxt == prev["planned"] and ("moved_from" in prev
+                                           or set(found) == set(prev.get("variants", {})) == {"absent"}):
+                # moved from recorded bytes, or a new file no main held when it was planned and none holds yet: the
+                # plan stands until the owner lands (a row whose copies were there and are all gone now is the owner
+                # moving off the planned bytes, refused below, not a new file)
                 entries.append({**base, "pending": {**prev, "variants": variants}})
                 continue
             if prev.get("first_move"):
