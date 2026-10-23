@@ -52,13 +52,13 @@ class Generate(Base):
         # exemptions come from the table as for every registry row (a registry run must not drop such a row)
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         text = self.t.read_text(encoding="utf-8") + (
-            '\n[[file]]\npath = "scripts/own.toml"\nrepos = []\nexempt = { "ALICE-A" = "this repository\'s own list '
+            '\n[[file]]\npath = "scripts/zz_own.toml"\nrepos = []\nexempt = { "ALICE-A" = "this repository\'s own list '
             'of its own files", "ALICE-B" = "this repository\'s own list of its own files" }\n')
         self.t.write_text(text, encoding="utf-8")
-        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\nscripts/own.toml\t-\n")
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\nscripts/zz_own.toml\t-\n")
         code, out = self.gen("--write", "--registry", str(reg))
         self.assertEqual(code, 0, out)
-        e = self.entries()["scripts/own.toml"]
+        e = self.entries()["scripts/zz_own.toml"]
         self.assertEqual((e["repos"], sorted(e["exempt"])), ([], ["ALICE-A", "ALICE-B"]))
         self.assertEqual(self.gen("--check")[0], 0)
 
@@ -66,10 +66,11 @@ class Generate(Base):
         # a file no main holds yet, moving into every listed repository: planned from the start (the registry's
         # next= and --target name its bytes and owner), so the rollout is explicit and the ratchet allows it
         v = b"#!/bin/sh\n# new shared file\n"
-        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         base = Path(self.tmp.name) / "base.toml"
         base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
+        # (registry() writes one file: the registry with the new row is made after the base run)
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
         code, out = self.gen("--write", "--registry", str(reg), "--next-from", str(reg),
                              "--target", f"scripts/n.sh={h(v)}@ALICE-A")
         self.assertEqual(code, 0, out)
