@@ -166,6 +166,15 @@ PRIVATE_NAME_HASHES = DEVICE_NAME_HASHES | {
     "c857d09db23e6822e3600bc06ad8d58f92ed62bc8efd81c753f77048662cb97d",
     "b5cf43ae07a7364e0c0ca9e838f01f278fc6a71c207a6f8c3de8d908608b2db1",
     "28e174396028f226b3bead259d19749205378d9204ce12fd9b1918ab6032a15d",
+    "c70eca6b0f88f44d81a41311647e50fda1ac454ec04ffd442b0eb4743a993131",
+    "60965168ce762e949600281ba6d01fee136e5b6e8257b1f216f9025ed324474c",
+    "ea198c98bbb82c6d3163194fac6132c3f41a95e1be9235cab986980f5ba04253",
+    "7d3194f79e645c42e4396dda38be04766810ec6a00d00aced3ffc2a0a1f1a9ef",
+    "f3ed9ee201ce50b5961e91b689cad0460a7c48848f7954f6dc96be2d1e435816",
+    "ceaf6109c3cc4fea4dfda2b5ba0665b95cda7bc99efbf0b5c4e5826fce812bf0",
+    "c547687a37cc0ecabffbad2699540f419a47e0a86b77fd9c0140b88bb32bc80c",
+    "6f7ac1823da81d2e52d1a1549ee69c85bbf8bb56d06682849e7c09da2785ce3b",
+    "6faef1df454754cb29df4e7e91bf6e37f64060ba852cb61d9f201f7b2a96b6bc",
     # titles and settings of a work that are not to appear in public text
     "19f798ce9f70706dd4334369cbf056e51922830d480360b8ace258e818ba7dd4",
     "f20f5b0dfb30b315a2adacb9fd240ce53301a01a4cbc4c16b26c1c64c815eaa8",
@@ -346,8 +355,9 @@ def private_names(line: str) -> list[str]:
 # that scope. Build an entry with `--allow-hash <path or dir/> <name>`. In `--tree`, an
 # entry of this repository that allows another number of lines than its count fails the
 # check (a new mention under a prefix, a removed one, or a mistyped entry).
+# keyed by repo_key(<repository name>)
 ALLOWED: dict[str, dict[str, int]] = {
-    "ALICE-LOL": {
+    "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192": {
         # the Agent Skills format word in the product's own skill (each file of skills/lol-sdf/, per word,
         # at the lines it is on; the skills/ directory as a path is not the word)
         "512ad23a184edef1a5d78480c4fb4cbd03528ce6196b8df9bedeb361a27f2cfd": 10,
@@ -358,7 +368,7 @@ ALLOWED: dict[str, dict[str, int]] = {
         "27b4d045e26de80668342952060c7d9a66b37840945cbef23f49a7b47627bf36": 1,
         "d2cf3aa96340fe696a4f84c4263ac02d56f9714c6c7fa839569f76a10a6f9c4e": 1,
     },
-    "ALICE-SDF": {
+    "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813": {
         # the getting-started guides name the product's own agent skill and the tools that install it
         # (the heading and the paragraph under it, in English and Japanese): "skill" on 2 lines of each
         # (the skills/implicit-cad/ path there is the directory, not the word)
@@ -385,7 +395,7 @@ ALLOWED: dict[str, dict[str, int]] = {
         "2d5c1dc549cf7601676a0cb7f5452d20be3fa5f1d0f55140305152ca6be22625": 1,
         "e7fc9e6005c1c2d4cad2be2070cced19d2ce2874f93d046f0cabe7194671d81c": 2,
     },
-    "text-to-print": {
+    "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970": {
         "8e3dd0d012a2b0488d6e314c823c6db1fc86881986cf3597f9cd9f3365108bb7": 2,
         "525b28df28e719b319178d0fcd956e3932174b4719f6c659081fa554415d633a": 2,
         "938fe3b8cdc685f71f04da5f9a7e225edfddd6e89137a73eee378842cfaf329b": 2,
@@ -402,7 +412,7 @@ ALLOWED: dict[str, dict[str, int]] = {
         "ffb612c1d576098613b338fc531a3e5defa9fa781e646cbe11d0c55536a753aa": 1,
         "e0ad96a94c13edafde51753681e9e1e936ec647f6df219c5ee6eb70c6da67bea": 1,
     },
-    "ALICE-CodeTracker": {
+    "3a983693b3386aed1c03b948f8160c17895986e69a4ba48966a24ea98ebc3b6d": {
         # the product records LLM coding sessions through a provider hook: the provider's and its
         # coding tool's names in the hook installer, its settings path, the model IDs of the cost
         # table and the docs of that feature, per published file of the mirror's allowlist
@@ -442,7 +452,7 @@ ALLOWED: dict[str, dict[str, int]] = {
         "8da6c361946741a699522f3e1c8818e06df9526873c3fc3314d2a7361981c336": 2,
         "4332255961133c06c86d1c42c2ebecc694d3f4467789356fdd88050f8fe34dba": 1,
     },
-    "voicebox": {
+    "38e19ab81bc34c0b638d4f0fa92e95d030e127bb8897517fe70ba91c5227e5b5": {
         "b1b065b5f49f4b5fa7b6c07d114bc8398be43a8635a8753ecd4155c2f3af524b": 4,
     },
 }
@@ -1786,6 +1796,11 @@ def suggest_allow(repo: str, ref: str, scope: str) -> int:
     return 0
 
 
+def repo_key(name: str) -> str:
+    """the allow table's key for a repository: sha256 of its name"""
+    return hashlib.sha256(name.encode("utf-8")).hexdigest()
+
+
 def repo_name(repo: str) -> str | None:
     """the repository's name from its origin URL (".../<name>.git"), or None"""
     r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"], capture_output=True, text=True)
@@ -1831,7 +1846,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.suggest_allow is not None:
         return suggest_allow(a.repo, a.suggest_allow[0], a.suggest_allow[1])
     name = a.repo_name or repo_name(a.repo)
-    ALLOW_STATE["allowed"] = dict(ALLOWED.get(name, {})) if name else {}
+    ALLOW_STATE["allowed"] = dict(ALLOWED.get(repo_key(name), {})) if name else {}
     ALLOW_STATE["repo"] = name
     ALLOW_STATE["used"] = {}
     try:
