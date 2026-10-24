@@ -497,21 +497,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "7baaf1e0f9ceea355ebf5dcd904566ba12d3e096d9a0c0707fe7ee95f9619ce3"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "7baaf1e0f9ceea355ebf5dcd904566ba12d3e096d9a0c0707fe7ee95f9619ce3"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "7baaf1e0f9ceea355ebf5dcd904566ba12d3e096d9a0c0707fe7ee95f9619ce3"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
 repo = "7bc7bbf1c0be20ad56186deeee18e365398c650bb49bc70e7cd01bc3d26467dc"
 kind = "authors"
 path = "Cargo.toml"
@@ -553,21 +538,6 @@ path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "8159b9624dcbd405aafb542894a3939254c02bc227268e698841e60fc5374cc3"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "8159b9624dcbd405aafb542894a3939254c02bc227268e698841e60fc5374cc3"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "8159b9624dcbd405aafb542894a3939254c02bc227268e698841e60fc5374cc3"
 kind = "holder"
 path = "TRADEMARK_NOTICE"
 
@@ -687,11 +657,6 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
-repo = "a56840b70bd58bd009a09dab821ea88b545c441c38cb2caf6994e617b0559927"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
 repo = "aa878435373fbfa0bb3926d78f7d7ba79f6c20d2fe7ad72da011a595f2cd46f9"
 kind = "authors"
 path = "Cargo.toml"
@@ -772,36 +737,6 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
-repo = "b7843aa111884f6528dd4136664d85df9f7f5ae4e3c0f12360a52d339f3ca704"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "b7843aa111884f6528dd4136664d85df9f7f5ae4e3c0f12360a52d339f3ca704"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "b7843aa111884f6528dd4136664d85df9f7f5ae4e3c0f12360a52d339f3ca704"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "bb18be8c6098b804c31199bd3af59ef0bc14d13aa3807ac1d322cc1fe43b38c0"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "bb18be8c6098b804c31199bd3af59ef0bc14d13aa3807ac1d322cc1fe43b38c0"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "bb18be8c6098b804c31199bd3af59ef0bc14d13aa3807ac1d322cc1fe43b38c0"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
 repo = "bb84ef653b9571eaec0fea344534fcf0f36cf2c336d3a50530326aca87e4ce85"
 kind = "authors"
 path = "Cargo.toml"
@@ -862,26 +797,6 @@ kind = "holder"
 path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
-repo = "cf98e874c6ab6a8653ee36fce0c4ff90f76191c48f1ae94450bab941fa1b80fd"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "cf98e874c6ab6a8653ee36fce0c4ff90f76191c48f1ae94450bab941fa1b80fd"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "cf98e874c6ab6a8653ee36fce0c4ff90f76191c48f1ae94450bab941fa1b80fd"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "d13a01ef62c1f9c0f0b273f30f9570ec2190dd1077f4201d7aede42553219481"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
 repo = "d2061a3f593eb506233333fd45d4cca5a9ed02ac1f7f19185d57e196d0764ddd"
 kind = "authors"
 path = "Cargo.toml"
@@ -930,21 +845,6 @@ path = "LICENSE-COMMERCIAL.md"
 repo = "d8d855545eadba30f6aa844916a29edb1abafdcdeca987dc60299cd692114384"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "db903a80fd14e2f240f8cc74a725700a4d7d80d331f213c52ca8134284cdfb81"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "db903a80fd14e2f240f8cc74a725700a4d7d80d331f213c52ca8134284cdfb81"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "db903a80fd14e2f240f8cc74a725700a4d7d80d331f213c52ca8134284cdfb81"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "e14da12cd76987da67eca6bc073cef88b131fc73bc5d7b48c3190d6e950dbe06"
