@@ -279,6 +279,7 @@ class Patch(unittest.TestCase):
         code, config, err = self.run_patch("split", graphs=graphs)
         self.assertEqual(code, 2)
         self.assertIn("no fixed point", err)
+        self.assertEqual(config, "")  # no config the graph does not match is left for the build
 
     def test_the_root_package_is_patched_before_the_rename(self):
         code, config, err = self.run_patch("one")
@@ -373,8 +374,8 @@ class Entries(unittest.TestCase):
         written = {("alice-det-math", DETMATH_URL), ("alice-det-math", "crates-io")}
         problems, used = mm.entry_problems(written, meta)
         self.assertEqual(used, 0)
-        self.assertEqual(problems, [f"patch entry alice-det-math from {DETMATH_URL}: not used",
-                                    "patch entry alice-det-math from crates-io: not used"])
+        self.assertEqual(problems, ["patch entry alice-det-math from crates-io: not used",
+                                    f"patch entry alice-det-math from {DETMATH_URL}: not used"])
         problems, used = mm.entry_problems({("alice-det-math", DETMATH_URL)},
                                            graph([("alice-db", "alice-det-math", DETMATH_GIT, None)]))
         self.assertEqual((problems, used), ([], 1))

@@ -4,10 +4,18 @@
 Main mode runs the same test as the published mode, with every core crate replaced
 by a checkout of its repository's main branch. The checkouts sit side by side in
 one directory (as the repositories expect: alice-lol depends on ../../ALICE-SDF and
-others by path), and this script writes a Cargo `[patch.crates-io]` table that
-points each crate at its checkout. A crate is found in its checkout by its package name
-(the root package or a workspace member), so a crate that moves inside its repository
-is still patched from where it is.
+others by path), and this script writes Cargo `[patch]` tables that point each crate
+at its checkout. A crate is found in its checkout by its package name (the root
+package or a workspace member), so a crate that moves inside its repository is still
+patched from where it is.
+
+Cargo applies a `[patch]` table to one source only: `[patch.crates-io]` to the
+requirements on crates.io, `[patch."<git URL>"]` to the requirements naming that
+repository by a commit. The core crates name each other both ways (a crate on main can
+require a sibling by a git commit), so the patch writes one entry per (crate, source)
+the resolved graph names, and repeats until a pass names no new one: without the git
+entries the commit a consumer names is linked beside the checkout, two copies of one
+crate in one build. A source the graph does not name gets no entry.
 
     python3 scripts/main_mode.py patch  <checkouts>   # writes e2e/.cargo/config.toml
     python3 scripts/main_mode.py verify               # after `cargo metadata` can resolve
@@ -21,7 +29,8 @@ before the push by the pre-push wiring check and before publishing by
 `scripts/release_train.py publish-gate`.
 
 `verify` reads the resolved graph of e2e/ and fails unless every crate below came
-from its checkout, each at least once. Cargo leaves a patch unused, and takes the
+from its checkout, each at least once, and every written entry was used (a requirement
+from that source resolved to the checkout; none used fails). Cargo leaves a patch unused, and takes the
 crate from crates.io instead, when the version on main does not match a requirement
 on it: after the raise that can only be a requirement of one core crate on another
 (for example a new major version on main that another crate's main does not accept
@@ -164,30 +173,122 @@ def crate_dir(checkout: Path, crate: str) -> Path:
     return found[0]
 
 
+CRATES_IO = "crates-io"
+# passes of the patch before it gives up on a fixed point (each pass can only add sources the
+# checkouts name, a handful at most)
+MAX_PASSES = 8
+
+
+def metadata() -> dict:
+    """`cargo metadata` of e2e/ as it is patched now"""
+    out = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--manifest-path", str(E2E / "Cargo.toml")],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=E2E,  # Cargo reads e2e/.cargo/config.toml from the working directory
+    ).stdout
+    return json.loads(out)
+
+
+def source_key(source: str | None) -> str | None:
+    """the [patch] table a requirement's declared source belongs to: "crates-io", the git URL
+    (without the commit), or None for a path requirement"""
+    if source is None:
+        return None
+    if source.startswith("registry+https://github.com/rust-lang/crates.io-index"):
+        return CRATES_IO
+    if source.startswith("git+"):
+        return re.split(r"[?#]", source[len("git+"):], maxsplit=1)[0]
+    return source
+
+
+def _requirements(meta: dict):
+    """(crate, declared source key, resolved package) of each resolved requirement on a core crate"""
+    by_id = {p["id"]: p for p in meta["packages"]}
+    for n in meta["resolve"]["nodes"]:
+        resolved = {by_id[d["pkg"]]["name"]: by_id[d["pkg"]] for d in n.get("deps", [])}
+        for d in by_id[n["id"]].get("dependencies", []):
+            if d["name"] in CRATES and d["name"] in resolved:
+                key = source_key(d.get("source"))
+                if key is not None:
+                    yield d["name"], key, resolved[d["name"]]
+
+
+def sources_named(meta: dict) -> set[tuple[str, str]]:
+    """every (crate, source) a resolved requirement names, wherever it resolved"""
+    return {(c, k) for c, k, _ in _requirements(meta)}
+
+
+def used_entries(meta: dict) -> set[tuple[str, str]]:
+    """the (crate, source) entries a resolved requirement used: it resolved to a path package (the checkout)"""
+    return {(c, k) for c, k, p in _requirements(meta) if p.get("source") is None}
+
+
+def written_entries(config: str) -> set[tuple[str, str]]:
+    """the (crate, source) entries of a written config"""
+    return {(crate, CRATES_IO if table == CRATES_IO else table)
+            for table, entries in tomllib.loads(config).get("patch", {}).items() for crate in entries}
+
+
+def entry_problems(written: set[tuple[str, str]], meta: dict) -> tuple[list[str], int]:
+    """(an entry the graph did not use is a problem, the number used)"""
+    used = used_entries(meta)
+    problems = [f"patch entry {c} from {k}: not used" for c, k in sorted(written - used)]
+    return problems, len(written & used)
+
+
+def render(entries: set[tuple[str, str]], paths: dict[str, Path]) -> str:
+    lines = ["# Written by scripts/main_mode.py: the core crates from their main branches"]
+    tables = sorted({k for _, k in entries}, key=lambda k: (k != CRATES_IO, k))
+    for table in tables:
+        if len(lines) > 1:
+            lines.append("")
+        lines.append(f"[patch.{CRATES_IO}]" if table == CRATES_IO else f'[patch."{table}"]')
+        for crate in CRATES:
+            if (crate, table) in entries:
+                lines.append(f'{crate} = {{ path = "{paths[crate].as_posix()}" }}')
+    return "\n".join(lines) + "\n"
+
+
 def patch(checkouts: Path) -> int:
-    lines = [
-        "# Written by scripts/main_mode.py: the core crates from their main branches",
-        "[patch.crates-io]",
-    ]
     versions: dict[str, str] = {}
+    paths: dict[str, Path] = {}
     for crate, repo in CRATES.items():
         try:
-            path = crate_dir(checkouts / repo, crate).resolve()
+            paths[crate] = crate_dir(checkouts / repo, crate).resolve()
         except LookupError as e:
             print(f"main mode: {e}", file=sys.stderr)
             return 2
-        manifest = path / "Cargo.toml"
-        lines.append(f'{crate} = {{ path = "{path.as_posix()}" }}')
+        manifest = paths[crate] / "Cargo.toml"
         versions[crate] = tomllib.loads(manifest.read_text(encoding="utf-8"))["package"]["version"]
-    CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"main mode: patched {len(CRATES)} crates in {CONFIG.relative_to(ROOT)}")
     manifest = E2E / "Cargo.toml"
     raised, changed = raise_requirements(manifest.read_text(encoding="utf-8"), versions)
     manifest.write_text(raised, encoding="utf-8")
     for line in changed:
         print(f"main mode: e2e requirement raised to main: {line}")
     print(f"main mode: {len(changed)} e2e requirement(s) raised, feature main-mode on")
+    # from every crate on crates.io, until a pass names no source without an entry
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    entries = {(c, CRATES_IO) for c in CRATES}
+    for _ in range(MAX_PASSES):
+        CONFIG.write_text(render(entries, paths), encoding="utf-8")
+        named = sources_named(metadata())
+        if named <= entries:
+            break
+        entries |= named
+    else:
+        CONFIG.unlink()
+        print(f"main mode: no fixed point after {MAX_PASSES} passes (sources still appearing)", file=sys.stderr)
+        return 2
+    # the entries no requirement names are not written (verify counts an unused entry as a problem)
+    entries &= named
+    CONFIG.write_text(render(entries, paths), encoding="utf-8")
+    gits = sorted({k for _, k in entries if k != CRATES_IO})
+    print(f"main mode: patched {len({c for c, _ in entries})} crates from {len(gits) + 1} source(s) "
+          f"in {CONFIG.relative_to(ROOT)}")
+    for url in gits:
+        print(f"main mode: git source patched: {url} ({', '.join(c for c, k in sorted(entries) if k == url)})")
     return 0
 
 
@@ -228,19 +329,15 @@ def verify() -> int:
         print(f"main mode: the patch did not run (no {CONFIG.relative_to(ROOT)}), nothing to verify",
               file=sys.stderr)
         return 2
-    out = subprocess.run(
-        ["cargo", "metadata", "--format-version", "1", "--manifest-path", str(E2E / "Cargo.toml")],
-        check=True,
-        capture_output=True,
-        text=True,
-        cwd=E2E,  # Cargo reads e2e/.cargo/config.toml from the working directory
-    ).stdout
-    packages = json.loads(out)["packages"]
+    meta = metadata()
+    packages = meta["packages"]
     seen, problems, compared = problems_of(packages)
+    unused, used = entry_problems(written_entries(CONFIG.read_text(encoding="utf-8")), meta)
+    problems += unused
     for crate in CRATES:
         for version, source in seen.get(crate, []):
             print(f"| {crate} | {version} | {'main' if source == 'path' else source} |")
-    print(f"main mode: compared {compared} resolved crates, {len(problems)} problem(s)")
+    print(f"main mode: compared {compared} resolved crates, {used} patch entries used, {len(problems)} problem(s)")
     for p in problems:
         print(f"main mode: {p}")
     # who pulls a crates.io copy in beside the checkout: the early warning, named
@@ -251,7 +348,8 @@ def verify() -> int:
             who = requirers(packages, crate, mains[0])
             print(f"main mode: {crate}: main is {mains[0]}, required by "
                   f"{', '.join(who) or '(no requirement found)'}, which do not accept it")
-    if compared == 0:
+    if compared == 0 or used == 0:
+        print("main mode: no patch entry was used (nothing taken from main)", file=sys.stderr)
         return 2
     return 1 if problems else 0
 
