@@ -37,16 +37,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "1270e03d426d148ee80945fa9e1c000c807c3ce1577f30024d7aee0d2013fc08"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "1270e03d426d148ee80945fa9e1c000c807c3ce1577f30024d7aee0d2013fc08"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
 repo = "1492a5b04da7234099071ac0133ae428b0e3450ca2e3dfd47d1f77b4cbb94305"
 kind = "authors"
 path = "Cargo.toml"
@@ -122,11 +112,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "3311bb14ec92583276233d7010b9871bc3497fbf124b0a9f546d170d290de758"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
 repo = "3392e4b48acca6d601862c3f299d3a28ff86133803e1e20d15cb8a7130ee6ffb"
 kind = "authors"
 path = "Cargo.toml"
@@ -200,56 +185,6 @@ path = "LICENSE-COMMERCIAL.md"
 repo = "4542ac49a6127dc74f12f4a59d4e07d7dd8dc64af739f48eabb3c1dbc99ef3ce"
 kind = "holder"
 path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "authors"
-path = "bindings/bevy/alice-sdf-bevy/Cargo.toml"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "authors"
-path = "bindings/openxr/Cargo.toml"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "authors"
-path = "examples/wasm-demo/Cargo.toml"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "authors"
-path = "mobile/uniffi-wrapper/Cargo.toml"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "authors"
-path = "server/Cargo.toml"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "holder"
-path = "LICENSE-COMMUNITY"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "holder"
-path = "unity-sdf-universe/LICENSE"
-
-[[entry]]
-repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
-kind = "holder"
-path = "vrchat-package/LICENSE.md"
 
 [[entry]]
 repo = "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0"
@@ -534,11 +469,6 @@ path = "Cargo.toml"
 [[entry]]
 repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
 kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
-kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -570,11 +500,6 @@ path = "TRADEMARK_NOTICE"
 repo = "86bf0ef670dfab03eba21037c979ef719e32e4c3e0dc38110be53806f1fa016a"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "86bf0ef670dfab03eba21037c979ef719e32e4c3e0dc38110be53806f1fa016a"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "8d1a8ff38e50cd7243014dc05db49e8f8d9a21bb1548e045ec6a740d3d7087d4"
@@ -867,11 +792,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "e70eaa2a06f6d7a43970daa6f223b82c1c5c972628e3acc303a36911d9e0d390"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
 repo = "eb3c7d3bafcbc8bedbc73df865104788adaa33d929a5807def4038b1b8f3e4f9"
 kind = "authors"
 path = "Cargo.toml"
@@ -920,21 +840,6 @@ path = "Cargo.toml"
 repo = "fc71052a2f100219b2c5c56c1994fee66e48d897e022dbf542a80c7ec0d8cde8"
 kind = "holder"
 path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "fd1a07a4c593dccd902f863d2bd767db766f6a3c9131dd44aa92786e3c6040f2"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "fd1a07a4c593dccd902f863d2bd767db766f6a3c9131dd44aa92786e3c6040f2"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "fd1a07a4c593dccd902f863d2bd767db766f6a3c9131dd44aa92786e3c6040f2"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "fe3785962421904a55014fbb7b36997e160f3804c0c4f88a0885e9a0d6f02316"
