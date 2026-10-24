@@ -1016,6 +1016,20 @@ class GitRevPreviousList(unittest.TestCase):
         self.assertEqual((self.up / "src" / "lib.rs").read_text(), before)
         self.assertEqual(sorted(p.name for p in self.parent.iterdir()), ["ALICE-Probe", "ALICE-Zz", "remote"])
 
+    def test_a_renamed_git_dependency_is_followed(self):
+        # the dependency is taken under another name (`key = { package = ..., git, rev }`) and the
+        # list is re-exported through that name: the checker finds the git source by the rename too
+        (self.d / "Cargo.toml").write_text(
+            '[package]\nname = "probe-crate"\nversion = "0.6.0"\nedition = "2021"\n\n[dependencies]\n'
+            f'zz_alias = {{ package = "alice-zz", git = "{self.url}", rev = "{self.rev}", version = "0.11" }}\n\n'
+            "[workspace]\n")
+        (self.d / "src" / "lib.rs").write_text("pub use zz_alias::{PREVIOUS_SEMANTICS_IDS, SEMANTICS_ID};\n")
+        self.git(self.d, "add", "-A")
+        self.git(self.d, "commit", "-qm", "renamed")
+        passed, problems = self.verify()
+        self.assertEqual(problems, [])
+        self.assertEqual(passed, [self.REF])
+
     def test_a_rev_not_on_an_origin_branch_fails(self):
         (self.up / "NOTES").write_text("local only\n")
         self.git(self.up, "add", "-A")
