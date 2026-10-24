@@ -111,6 +111,25 @@ from pathlib import Path
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 REPO = re.compile(r"^ALICE-[A-Za-z0-9-]+$")
+# the account's product repositories outside the ALICE-* names that hold copies of the Law tooling: each entry is
+# sha256(<the repository name, lower case>), so the list names none of them; a name is one of them only when it is
+# already in lower case and its hash is listed
+PRODUCT_REPO_HASHES = {
+    "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970",
+}
+PRODUCT_REPO = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def is_repo_name(name: object) -> bool:
+    """an ALICE-* repository, or a product repository of PRODUCT_REPO_HASHES: the one rule every check that reads a
+    repository name uses"""
+    if not isinstance(name, str):
+        return False
+    if REPO.match(name):
+        return True
+    return bool(PRODUCT_REPO.match(name)) and hashlib.sha256(name.encode("utf-8")).hexdigest() in PRODUCT_REPO_HASHES
+
+
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 GITHUB = "https://github.com/ext-sakamoro/"
 MIN_REASON = 12
@@ -200,7 +219,7 @@ def reason(s: object) -> bool:
 
 
 def is_repos(v: object) -> bool:
-    return (isinstance(v, list) and bool(v) and all(isinstance(r, str) and REPO.match(r) for r in v)
+    return (isinstance(v, list) and bool(v) and all(is_repo_name(r) for r in v)
             and len(set(v)) == len(v) and v == sorted(v))
 
 
@@ -242,7 +261,7 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
             if not f.get("exempt"):
                 raise Unreadable(f"{where}: a per-repository entry (repos = []) must exempt each repository that has it")
         elif not is_repos(repos):
-            raise Unreadable(f"{where}: repos must be a sorted list of distinct ALICE-… names")
+            raise Unreadable(f"{where}: repos must be a sorted list of distinct repository names (ALICE-… or a listed product)")
         if per_repo:
             pass
         elif "pending" in f:
@@ -256,7 +275,7 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
                                  "first move of a uniform row to bytes no main holds yet)")
             if not isinstance(p["target"], str) or not HEX64.match(p["target"]):
                 raise Unreadable(f"{where}: pending.target must be the SHA-256 that becomes the file's bytes")
-            if not isinstance(p["owner"], str) or not REPO.match(p["owner"]) or p["owner"] not in repos:
+            if not is_repo_name(p["owner"]) or p["owner"] not in repos:
                 raise Unreadable(f"{where}: pending.owner must be one of the listed repositories")
             if not isinstance(p["since"], str) or not DATE.match(p["since"]):
                 raise Unreadable(f"{where}: pending.since must be YYYY-MM-DD")
@@ -298,17 +317,17 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
                 raise Unreadable(f"{where}: sha256 is not 64 lower-case hex digits")
             src = f["source"]
             if (not isinstance(src, dict) or set(src) != {"repo", "rev"} or not isinstance(src["repo"], str)
-                    or not REPO.match(src["repo"]) or not isinstance(src["rev"], str)
+                    or not is_repo_name(src["repo"]) or not isinstance(src["rev"], str)
                     or not HEX40.match(src["rev"])):
-                raise Unreadable(f"{where}: source must be {{ repo = \"ALICE-…\", rev = \"<40 hex>\" }}")
+                raise Unreadable(f"{where}: source must be {{ repo = \"<repository name>\", rev = \"<40 hex>\" }}")
             if src["repo"] not in repos:
                 raise Unreadable(f"{where}: the source repository {src['repo']} is not in repos")
         alt = f.get("paths", {})
         if not isinstance(alt, dict) or not all(r in repos and safe_path(q) for r, q in alt.items()):
             raise Unreadable(f"{where}: paths must map listed repositories to relative paths")
         ex = f.get("exempt", {})
-        if not isinstance(ex, dict) or not all(REPO.match(r) and r not in repos and reason(w) for r, w in ex.items()):
-            raise Unreadable(f"{where}: exempt must map unlisted ALICE-… repositories to a reason "
+        if not isinstance(ex, dict) or not all(is_repo_name(r) and r not in repos and reason(w) for r, w in ex.items()):
+            raise Unreadable(f"{where}: exempt must map unlisted repositories (ALICE-… or a listed product) to a reason "
                              f"of at least {MIN_REASON} characters")
     return files, []
 
@@ -753,8 +772,8 @@ def main(argv: list[str]) -> int:
             base_variants = {e["path"]: e["pending"]["variants"] for e in base_entries if "pending" in e}
             base_uniform = {e["path"]: e["sha256"] for e in base_entries if "sha256" in e}
         if a.repo is not None:
-            if not REPO.match(a.name):
-                raise Unreadable(f"--name {a.name!r} is not an ALICE-… repository name")
+            if not is_repo_name(a.name):
+                raise Unreadable(f"--name {a.name!r} is not a repository name (ALICE-… or a listed product)")
             problems, notes, c = check_repo(entries, a.repo, a.name)
         elif a.fetch or a.live:
             with tempfile.TemporaryDirectory() as d:
