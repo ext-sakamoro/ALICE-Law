@@ -190,7 +190,7 @@ One row per repository: crates that share a repository share its one manifest at
 | ALICE-LLM | alice-llm | 12 | 1 | 1 | 0 |
 | ALICE-LOL | alice-lol, alice-lol-macro | 12 | 0 | 2 | 0 |
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
-| ALICE-Physics | alice-physics | 9 | 4 | 1 | 0 |
+| ALICE-Physics | alice-physics | 10 | 3 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 9 | 3 | 2 | 0 |
 | ALICE-Sync | alice-sync | 12 | 1 | 1 | 0 |
 | ALICE-Zip | alice-zip, alice-zip-cli | 13 | 1 | 0 | 0 |
