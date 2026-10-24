@@ -34,6 +34,29 @@ def pkg(name: str, version: str, source: str | None) -> dict:
 
 
 REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
+DETMATH_URL = "https://github.com/ext-sakamoro/ALICE-DetMath"
+DETMATH_GIT = f"git+{DETMATH_URL}?rev=6384856c#6384856c"
+
+
+def graph(edges: list[tuple[str, str, str | None, str | None]]) -> dict:
+    """`cargo metadata` output for edges (from, crate, declared source, resolved source): the declared
+    source is what the requiring manifest names (None for a path dependency), the resolved one where
+    Cargo took the crate from (None for a path, as a patched checkout is)"""
+    packages: dict[str, dict] = {}
+
+    def node(name: str, source: str | None) -> dict:
+        pid = f"{name} 1.0.0 {source or 'path'}"
+        return packages.setdefault(pid, {"id": pid, "name": name, "version": "1.0.0", "source": source,
+                                         "dependencies": []})
+
+    deps: dict[str, list[str]] = {}
+    for frm, crate, declared, resolved in edges:
+        a, b = node(frm, None), node(crate, resolved)
+        a["dependencies"].append({"name": crate, "source": declared, "req": "*", "kind": None})
+        deps.setdefault(a["id"], []).append(b["id"])
+    nodes = [{"id": pid, "deps": [{"name": packages[t]["name"].replace("-", "_"), "pkg": t}
+                                  for t in deps.get(pid, [])]} for pid in packages]
+    return {"packages": list(packages.values()), "resolve": {"nodes": nodes}}
 
 
 class Accepts(unittest.TestCase):
@@ -179,8 +202,13 @@ class CrateDir(unittest.TestCase):
             mm.crate_dir(self.d / "ALICE-Physics", "alice-physics")
 
 
+def every_core_crate_from(declared: str | None = REGISTRY) -> list[tuple[str, str, str | None, str | None]]:
+    """the e2e crate requiring every core crate from `declared`, each resolved from its checkout"""
+    return [("alice-law-e2e", c, declared, None) for c in mm.CRATES]
+
+
 class Patch(unittest.TestCase):
-    def run_patch(self, physics: str, change=None) -> tuple[int, str, str]:
+    def run_patch(self, physics: str, change=None, graphs=None) -> tuple[int, str, str]:
         # the e2e paths point into a temporary directory: a patch must never write the repository's own
         import contextlib
         import io
@@ -195,6 +223,11 @@ class Patch(unittest.TestCase):
             self.addCleanup(setattr, mm, name, getattr(mm, name))
         mm.ROOT, mm.E2E, mm.CONFIG = d, d / "e2e", d / "e2e" / ".cargo" / "config.toml"
         write(mm.E2E / "Cargo.toml", MANIFEST)
+        # the resolved graph after each written patch: a function of the config text, so a git entry
+        # appears in the graph only once the patch for it is written (cargo is not run here)
+        graphs = graphs or (lambda config: graph(every_core_crate_from()))
+        self.addCleanup(setattr, mm, "metadata", mm.metadata)
+        mm.metadata = lambda: graphs(mm.CONFIG.read_text(encoding="utf-8"))
         err = io.StringIO()
         with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = mm.patch(d / "core")
@@ -207,6 +240,45 @@ class Patch(unittest.TestCase):
         line = next(x for x in config.splitlines() if x.startswith("alice-physics ="))
         self.assertTrue(line.endswith('ALICE-Physics/crates/alice-physics" }'), line)
         self.assertEqual(sum(x.split(" = ")[0] in mm.CRATES for x in config.splitlines()), len(mm.CRATES))
+
+    def test_a_git_source_of_a_core_repository_is_patched_too(self):
+        # a consumer on main names alice-det-math by a git commit: Cargo applies [patch.crates-io] only to
+        # crates.io requirements, so without an entry under the repository's URL that copy is linked
+        # beside the checkout (two alice-det-math in one build)
+        def graphs(config: str) -> dict:
+            patched = f'[patch."{DETMATH_URL}"]' in config
+            return graph(every_core_crate_from() + [("alice-db", "alice-det-math", DETMATH_GIT,
+                                                     None if patched else DETMATH_GIT)])
+        code, config, err = self.run_patch("split", graphs=graphs)
+        self.assertEqual(code, 0, err)
+        table = config.split(f'[patch."{DETMATH_URL}"]\n', 1)
+        self.assertEqual(len(table), 2, config)
+        self.assertTrue(table[1].startswith('alice-det-math = { path = "'), table[1])
+        self.assertTrue(table[1].splitlines()[0].endswith('ALICE-DetMath" }'), table[1])
+
+    def test_only_the_sources_the_graph_uses_get_an_entry(self):
+        # no requirement names a crate from crates.io or by git: no entry for it (an entry nothing uses
+        # is a finding of verify, so the patch writes none)
+        def graphs(config: str) -> dict:
+            return graph([e for e in every_core_crate_from() if e[1] != "alice-edge"]
+                         + [("alice-lol", "alice-edge", None, None)])
+        code, config, err = self.run_patch("split", graphs=graphs)
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("alice-edge =", config)
+        self.assertNotIn("[patch.\"https://", config)
+
+    def test_a_source_that_keeps_appearing_stops_the_patch(self):
+        # each pass names a git source the last one did not: no fixed point, so the patch refuses
+        # instead of writing a config the graph does not match
+        passes = []
+
+        def graphs(config: str) -> dict:
+            passes.append(config)
+            return graph(every_core_crate_from() + [
+                ("alice-db", "alice-det-math", f"git+{DETMATH_URL}-{len(passes)}?rev=1#1", None)])
+        code, config, err = self.run_patch("split", graphs=graphs)
+        self.assertEqual(code, 2)
+        self.assertIn("no fixed point", err)
 
     def test_the_root_package_is_patched_before_the_rename(self):
         code, config, err = self.run_patch("one")
@@ -273,6 +345,44 @@ class Requirers(unittest.TestCase):
         ]
         self.assertEqual(mm.requirers(packages, "alice-zip", "0.11.0"), ["alice-db (^0.10)", "alice-edge (^0.10)"])
         self.assertEqual(mm.requirers(packages, "alice-zip", "0.10.3"), [])
+
+
+class Entries(unittest.TestCase):
+    """which patch entries the resolved graph used: an entry is (crate, source), the source "crates-io"
+    or a git URL, and it is used when a requirement naming that crate from that source resolved to the
+    checkout (a path package)"""
+
+    def test_a_requirement_resolved_to_the_checkout_uses_its_entry(self):
+        meta = graph([("alice-law-e2e", "alice-zip", REGISTRY, None),
+                      ("alice-db", "alice-det-math", DETMATH_GIT, None)])
+        self.assertEqual(mm.used_entries(meta), {("alice-zip", "crates-io"), ("alice-det-math", DETMATH_URL)})
+
+    def test_a_requirement_resolved_elsewhere_uses_no_entry(self):
+        # the git patch dropped (or its version not accepted): the git commit is linked, not main
+        meta = graph([("alice-db", "alice-det-math", DETMATH_GIT, DETMATH_GIT)])
+        self.assertEqual(mm.used_entries(meta), set())
+        self.assertEqual(mm.sources_named(meta), {("alice-det-math", DETMATH_URL)})
+
+    def test_path_requirements_and_other_crates_are_not_entries(self):
+        meta = graph([("alice-lol", "alice-sdf", None, None), ("alice-law-e2e", "serde", REGISTRY, REGISTRY)])
+        self.assertEqual(mm.used_entries(meta), set())
+        self.assertEqual(mm.sources_named(meta), set())
+
+    def test_an_unused_entry_is_a_finding_and_none_used_fails(self):
+        meta = graph([("alice-db", "alice-det-math", DETMATH_GIT, DETMATH_GIT)])
+        written = {("alice-det-math", DETMATH_URL), ("alice-det-math", "crates-io")}
+        problems, used = mm.entry_problems(written, meta)
+        self.assertEqual(used, 0)
+        self.assertEqual(problems, [f"patch entry alice-det-math from {DETMATH_URL}: not used",
+                                    "patch entry alice-det-math from crates-io: not used"])
+        problems, used = mm.entry_problems({("alice-det-math", DETMATH_URL)},
+                                           graph([("alice-db", "alice-det-math", DETMATH_GIT, None)]))
+        self.assertEqual((problems, used), ([], 1))
+
+    def test_the_written_entries_are_read_back_from_the_config(self):
+        text = ('[patch.crates-io]\nalice-zip = { path = "/c/ALICE-Zip" }\n\n'
+                f'[patch."{DETMATH_URL}"]\nalice-det-math = {{ path = "/c/ALICE-DetMath" }}\n')
+        self.assertEqual(mm.written_entries(text), {("alice-zip", "crates-io"), ("alice-det-math", DETMATH_URL)})
 
 
 class Verify(unittest.TestCase):
