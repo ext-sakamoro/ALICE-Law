@@ -247,7 +247,7 @@ class PackageJsonExemption(unittest.TestCase):
         # a package that is not distributed on its own declares the repository's licence; it is not an exemption
         files = {"Cargo.toml": cargo("AGPL-3.0-only OR LicenseRef-Commercial"), "LICENSE-AGPL": AGPL,
                  "LICENSE-COMMERCIAL": "terms\n", "scripts/package.json": package_json("ISC")}
-        _, f, _ = lfc.check(repo(files), "HEAD", repo_name="ALICE-Font")
+        _, f, _ = lfc.check(repo(files), "HEAD", repo_name="ALICE-Helper")
         self.assertEqual(f, ["scripts/package.json declares ISC and Cargo.toml declares AGPL-3.0-only OR LicenseRef-Commercial"])
 
     def test_the_same_path_in_another_repository_is_a_finding(self):
