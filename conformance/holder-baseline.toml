@@ -2,27 +2,12 @@
 # of its name. The list only goes down; a fixed occurrence is removed in the same change that fixes it.
 
 [[entry]]
-repo = "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970"
-kind = "authors"
-path = "crates/app/Cargo.toml"
-
-[[entry]]
 repo = "04b562ca0b7fe99996acc9c1bd74f4da3923bd7ecaaeabdf09e7bc9d94009a63"
 kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
 repo = "04b562ca0b7fe99996acc9c1bd74f4da3923bd7ecaaeabdf09e7bc9d94009a63"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "0607acfb4c129b1ce84836e88e8c8281163d13caec9124800f4197ea625b2bd7"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "0607acfb4c129b1ce84836e88e8c8281163d13caec9124800f4197ea625b2bd7"
 kind = "holder"
 path = "TRADEMARK_NOTICE"
 
@@ -65,16 +50,6 @@ path = "TRADEMARK_NOTICE"
 repo = "1e2c8aead72e36cc4fbbe0d1c84fd2cf338b01873321c617dda37917006c129b"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "22109574c91caee3f128621bdd0d8ea7e2d5588b2e8f12de42ae00bf7603392e"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "22109574c91caee3f128621bdd0d8ea7e2d5588b2e8f12de42ae00bf7603392e"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "2368fbbea5ea4043cb84a5ae027905aec833fcd7648a68e5b9473d5cdd8b941a"
@@ -142,11 +117,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "3ef7c23054fecceba84393adf2be7da3e61c15adafac87399f90c9ffd92b43ee"
-kind = "holder"
-path = "LICENSE-COMMERCIAL"
-
-[[entry]]
 repo = "42bfebe261d4d5ce9815f04b602444cf653bc2e3cd7375efe8004ae934b128ce"
 kind = "authors"
 path = "Cargo.toml"
@@ -173,41 +143,6 @@ path = "Cargo.toml"
 
 [[entry]]
 repo = "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
-kind = "authors"
-path = "libalice-enterprise/Cargo.toml"
-
-[[entry]]
-repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
-kind = "authors"
-path = "libalice/Cargo.toml"
-
-[[entry]]
-repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
-kind = "authors"
-path = "libalice/pyproject.toml"
-
-[[entry]]
-repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
-kind = "authors"
-path = "pyproject.toml"
-
-[[entry]]
-repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
-kind = "authors"
-path = "wasm/Cargo.toml"
-
-[[entry]]
-repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
 kind = "holder"
 path = "TRADEMARK_NOTICE"
 
@@ -230,11 +165,6 @@ path = "Cargo.toml"
 repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
@@ -320,11 +250,6 @@ path = "TRADEMARK_NOTICE"
 repo = "7d4b79a4762a666b78305a30ee1d8d1afc92011c5a1a52dba3a1727524226443"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "7d4b79a4762a666b78305a30ee1d8d1afc92011c5a1a52dba3a1727524226443"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "7e889a2755e1e0adeb76844653110ef6339e9a8beb4cbd9137f6da064959d832"
@@ -607,11 +532,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "d544146aac6f53d27825f76f914d20033a438a76806c14eb06663e1c711b0e11"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
 repo = "d572850796fa57b4e7f4880b9da80d3ff933d69b6712c843716929cebee4fd80"
 kind = "authors"
 path = "Cargo.toml"
@@ -650,11 +570,6 @@ path = "Cargo.toml"
 repo = "ec6b462b45e4aa123e2dac876e8a7aef0c5fed2dc997c7dd1b31b3282ae5a447"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "ec6b462b45e4aa123e2dac876e8a7aef0c5fed2dc997c7dd1b31b3282ae5a447"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "ef2637e2b37ab450c46796a8b57569f421b4acc569e39f58bbb871073d33df1b"
