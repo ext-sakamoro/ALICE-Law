@@ -161,8 +161,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/package_git_patches.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "314f8d722180815517223f53cec79db96f3c543073adbe3b5b6f790b4edb7950", owner = "ALICE-Physics", planned = "fb56762a47727ecf736dbfe88888caf07553da76", variants = { "314f8d722180815517223f53cec79db96f3c543073adbe3b5b6f790b4edb7950" = ["ALICE-Physics"], "absent" = ["ALICE-SDF"] } }
-repos = ["ALICE-Physics", "ALICE-SDF"]
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e016a94d2db59c59f7d7915ac14b03ecc6af6d2ec986e4a9e2f345184a091287", owner = "ALICE-Physics", planned = "bff8c998fd9bae045607fc7530357a61b536b81c", moved_from = { planned = "fb56762a47727ecf736dbfe88888caf07553da76", target = "314f8d722180815517223f53cec79db96f3c543073adbe3b5b6f790b4edb7950" }, variants = { "314f8d722180815517223f53cec79db96f3c543073adbe3b5b6f790b4edb7950" = ["ALICE-Physics"], "absent" = ["ALICE-SDF", "ALICE-Zip"] } }
+repos = ["ALICE-Physics", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/package_integrity.py"
@@ -332,8 +332,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/test_package_git_patches.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "807a849466eeaf1a4489a9ded16ed6d38407f57276e3ea208a3e5759328db1ab", owner = "ALICE-Physics", planned = "8611f6f12ed5a2bb96225cbe9f28165d5b7dde55", variants = { "807a849466eeaf1a4489a9ded16ed6d38407f57276e3ea208a3e5759328db1ab" = ["ALICE-Physics"], "absent" = ["ALICE-SDF"] } }
-repos = ["ALICE-Physics", "ALICE-SDF"]
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "eb96897f1ee21b6b9d5b6936446c7eced04652df3cb42da33ffa7e2d206dbdf5", owner = "ALICE-Physics", planned = "55701ede1c0c523f1dda677ec42cabd7af1be55b", moved_from = { planned = "8611f6f12ed5a2bb96225cbe9f28165d5b7dde55", target = "807a849466eeaf1a4489a9ded16ed6d38407f57276e3ea208a3e5759328db1ab" }, variants = { "807a849466eeaf1a4489a9ded16ed6d38407f57276e3ea208a3e5759328db1ab" = ["ALICE-Physics"], "absent" = ["ALICE-SDF", "ALICE-Zip"] } }
+repos = ["ALICE-Physics", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_package_integrity.py"
