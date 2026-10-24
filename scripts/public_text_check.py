@@ -71,7 +71,7 @@ FORBIDDEN = [
                                  # (any case, as a word; not inside an identifier such as `SKILL_DIR`, not
                                  # the Agent Skills file name `SKILL.md`, not the product "Cloudflare Workers")
                                  r"(?<![A-Za-z])(?<!max_)(?<!num_)(?<!n_)(?<!Cloudflare )(?i:workers?)(?![A-Za-z])"
-                                 r"(?!\s+(?i:threads?)(?![A-Za-z]))|"
+                                 r"(?!\s+(?i:threads?)(?![A-Za-z]))(?!_threads\()|"
                                  r"(?<![A-Za-z_])(?i:subagents?|multi[- ]?agents?|skills?)(?![A-Za-z_])(?<!SKILL(?=\.md))"
                                  # `git worktree add` is a command, not a description of how the work was done; so is
                                  # the same subcommand as an argument list (`[*git_argv, "worktree", "add", ...]`): the
@@ -207,10 +207,11 @@ PRIVATE_NAME_HASHES = DEVICE_NAME_HASHES | {
 # are enumerated at once), so this public check holds no id: an id-like token is a finding
 # only next to a word that names a review or a session ("レビュー", "review", "指摘",
 # "検証", "session" / "セッション" before or after it). A token glued to a digit, letter,
-# "#", "_", "-" or "." (a date, a version, a colour, x86_64) is not id-like. The contexts
+# "#", "_", "-" or "." (a date, a version, a colour, x86_64), or followed by "_" (the start of an
+# identifier: `fb_open()`), is not id-like. The contexts
 # "<id>の" and "<id>'s" are left to a check that knows the ids: here they matched counts,
 # dates and "oracle 10's" far more often than ids.
-ID = r"(?<![A-Za-z0-9#_.\-])[0-9a-f]{2}(?![A-Za-z0-9])"
+ID = r"(?<![A-Za-z0-9#_.\-])[0-9a-f]{2}(?![A-Za-z0-9_])"
 IDS = r"[(\[]?" + ID + r"(?:\s*/\s*" + ID + r")*[)\]]?"  # "fb", "(6e/fb)"
 REVIEW_WORD = r"(?:レビュー|(?i:review)|指摘|検証|セッション|(?i:session))"
 # "be" before "review" is the English verb ("cannot be reviewed"), not an id
