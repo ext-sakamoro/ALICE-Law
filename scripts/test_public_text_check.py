@@ -210,6 +210,16 @@ class Vocabulary(unittest.TestCase):
         self.assertTrue(ptc.PRIVATE_NAME_HASHES)
         self.assertTrue(all(len(h) == 64 and int(h, 16) >= 0 for h in ptc.PRIVATE_NAME_HASHES))
 
+    def test_the_allow_table_names_no_repository(self):
+        # a key is sha256(<repository name>): a private repository's name in a public table discloses it
+        self.assertTrue(ptc.ALLOWED)
+        for key in ptc.ALLOWED:
+            self.assertRegex(key, r"^[0-9a-f]{64}$")
+
+    def test_a_repository_key_is_the_hash_of_its_name(self):
+        import hashlib as h
+        self.assertEqual(ptc.repo_key("ALICE-Zorblat"), h.sha256(b"ALICE-Zorblat").hexdigest())
+
     def test_the_private_name_set_is_pinned(self):
         # its size and the SHA-256 of its sorted lines: removing or changing a name changes them
         spec = importlib.util.spec_from_file_location("ptc_fresh", HERE / "public_text_check.py")
@@ -217,7 +227,7 @@ class Vocabulary(unittest.TestCase):
         spec.loader.exec_module(fresh)  # (other tests swap ptc's set)
         h = sorted(fresh.PRIVATE_NAME_HASHES)
         self.assertEqual((len(h), hashlib.sha256("\n".join(h).encode()).hexdigest()),
-                         (48, "324204d07160abe230e73b824cbf06344d15f6257153ef29067f149436c643de"))
+                         (57, "77a5b47d02073be0bfac874bf535b6951acf683f8f4ac347a8efdc8c73295d49"))
 
     def test_the_repository_is_clean(self):
         code, out = run(HERE.parent, "--tree")
@@ -299,7 +309,7 @@ class AllowSkillWord(Base):
         self.addCleanup(lambda: setattr(ptc, "ALLOWED", self.saved_allowed))
         commit(self.repo, {"pkg/a.md": self.SK * 2})
         word = "ski" + "ll"
-        ptc.ALLOWED = {"r": {ptc.allow_hash("pkg/a.md", word): 2}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {ptc.allow_hash("pkg/a.md", word): 2}}
 
     def test_the_word_at_its_count_passes(self):
         code, out = run(self.repo, "--repo-name", "r", "--tree")
@@ -350,7 +360,7 @@ class AllowList(Base):
             self.assertEqual(ptc.main(["--allow-hash", "docs/plugin.md", "ordinary words"]), 2)
 
     def test_an_allowed_mention_passes_only_in_its_file_and_repository(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("docs/plugin.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
         self.assertIn("docs/other.md:1: private name", out)
@@ -360,29 +370,29 @@ class AllowList(Base):
         self.assertIn("docs/plugin.md:1: private name", out)
 
     def test_both_files_allowed_pass(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 0, out)
 
     def test_an_entry_that_allows_nothing_fails(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1, self.entry("docs/gone.md"): 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1, self.entry("docs/gone.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
         self.assertIn("it allows nothing", out)
         self.assertNotIn(MADE_UP, out)
 
     def test_another_repositorys_entries_are_not_stale_here(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}, "elsewhere": {"0" * 64: 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}, ptc.repo_key("elsewhere"): {"0" * 64: 1}}
         self.assertEqual(run(self.repo, "--repo-name", "r", "--tree")[0], 0)
 
     def test_added_lines_of_a_range_are_allowed_too(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/new.md"): 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("docs/new.md"): 1}}
         commit(self.repo, {"docs/new.md": f"the {MADE_UP} manifest\n"})
         code, out = run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")
         self.assertEqual(code, 0, out)
 
     def test_commit_messages_are_never_allowed(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("docs/plugin.md"): 1}}
         commit(self.repo, {"a.txt": "y\n"}, message=f"add {MADE_UP}")
         code, out = run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")
         self.assertEqual(code, 1, out)
@@ -391,20 +401,20 @@ class AllowList(Base):
     def test_a_prefix_entry_allows_every_file_under_it_by_whole_components(self):
         commit(self.repo, {"kits/cad/a.md": f"{MADE_UP} one\n", "kits/cad/sub/b.md": f"{MADE_UP} two\n",
                            "kits/cadx/c.md": f"{MADE_UP} three\n"})
-        ptc.ALLOWED = {"r": {self.entry("kits/cad/"): 2, self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("kits/cad/"): 2, self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
         self.assertIn("kits/cadx/c.md:1: private name", out)
         self.assertNotIn("kits/cad/a.md", out)
 
     def test_the_count_is_pinned(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 2, self.entry("docs/other.md"): 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("docs/plugin.md"): 2, self.entry("docs/other.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
         self.assertIn("allows 1 lines", out)
 
     def test_a_count_below_one_is_refused(self):
-        ptc.ALLOWED = {"r": {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1, self.entry("docs/gone.md"): 0}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1, self.entry("docs/gone.md"): 0}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
         self.assertIn("has count 0", out)
@@ -412,14 +422,14 @@ class AllowList(Base):
     def test_an_agent_word_or_a_note_link_can_be_allowed_too(self):
         commit(self.repo, {"skills/x/SKILL.md": "the skills entry [[kv_namespaces]]\n"})
         # (the path names the word too: the path line is one of the entry's lines)
-        ptc.ALLOWED = {"r": {self.entry("skills/x/SKILL.md", "skills"): 2, self.entry("skills/x/SKILL.md", "[[kv_namespaces]]"): 1,
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("skills/x/SKILL.md", "skills"): 2, self.entry("skills/x/SKILL.md", "[[kv_namespaces]]"): 1,
                              self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 0, out)
 
     def test_a_literal_pathspec_keeps_a_glob_name_to_itself(self):
         # "a*.md" next to "a.md": without a literal pathspec, a.md's added lines are read under a*.md
-        ptc.ALLOWED = {"r": {self.entry("a*.md"): 1}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("a*.md"): 1}}
         commit(self.repo, {"a*.md": f"{MADE_UP} here\n", "a.md": f"{MADE_UP} there\n"})
         code, out = run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")
         self.assertEqual(code, 1, out)
@@ -461,7 +471,7 @@ class Paths(Base):
     def test_an_allowed_mention_in_such_a_file_is_allowed_in_both_modes(self):
         saved = ptc.ALLOWED
         self.addCleanup(lambda: setattr(ptc, "ALLOWED", saved))
-        ptc.ALLOWED = {"r": {ptc.allow_hash(n, MADE_UP): 1 for n in self.NAMES}}
+        ptc.ALLOWED = {ptc.repo_key("r"): {ptc.allow_hash(n, MADE_UP): 1 for n in self.NAMES}}
         commit(self.repo, {n: f"the {MADE_UP} plugin\n" for n in self.NAMES})
         self.assertEqual(run(self.repo, "--repo-name", "r", "--range", "HEAD~1..HEAD")[0], 0)
         self.assertEqual(run(self.repo, "--repo-name", "r", "--tree")[0], 0)
