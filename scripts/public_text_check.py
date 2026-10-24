@@ -417,7 +417,7 @@ ALLOWED: dict[str, dict[str, int]] = {
         # the product records LLM coding sessions through a provider hook: the provider's and its
         # coding tool's names in the hook installer, its settings path, the model IDs of the cost
         # table and the docs of that feature, per published file of the mirror's allowlist
-        # (mirror-allowlist.txt; private documents and crates are not published)
+        # (mirror-allowlist.txt)
         "2fce1206037fe05fb65ee69462a31f0021e4d0f4cfe89f2325b6c00a72beed1f": 1,
         "62215a0753f5c74d061bf0491dec31ce4a1be008f022586a1d2efc30ee9d9296": 1,
         "8ea2b5ec7bfd6d9691e1dadd07d2303337534ace39cea01363bd2bd1629037d8": 1,
@@ -477,7 +477,7 @@ ALLOW_STATE: dict = {"allowed": {}, "used": {}, "repo": None}
 # "worker" is also the name of a technical part: the Cloudflare Workers crate and its runtime
 # files. Only there, by path (whole components, so "crates/worker-notes/" is not one), and in
 # a Cargo.lock only on its package lines, is the word not a finding; anywhere else (docs,
-# ROADMAP, CHANGELOG, comments) it still is.
+# README, CHANGELOG, comments) it still is.
 WORKER_DIRS = ("crates/worker/", "migrations/")
 WORKER_FILES = ("wrangler.toml",)
 CARGO_LOCK_WORKER_RE = re.compile(r'^(?:name = "worker(?:-[a-z0-9_-]+)?"|\s*"worker(?:-[a-z0-9_-]+)?(?: [0-9][^"]*)?",?)\s*$')
