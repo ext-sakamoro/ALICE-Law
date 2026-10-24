@@ -45,6 +45,7 @@ Z = r"(?![A-Za-z])"
 OWN_SKILL_PREFIX_HASHES = {
     "504b446ca023c96625390e13d4f5c8fab91eeb9faf7dc544711175be6a6c95d7",
     "5affd913400e5451bef38e69584e1856d51894ed426240de2e9d5e0fdcb11d85",
+    "88b5b20ada429bc45e512c17ae1ee8659d82cadd1ddb2c8cfdddc4f747fc2209",
 }
 # (at the start of a path, or after "./" or "../" steps: a relative link to the same directory)
 SKILL_PREFIX_RE = re.compile(r"(?:(?<![A-Za-z0-9_./-])|(?<=\.\./)|(?<=(?<![A-Za-z0-9_.-])\./))skills(/[A-Za-z0-9._-]+/)")
@@ -398,20 +399,38 @@ ALLOWED: dict[str, dict[str, int]] = {
     },
     "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970": {
         "8e3dd0d012a2b0488d6e314c823c6db1fc86881986cf3597f9cd9f3365108bb7": 2,
-        "525b28df28e719b319178d0fcd956e3932174b4719f6c659081fa554415d633a": 2,
         "938fe3b8cdc685f71f04da5f9a7e225edfddd6e89137a73eee378842cfaf329b": 2,
         "2fce1206037fe05fb65ee69462a31f0021e4d0f4cfe89f2325b6c00a72beed1f": 2,
-        "607e6bc8421c315268ff7b882358b1b0554070af4c59f9850e6f70cdc710d30e": 1,
         "5e9759a32eeb52bfadaed64f1f2475cdef4c47bffa624a5e694593308c66d062": 6,
         "c4e9802423d3ef13964b175c670bad3a11daa8bd6874c18d4d1c4edc048d1393": 3,
         "d47bbfaf39f76243602a5e88dfc65279df2b05cfa4c562ff4dba04ac0f15e73a": 3,
         "971a9ffc87554fbe3293e6ca79ca2ec3be9f6e9fecc4138fece5c35a75900ef7": 3,
         "a5048c9fd6603806b175feb184239bfada1ace37eebf811c75fc400b14b58a05": 2,
         "40f8027e044e8aa3e2783d55bd9628c9b073f4e82458878f6bbdc8fcb3f791ed": 1,
-        "2929782d0900b7181a937f0dbd61ed44120d917cc882969b9453bdaaff0a4f95": 3,
         "1a6aa0d6a24df8ac5f6ff7c0f6b30c35e552c12433f09c88e349ac63c3694c69": 4,
         "ffb612c1d576098613b338fc531a3e5defa9fa781e646cbe11d0c55536a753aa": 1,
         "e0ad96a94c13edafde51753681e9e1e936ec647f6df219c5ee6eb70c6da67bea": 1,
+        # the LLM providers the product lets a user bring a key for: their names in the provider settings, its UI
+        # and translations, the stored settings, the provider-compatible backend and its docs, per file
+        "8021da4dbe6367445e3ca97c486434c78f2c7ae7b258524797ec59ef183e018c": 1,
+        "ea28c38ec77891d4e409682e7e434e6360069fa4cf24ac61c6bd009438064125": 1,
+        "afe61520ef0ecf5dd16ade1a230b71827e5214295b26aed29cf557a30ece6155": 8,
+        "86a76ba62e3d660c274cde8bafc3210f51afb4125ca7a328f5e0e6e30068883a": 18,
+        "c2c1ac3fa6dab5d67c4f9777f00145e89dbd0fe076079ce3cae1e82e458138aa": 13,
+        "28eca770a90071d71ae07ff742a0900e377856eea8d56fc1eaabda841e9dd6b7": 18,
+        "4fe81809e9fec87a90b7a44b32cb0d8e3b1ab4e6a99ea355ad864a5e7903c428": 3,
+        "ee3d8a4176e0070cd2815dc1e3ff4aeea8f076cfd5b1dca67577d6fdd5eab96f": 46,
+        "c3985f2448fb6ab6f77561c037c8e074c97fbd3a249cb7d19f11cadde9ae1cda": 12,
+        "d10132183d11da9f825a6c5f0d7678755a9e1c47eec40fdcc595a0ef87c67128": 2,
+        "608ba465bb014ebae8edab6a8bb5fe8ea6a087f08b2a141736789f76eae4e3bb": 1,
+        "c9a533d65436349de2f1306acb3b6049b134d76f88b542f5cf0d3f4cdb661a0d": 15,
+        "bb4cfb53dbc95feb5e905e13a1beebe85e48c5ed28ca51274aaf2e02ef84ca5b": 1,
+        "ff1e80a526336e71aea2f1dcabd55e58fd3320f49a03acad32e34ad6037f749d": 1,
+        "78630b4c6ab9d76bc908691e4bd0acac2cf598d7c98194bc879ff0a2fe2d8cb4": 1,
+        "b87c00b29f8da89b179ed5a0cd0ae3a18ea3f9b78b96f7ec75236f17173aeb57": 36,
+        "4d8ea2179bb1f4fcbecc6379dcac19e7754647dc81d6e709d427ac3576158657": 20,
+        "ad61fec51d697a9ec8318b673b0ea83a18fb38eda98428ea77215fdda33381da": 2,
+        "5a626491677c01fc686a01e0bfa150bb599109893c11c9223b6662a735f5aec1": 1,
     },
     "3a983693b3386aed1c03b948f8160c17895986e69a4ba48966a24ea98ebc3b6d": {
         # the product records LLM coding sessions through a provider hook: the provider's and its

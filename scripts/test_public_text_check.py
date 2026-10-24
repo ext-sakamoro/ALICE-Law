@@ -1299,6 +1299,26 @@ class Terms(unittest.TestCase):
         self.assertTrue(ptc.folded_agent_word("see SKILL.md, by a w0rker"))
         self.assertFalse(ptc.folded_agent_word("see SKILL.md"))
 
+    def test_an_own_skill_entry_is_the_hash_of_the_repository_and_its_directory(self):
+        # a fictional repository and directory: the entry is sha256(<repository> NUL skills/<dir>/), so adding it
+        # makes that directory a path in that repository only, and nothing else changes
+        import hashlib
+        entry = hashlib.sha256("fictional-repo\0skills/fic-pkg/".encode("utf-8")).hexdigest()
+        self.assertNotIn(entry, ptc.OWN_SKILL_PREFIX_HASHES)
+        line = "see `skills/fic-pkg/SKILL.md`"
+        self.in_repo("fictional-repo")
+        self.assertIn("agent process", ptc.kinds(line))  # without the entry: a finding
+        self.addCleanup(ptc.OWN_SKILL_PREFIX_HASHES.discard, entry)
+        ptc.OWN_SKILL_PREFIX_HASHES.add(entry)
+        self.assertNotIn("agent process", ptc.kinds(line))
+        self.assertIn("agent process", ptc.kinds("see `skills/other-pkg/SKILL.md`"))
+        self.in_repo("other-repo")
+        self.assertIn("agent process", ptc.kinds(line))
+        # every entry is a 64-digit sha256 (a plain name would list what the hash hides)
+        self.assertTrue(ptc.OWN_SKILL_PREFIX_HASHES)
+        for h in ptc.OWN_SKILL_PREFIX_HASHES - {entry}:
+            self.assertRegex(h, r"^[0-9a-f]{64}$")
+
     def test_this_session_and_in_chat_are_process_words(self):
         for line in ("This session's simulator tooling", "as decided in this session", "asked in chat",
                      "THIS SESSION", "In Chat"):
