@@ -46,6 +46,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/conformance_roster_check.py
 
+  # The only rights holder is the author: every public repository of the account, at its default
+  # branch, against conformance/holder-baseline.toml (scripts/holder_live.py). A new occurrence or a
+  # listed one that is gone is red; a repository that could not be read is red, never a pass.
+  # Daily and by hand only: it reads every public repository, not what one change touched.
+  holder:
+    name: Every public repository names only the author as the rights holder
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Test the reader
+        run: python3 scripts/test_holder_live.py
+
+      - name: The public repositories against the baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/holder_live.py
+
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
   # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a

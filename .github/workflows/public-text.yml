@@ -35,9 +35,13 @@ jobs:
       - name: Test the licence files checker
         run: python scripts/test_licence_files_check.py
 
-      # the declared licences have their full texts in this repository
+      - name: Test the rights-holder reader of the public repositories
+        run: python scripts/test_holder_live.py
+
+      # the declared licences have their full texts in this repository; the rights-holder rule against
+      # conformance/holder-baseline.toml, which may not grow against the merge base with main
       - name: The licence files
-        run: python scripts/licence_files_check.py --repo .
+        run: python scripts/licence_files_check.py --repo . --holder-base-ref "$(git merge-base origin/main HEAD)"
 
       - name: The tree
         run: python scripts/public_text_check.py --tree HEAD
