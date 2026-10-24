@@ -267,7 +267,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/test_check_pipe_grep_q.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "00a58ee0a97eaeacf121742714d424b48b17e04926eac8b1ffb483b152998057", owner = "ALICE-Zip", planned = "b34a53f22c3a415a9067dadb210065ab0bfed811", variants = { "absent" = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"] } }
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "faf6446404e832ab301a9b4752a0f2a904ced02591b5148e84c2c026072fcf57", owner = "ALICE-Zip", planned = "40385b66287a7ea8367b3f457a2057ca74fee6c8", variants = { "absent" = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
