@@ -22,6 +22,16 @@ TRADEMARK_NOTICE, when present, must not name a licence file the repository does
 ("(see <files> and the `license` field …)"; "the LICENSE-* files" needs at least one LICENSE-* file).
 
 --agpl-report-only prints the AGPL findings but does not fail on them.
+
+The only rights holder is the author. A rights statement (a tracked file named LICENSE*, NOTICE* or TRADEMARK_NOTICE*,
+outside vendor/, third_party/, node_modules/ and target/) must not name the company, and the `authors` of every
+Cargo.toml ([package] and [workspace.package]) and pyproject.toml ([project] and [tool.poetry]) must be exactly
+"Moroya Sakamoto", without an e-mail (a manifest without `authors` has nothing to compare). The README is not a
+rights statement, nor is a line that is exactly "Enquiries: https://extoria.co.jp/". Occurrences known today are listed in --holder-baseline (default conformance/holder-baseline.toml
+of this repository), each repository by the SHA-256 of its name: an occurrence not listed is a finding, a listed one
+that is gone is reported as stale (a finding with --stale-fails). --base-holder-baseline FILE (or --holder-base-ref
+REF, the baseline at that commit) refuses entries the base does not have: the list only goes down. holder_live.py
+applies the rule to every public repository of the account.
 Exit 0 when every declared licence has its file, 1 on a finding, 2 when nothing was compared (no Cargo.toml or
 package.json declaration) or git failed.
 """
@@ -34,6 +44,7 @@ import re
 import subprocess
 import sys
 import tomllib
+from pathlib import Path
 
 # SHA-256 of the words of the official texts (apache.org LICENSE-2.0.txt, gnu.org agpl-3.0.txt). The comparison is of
 # words only: a copy with other line breaks or spacing is the same text. The AGPL copies in the ALICE repositories
@@ -52,6 +63,94 @@ MIT_HEAD = re.compile(r"(?:MIT License )?(?:Copyright (?:\(c\)|©) [^.!?]{1,120}
 # each is not the repository's licence (a package that can declare the repository's licence is fixed, not listed). An entry the repository no longer needs (the file is gone or now agrees) is a finding.
 # (repository, path) -> reason; none listed today (ALICE-SDF's VRChat package declares the crate's licence)
 PACKAGE_JSON_EXEMPT: dict[tuple[str, str], str] = {}
+
+
+# the rights holder rule
+AUTHOR = "Moroya Sakamoto"
+HOLDER_RE = re.compile(r"(?i)extoria|エクストーリア")
+# the contact line of the canonical notices (a whole line, exactly): the site, not a rights holder
+ENQUIRY_RE = re.compile(r"^Enquiries: https://extoria\.co\.jp/[ \t]*$", re.M)
+RIGHTS_FILE_RE = re.compile(r"^(?:LICEN[CS]E|NOTICE|TRADEMARK_NOTICE)(?:[-._][^/]*)?$")  # by convention in capitals
+NOT_READ = ("vendor/", "third_party/", "node_modules/", "target/")
+KINDS = ("holder", "authors")
+HOLDER_BASELINE = Path(__file__).resolve().parent.parent / "conformance" / "holder-baseline.toml"
+
+
+def repo_key(name: str) -> str:
+    """a repository in the baseline: sha256 of its name"""
+    return hashlib.sha256(name.encode("utf-8")).hexdigest()
+
+
+def read_paths(path: str) -> bool:
+    return not any(path.startswith(d) or f"/{d}" in path for d in NOT_READ)
+
+
+def authors_ok(path: str, text: str) -> bool:
+    """every listed author is exactly AUTHOR, with no e-mail; no `authors` key compares nothing"""
+    doc = tomllib.loads(text)
+    found: list[object] = []
+    if path.rsplit("/", 1)[-1] == "Cargo.toml":
+        for table in (doc.get("package") or {}, (doc.get("workspace") or {}).get("package") or {}):
+            a = table.get("authors")
+            if isinstance(a, list):
+                found += a
+    else:
+        for a in ((doc.get("project") or {}).get("authors"), ((doc.get("tool") or {}).get("poetry") or {}).get("authors")):
+            if isinstance(a, list):
+                found += a
+    return all(x == AUTHOR or (isinstance(x, dict) and x == {"name": AUTHOR}) for x in found)
+
+
+def holder_occurrences(paths: list[str], read) -> set[tuple[str, str]]:
+    """(kind, path) of each rights statement naming another holder and each manifest with other authors;
+    read(path) returns the file's bytes"""
+    occ: set[tuple[str, str]] = set()
+    for path in paths:
+        if not read_paths(path):
+            continue
+        base = path.rsplit("/", 1)[-1]
+        if RIGHTS_FILE_RE.match(base):
+            if HOLDER_RE.search(ENQUIRY_RE.sub("", read(path).decode("utf-8", "replace"))):
+                occ.add(("holder", path))
+        elif base in ("Cargo.toml", "pyproject.toml"):
+            if not authors_ok(path, read(path).decode("utf-8")):
+                occ.add(("authors", path))
+    return occ
+
+
+def load_baseline(text: str) -> dict[str, set[tuple[str, str]]]:
+    out: dict[str, set[tuple[str, str]]] = {}
+    for e in tomllib.loads(text).get("entry", []):
+        repo, kind, path = e.get("repo"), e.get("kind"), e.get("path")
+        if not (isinstance(repo, str) and re.fullmatch(r"[0-9a-f]{64}", repo)):
+            raise ValueError(f"baseline entry {e}: repo is not a sha256")
+        if kind not in KINDS or not (isinstance(path, str) and path):
+            raise ValueError(f"baseline entry {e}: kind must be one of {KINDS} and path a non-empty string")
+        if set(e) != {"repo", "kind", "path"}:
+            raise ValueError(f"baseline entry {e}: only repo, kind and path")
+        out.setdefault(repo, set()).add((kind, path))
+    return out
+
+
+def dump_baseline(b: dict[str, set[tuple[str, str]]]) -> str:
+    lines = ["# Known rights-holder occurrences (see scripts/licence_files_check.py): each repository by the SHA-256",
+             "# of its name. The list only goes down; a fixed occurrence is removed in the same change that fixes it.", ""]
+    for repo in sorted(b):
+        for kind, path in sorted(b[repo]):
+            lines += ["[[entry]]", f'repo = "{repo}"', f'kind = "{kind}"', f"path = {json.dumps(path, ensure_ascii=False)}", ""]
+    return "\n".join(lines)
+
+
+def compare_baseline(name: str, occ: set[tuple[str, str]],
+                     b: dict[str, set[tuple[str, str]]]) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    """(new, stale) for the repository called name"""
+    listed = b.get(repo_key(name), set())
+    return occ - listed, listed - occ
+
+
+def baseline_growth(old: dict[str, set[tuple[str, str]]],
+                    new: dict[str, set[tuple[str, str]]]) -> list[tuple[str, str, str]]:
+    return sorted((r, k, p) for r, entries in new.items() for k, p in entries - old.get(r, set()))
 
 
 def repo_name_of(repo: str) -> str:
@@ -174,13 +273,57 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", default=".")
     ap.add_argument("--ref", default="HEAD")
     ap.add_argument("--agpl-report-only", action="store_true")
-    ap.add_argument("--repo-name", help="the repository's name for PACKAGE_JSON_EXEMPT (default: from origin)")
+    ap.add_argument("--repo-name", help="the repository's name for PACKAGE_JSON_EXEMPT and the holder baseline "
+                                        "(default: from origin)")
+    ap.add_argument("--holder-baseline", default=str(HOLDER_BASELINE))
+    ap.add_argument("--stale-fails", action="store_true", help="a listed occurrence that is gone is a finding")
+    ap.add_argument("--base-holder-baseline", metavar="FILE",
+                    help="the baseline at the merge base: an entry it does not have is a finding")
+    ap.add_argument("--holder-base-ref", metavar="REF",
+                    help="the same, read from conformance/holder-baseline.toml at REF in --repo (when REF has no "
+                         "baseline, the list is being introduced and nothing is compared)")
     a = ap.parse_args(argv)
     try:
         compared, findings, reports = check(a.repo, a.ref, a.agpl_report_only, a.repo_name)
     except (subprocess.CalledProcessError, tomllib.TOMLDecodeError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    try:
+        baseline = load_baseline(Path(a.holder_baseline).read_text(encoding="utf-8"))
+        tracked = [x for x in git(a.repo, "ls-tree", "-r", "-z", "--name-only", a.ref).split("\0") if x]
+        occ = holder_occurrences(tracked, lambda x: subprocess.run(["git", "-C", a.repo, "show", f"{a.ref}:{x}"],
+                                                                   capture_output=True, check=True).stdout)
+        name = a.repo_name or repo_name_of(a.repo)
+        base_text = Path(a.base_holder_baseline).read_text(encoding="utf-8") if a.base_holder_baseline else None
+        if a.holder_base_ref is not None:
+            ref = a.holder_base_ref.strip()
+            ok = ref and subprocess.run(["git", "-C", a.repo, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}"],
+                                        capture_output=True).returncode == 0
+            if not ok:
+                print(f"error: the holder base ref {a.holder_base_ref!r} is not a commit of {a.repo} "
+                      "(nothing would be compared)", file=sys.stderr)
+                return 2
+            r = subprocess.run(["git", "-C", a.repo, "show", f"{ref}:conformance/holder-baseline.toml"],
+                               capture_output=True, text=True)
+            if r.returncode == 0:
+                base_text = r.stdout
+            else:
+                print(f"note: no holder baseline at {a.holder_base_ref} (it is being introduced)")
+        grown = baseline_growth(load_baseline(base_text), baseline) if base_text is not None else []
+    except (OSError, subprocess.CalledProcessError, tomllib.TOMLDecodeError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    new, stale = compare_baseline(name, occ, baseline)
+    if not tracked:
+        print("error: no tracked file was read for the holder rule", file=sys.stderr)
+        return 2
+    for kind, path in sorted(new):
+        findings.append(f"{path}: " + ("names another rights holder" if kind == "holder" else
+                                       f'authors other than exactly "{AUTHOR}" (no e-mail)'))
+    for kind, path in sorted(stale):
+        (findings if a.stale_fails else reports).append(f"stale baseline entry: {kind} {path} (fixed: remove the entry)")
+    for r, kind, path in grown:
+        findings.append(f"the holder baseline grew: {kind} {path} for repository {r[:12]} (the list only goes down)")
     for r in reports:
         print(f"report (not failing): {r}")
     for f in findings:

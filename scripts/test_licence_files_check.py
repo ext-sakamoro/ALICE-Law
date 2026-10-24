@@ -341,5 +341,184 @@ class TheExemptionTable(unittest.TestCase):
         self.assertIn("vrchat-package/package.json declares", f[0])
 
 
+
+ME = "Moroya Sakamoto"
+OTHER = "Ex" + "toria"  # the company name split, so this file's own text is not an occurrence
+
+
+def cargo_authors(*authors: str, table: str = "package") -> str:
+    inner = ", ".join(f'"{a}"' for a in authors)
+    return f'[{table}]\nname = "x"\nversion = "0.1.0"\nlicense = "MIT"\nauthors = [{inner}]\n'
+
+
+class Holder(unittest.TestCase):
+    """the only rights holder is the author: rights statements and manifest authors name no one else"""
+
+    def occ(self, files):
+        return lfc.holder_occurrences(list(files), lambda p: files[p].encode("utf-8"))
+
+    def test_a_rights_file_naming_another_holder_is_an_occurrence(self):
+        for name in ("LICENSE", "LICENSE-COMMERCIAL.md", "NOTICE", "NOTICE.txt", "TRADEMARK_NOTICE", "crates/a/LICENSE-MIT"):
+            self.assertEqual(self.occ({name: f"Copyright 2026 {OTHER} Inc.\n"}), {("holder", name)}, name)
+        self.assertEqual(self.occ({"LICENSE": f"(c) {OTHER.upper()}\n"}), {("holder", "LICENSE")})
+        self.assertEqual(self.occ({"LICENSE": "株式会社エクス" + "トーリア\n"}), {("holder", "LICENSE")})
+
+    def test_the_enquiry_line_is_not_a_holder(self):
+        # the contact line of the canonical notices names the company's site, not a rights holder
+        line = "Enquiries: https://" + OTHER.lower() + ".co.jp/\n"
+        self.assertEqual(self.occ({"TRADEMARK_NOTICE": "trademarks of " + ME + ".\n\n" + line}), set())
+        self.assertEqual(self.occ({"TRADEMARK_NOTICE": line + f"Copyright {OTHER}\n"}), {("holder", "TRADEMARK_NOTICE")})
+        self.assertEqual(self.occ({"LICENSE": "Enquiries: https://" + OTHER.lower() + ".co.jp/ and " + OTHER + "\n"}),
+                         {("holder", "LICENSE")})
+
+    def test_the_readme_and_other_files_are_not_rights_statements(self):
+        files = {"README.md": f"Enquiries: https://{OTHER.lower()}.co.jp/\n", "docs/LICENSE_NOTES.md.txt": "x\n",
+                 "src/licence.rs": f"// {OTHER}\n", "LICENSE": f"Copyright 2026 {ME}\n"}
+        self.assertEqual(self.occ(files), set())
+
+    def test_authors_must_be_exactly_the_author_without_an_e_mail(self):
+        ok = {"Cargo.toml": cargo_authors(ME), "py/pyproject.toml": f'[project]\nname = "x"\nauthors = [{{name = "{ME}"}}]\n',
+              "b/Cargo.toml": '[package]\nname = "b"\n'}  # no authors: nothing to compare
+        self.assertEqual(self.occ(ok), set())
+        for text in (cargo_authors(f"{ME} <m@x.y>"), cargo_authors(ME, "Someone"), cargo_authors("you"),
+                     cargo_authors(f"{ME} <m@x.y>", table="workspace.package")):
+            self.assertEqual(self.occ({"Cargo.toml": text}), {("authors", "Cargo.toml")}, text)
+        for text in (f'[project]\nauthors = [{{name = "{ME}", email = "m@x.y"}}]\n',
+                     '[tool.poetry]\nauthors = ["Someone <s@x.y>"]\n'):
+            self.assertEqual(self.occ({"pyproject.toml": text}), {("authors", "pyproject.toml")}, text)
+
+    def test_vendored_trees_are_not_read(self):
+        self.assertEqual(self.occ({"vendor/z/LICENSE": f"(c) {OTHER}\n", "third_party/LICENSE": f"(c) {OTHER}\n"}), set())
+
+
+class HolderBaseline(unittest.TestCase):
+    """known occurrences are listed (repository by sha256 of its name); a new one fails, a fixed one is stale"""
+
+    def base(self, repo_name, *entries):
+        key = lfc.repo_key(repo_name)
+        return {key: {(k, p) for k, p in entries}}
+
+    def test_a_listed_occurrence_passes_and_a_new_one_fails(self):
+        occ = {("holder", "LICENSE"), ("authors", "Cargo.toml")}
+        new, stale = lfc.compare_baseline("r", occ, self.base("r", ("holder", "LICENSE")))
+        self.assertEqual((new, stale), ({("authors", "Cargo.toml")}, set()))
+
+    def test_a_fixed_occurrence_is_stale(self):
+        new, stale = lfc.compare_baseline("r", set(), self.base("r", ("holder", "LICENSE")))
+        self.assertEqual((new, stale), (set(), {("holder", "LICENSE")}))
+
+    def test_another_repositorys_entries_do_not_apply(self):
+        new, _ = lfc.compare_baseline("r", {("holder", "LICENSE")}, self.base("q", ("holder", "LICENSE")))
+        self.assertEqual(new, {("holder", "LICENSE")})
+
+    def test_the_baseline_file_round_trips_and_names_no_repository(self):
+        b = {lfc.repo_key("ALICE-Zorblat"): {("holder", "LICENSE"), ("authors", "a/Cargo.toml")}}
+        text = lfc.dump_baseline(b)
+        self.assertNotIn("Zorblat", text)
+        self.assertEqual(lfc.load_baseline(text), b)
+
+    def test_a_malformed_baseline_is_refused(self):
+        for text in ('[[entry]]\nrepo = "x"\nkind = "holder"\npath = "LICENSE"\n',
+                     f'[[entry]]\nrepo = "{"0" * 64}"\nkind = "other"\npath = "LICENSE"\n',
+                     f'[[entry]]\nrepo = "{"0" * 64}"\nkind = "holder"\n'):
+            with self.assertRaises(ValueError, msg=text):
+                lfc.load_baseline(text)
+
+    def test_growth_against_the_base_is_refused(self):
+        old = {lfc.repo_key("r"): {("holder", "LICENSE")}}
+        grown = {lfc.repo_key("r"): {("holder", "LICENSE"), ("holder", "NOTICE")}}
+        shrunk = {lfc.repo_key("r"): set()}
+        self.assertEqual(lfc.baseline_growth(old, grown), [(lfc.repo_key("r"), "holder", "NOTICE")])
+        self.assertEqual(lfc.baseline_growth(old, shrunk), [])
+        self.assertEqual(lfc.baseline_growth(old, old), [])
+
+
+class HolderRepoMode(unittest.TestCase):
+    """the check of one repository against the baseline (this repository's own CI)"""
+
+    def cli(self, files, baseline: str, *extra):
+        d = repo(files)
+        b = Path(tempfile.mkdtemp()) / "holder-baseline.toml"
+        b.write_text(baseline, encoding="utf-8")
+        return subprocess.run([sys.executable, str(HERE / "licence_files_check.py"), "--repo", d, "--repo-name", "r",
+                               "--holder-baseline", str(b), *extra], capture_output=True, text=True)
+
+    def files(self, holder_line: str):
+        return {"Cargo.toml": cargo_authors(ME), "LICENSE-MIT": MIT, "NOTICE": holder_line}
+
+    def test_a_new_occurrence_fails(self):
+        p = self.cli(self.files(f"(c) {OTHER}\n"), "")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("NOTICE", p.stdout)
+
+    def test_a_listed_occurrence_passes(self):
+        b = lfc.dump_baseline({lfc.repo_key("r"): {("holder", "NOTICE")}})
+        p = self.cli(self.files(f"(c) {OTHER}\n"), b)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+
+    def test_a_stale_line_is_reported_and_fails_only_when_asked(self):
+        b = lfc.dump_baseline({lfc.repo_key("r"): {("holder", "NOTICE")}})
+        p = self.cli(self.files(f"(c) {ME}\n"), b)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("stale", p.stdout)
+        p = self.cli(self.files(f"(c) {ME}\n"), b, "--stale-fails")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+
+
+class HolderBaseRef(unittest.TestCase):
+    """--holder-base-ref reads the base baseline from a commit of the repository"""
+
+    def test_growth_against_a_commit_fails_and_an_introduction_is_noted(self):
+        files = {"Cargo.toml": cargo_authors(ME), "LICENSE-MIT": MIT}
+        d = repo(files)
+        b = Path(d) / "conformance" / "holder-baseline.toml"
+        run = lambda *x: subprocess.run([sys.executable, str(HERE / "licence_files_check.py"), "--repo", d,  # noqa: E731
+                                         "--repo-name", "r", "--holder-baseline", str(b), *x], capture_output=True, text=True)
+        b.parent.mkdir()
+        b.write_text(lfc.dump_baseline({}), encoding="utf-8")
+        p = run("--holder-base-ref", "HEAD")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("being introduced", p.stdout)
+        g = ["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@t"]
+        subprocess.run(g + ["add", "-A"], check=True)
+        subprocess.run(g + ["commit", "-qm", "base"], check=True)
+        b.write_text(lfc.dump_baseline({lfc.repo_key("q"): {("holder", "NOTICE")}}), encoding="utf-8")
+        p = run("--holder-base-ref", "HEAD")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("baseline grew", p.stdout)
+
+
+class HolderBaseRefMustResolve(unittest.TestCase):
+    """an empty or unresolvable base ref compares nothing: refused, not read from the index"""
+
+    def test_empty_and_bogus_refs_exit_2(self):
+        d = repo({"Cargo.toml": cargo_authors(ME), "LICENSE-MIT": MIT})
+        b = Path(d) / "conformance" / "holder-baseline.toml"
+        b.parent.mkdir()
+        b.write_text(lfc.dump_baseline({}), encoding="utf-8")
+        g = ["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@t"]
+        subprocess.run(g + ["add", "-A"], check=True)
+        subprocess.run(g + ["commit", "-qm", "base"], check=True)
+        for ref in ("", " ", "no-such-ref", "0" * 40):
+            p = subprocess.run([sys.executable, str(HERE / "licence_files_check.py"), "--repo", d, "--repo-name", "r",
+                                "--holder-baseline", str(b), "--holder-base-ref", ref], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 2, (ref, p.stdout + p.stderr))
+            self.assertIn("base ref", p.stderr)
+
+
+class TheHolderBaseline(unittest.TestCase):
+    """the baseline as shipped"""
+
+    PATH = HERE.parent / "conformance" / "holder-baseline.toml"
+
+    def test_it_loads_and_lists_something(self):
+        b = lfc.load_baseline(self.PATH.read_text(encoding="utf-8"))
+        self.assertGreater(sum(len(v) for v in b.values()), 0)
+
+    def test_it_is_written_in_its_own_canonical_form(self):
+        text = self.PATH.read_text(encoding="utf-8")
+        self.assertEqual(lfc.dump_baseline(lfc.load_baseline(text)), text)
+
+
 if __name__ == "__main__":
     sys.exit(unittest.main())
