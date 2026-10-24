@@ -126,6 +126,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - scripts/licence_files_check.py: Cargo.toml が宣言した licence の全文が repository にあるかを見る (Apache-2.0 / AGPL-3.0 / MIT は公式の本文と語の並びで比べる、改行や空白の違いは同じ本文として扱う、TRADEMARK_NOTICE の参照先の存在も見る) CI の Public text と preflight で走らせる、AGPL は当面報告だけ
 
 ### Changed
+- Licence: from `AGPL-3.0-or-later OR LicenseRef-Commercial` to `LicenseRef-Proprietary` from this version (the source stays published for reading; using it needs a written agreement); published versions keep their licence
 - `scripts/licence_files_check.py`: `PACKAGE_JSON_EXEMPT` から ALICE-SDF の `vrchat-package/package.json` を外す (その package は crate と同じ license を宣言するので、例外が要らない) 例外の仕組みは残す (表は空) 仕組みの試験は試験の中で置く行で確かめ、出荷する表は各行に理由があることと SDF の package が例外なしで通ることを確かめる
 - `conformance/shared-files.toml`: `scripts/package_git_patches.py` / `scripts/test_package_git_patches.py` の計画された行を owner ALICE-Physics の新しい bytes (planned bff8c998 / 55701ede、git の pin を crate 名でなく url と rev で引く) に計画し直す (moved_from は前の計画 fb56762a / 8611f6f1、計画した bytes は `conformance/planned/`)
 - e2e: `KNOWN_SEMANTICS` は alice-det-math の識別子ごとに、それが始まる版と一緒に持つ 識別子を変えない版 (関数の集合とその bit が同じ) は自分の行を持たず、その版以前で最も新しい行で作られ、golden の digest もその行のもの (0.5.2 は 0.5.1 の行) 当てた行は alice_det_math::SEMANTICS_ID そのものと比べ、識別子を変えて行を足さない版は行の名前付きで失敗する 表は版の順で、同じ識別子を 2 度持たない (試験) End to end (main) は毎日も走る (兄弟 repo の main が答えを変え、この repository の path では見えないので、週に 1 度では 0.5.2 で落ちるのを 3 日見落とした)
