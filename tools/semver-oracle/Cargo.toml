@@ -5,7 +5,7 @@ name = "semver-oracle"
 version = "0.0.0"
 edition = "2021"
 publish = false
-license = "AGPL-3.0-or-later OR LicenseRef-Commercial"
+license = "LicenseRef-Proprietary"
 
 [dependencies]
 semver = "1"
