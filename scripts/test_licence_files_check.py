@@ -215,7 +215,18 @@ class NodeShell(unittest.TestCase):
 
 
 class PackageJsonExemption(unittest.TestCase):
-    """a package that is its own distribution may declare another licence, only where listed (repository, path)"""
+    """a package that is its own distribution may declare another licence, only where listed (repository, path)
+
+    The mechanism is tested with an entry put in for the test (the table itself lists none today)"""
+
+    LISTED = {("ALICE-SDF", "vrchat-package/package.json"):
+              "the VRChat / Unity package is distributed on its own and points at its own LICENSE.md"}
+
+    def setUp(self):
+        saved = dict(lfc.PACKAGE_JSON_EXEMPT)
+        lfc.PACKAGE_JSON_EXEMPT.clear()
+        lfc.PACKAGE_JSON_EXEMPT.update(self.LISTED)
+        self.addCleanup(lambda: (lfc.PACKAGE_JSON_EXEMPT.clear(), lfc.PACKAGE_JSON_EXEMPT.update(saved)))
 
     def sdf(self, with_package=True, licence="SEE LICENSE IN LICENSE.md"):
         files = {"Cargo.toml": cargo("Apache-2.0"), "LICENSE": APACHE}
@@ -308,6 +319,26 @@ class Exit(unittest.TestCase):
         p = self.cli(files, "--agpl-report-only")
         self.assertEqual(p.returncode, 0)
         self.assertIn("report (not failing)", p.stdout)
+
+
+class TheExemptionTable(unittest.TestCase):
+    """the table as shipped (no entry put in by a test)"""
+
+    def test_every_entry_has_a_reason(self):
+        for key, why in lfc.PACKAGE_JSON_EXEMPT.items():
+            self.assertGreaterEqual(len(why.split()), 6, key)
+
+    def test_the_sdf_vrchat_package_declares_the_crate_licence_without_an_exemption(self):
+        self.assertNotIn(("ALICE-SDF", "vrchat-package/package.json"), lfc.PACKAGE_JSON_EXEMPT)
+        files = {"Cargo.toml": cargo("LicenseRef-Proprietary"), "LICENSE-Proprietary": "terms\n",
+                 "vrchat-package/package.json": package_json("LicenseRef-Proprietary")}
+        _, f, _ = lfc.check(repo(files), "HEAD", repo_name="ALICE-SDF")
+        self.assertEqual(f, [])
+        # another licence there is a finding now that it is not listed
+        files["vrchat-package/package.json"] = package_json("SEE LICENSE IN LICENSE.md")
+        _, f, _ = lfc.check(repo(files), "HEAD", repo_name="ALICE-SDF")
+        self.assertEqual(len(f), 1, f)
+        self.assertIn("vrchat-package/package.json declares", f[0])
 
 
 if __name__ == "__main__":

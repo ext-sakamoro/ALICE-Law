@@ -50,10 +50,8 @@ MIT_HEAD = re.compile(r"(?:MIT License )?(?:Copyright (?:\(c\)|©) [^.!?]{1,120}
 
 # package.json files that are separate distributions with their own licence by nature, by (repository, path): why
 # each is not the repository's licence (a package that can declare the repository's licence is fixed, not listed). An entry the repository no longer needs (the file is gone or now agrees) is a finding.
-PACKAGE_JSON_EXEMPT = {
-    ("ALICE-SDF", "vrchat-package/package.json"):
-        "the VRChat / Unity package is distributed on its own and points at its own LICENSE.md",
-}
+# (repository, path) -> reason; none listed today (ALICE-SDF's VRChat package declares the crate's licence)
+PACKAGE_JSON_EXEMPT: dict[tuple[str, str], str] = {}
 
 
 def repo_name_of(repo: str) -> str:
