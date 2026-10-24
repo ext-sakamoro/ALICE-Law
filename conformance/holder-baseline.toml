@@ -547,11 +547,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "bf3c0d7427bd7565679270563d2986d5a9cb36ced72d32dffe163395e5cfe572"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
 repo = "c01520440b902374118ce6d88b22d615501b0995966ca5170f1b238dd479e3e2"
 kind = "authors"
 path = "Cargo.toml"
