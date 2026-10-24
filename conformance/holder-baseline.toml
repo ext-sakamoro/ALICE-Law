@@ -357,16 +357,6 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
-repo = "a2475db3c37ae731d21b353bad8ff50a8b9619904ad51166d4a4e5c1d24542ab"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "a2475db3c37ae731d21b353bad8ff50a8b9619904ad51166d4a4e5c1d24542ab"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
 repo = "a431e371846af56936eb500d22259b8e97913a04c00e47af6cdd49964410a32c"
 kind = "authors"
 path = "Cargo.toml"
