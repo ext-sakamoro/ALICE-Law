@@ -247,7 +247,9 @@ class SessionIds(Base):
     def test_numbers_dates_versions_and_other_contexts_pass(self):
         for line in ("e9 tests", "0xe9 review", "#c1 review", "2026-09-15 review", "v1.53 review", "x86_64's",
                      "oracle 10's", "53 の候補", "ae9 review", "e91 review", "a netcode session", "e9", "c1-c2",
-                     "session key", "F1 score and F2 keys"):
+                     "session key", "F1 score and F2 keys",
+                     # a function whose name starts with id-like letters, assigned to a variable
+                     "let session = af_fix_session_new(a, b);", "session = fb_open()"):
             self.assertEqual(ptc.kinds(line), [], line)
 
     def test_this_session_in_either_script_is_found(self):
@@ -1248,6 +1250,7 @@ class Terms(unittest.TestCase):
         # a closed list of pool-size arguments, and a thread
         for line in ("ThreadPoolExecutor(max_workers=16)", "DataLoader(num_workers=4)", "n_workers = 8",
                      "first touched from its worker thread", "else the worker threads run",
+                     ".worker_threads(2)", "Builder::new_multi_thread().worker_threads(n)",  # the runtime's builder
                      "- **Cloudflare Workers**: a separate binary"):
             self.assertNotIn("agent process", ptc.kinds(line), line)
         for line in ("a worker did X", "worker 3", "found by the worker", "the workers ran the tests",
