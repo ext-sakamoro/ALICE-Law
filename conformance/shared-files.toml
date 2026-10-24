@@ -7,7 +7,7 @@
 path = ".github/actions/alice-siblings/action.yml"
 sha256 = "ab023fb96ca6a25d31032b59debde1a599970f729120ecb5d56e40d1339ecdab"
 source = { repo = "ALICE-Analytics", rev = "12630d7e24575bd27022d137a69785d5d196f550" }
-repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB", "ALICE-DB-Enterprise", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-Print", "ALICE-Queue"]
+repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-Queue"]
 
 [[file]]
 path = ".github/workflows/eol.yml"
@@ -26,7 +26,7 @@ exempt = { "ALICE-Law" = "runs its own scripts/public_text_check.py in place; th
 path = "scripts/advisory_hold_guard.py"
 sha256 = "e5f2844a399fe58d2d3d3ce601694bec584137491f784bbc98ac946124a89814"
 source = { repo = "ALICE-Kinematics", rev = "d6b9dbef79bd40cbc873e4a5ae7bf72c315c83ce" }
-repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB-Enterprise", "ALICE-Kinematics", "ALICE-Print", "ALICE-Queue"]
+repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue"]
 
 [[file]]
 path = "scripts/alice_siblings_check.py"
@@ -207,7 +207,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/sibling_coverage_guard.py"
 sha256 = "57315a0dbc4ffb5d8d284b5957f5524cfed70c2f872526913bdc4220691e8320"
 source = { repo = "ALICE-Kinematics", rev = "d6b9dbef79bd40cbc873e4a5ae7bf72c315c83ce" }
-repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB-Enterprise", "ALICE-Kinematics", "ALICE-Print", "ALICE-Queue"]
+repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue"]
 
 [[file]]
 path = "scripts/stub_guard.sh"
@@ -218,7 +218,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge"]
 path = "scripts/test_advisory_hold_guard.py"
 sha256 = "d0d2bdd1db7d75498ae8dc50618ef33d38ad581607547555d903298c4de526cb"
 source = { repo = "ALICE-Kinematics", rev = "d6b9dbef79bd40cbc873e4a5ae7bf72c315c83ce" }
-repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB-Enterprise", "ALICE-Kinematics", "ALICE-Print", "ALICE-Queue"]
+repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue"]
 
 [[file]]
 path = "scripts/test_alice_siblings_check.py"
@@ -378,7 +378,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/test_sibling_coverage_guard.py"
 sha256 = "21b9784f3390f9921f90a02feb05c1c338c10548e5d386fe15b2d9cba7532a14"
 source = { repo = "ALICE-Kinematics", rev = "c2870472ffafad833b623251f18debf1448122a5" }
-repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB-Enterprise", "ALICE-Kinematics", "ALICE-Print", "ALICE-Queue"]
+repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue"]
 
 [[file]]
 path = "scripts/test_tracked_binaries.py"
