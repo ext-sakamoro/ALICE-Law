@@ -70,7 +70,7 @@ repos = ["ALICE-LOL", "ALICE-TRT"]
 
 [[file]]
 path = "scripts/changed_paths.py"
-pending = { since = "2026-10-17", exit = "the registry row becomes enforced and every listed main has the same bytes", target = "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7", owner = "ALICE-Crypto", variants = { "bcc94db8bb19e75b7c8999dba396108a36d0e9b7315db58e155fb1b07f85ee2f" = ["ALICE-LOL", "ALICE-Physics", "ALICE-Zip"], "ce667a93d0107a33d92d4a635c81159ecdf6ea88040d7cdb0f85d4b303fa766a" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"] } }
+pending = { since = "2026-10-17", exit = "the registry row becomes enforced and every listed main has the same bytes", target = "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7", owner = "ALICE-Crypto", variants = { "bcc94db8bb19e75b7c8999dba396108a36d0e9b7315db58e155fb1b07f85ee2f" = ["ALICE-LOL", "ALICE-Physics", "ALICE-Zip"], "ce667a93d0107a33d92d4a635c81159ecdf6ea88040d7cdb0f85d4b303fa766a" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"], "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7" = ["ALICE-Crypto"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -161,7 +161,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/package_git_patches.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "314f8d722180815517223f53cec79db96f3c543073adbe3b5b6f790b4edb7950", owner = "ALICE-Physics", planned = "fb56762a47727ecf736dbfe88888caf07553da76", variants = { "314f8d722180815517223f53cec79db96f3c543073adbe3b5b6f790b4edb7950" = ["ALICE-Physics"], "absent" = ["ALICE-SDF"] } }
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e016a94d2db59c59f7d7915ac14b03ecc6af6d2ec986e4a9e2f345184a091287", owner = "ALICE-Physics", planned = "bff8c998fd9bae045607fc7530357a61b536b81c", moved_from = { planned = "fb56762a47727ecf736dbfe88888caf07553da76", target = "314f8d722180815517223f53cec79db96f3c543073adbe3b5b6f790b4edb7950" }, variants = { "314f8d722180815517223f53cec79db96f3c543073adbe3b5b6f790b4edb7950" = ["ALICE-Physics"], "absent" = ["ALICE-SDF"] } }
 repos = ["ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
@@ -251,7 +251,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/test_changed_paths.py"
-pending = { since = "2026-10-17", exit = "the registry row becomes enforced and every listed main has the same bytes", target = "42f15623afba06a618daa29b98179628957d9b92adc920a2326fc8c2173fa65b", owner = "ALICE-Crypto", variants = { "0f98262e85aa0e59e9b0567b1b46acd43eb0469929e73719640082d3234c16f6" = ["ALICE-Crypto"], "c61088e4f84a292fcd4fda49e15ef1da33aad3664438c78fb6a80cca952ea513" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"], "c7f66a65ce9f99abeee530ead0734bb32f142575bfbfdb5119540f5e7886fa0f" = ["ALICE-Physics"], "dfd1773e08f6de579252744186ee09a3ee639745f0bd7cba8547a72b858b638e" = ["ALICE-LOL", "ALICE-Zip"] } }
+pending = { since = "2026-10-17", exit = "the registry row becomes enforced and every listed main has the same bytes", target = "42f15623afba06a618daa29b98179628957d9b92adc920a2326fc8c2173fa65b", owner = "ALICE-Crypto", variants = { "42f15623afba06a618daa29b98179628957d9b92adc920a2326fc8c2173fa65b" = ["ALICE-Crypto"], "c61088e4f84a292fcd4fda49e15ef1da33aad3664438c78fb6a80cca952ea513" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sync"], "c7f66a65ce9f99abeee530ead0734bb32f142575bfbfdb5119540f5e7886fa0f" = ["ALICE-Physics"], "dfd1773e08f6de579252744186ee09a3ee639745f0bd7cba8547a72b858b638e" = ["ALICE-LOL", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -332,7 +332,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/test_package_git_patches.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "807a849466eeaf1a4489a9ded16ed6d38407f57276e3ea208a3e5759328db1ab", owner = "ALICE-Physics", planned = "8611f6f12ed5a2bb96225cbe9f28165d5b7dde55", variants = { "807a849466eeaf1a4489a9ded16ed6d38407f57276e3ea208a3e5759328db1ab" = ["ALICE-Physics"], "absent" = ["ALICE-SDF"] } }
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "eb96897f1ee21b6b9d5b6936446c7eced04652df3cb42da33ffa7e2d206dbdf5", owner = "ALICE-Physics", planned = "55701ede1c0c523f1dda677ec42cabd7af1be55b", moved_from = { planned = "8611f6f12ed5a2bb96225cbe9f28165d5b7dde55", target = "807a849466eeaf1a4489a9ded16ed6d38407f57276e3ea208a3e5759328db1ab" }, variants = { "807a849466eeaf1a4489a9ded16ed6d38407f57276e3ea208a3e5759328db1ab" = ["ALICE-Physics"], "absent" = ["ALICE-SDF"] } }
 repos = ["ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
