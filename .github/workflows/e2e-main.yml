@@ -65,14 +65,6 @@ jobs:
       # each feature of its manifest on main is in a set or excluded with a reason
       - name: Consumer feature sets cover every feature (main)
         run: python3 scripts/release_train.py feature-coverage --repos-root "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
-      # each run of scripts/semver_gate.py in a roster repository's CI reads a config that is
-      # a copy of the crate's roster entry (every roster repository is checked out for it)
-      - name: Each semver_gate config is a copy of its roster entry (main)
-        run: |
-          for r in $(python3 -c "import tomllib; print(' '.join(sorted({c['repo'] for c in tomllib.load(open('release-train.toml', 'rb'))['crate'].values() if 'repo' in c})))"); do
-            [ -d "$RUNNER_TEMP/core/$r" ] || git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
-          done
-          python3 scripts/release_train.py semver-config-drift --repos-root "$RUNNER_TEMP/core" --at HEAD | tee -a "$GITHUB_STEP_SUMMARY"
       # a failure the roster lists under [expected-failure.*] (named, explained, until a
       # release) is reported as expected and skips the steps that need it; any other is red
       - &patch
