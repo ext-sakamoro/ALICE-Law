@@ -10,14 +10,14 @@
 # to fail with the expected message (scripts/e2e_teeth.py); it rebuilds the test for
 # each change, so it runs on demand and when the test or the mutations change.
 #
-# Weekly and on demand, and on a push that changes the check. One run at a time;
-# the teeth job waits for the round trip and does not run on the weekly schedule.
+# Daily and on demand, and on a push that changes the check. One run at a time;
+# the teeth job waits for the round trip and does not run on the daily schedule.
 
 name: End to end (main)
 
 on:
   schedule:
-    - cron: "47 5 * * 1"   # Mondays 05:47 UTC
+    - cron: "47 5 * * *"   # daily 05:47 UTC: the siblings' mains change the answer, and no path here sees them
   workflow_dispatch:
   push:
     branches: [main, "ci/**"]

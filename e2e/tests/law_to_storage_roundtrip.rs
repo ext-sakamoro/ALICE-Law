@@ -43,14 +43,36 @@ const LAW_NAME: &str = "newton-cooling";
 const EDGE_LAW_NAME: &str = "edge-window";
 /// The identifier of the arithmetic every crate here is built with (alice-det-math 0.5):
 /// alice-edge publishes it as its own, and it is recorded with every stored law
-/// The arithmetic identifier of each alice-det-math release this check runs with, oldest first.
-/// The locked release must be listed and its identifier must be the listed one; each release
-/// listed before it must be one `alice_det_math::check_semantics` accepts as a verified earlier
-/// identifier. A new release adds its row (its identifier changes when its set of functions does).
+/// Each arithmetic identifier of alice-det-math, with the release it starts at, oldest first.
+/// A release that does not change the identifier (its set of functions and their bits are the
+/// same) has no row of its own: it is built with the row of the latest release listed at or
+/// before it ([`semantics_entry`]), and so are its golden digests. The locked release's row must
+/// be `alice_det_math::SEMANTICS_ID` itself, and each row before it an identifier
+/// `alice_det_math::check_semantics` accepts as a verified earlier one. A release whose identifier
+/// changes adds its row.
 const KNOWN_SEMANTICS: &[(&str, &str)] = &[
     ("0.5.0", "135c407d4249c1c200e4d1be79a12e848ce5c355fc3a918da965849e697ef000"),
     ("0.5.1", "85e0884623b154a3b2b264374907b6cbac09307ca3f9a08339e48c567d3cb315"),
 ];
+/// `major.minor.patch` of a release (a pre-release or a malformed version is refused).
+fn release(version: &str) -> (u64, u64, u64) {
+    let parts: Vec<u64> = version
+        .split('.')
+        .map(|p| p.parse().unwrap_or_else(|_| panic!("alice-det-math {version}: not major.minor.patch")))
+        .collect();
+    match parts[..] {
+        [major, minor, patch] => (major, minor, patch),
+        _ => panic!("alice-det-math {version}: not major.minor.patch"),
+    }
+}
+
+/// The row of [`KNOWN_SEMANTICS`] a release of alice-det-math is built with: the latest one that
+/// starts at or before it, or `None` for a release older than every row.
+fn semantics_entry(version: &str) -> Option<usize> {
+    let v = release(version);
+    KNOWN_SEMANTICS.iter().rposition(|(start, _)| release(start) <= v)
+}
+
 /// 0 to 600 s every 0.25 s: on about one point in ten, `alice_det_math::exp64` and
 /// a platform's `exp` round differently, so the grid shows which one was used
 const COOLING_POINTS: i64 = 2401;
@@ -632,11 +654,19 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         .find(|(name, _)| name == "alice-det-math")
         .and_then(|(_, v)| v.first().cloned())
         .expect("alice-det-math in Cargo.lock");
-    let position = KNOWN_SEMANTICS
-        .iter()
-        .position(|(version, _)| *version == det_math_version)
-        .unwrap_or_else(|| panic!("no identifier recorded for alice-det-math {det_math_version}: add it to KNOWN_SEMANTICS"));
-    assert_eq!(hex(&semantics), KNOWN_SEMANTICS[position].1, "alice-det-math {det_math_version} has another identifier");
+    let position = semantics_entry(&det_math_version).unwrap_or_else(|| {
+        panic!("alice-det-math {det_math_version} is older than every row of KNOWN_SEMANTICS")
+    });
+    let (entry_version, entry_id) = KNOWN_SEMANTICS[position];
+    // the crate's own constant, not a copy: a release that changes the identifier without a new
+    // row fails here, by name
+    assert_eq!(
+        hex(&alice_det_math::SEMANTICS_ID),
+        entry_id,
+        "alice-det-math {det_math_version} has an identifier the {entry_version} row does not record: \
+         a release that changes its identifier adds its row to KNOWN_SEMANTICS"
+    );
+    assert_eq!(hex(&semantics), entry_id);
     for (version, earlier) in &KNOWN_SEMANTICS[..position] {
         let id = unhex(earlier);
         assert_eq!(
@@ -645,7 +675,11 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
             "alice-det-math {det_math_version} does not accept the identifier of {version} as a verified earlier one"
         );
     }
-    println!("e2e: alice-det-math {det_math_version}, identifier {}, {} earlier identifier(s) accepted", hex(&semantics), position);
+    println!(
+        "e2e: alice-det-math {det_math_version} (row {entry_version}), identifier {}, {} earlier identifier(s) accepted",
+        hex(&semantics),
+        position
+    );
     let crate_ids = each_crate_folds_this_det_math(&semantics);
     let lol_pin = alice_lol::law_id::LOL_SEMANTICS_PINS
         .iter()
@@ -795,11 +829,11 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         let shown = if cfg!(feature = "main-mode") { &values_got } else { &got };
         std::fs::write(out, format!("{det_math_version} {shown}\n")).unwrap();
     }
-    check_golden("golden/values.digest", &det_math_version, &values_got);
+    check_golden("golden/values.digest", entry_version, &values_got);
     // the whole run, records included, is the published releases' format; on main the records
     // are compared through the store above (written == read back, read as the current semantics)
     #[cfg(not(feature = "main-mode"))]
-    check_golden("golden/run.digest", &det_math_version, &got);
+    check_golden("golden/run.digest", entry_version, &got);
     println!("e2e: run digest {got}");
 }
 
@@ -881,4 +915,30 @@ fn det_math_binding_follows_crate_pins_and_refuses_the_rest() {
     let (a_pins, c_pins) = ([("alice-c", [21u8; 32])], [("alice-a", [20u8; 32])]);
     let cycle: [Checked<'_>; 2] = [("alice-a", &a_pins, [20u8; 32]), ("alice-c", &c_pins, [21u8; 32])];
     assert!(b(&cycle, "alice-a").unwrap_err().contains("cycle"));
+}
+
+/// A release without a new identifier is built with the row it started at; one older than every
+/// row has none. The table is strictly ordered by release and has no identifier twice (each row is
+/// a change of the identifier).
+#[test]
+fn a_release_is_built_with_the_row_it_started_at() {
+    let at = |v: &str| semantics_entry(v).map(|i| KNOWN_SEMANTICS[i].0);
+    assert_eq!(at("0.5.0"), Some("0.5.0"));
+    assert_eq!(at("0.5.1"), Some("0.5.1"));
+    assert_eq!(at("0.5.2"), Some("0.5.1"));
+    assert_eq!(at("0.5.10"), Some("0.5.1"));
+    assert_eq!(at("0.6.0"), Some(KNOWN_SEMANTICS.last().unwrap().0));
+    assert_eq!(at("0.4.9"), None);
+    for pair in KNOWN_SEMANTICS.windows(2) {
+        assert!(release(pair[0].0) < release(pair[1].0), "{} before {}", pair[0].0, pair[1].0);
+        assert_ne!(pair[0].1, pair[1].1, "{} and {} record the same identifier", pair[0].0, pair[1].0);
+    }
+    let ids: std::collections::BTreeSet<_> = KNOWN_SEMANTICS.iter().map(|(_, id)| *id).collect();
+    assert_eq!(ids.len(), KNOWN_SEMANTICS.len(), "an identifier recorded twice");
+}
+
+#[test]
+#[should_panic(expected = "not major.minor.patch")]
+fn a_pre_release_is_refused() {
+    let _ = release("0.6.0-rc.1");
 }
