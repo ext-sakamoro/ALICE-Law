@@ -28,6 +28,11 @@ pending = { since = "2026-10-24", exit = "every listed repository's main has the
 repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue"]
 
 [[file]]
+path = "scripts/alice_dup_check.py"
+pending = { since = "2026-10-25", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "052f95b6d1322ed9f88b24727f2c7709e4bf52177ad304d6929d436a55227fda", owner = "ALICE-LOL", planned = "b197c1e4c76e9f3a9079d1af3c5f6c8f90c848f9", variants = { "052f95b6d1322ed9f88b24727f2c7709e4bf52177ad304d6929d436a55227fda" = ["ALICE-LOL"], "absent" = ["ALICE-Text"] } }
+repos = ["ALICE-LOL", "ALICE-Text"]
+
+[[file]]
 path = "scripts/alice_siblings_check.py"
 pending = { since = "2026-10-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "ca03c5601e1b158d10e026bd96bbc51b8442286ea6e0235bd346cf372fd7df73", owner = "ALICE-Analytics", planned = "1c0a73e489c51288999ecf35c2389dd526c82f02", moved_from = { planned = "f54415ed59569d52c50b5c29f1a97092b4f6b581", target = "b577e8bc5fc9a6050f8344e5d4427b0b4f6a58519ea73d819dd5ec6f06841252" }, variants = { "b577e8bc5fc9a6050f8344e5d4427b0b4f6a58519ea73d819dd5ec6f06841252" = ["ALICE-DB", "ALICE-Edge", "ALICE-LOL"], "ca03c5601e1b158d10e026bd96bbc51b8442286ea6e0235bd346cf372fd7df73" = ["ALICE-Analytics"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
