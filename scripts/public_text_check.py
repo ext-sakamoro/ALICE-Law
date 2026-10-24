@@ -477,7 +477,7 @@ ALLOW_STATE: dict = {"allowed": {}, "used": {}, "repo": None}
 # "worker" is also the name of a technical part: the Cloudflare Workers crate and its runtime
 # files. Only there, by path (whole components, so "crates/worker-notes/" is not one), and in
 # a Cargo.lock only on its package lines, is the word not a finding; anywhere else (docs,
-# ROADMAP, CHANGELOG, comments) it still is.
+# README, CHANGELOG, comments) it still is.
 WORKER_DIRS = ("crates/worker/", "migrations/")
 WORKER_FILES = ("wrangler.toml",)
 CARGO_LOCK_WORKER_RE = re.compile(r'^(?:name = "worker(?:-[a-z0-9_-]+)?"|\s*"worker(?:-[a-z0-9_-]+)?(?: [0-9][^"]*)?",?)\s*$')
