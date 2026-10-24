@@ -1030,6 +1030,45 @@ class GitRevPreviousList(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(passed, [self.REF])
 
+    def test_a_dependency_only_in_its_remote_is_fetched_from_its_url(self):
+        # no clone of the dependency next to the repository or in the home directory (a CI runner):
+        # the checker reads the rev from the dependency's own url, and the copy built with it
+        # resolves the package there, not at ../<Repo>
+        bare = (self.parent / "remote" / "ALICE-Zz.git").as_uri()
+        shutil.rmtree(self.up)
+        self.consumer(self.rev)
+        (self.d / "Cargo.toml").write_text((self.d / "Cargo.toml").read_text().replace(self.url, bare))
+        self.git(self.d, "add", "-A")
+        self.git(self.d, "commit", "-qm", "remote only")
+        passed, problems = self.verify()
+        self.assertEqual(problems, [])
+        self.assertEqual(passed, [self.REF])
+        self.assertEqual(sorted(p.name for p in self.parent.iterdir()), ["ALICE-Probe", "remote"])
+
+    def test_a_dependency_only_in_its_remote_still_needs_a_test_that_depends_on_the_old_value(self):
+        bare = (self.parent / "remote" / "ALICE-Zz.git").as_uri()
+        shutil.rmtree(self.up)
+        self.consumer(self.rev, "let _ = probe_crate::PREVIOUS_SEMANTICS_IDS;")
+        (self.d / "Cargo.toml").write_text((self.d / "Cargo.toml").read_text().replace(self.url, bare))
+        self.git(self.d, "add", "-A")
+        self.git(self.d, "commit", "-qm", "remote only, weak test")
+        passed, problems = self.verify()
+        self.assertEqual(passed, [])
+        self.assertTrue(problems, "a test that passes without the old value is refused")
+
+    def test_a_dependency_whose_url_cannot_be_fetched_fails_closed(self):
+        # no clone anywhere and a url that does not answer (as a private repository without
+        # credentials): a problem naming the fetch, not a pass and not a skipped comparison
+        # (cargo itself reached the dependency, as it does with its own credentials: the rustdoc JSON
+        # is built first, then the manifest names a url the checker cannot fetch)
+        doc = imc.rustdoc_json(self.d, self.cfg)
+        shutil.rmtree(self.up)
+        gone = (self.parent / "no-such-remote" / "ALICE-Zz.git").as_uri()
+        (self.d / "Cargo.toml").write_text((self.d / "Cargo.toml").read_text().replace(self.url, gone))
+        passed, problems = imc.PreviousVerifier(self.d, self.cfg, doc, self.target)(self.cfg.ids[0], "11" * 32)
+        self.assertEqual(passed, [])
+        self.assertTrue(any("fetching ALICE-Zz failed" in p for p in problems), problems)
+
     def test_a_rev_not_on_an_origin_branch_fails(self):
         (self.up / "NOTES").write_text("local only\n")
         self.git(self.up, "add", "-A")

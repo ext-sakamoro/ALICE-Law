@@ -708,12 +708,12 @@ def _manifests(repo: Path) -> list[Path]:
     return [m for m in repo.rglob("Cargo.toml") if "target" not in m.relative_to(repo).parts]
 
 
-def path_dep_siblings(copy_root: Path, real_parent: Path) -> list[str]:
+def path_dep_siblings(copy_root: Path, real_parent: Path, copied: frozenset[str] = frozenset()) -> list[str]:
     """the sibling repositories (`../<Repo>`) that the manifests of `copy_root` name as path
     dependencies, and the ones their manifests name in turn: a sibling may point back at this
     repository (`../<this repo>/<crate>`), so a copy is built under a fresh parent that holds the
     copy under the repository's own name and a link to each of these, and every `../` resolves
-    inside it"""
+    inside it; a repository in `copied` is laid out next to the copy already and is read there"""
     own, seen, queue = copy_root.name, set(), [copy_root]
     while queue:
         repo = queue.pop()
@@ -733,6 +733,10 @@ def path_dep_siblings(copy_root: Path, real_parent: Path) -> list[str]:
                                      f"repositories ({repo.parent})") from None
                 if name == own or name in seen:
                     continue
+                if name in copied:
+                    seen.add(name)
+                    queue.append(copy_root.parent / name)
+                    continue
                 if not (real_parent / name).is_dir():
                     raise CheckError(f"{m}: path dependency {dep!r} names ../{name}, which is not checked out "
                                      f"next to the repository ({real_parent / name})")
@@ -743,7 +747,7 @@ def path_dep_siblings(copy_root: Path, real_parent: Path) -> list[str]:
 
 def link_siblings(copy_root: Path, real_parent: Path, copied: set[str]) -> None:
     """links in the parent of `copy_root` to the siblings its manifests reach (except `copied`)"""
-    for name in path_dep_siblings(copy_root, real_parent):
+    for name in path_dep_siblings(copy_root, real_parent, frozenset(copied)):
         if name not in copied:
             (copy_root.parent / name).symlink_to(real_parent / name, target_is_directory=True)
 
@@ -870,18 +874,36 @@ def git_rev_dependency(root: Path, crate_dir: Path, crate: str) -> dict | str | 
     return None
 
 
-def checked_rev_clone(root: Path, source: dict) -> tuple[str, Path]:
+def checked_rev_clone(root: Path, source: dict, cache: Path | None = None) -> tuple[str, Path]:
     """(repository name, local clone) for a git + rev source: the clone next to the repository, or
-    in the home directory, with the rev fetched from its origin and on an origin branch; its HEAD
-    and working tree are neither read nor moved"""
+    in the home directory, or (with neither, as on a CI runner) a partial bare repository under
+    `cache` whose origin is the source's url; the rev is fetched from its origin and must be on an
+    origin branch; a clone's HEAD and working tree are neither read nor moved"""
     name = Path(urlparse(source["url"]).path).name.removesuffix(".git")
     for clone in (root.resolve().parent / name, Path.home() / name):
         if (clone / ".git").exists():
             break
     else:
-        raise CheckError(f"{source['url']} rev {source['rev'][:12]}: no clone of {name} next to the repository "
-                         f"or in the home directory to read it from")
-    subprocess.run(["git", "-C", str(clone), "fetch", "-q", "origin"], capture_output=True)
+        if cache is None:
+            raise CheckError(f"{source['url']} rev {source['rev'][:12]}: no clone of {name} next to the "
+                             f"repository or in the home directory to read it from")
+        clone = cache / f"{name}.git"
+        if not (clone / "HEAD").is_file():
+            clone.mkdir(parents=True, exist_ok=True)
+            for args in (["init", "-q", "--bare"], ["remote", "add", "origin", source["url"]],
+                         ["config", "remote.origin.promisor", "true"],
+                         ["config", "remote.origin.partialclonefilter", "blob:none"]):
+                r = subprocess.run(["git", "-C", str(clone), *args], capture_output=True, text=True)
+                if r.returncode != 0:
+                    raise CheckError(f"{source['url']}: preparing a fetch of {name} failed: {r.stderr.strip()[-300:]}")
+        # no credential prompt: a url that needs credentials fails here instead of waiting
+        r = subprocess.run(["git", "-C", str(clone), "fetch", "-q", "--filter=blob:none", "origin",
+                            "+refs/heads/*:refs/remotes/origin/*"], capture_output=True, text=True,
+                           env=dict(os.environ, GIT_TERMINAL_PROMPT="0"))
+        if r.returncode != 0:
+            raise CheckError(f"{source['url']}: fetching {name} failed: {r.stderr.strip()[-300:]}")
+    subprocess.run(["git", "-C", str(clone), "fetch", "-q", "origin"], capture_output=True,
+                   env=dict(os.environ, GIT_TERMINAL_PROMPT="0"))
     rev = source["rev"]
     if subprocess.run(["git", "-C", str(clone), "cat-file", "-e", f"{rev}^{{commit}}"],
                       capture_output=True).returncode != 0:
@@ -934,7 +956,7 @@ class PreviousVerifier:
             return f"{spec.previous} re-exports {'::'.join(item_path)}: {source}"
         if source is not None:
             try:
-                repo, clone = checked_rev_clone(top, source)
+                repo, clone = checked_rev_clone(top, source, self.target / "id-move-git-sources")
                 scratch = top.parent / f".id-move-rev-{os.getpid()}"
                 try:
                     archive_rev(clone, source["rev"], scratch / repo)
