@@ -827,7 +827,8 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         // (.github/workflows/e2e.yml, against golden/run.digest), the values on main
         // (e2e-main.yml, against golden/values.digest)
         let shown = if cfg!(feature = "main-mode") { &values_got } else { &got };
-        std::fs::write(out, format!("{det_math_version} {shown}\n")).unwrap();
+        // keyed like the golden files: by the KNOWN_SEMANTICS row the release is built with
+        std::fs::write(out, format!("{entry_version} {shown}\n")).unwrap();
     }
     check_golden("golden/values.digest", entry_version, &values_got);
     // the whole run, records included, is the published releases' format; on main the records
