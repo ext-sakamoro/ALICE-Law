@@ -1375,9 +1375,17 @@ def publish_verify(roster: dict[str, dict], owners: list[str], crate: str, commi
     if not checksum or checksum != expect_sha256:
         problems.append(f"{crate} {version}: crates.io has checksum {checksum}, the gate packaged {expect_sha256}")
     compared += 1
-    license_here = tomllib.loads(manifest_text).get("package", {}).get("license")
+    package = tomllib.loads(manifest_text).get("package", {})
+    license_here = package.get("license")
     if v.get("license") != license_here:
-        problems.append(f"{crate} {version}: crates.io has license {v.get('license')!r}, the manifest {license_here!r}")
+        manifest_version = package.get("version")
+        # a published version keeps the licence it was published with: when the manifest at the
+        # ref is already a later version (relicensed since), the difference is reported, not refused
+        if isinstance(manifest_version, str) and dc.Version(manifest_version) > dc.Version(version):
+            print(f"note: {crate} {version} keeps its published licence {v.get('license')!r} "
+                  f"(the manifest is {manifest_version} under {license_here!r})")
+        else:
+            problems.append(f"{crate} {version}: crates.io has license {v.get('license')!r}, the manifest {license_here!r}")
     compared += 1
     users = fetch(f"{crate}/owners").get("users")
     if not isinstance(users, list):

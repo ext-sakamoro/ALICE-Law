@@ -704,7 +704,7 @@ class Verify(unittest.TestCase):
     """after `cargo publish`: the release on crates.io is the commit the gate checked"""
 
     def world(self, d: str, **over):
-        repo, ref = make_repo(d, {"Cargo.toml": ZIP_LICENSED})
+        repo, ref = make_repo(d, {"Cargo.toml": over.get("manifest", ZIP_LICENSED)})
         vcs = over.get("vcs", {"git": {"sha1": ref}, "path_in_vcs": ""})
         files = {"Cargo.toml": b"x"}
         if vcs is not None:
@@ -764,6 +764,32 @@ class Verify(unittest.TestCase):
             code, out, _ = self.verify(**over)
             self.assertEqual(code, 1, needle)
             self.assertIn(needle.replace("not the remote", "not on the remote"), out)
+
+    def test_a_published_version_keeps_its_licence_after_the_manifest_moved_on(self):
+        # the manifest at the ref is a later version under a new licence: the published version
+        # keeps the licence it was published with, so the difference is a note, not a finding
+        later = ZIP_LICENSED.replace('version = "0.10.0"', 'version = "0.11.0"', 1).replace(
+            'license = "Apache-2.0"', 'license = "LicenseRef-Proprietary"', 1)
+        code, out, _ = self.verify(manifest=later)
+        self.assertEqual(code, 0, out)
+        self.assertIn("note: alice-zip 0.10.0 keeps its published licence 'Apache-2.0' "
+                      "(the manifest is 0.11.0 under 'LicenseRef-Proprietary')", out)
+        self.assertNotIn("crates.io has license", out)
+
+    def test_the_same_version_under_another_licence_is_refused(self):
+        same = ZIP_LICENSED.replace('license = "Apache-2.0"', 'license = "LicenseRef-Proprietary"', 1)
+        code, out, _ = self.verify(manifest=same)
+        self.assertEqual(code, 1, out)
+        self.assertIn("alice-zip 0.10.0: crates.io has license 'Apache-2.0', the manifest 'LicenseRef-Proprietary'", out)
+        self.assertNotIn("keeps its published licence", out)
+
+    def test_a_manifest_older_than_the_release_is_refused(self):
+        # a ref before the release is not the release: its licence is compared, not excused
+        older = ZIP_LICENSED.replace('version = "0.10.0"', 'version = "0.9.0"', 1).replace(
+            'license = "Apache-2.0"', 'license = "MIT"', 1)
+        code, out, _ = self.verify(manifest=older)
+        self.assertEqual(code, 1, out)
+        self.assertIn("crates.io has license 'Apache-2.0', the manifest 'MIT'", out)
 
     def test_the_vcs_sha1_must_be_the_commit_and_the_path_the_manifest_directory(self):
         code, out, _ = self.verify(vcs={"git": {"sha1": "x"}, "path_in_vcs": "sub"})
