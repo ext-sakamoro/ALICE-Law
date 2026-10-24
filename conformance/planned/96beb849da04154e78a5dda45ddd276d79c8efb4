@@ -43,7 +43,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "release_baseline.py"
+# the fixtures' git and the script's git read no system or global configuration (a host's
+# commit.gpgsign would otherwise decide the outcome)
 ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+ENV.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
 
 
 def load():
