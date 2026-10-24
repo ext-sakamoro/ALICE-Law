@@ -72,6 +72,9 @@ class Cli(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stderr)
         self.assertIn("ci/gate.sh:2:", r.stderr)
         self.assertIn("1 pipelines end in grep -q", r.stdout)
+        if sys.platform == "win32":
+            # paths are printed with '/', the same on every OS
+            self.assertNotIn("\\", r.stderr + r.stdout)
 
     def test_a_clean_tree_passes(self):
         r = self.run_in({"ci/gate.sh": 'grep -q wasm32 <<<"$(rustup target list)"\n'})

@@ -52,7 +52,7 @@ def main() -> int:
     bad = []
     for f in files:
         for n, line in offending(f.read_text(encoding="utf-8")):
-            bad.append(f"{f.relative_to(ROOT)}:{n}: {line}")
+            bad.append(f"{f.relative_to(ROOT).as_posix()}:{n}: {line}")
     for b in bad:
         print(f"check_pipe_grep_q: {b}", file=sys.stderr)
     print(f"check_pipe_grep_q: {len(files)} files read, {len(bad)} pipelines end in grep -q")
