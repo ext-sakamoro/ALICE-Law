@@ -17,7 +17,8 @@ python3 scripts/test_expected_failure.py
 python3 scripts/expected_failure.py --check
 python3 scripts/test_public_text_check.py
 python3 scripts/test_licence_files_check.py
-python3 scripts/licence_files_check.py --repo .
+python3 scripts/test_holder_live.py
+python3 scripts/licence_files_check.py --repo . --holder-base-ref "$(git merge-base origin/main HEAD)"
 python3 scripts/test_readme_roster_check.py
 python3 scripts/test_conformance_docs_schema_check.py
 python3 scripts/test_conformance_roster_check.py

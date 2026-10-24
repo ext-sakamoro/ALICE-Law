@@ -1,0 +1,1077 @@
+# Known rights-holder occurrences (see scripts/licence_files_check.py): each repository by the SHA-256
+# of its name. The list only goes down; a fixed occurrence is removed in the same change that fixes it.
+
+[[entry]]
+repo = "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970"
+kind = "authors"
+path = "crates/app/Cargo.toml"
+
+[[entry]]
+repo = "04b562ca0b7fe99996acc9c1bd74f4da3923bd7ecaaeabdf09e7bc9d94009a63"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "04b562ca0b7fe99996acc9c1bd74f4da3923bd7ecaaeabdf09e7bc9d94009a63"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "04b562ca0b7fe99996acc9c1bd74f4da3923bd7ecaaeabdf09e7bc9d94009a63"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "0607acfb4c129b1ce84836e88e8c8281163d13caec9124800f4197ea625b2bd7"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "0607acfb4c129b1ce84836e88e8c8281163d13caec9124800f4197ea625b2bd7"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "0a99025bd77becb260c8fec10ce710a81b0bb5ba4b046739d7e9d6a4ceb3b2ef"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "0dc5da98ff8e3325f4be641bc0f894b94f06ee0b93b5657092379ed2f4c28c8d"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "0dc5da98ff8e3325f4be641bc0f894b94f06ee0b93b5657092379ed2f4c28c8d"
+kind = "authors"
+path = "pyproject.toml"
+
+[[entry]]
+repo = "0dc5da98ff8e3325f4be641bc0f894b94f06ee0b93b5657092379ed2f4c28c8d"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1270e03d426d148ee80945fa9e1c000c807c3ce1577f30024d7aee0d2013fc08"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "1270e03d426d148ee80945fa9e1c000c807c3ce1577f30024d7aee0d2013fc08"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1492a5b04da7234099071ac0133ae428b0e3450ca2e3dfd47d1f77b4cbb94305"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "1af6f0a948660d7aad2ed1822f5ce592114ff8c418b51248a352b2b952e31868"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "1af6f0a948660d7aad2ed1822f5ce592114ff8c418b51248a352b2b952e31868"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1b80d555bb43819ac4da24564236102f0c1999d00ab3faf330c03825a6afddf0"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "1b80d555bb43819ac4da24564236102f0c1999d00ab3faf330c03825a6afddf0"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "1e0fbeb03c31c18cd536cf38787ca7d2240bd07956a2d708276515905de8c62a"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "1e0fbeb03c31c18cd536cf38787ca7d2240bd07956a2d708276515905de8c62a"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1e2c8aead72e36cc4fbbe0d1c84fd2cf338b01873321c617dda37917006c129b"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "22109574c91caee3f128621bdd0d8ea7e2d5588b2e8f12de42ae00bf7603392e"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "22109574c91caee3f128621bdd0d8ea7e2d5588b2e8f12de42ae00bf7603392e"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "2368fbbea5ea4043cb84a5ae027905aec833fcd7648a68e5b9473d5cdd8b941a"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "2368fbbea5ea4043cb84a5ae027905aec833fcd7648a68e5b9473d5cdd8b941a"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "30ab6a7b246586a5c0b052d4563ed4f9148cdacbe67706b38bd575daf04ccde9"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "30ab6a7b246586a5c0b052d4563ed4f9148cdacbe67706b38bd575daf04ccde9"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "3311bb14ec92583276233d7010b9871bc3497fbf124b0a9f546d170d290de758"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "3311bb14ec92583276233d7010b9871bc3497fbf124b0a9f546d170d290de758"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "3392e4b48acca6d601862c3f299d3a28ff86133803e1e20d15cb8a7130ee6ffb"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "373fddf8f059d21f3a5e539e04abf943b7ff569aba590c486b4bac19e3e47430"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "373fddf8f059d21f3a5e539e04abf943b7ff569aba590c486b4bac19e3e47430"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "373fddf8f059d21f3a5e539e04abf943b7ff569aba590c486b4bac19e3e47430"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "38e19ab81bc34c0b638d4f0fa92e95d030e127bb8897517fe70ba91c5227e5b5"
+kind = "authors"
+path = "tauri/src-tauri/Cargo.toml"
+
+[[entry]]
+repo = "3b8f98eddf85ecec26b8f95ae9eb70154451813a4f74eb1a43825126aca90bcf"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "3b8f98eddf85ecec26b8f95ae9eb70154451813a4f74eb1a43825126aca90bcf"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "3ef7c23054fecceba84393adf2be7da3e61c15adafac87399f90c9ffd92b43ee"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "3ef7c23054fecceba84393adf2be7da3e61c15adafac87399f90c9ffd92b43ee"
+kind = "holder"
+path = "LICENSE-COMMERCIAL"
+
+[[entry]]
+repo = "42bfebe261d4d5ce9815f04b602444cf653bc2e3cd7375efe8004ae934b128ce"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "42bfebe261d4d5ce9815f04b602444cf653bc2e3cd7375efe8004ae934b128ce"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "42bfebe261d4d5ce9815f04b602444cf653bc2e3cd7375efe8004ae934b128ce"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4542ac49a6127dc74f12f4a59d4e07d7dd8dc64af739f48eabb3c1dbc99ef3ce"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "4542ac49a6127dc74f12f4a59d4e07d7dd8dc64af739f48eabb3c1dbc99ef3ce"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "4542ac49a6127dc74f12f4a59d4e07d7dd8dc64af739f48eabb3c1dbc99ef3ce"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "authors"
+path = "bindings/bevy/alice-sdf-bevy/Cargo.toml"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "authors"
+path = "bindings/openxr/Cargo.toml"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "authors"
+path = "examples/wasm-demo/Cargo.toml"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "authors"
+path = "mobile/uniffi-wrapper/Cargo.toml"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "authors"
+path = "server/Cargo.toml"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "holder"
+path = "LICENSE-COMMUNITY"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "holder"
+path = "unity-sdf-universe/LICENSE"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "holder"
+path = "vrchat-package/LICENSE.md"
+
+[[entry]]
+repo = "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
+kind = "authors"
+path = "libalice-enterprise/Cargo.toml"
+
+[[entry]]
+repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
+kind = "authors"
+path = "libalice/Cargo.toml"
+
+[[entry]]
+repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
+kind = "authors"
+path = "libalice/pyproject.toml"
+
+[[entry]]
+repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
+kind = "authors"
+path = "pyproject.toml"
+
+[[entry]]
+repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
+kind = "authors"
+path = "wasm/Cargo.toml"
+
+[[entry]]
+repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4c32980deda42f0977074d4334853e28b4805cd9e82321204d50cc893ebf0f6a"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "4c32980deda42f0977074d4334853e28b4805cd9e82321204d50cc893ebf0f6a"
+kind = "holder"
+path = "LICENSE-COMMERCIAL"
+
+[[entry]]
+repo = "4de52b5ee0c53c617c91db974d74c1e70f8c4a4492c38e09b48eb0c8e8252c0c"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "549f59f6129609e92ea247c184707ee2743cc1020d7371b4cd6c642bb7c0e569"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "549f59f6129609e92ea247c184707ee2743cc1020d7371b4cd6c642bb7c0e569"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "569e59fdd3172d0b37f76bf346066ee89dd2a87fe2d60aa44b59bda36d1abc6e"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "569e59fdd3172d0b37f76bf346066ee89dd2a87fe2d60aa44b59bda36d1abc6e"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "569e59fdd3172d0b37f76bf346066ee89dd2a87fe2d60aa44b59bda36d1abc6e"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "57c9065ce5b50297a0ad90c1d8fbb40731b9faee2299e00955dd84ee317ff9c8"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "57c9065ce5b50297a0ad90c1d8fbb40731b9faee2299e00955dd84ee317ff9c8"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-lol-datagen/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-lol-humanoid/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-lol-layout/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-lol-macro/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-lol-robot/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-lol-ui/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-lol/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-world-auditor-types/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "authors"
+path = "alice-world-auditor/Cargo.toml"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-lol-humanoid/TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-lol-layout/TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-lol-macro/TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-lol-robot/TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-lol-ui/TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-lol/TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-world-auditor-types/TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-world-auditor/LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "holder"
+path = "alice-world-auditor/TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "5c03fd3dd75391b968af52319e155c8915b5550d2c1c2513f72a606e307f1d6c"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "6226702ee85270dac34187b10c57139ee017758cf78d20f2539bb1d5dfad279b"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "6226702ee85270dac34187b10c57139ee017758cf78d20f2539bb1d5dfad279b"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6ff0f2728e75a6b67bcb2540590cb7aab7d1fa2528a074b56aea8b220850ac12"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "7218f32b0e056930aa0b50b7188ffcded8e75ba4f201971c26a746a5a0661bba"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "77c27f441163eb42122e0b0a2610588de91ccc1e370f8f4ea2edeeef04709fd3"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "7ab2d160450457417410b7fe04af5aaa1fc637aabb03c3eac5c1e317aa23b80b"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "7baaf1e0f9ceea355ebf5dcd904566ba12d3e096d9a0c0707fe7ee95f9619ce3"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "7baaf1e0f9ceea355ebf5dcd904566ba12d3e096d9a0c0707fe7ee95f9619ce3"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "7baaf1e0f9ceea355ebf5dcd904566ba12d3e096d9a0c0707fe7ee95f9619ce3"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7bc7bbf1c0be20ad56186deeee18e365398c650bb49bc70e7cd01bc3d26467dc"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "7bc7bbf1c0be20ad56186deeee18e365398c650bb49bc70e7cd01bc3d26467dc"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7d4b79a4762a666b78305a30ee1d8d1afc92011c5a1a52dba3a1727524226443"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "7d4b79a4762a666b78305a30ee1d8d1afc92011c5a1a52dba3a1727524226443"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "7e889a2755e1e0adeb76844653110ef6339e9a8beb4cbd9137f6da064959d832"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "7ee23f6d9c6e3bd0f4d8f27baf0a6236ebae0e93912ef7fd50c2dbe7602b9d60"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8159b9624dcbd405aafb542894a3939254c02bc227268e698841e60fc5374cc3"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "8159b9624dcbd405aafb542894a3939254c02bc227268e698841e60fc5374cc3"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "8159b9624dcbd405aafb542894a3939254c02bc227268e698841e60fc5374cc3"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "853a08873479add5fda50b6b6fe19b02fbd35e2200af2fb0df9caeb08311f234"
+kind = "authors"
+path = "services/api-gateway/Cargo.toml"
+
+[[entry]]
+repo = "853a08873479add5fda50b6b6fe19b02fbd35e2200af2fb0df9caeb08311f234"
+kind = "authors"
+path = "services/core-engine/Cargo.toml"
+
+[[entry]]
+repo = "85ef98a05feb4a14851fc78b8837205a7e1fabd0247eb558c8e48c387ce99490"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "85ef98a05feb4a14851fc78b8837205a7e1fabd0247eb558c8e48c387ce99490"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "85ef98a05feb4a14851fc78b8837205a7e1fabd0247eb558c8e48c387ce99490"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "86bf0ef670dfab03eba21037c979ef719e32e4c3e0dc38110be53806f1fa016a"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "86bf0ef670dfab03eba21037c979ef719e32e4c3e0dc38110be53806f1fa016a"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "8d1a8ff38e50cd7243014dc05db49e8f8d9a21bb1548e045ec6a740d3d7087d4"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "8e52fe74cde323a2f416625b64e7afb67cdd94287f2a182f2f59dbfa14fca3e5"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "8e52fe74cde323a2f416625b64e7afb67cdd94287f2a182f2f59dbfa14fca3e5"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "8e52fe74cde323a2f416625b64e7afb67cdd94287f2a182f2f59dbfa14fca3e5"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8e7d0e949c7f3ccc664e0104a4eb6f1daaa6b233f65d94121282adee4d571e08"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "939565c3177120a58a7b13cb316ecad5957379819ebc6db9013ae76ff5438d87"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "939565c3177120a58a7b13cb316ecad5957379819ebc6db9013ae76ff5438d87"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "98fc04542fe3a6d7a13248828f363a6bcf1b91c1176de758239b1c9f6cced5b1"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "9a0e45b93d7a3c91398f6ea80631c4cd208224450863c392157c3fb8c1c98578"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "9a0e45b93d7a3c91398f6ea80631c4cd208224450863c392157c3fb8c1c98578"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9c9affbb09120880f3e77400d2584c6997408f97acd289516f45eae66df43ea6"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "9c9affbb09120880f3e77400d2584c6997408f97acd289516f45eae66df43ea6"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a2475db3c37ae731d21b353bad8ff50a8b9619904ad51166d4a4e5c1d24542ab"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "a2475db3c37ae731d21b353bad8ff50a8b9619904ad51166d4a4e5c1d24542ab"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a431e371846af56936eb500d22259b8e97913a04c00e47af6cdd49964410a32c"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "a431e371846af56936eb500d22259b8e97913a04c00e47af6cdd49964410a32c"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a56840b70bd58bd009a09dab821ea88b545c441c38cb2caf6994e617b0559927"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "aa878435373fbfa0bb3926d78f7d7ba79f6c20d2fe7ad72da011a595f2cd46f9"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "aa878435373fbfa0bb3926d78f7d7ba79f6c20d2fe7ad72da011a595f2cd46f9"
+kind = "authors"
+path = "examples/rerun-viz/Cargo.toml"
+
+[[entry]]
+repo = "aa878435373fbfa0bb3926d78f7d7ba79f6c20d2fe7ad72da011a595f2cd46f9"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "abbaa5b057eceb02af7a328a762aabd0ed60507dcb9d5049cced185cab0e8b41"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "abbaa5b057eceb02af7a328a762aabd0ed60507dcb9d5049cced185cab0e8b41"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ac703d22ffea43351d568be4cfcade90b2bf963f19a757cea11053fc6013fbc3"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
+kind = "authors"
+path = "crates/alice-physics/Cargo.toml"
+
+[[entry]]
+repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
+kind = "holder"
+path = "crates/alice-physics/LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "b4836d6f58132d63dea52a28ddfcbf71f604fccc51689c0cd35829176ff4e97f"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "b4836d6f58132d63dea52a28ddfcbf71f604fccc51689c0cd35829176ff4e97f"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b5099a078d615727314d712e1c179e4365bf0114735e9a5ba96b90df7e3b5b03"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "b68f98d9a0b050eaefd08a7ca85f4e97cccfcbde3dd00daf8f91929cf309c4b0"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "b68f98d9a0b050eaefd08a7ca85f4e97cccfcbde3dd00daf8f91929cf309c4b0"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b7843aa111884f6528dd4136664d85df9f7f5ae4e3c0f12360a52d339f3ca704"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "b7843aa111884f6528dd4136664d85df9f7f5ae4e3c0f12360a52d339f3ca704"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "b7843aa111884f6528dd4136664d85df9f7f5ae4e3c0f12360a52d339f3ca704"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "bb18be8c6098b804c31199bd3af59ef0bc14d13aa3807ac1d322cc1fe43b38c0"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "bb18be8c6098b804c31199bd3af59ef0bc14d13aa3807ac1d322cc1fe43b38c0"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "bb18be8c6098b804c31199bd3af59ef0bc14d13aa3807ac1d322cc1fe43b38c0"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "bb84ef653b9571eaec0fea344534fcf0f36cf2c336d3a50530326aca87e4ce85"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "bedb6b9e9954b6dbac2a285af1caa8b6679c12f752d23d987037c492aba5b0c0"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "bf3c0d7427bd7565679270563d2986d5a9cb36ced72d32dffe163395e5cfe572"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "bf3c0d7427bd7565679270563d2986d5a9cb36ced72d32dffe163395e5cfe572"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "c01520440b902374118ce6d88b22d615501b0995966ca5170f1b238dd479e3e2"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "c01520440b902374118ce6d88b22d615501b0995966ca5170f1b238dd479e3e2"
+kind = "authors"
+path = "pyproject.toml"
+
+[[entry]]
+repo = "c01520440b902374118ce6d88b22d615501b0995966ca5170f1b238dd479e3e2"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c03691bbabe8735c38c7060203021abe40067b27654794725918953950f592c3"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "c60802e1244cbff8656a167ead19a99b191a28ae23e23a6f3ae08a1fb504acf5"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "cc56be2998112dda4d0d76b95afcf4e8f68f1c043714e5586f51587b4af9bdce"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "ce01a93be43237e2bc510416e9aa8ac1c059e36c2819bbf30f562645473f1cb8"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "ce01a93be43237e2bc510416e9aa8ac1c059e36c2819bbf30f562645473f1cb8"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "cf98e874c6ab6a8653ee36fce0c4ff90f76191c48f1ae94450bab941fa1b80fd"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "cf98e874c6ab6a8653ee36fce0c4ff90f76191c48f1ae94450bab941fa1b80fd"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "cf98e874c6ab6a8653ee36fce0c4ff90f76191c48f1ae94450bab941fa1b80fd"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d13a01ef62c1f9c0f0b273f30f9570ec2190dd1077f4201d7aede42553219481"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d2061a3f593eb506233333fd45d4cca5a9ed02ac1f7f19185d57e196d0764ddd"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "d3e8853a0db7ddbe0bb50f5f1492fe1e786a6df432f69b9bde9096f74bc2e510"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "d3e8853a0db7ddbe0bb50f5f1492fe1e786a6df432f69b9bde9096f74bc2e510"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d49581f6bffb48fa47af921ad0654cfc0926d029c7e36d3c9f6447b6a26a3f76"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "d49581f6bffb48fa47af921ad0654cfc0926d029c7e36d3c9f6447b6a26a3f76"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "d544146aac6f53d27825f76f914d20033a438a76806c14eb06663e1c711b0e11"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "d544146aac6f53d27825f76f914d20033a438a76806c14eb06663e1c711b0e11"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "d572850796fa57b4e7f4880b9da80d3ff933d69b6712c843716929cebee4fd80"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "d572850796fa57b4e7f4880b9da80d3ff933d69b6712c843716929cebee4fd80"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "d8d855545eadba30f6aa844916a29edb1abafdcdeca987dc60299cd692114384"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "db903a80fd14e2f240f8cc74a725700a4d7d80d331f213c52ca8134284cdfb81"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "db903a80fd14e2f240f8cc74a725700a4d7d80d331f213c52ca8134284cdfb81"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "db903a80fd14e2f240f8cc74a725700a4d7d80d331f213c52ca8134284cdfb81"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e14da12cd76987da67eca6bc073cef88b131fc73bc5d7b48c3190d6e950dbe06"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "e14da12cd76987da67eca6bc073cef88b131fc73bc5d7b48c3190d6e950dbe06"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "e23e84a6186aea987ec72ec25934926cc7a0fc4847aae2892f7bccfb65f29e51"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "e70eaa2a06f6d7a43970daa6f223b82c1c5c972628e3acc303a36911d9e0d390"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "e70eaa2a06f6d7a43970daa6f223b82c1c5c972628e3acc303a36911d9e0d390"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "eb3c7d3bafcbc8bedbc73df865104788adaa33d929a5807def4038b1b8f3e4f9"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "ec37e45b194ea3ecafb53bcd9219a3e20c84f24b04705fbc60c3f5d743d6396d"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "ec37e45b194ea3ecafb53bcd9219a3e20c84f24b04705fbc60c3f5d743d6396d"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "ec6b462b45e4aa123e2dac876e8a7aef0c5fed2dc997c7dd1b31b3282ae5a447"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "ec6b462b45e4aa123e2dac876e8a7aef0c5fed2dc997c7dd1b31b3282ae5a447"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "ef2637e2b37ab450c46796a8b57569f421b4acc569e39f58bbb871073d33df1b"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "ef2637e2b37ab450c46796a8b57569f421b4acc569e39f58bbb871073d33df1b"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "f0cdc2604f121709f35a9dd09d3ff3084c09c9b1dfd970332c55a0fdd06e0da9"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "fc71052a2f100219b2c5c56c1994fee66e48d897e022dbf542a80c7ec0d8cde8"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "fc71052a2f100219b2c5c56c1994fee66e48d897e022dbf542a80c7ec0d8cde8"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "fd1a07a4c593dccd902f863d2bd767db766f6a3c9131dd44aa92786e3c6040f2"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "fd1a07a4c593dccd902f863d2bd767db766f6a3c9131dd44aa92786e3c6040f2"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "fd1a07a4c593dccd902f863d2bd767db766f6a3c9131dd44aa92786e3c6040f2"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "fe3785962421904a55014fbb7b36997e160f3804c0c4f88a0885e9a0d6f02316"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "fe3785962421904a55014fbb7b36997e160f3804c0c4f88a0885e9a0d6f02316"
+kind = "holder"
+path = "LICENSE-COMMERCIAL.md"
+
+[[entry]]
+repo = "fe3785962421904a55014fbb7b36997e160f3804c0c4f88a0885e9a0d6f02316"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ff015f2cef8ec1b3a49d7b3064e4ea4679e0ad42b6b0abed1600d22b1ae21a1c"
+kind = "authors"
+path = "Cargo.toml"
+
+[[entry]]
+repo = "ff015f2cef8ec1b3a49d7b3064e4ea4679e0ad42b6b0abed1600d22b1ae21a1c"
+kind = "holder"
+path = "TRADEMARK_NOTICE"
