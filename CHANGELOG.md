@@ -126,6 +126,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - scripts/licence_files_check.py: Cargo.toml が宣言した licence の全文が repository にあるかを見る (Apache-2.0 / AGPL-3.0 / MIT は公式の本文と語の並びで比べる、改行や空白の違いは同じ本文として扱う、TRADEMARK_NOTICE の参照先の存在も見る) CI の Public text と preflight で走らせる、AGPL は当面報告だけ
 
 ### Changed
+- `release-train.toml`: alice-sync の行の注釈から、この repository の license を前提にした向きの説明を外す (この repository は alice-sync を引かない)
 - `scripts/release_train.py` publish-verify: crates.io の版と manifest の license が違う時、manifest の版が crates.io の版より新しければ (公開後に license を変えた) note にする 公開した版は公開した時の license のまま 同じ版 (または manifest が古い) で license が違うのは従来どおり拒む
 - `conformance/shared-files.toml`: ALICE-DB-Enterprise と ALICE-Print を表から外す (どちらも非公開で、conformance-live の token では main を読めない) 読み取り専用の鍵が入るまで、両 repo の写しは表の外
 - `conformance/shared-files.toml`: 揃える途中の `scripts/changed_paths.py` / `scripts/test_changed_paths.py` の行の target を、owner ALICE-Crypto の新しい bytes にする (sha256 f8dcad92 / 42f15623: workflow を行単位でなく YAML として読み、行頭の注釈・flow 記法の paths・BOM・NEL / LS / PS の改行で job や paths を見落とさない) 写しはこの bytes に揃える

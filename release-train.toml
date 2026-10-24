@@ -461,7 +461,7 @@ required-ci = [
 
 [crate.alice-sync]
 # Law に早く載せる crate (README の ALICE-Law 統合の節を置くため) 0.6.1 は公開済み (tag v0.6.1 = 4e15f2e)
-# license は AGPL-3.0-or-later OR LicenseRef-Commercial で、この repository (AGPL) との向きの問題は無い
+# license は crate 側の宣言に従う (この repository は alice-sync を引かないので、license の向きの問題は無い)
 # alice-det-math を直接は引かず、physics feature の alice-physics を通す 公開済みの 0.6.1 は alice-physics ^1.4 を
 # 要求し、main (a3305fd) は "3.0" (最新の 3 系) を要求するので、次の版は main から prepared にできる
 # (publish-gate は最新でない版を受ける要求を拒否する) この repository は alice-sync を引かない
