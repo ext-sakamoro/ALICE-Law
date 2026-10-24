@@ -8,6 +8,7 @@ runner for cargo, so each case fixes exactly what is published and what cargo re
 from __future__ import annotations
 
 import io
+import json
 import os
 import sys
 import tarfile
@@ -458,7 +459,7 @@ class Workspace(unittest.TestCase):
             self.assertIn("blocked: alice-physics >=3.0, <5 unpublished (crates.io max 2.0.0), satisfied only by "
                           f".github/alice-siblings ALICE-Physics {SHA[:12]}", out)
             rc, out, err = self.main("--member", "ws-lib", "--patches")
-            self.assertEqual((rc, out.splitlines()), (0, [f'--config=patch.crates-io.alice-physics.path="{pkg.resolve()}"']), err)
+            self.assertEqual((rc, out.splitlines()), (0, [f'--config=patch.crates-io.alice-physics.path={json.dumps(str(pkg.resolve()))}']), err)
         # the package is read from that directory: no manifest there fails
         self.write_lib('alice-physics = { path = "../../ALICE-Physics/crates/missing", version = ">=3.0, <5" }\n')
         rc, out, _ = self.main("--member", "ws-lib", "--publish-gate")
@@ -547,7 +548,7 @@ class Workspace(unittest.TestCase):
         rc, out, err = self.main("--member", "ws-lib", "--patches")
         self.assertEqual(rc, 0, err)
         self.assertEqual(out.splitlines(),
-                         [f'--config=patch.crates-io.alice-zip.path="{(self.base / "ALICE-Zip").resolve()}"'])
+                         [f'--config=patch.crates-io.alice-zip.path={json.dumps(str((self.base / "ALICE-Zip").resolve()))}'])
         self.assertIn("blocked 1", err)
 
     def test_dependency_on_the_workspace_root_package_is_a_member(self) -> None:
@@ -635,8 +636,8 @@ class Workspace(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         lines = out.splitlines()
         self.assertEqual(lines, [
-            f'--config=patch.crates-io.ws-macro.path="{(self.root / "ws-macro").resolve()}"',
-            f'--config=patch.crates-io.alice-zip.path="{(self.base / "ALICE-Zip").resolve()}"',
+            f'--config=patch.crates-io.ws-macro.path={json.dumps(str((self.root / "ws-macro").resolve()))}',
+            f'--config=patch.crates-io.alice-zip.path={json.dumps(str((self.base / "ALICE-Zip").resolve()))}',
         ])
         self.assertIn("blocked 2", err)
         self.published.update({"ws-macro": [(0, 4, 0)], "alice-zip": [(0, 11, 0)]})
