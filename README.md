@@ -203,19 +203,9 @@ None.
 
 ## License
 
-`AGPL-3.0-or-later OR LicenseRef-Commercial`: dual-licensed, pick either.
+`LicenseRef-Proprietary` from this version: the source is published for reading only, and
+using, copying, modifying or distributing it needs a written agreement with
+the copyright holder. The text is [LICENSE-Proprietary](LICENSE-Proprietary). Versions
+published before keep the licence they were published under.
 
-| Option | Terms | Use it when |
-|--------|-------|-------------|
-| **AGPL-3.0-or-later** | [LICENSE-AGPL](LICENSE-AGPL), free | your project is itself AGPL-compatible open source, or you run the checks internally |
-| **Commercial License** | [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md), paid, removes the copyleft | closed-source products or pipelines, proprietary SaaS, redistribution in a proprietary tool |
-
-AGPL is a strong copyleft: a product, pipeline or service that incorporates these
-checks and is distributed or served to users must be released under the AGPL as well.
-Of the core crates the end to end test crate links, three are under the same dual
-licence: alice-physics, alice-db and alice-crypto. alice-lol, alice-zip and
-alice-analytics are `Apache-2.0` and alice-sdf is `MIT OR Apache-2.0`; alice-det-math
-is `MIT OR Apache-2.0` in the published 0.4.0 the test builds against, and
-`Apache-2.0` from 0.5.0.
-
-Commercial licence enquiries: <contact@extoria.co.jp>
+Licence enquiries: <contact@extoria.co.jp>

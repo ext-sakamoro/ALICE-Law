@@ -3,7 +3,7 @@ name = "alice-law-e2e"
 version = "0.0.0"
 edition = "2021"
 publish = false
-license = "AGPL-3.0-or-later OR LicenseRef-Commercial"
+license = "LicenseRef-Proprietary"
 description = "End to end check across the core ALICE crates: read a law, compute, save, restore, compare bit for bit"
 
 # The published releases the check is written against. `alice-lol` 0.4 is the first
