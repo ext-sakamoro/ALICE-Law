@@ -91,6 +91,12 @@ source = { repo = "ALICE-DB", rev = "6e7595bcbb014b7db415c881c8bcc32236930a25" }
 repos = ["ALICE-DB", "ALICE-Edge"]
 
 [[file]]
+path = "scripts/ci_test_coverage_check.py"
+sha256 = "103b24f28c8b7a572b8f30002014b8c1ffeb61d45968669c247ec7547d2d8883"
+source = { repo = "ALICE-SDF", rev = "a63fefbf4933f68abeac8145fdbae8c5ed55b204" }
+repos = ["ALICE-LLM", "ALICE-SDF"]
+
+[[file]]
 path = "scripts/clippy-lib-canary/Cargo.lock"
 repos = []
 exempt = { "ALICE-LOL" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids", "ALICE-Physics" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids", "ALICE-SDF" = "the lock of this repository's own canary crate, whose dependencies follow the forms this repository's clippy configuration forbids" }
@@ -269,6 +275,12 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 path = "scripts/test_check_pipe_grep_q.py"
 pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "faf6446404e832ab301a9b4752a0f2a904ced02591b5148e84c2c026072fcf57", owner = "ALICE-Zip", planned = "40385b66287a7ea8367b3f457a2057ca74fee6c8", variants = { "absent" = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Physics", "ALICE-SDF", "ALICE-Zip"]
+
+[[file]]
+path = "scripts/test_ci_test_coverage_check.py"
+sha256 = "47f48d312531bcca14ea46781be509ffcb55ecf71aa57bb5b9f50971c6cd0d51"
+source = { repo = "ALICE-SDF", rev = "a63fefbf4933f68abeac8145fdbae8c5ed55b204" }
+repos = ["ALICE-LLM", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/test_clippy_canary.py"
