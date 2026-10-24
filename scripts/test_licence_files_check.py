@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Tests for licence_files_check.py: a declared licence needs its full text in the repository.
 
-The full texts come from this repository (LICENSE-AGPL, the GNU AGPL v3 text) and scripts/testdata/apache-2.0.txt
-(the Apache License 2.0 text as apache.org publishes it).
+The full texts come from scripts/testdata/agpl-3.0.txt (the GNU AGPL v3 text as the ALICE repositories carried it
+in LICENSE-AGPL) and scripts/testdata/apache-2.0.txt (the Apache License 2.0 text as apache.org publishes it).
 
 Usage: python3 scripts/test_licence_files_check.py
 """
@@ -20,7 +20,7 @@ spec = importlib.util.spec_from_file_location("lfc", HERE / "licence_files_check
 lfc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lfc)
 
-AGPL = (HERE.parent / "LICENSE-AGPL").read_text(encoding="utf-8")
+AGPL = (HERE / "testdata" / "agpl-3.0.txt").read_text(encoding="utf-8")
 APACHE = (HERE / "testdata" / "apache-2.0.txt").read_text(encoding="utf-8")
 MIT = """MIT License
 
