@@ -127,6 +127,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - scripts/licence_files_check.py: Cargo.toml が宣言した licence の全文が repository にあるかを見る (Apache-2.0 / AGPL-3.0 / MIT は公式の本文と語の並びで比べる、改行や空白の違いは同じ本文として扱う、TRADEMARK_NOTICE の参照先の存在も見る) CI の Public text と preflight で走らせる、AGPL は当面報告だけ
 
 ### Changed
+- `.github/workflows/e2e-main.yml`: `Each semver_gate config is a copy of its roster entry` の step は dispatch の時だけ走る (休止)
 - `conformance/shared-files.toml`: `scripts/id_move_check.py` / `scripts/test_id_move_check.py` の計画を owner ALICE-Physics の新しい bytes に計画し直す (planned 400420c8 / f148e0de、moved_from は前の計画 03e6bfc1 / dc8ec15d) `scripts/release_baseline.py` の写しに ALICE-Physics を足す (まだ持たない) `scripts/check_pipe_grep_q.py` / `scripts/test_check_pipe_grep_q.py` の計画を owner ALICE-Zip の新しい bytes に計画し直す (planned 7447715d / 5b97a519、どの repo もまだ持たないので moved_from は置かず、`conformance/planned/` の前の bytes は外す)
 - `conformance/shared-files.toml`: `scripts/advisory_hold_guard.py` / `scripts/test_advisory_hold_guard.py` の揃った行を owner ALICE-Kinematics の新しい bytes (planned cf2b08a9 / f7d0d1ac、main 460ca2d) に動かす計画にする (写しは ALICE-Cloud-Gateway / ALICE-Container / ALICE-Kinematics / ALICE-Queue) 揃った行の写しの数の固定は 943 から 935
 - `conformance/shared-files.toml`: `scripts/ci_test_coverage_check.py` / `scripts/test_ci_test_coverage_check.py` の揃った行を足す (source ALICE-SDF a63fefbf、写しは ALICE-LLM と ALICE-SDF) 揃った行の写しの数の固定は 939 から 943

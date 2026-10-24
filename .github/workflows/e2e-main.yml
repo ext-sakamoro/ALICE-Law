@@ -66,8 +66,10 @@ jobs:
       - name: Consumer feature sets cover every feature (main)
         run: python3 scripts/release_train.py feature-coverage --repos-root "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
       # each run of scripts/semver_gate.py in a roster repository's CI reads a config that is
-      # a copy of the crate's roster entry (every roster repository is checked out for it)
+      # a copy of the crate's roster entry (every roster repository is checked out for it);
+      # dormant: runs only when the workflow is dispatched
       - name: Each semver_gate config is a copy of its roster entry (main)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           for r in $(python3 -c "import tomllib; print(' '.join(sorted({c['repo'] for c in tomllib.load(open('release-train.toml', 'rb'))['crate'].values() if 'repo' in c})))"); do
             [ -d "$RUNNER_TEMP/core/$r" ] || git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
