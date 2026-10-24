@@ -387,6 +387,49 @@ class Entries(unittest.TestCase):
 
 
 class Verify(unittest.TestCase):
+    def run_verify(self, config: str, meta: dict) -> tuple[int, str]:
+        """verify() over a written config and a resolved graph (cargo is not run), its exit code and output"""
+        import contextlib
+        import io
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        for name in ("ROOT", "CONFIG", "metadata"):
+            self.addCleanup(setattr, mm, name, getattr(mm, name))
+        mm.ROOT = Path(tmp.name)
+        mm.CONFIG = mm.ROOT / "e2e" / ".cargo" / "config.toml"
+        write(mm.CONFIG, config)
+        mm.metadata = lambda: meta
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = mm.verify()
+        return code, out.getvalue()
+
+    def config(self, git: bool) -> str:
+        text = "[patch.crates-io]\n" + "".join(f'{c} = {{ path = "/c/{c}" }}\n' for c in mm.CRATES)
+        if git:
+            text += f'\n[patch."{DETMATH_URL}"]\nalice-det-math = {{ path = "/c/alice-det-math" }}\n'
+        return text
+
+    def test_every_entry_used_and_every_crate_from_main_passes(self):
+        code, out = self.run_verify(self.config(git=True), graph(
+            every_core_crate_from() + [("alice-db", "alice-det-math", DETMATH_GIT, None)]))
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"{len(mm.CRATES) + 1} patch entries used, 0 problem(s)", out)
+
+    def test_a_written_entry_the_graph_does_not_use_fails_and_is_named(self):
+        # the git entry is written but no requirement names the commit any more
+        code, out = self.run_verify(self.config(git=True), graph(every_core_crate_from()))
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"patch entry alice-det-math from {DETMATH_URL}: not used", out)
+
+    def test_no_entry_used_fails_with_exit_2(self):
+        # every requirement resolved elsewhere: the checkouts were never taken
+        code, out = self.run_verify(self.config(git=False), graph(
+            [("alice-law-e2e", c, REGISTRY, REGISTRY) for c in mm.CRATES]))
+        self.assertEqual(code, 2, out)
+        self.assertIn("no patch entry was used", out)
+
     def test_without_the_patch_it_says_so_instead_of_reading_every_crate_as_from_crates_io(self):
         import contextlib
         import io
