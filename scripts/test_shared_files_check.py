@@ -188,6 +188,56 @@ class Schema(Base):
             self.assertEqual(code, 2, out)
             self.assertIn("needs exactly one", out)
 
+    def test_a_product_repository_in_the_hashed_set_is_a_repository_name(self):
+        # a product of the account outside the ALICE-* names (text-to-print) holds copies of the Law tooling too;
+        # it is named only through sha256 of its lower-case name, and every rule that reads a name takes it
+        self.assertTrue(sfc.is_repo_name("text-to-print"))
+        self.assertTrue(sfc.is_repo_name("ALICE-A"))
+        self.t.write_text(self.w.table(repos=["ALICE-A", "ALICE-B", "text-to-print"]), encoding="utf-8")
+        code, out = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("repos 3", out)
+
+    def test_a_name_outside_the_set_is_refused_wherever_a_name_is_read(self):
+        for name in ("other-product", "Text-To-Print", "text-to-print ", "", "ALICE-", "alice-zip"):
+            self.assertFalse(sfc.is_repo_name(name), name)
+        with self.assertRaises(sfc.Unreadable):
+            sfc.load(self.w.table(repos=["ALICE-A", "ALICE-B", "other-product"]))
+        c_row = {"path": "scripts/c.sh", "sha256": h(b"c\n"), "source": {"repo": "other-product", "rev": "0" * 40},
+                 "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {}}
+        with self.assertRaises(sfc.Unreadable):
+            sfc.load(self.w.table(c_row))
+        c_row = {"path": "scripts/c.sh", "sha256": h(b"c\n"), "source": {"repo": "ALICE-A", "rev": "0" * 40},
+                 "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {"other-product": "a reason long enough"}}
+        with self.assertRaises(sfc.Unreadable):
+            sfc.load(self.w.table(c_row))
+
+    def test_a_product_repository_can_be_a_row_s_source_and_a_pending_owner(self):
+        c_row = {"path": "scripts/c.sh", "sha256": h(b"c\n"), "source": {"repo": "text-to-print", "rev": "0" * 40},
+                 "repos": ["ALICE-A", "text-to-print"], "paths": {}, "exempt": {}}
+        self.assertEqual(sfc.load(self.w.table(c_row))[0]["source"]["repo"], "text-to-print")
+        c_row = {"path": "scripts/c.sh", "sha256": h(b"c\n"), "source": {"repo": "ALICE-A", "rev": "0" * 40},
+                 "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {"text-to-print": "a reason long enough"}}
+        self.assertEqual(sfc.load(self.w.table(c_row))[0]["exempt"], {"text-to-print": "a reason long enough"})
+
+    def test_the_set_holds_hashes_only_and_a_fictional_entry_admits_exactly_that_name(self):
+        entry = hashlib.sha256("fictional-product".encode("utf-8")).hexdigest()
+        self.assertNotIn(entry, sfc.PRODUCT_REPO_HASHES)
+        self.assertFalse(sfc.is_repo_name("fictional-product"))
+        self.addCleanup(sfc.PRODUCT_REPO_HASHES.discard, entry)
+        sfc.PRODUCT_REPO_HASHES.add(entry)
+        self.assertTrue(sfc.is_repo_name("fictional-product"))
+        self.assertFalse(sfc.is_repo_name("fictional-product2"))
+        self.assertTrue(sfc.PRODUCT_REPO_HASHES)
+        for x in sfc.PRODUCT_REPO_HASHES:
+            self.assertRegex(x, r"^[0-9a-f]{64}$")
+
+    def test_gen_reads_a_product_owner_through_the_same_rule(self):
+        code, out = run(gen.main, ["--table", str(self.t), "--check",
+                                   "--target", "scripts/c.sh=" + "0" * 64 + "@other-product"])
+        self.assertEqual(code, 2, out)
+        self.assertIn("needs PATH=SHA256@", out)
+
     def test_a_good_table_reads(self):
         self.t.write_text(self.w.table(), encoding="utf-8")
         code, out = self.check()
