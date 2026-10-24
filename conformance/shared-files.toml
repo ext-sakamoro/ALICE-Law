@@ -24,8 +24,7 @@ exempt = { "ALICE-Law" = "runs its own scripts/public_text_check.py in place; th
 
 [[file]]
 path = "scripts/advisory_hold_guard.py"
-sha256 = "e5f2844a399fe58d2d3d3ce601694bec584137491f784bbc98ac946124a89814"
-source = { repo = "ALICE-Kinematics", rev = "d6b9dbef79bd40cbc873e4a5ae7bf72c315c83ce" }
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e76f84d08796a2665af470bff3492060063fdd8190c95bc30dc01a407a6f1329", owner = "ALICE-Kinematics", planned = "cf2b08a94f242c857a7c2b38cd1b1545c8345cdb", variants = { "e5f2844a399fe58d2d3d3ce601694bec584137491f784bbc98ac946124a89814" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Queue"], "e76f84d08796a2665af470bff3492060063fdd8190c95bc30dc01a407a6f1329" = ["ALICE-Kinematics"] } }
 repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue"]
 
 [[file]]
@@ -227,8 +226,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge"]
 
 [[file]]
 path = "scripts/test_advisory_hold_guard.py"
-sha256 = "d0d2bdd1db7d75498ae8dc50618ef33d38ad581607547555d903298c4de526cb"
-source = { repo = "ALICE-Kinematics", rev = "d6b9dbef79bd40cbc873e4a5ae7bf72c315c83ce" }
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e7a6fd22e92ed6cacbd02f829934ebae6d0d7cc02fe72fec1240802cdd90d1be", owner = "ALICE-Kinematics", planned = "f7d0d1ac0c74bdd05d20b4cfaedec6b579ea9a99", variants = { "d0d2bdd1db7d75498ae8dc50618ef33d38ad581607547555d903298c4de526cb" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Queue"], "e7a6fd22e92ed6cacbd02f829934ebae6d0d7cc02fe72fec1240802cdd90d1be" = ["ALICE-Kinematics"] } }
 repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue"]
 
 [[file]]
