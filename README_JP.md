@@ -203,17 +203,8 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 
 ## ライセンス
 
-`AGPL-3.0-or-later OR LicenseRef-Commercial`: 二重 license で、どちらかを選ぶ
+この版から `LicenseRef-Proprietary`: ソースは閲覧用に公開しており、利用・複製・改変・配布には
+著作権者との書面での合意が必要 条文は [LICENSE-Proprietary](LICENSE-Proprietary)
+それより前に公開した版は、公開時のライセンスのまま
 
-| 選択 | 条件 | 使う時 |
-|--------|-------|-------------|
-| **AGPL-3.0-or-later** | [LICENSE-AGPL](LICENSE-AGPL)、無料 | project そのものが AGPL と両立する open source である、または検査を内部で走らせる |
-| **Commercial License** | [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)、有料、copyleft を外す | closed source の製品や pipeline、独自の SaaS、独自の道具での再配布 |
-
-AGPL は強い copyleft: これらの検査を組み込み、配布するか利用者に提供する製品、pipeline、
-service も AGPL で公開しなければならない end to end の試験の crate が link する core crate
-のうち 3 つが同じ二重 license: alice-physics、alice-db、alice-crypto alice-lol、alice-zip、
-alice-analytics は `Apache-2.0`、alice-sdf は `MIT OR Apache-2.0`; alice-det-math は試験が
-build する公開版の 0.4.0 では `MIT OR Apache-2.0`、0.5.0 から `Apache-2.0`
-
-商用 license の問い合わせ: <contact@extoria.co.jp>
+ライセンスの問い合わせ: <contact@extoria.co.jp>
