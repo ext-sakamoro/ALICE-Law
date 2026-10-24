@@ -675,7 +675,7 @@ class Shapes(unittest.TestCase):
                            ("migrations/0001.sql", "-- worker table"), ("Cargo.lock", 'name = "worker"'),
                            ("Cargo.lock", ' "worker-macros 0.4.2",')):
             self.assertNotIn("agent process", ptc.kinds(line, path), (path, line))
-        for path, line in (("docs/ROADMAP.md", "the worker landed it"), ("crates/worker-notes/a.md", "a worker"),
+        for path, line in (("docs/notes.md", "the worker landed it"), ("crates/worker-notes/a.md", "a worker"),
                            ("xcrates/worker/a.rs", "a worker"), ("Cargo.lock", "# a worker wrote this"),
                            ("crates/worker/src/lib.rs", "the worker and a subagent")):
             self.assertIn("agent process", ptc.kinds(line, path), (path, line))
