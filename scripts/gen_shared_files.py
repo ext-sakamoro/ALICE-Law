@@ -421,7 +421,7 @@ def main(argv: list[str]) -> int:
         for t in a.target:
             path, _, rest = t.partition("=")
             sha, _, owner = rest.partition("@")
-            if not path or not sfc.HEX64.match(sha) or not sfc.REPO.match(owner):
+            if not path or not sfc.HEX64.match(sha) or not sfc.is_repo_name(owner):
                 raise sfc.Unreadable(f"--target {t!r}: needs PATH=SHA256@ALICE-X")
             targets[path] = (sha, owner)
         old_entries = (sfc.load(a.table.read_text(encoding="utf-8"))
