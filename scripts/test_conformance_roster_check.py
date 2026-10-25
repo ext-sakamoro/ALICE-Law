@@ -554,6 +554,27 @@ class LawEvidence(unittest.TestCase):
             self.assertEqual(c, "pass 1, fail-known 0, unverified 1, n/a 0", g8)
             self.assertIn(why, out)
 
+    def test_a_tie_test_in_a_workspace_members_tests_dir_runs(self):
+        # a workspace keeps its integration tests at <member>/tests/: the member is a directory whose
+        # Cargo.toml has a [package]; a tests/ directory anywhere else is not an integration-test target
+        test = "#[test]\nfn member_tie() {}\n"
+        paths = {"alice-lol/Cargo.toml", "alice-lol/tests/x.rs", "src/foo/tests/x.rs", "docs/tests/x.rs",
+                 "virtual/Cargo.toml", "virtual/tests/x.rs", "crates/a/b/Cargo.toml", "crates/a/b/tests/y.rs",
+                 "alice-lol/tests/sub/z.rs"}
+        files = {"alice-lol/Cargo.toml": '[package]\nname = "alice-lol"\n', "alice-lol/tests/x.rs": test,
+                 "src/foo/tests/x.rs": test, "docs/tests/x.rs": test,
+                 "virtual/Cargo.toml": '[workspace]\nmembers = ["a"]\n', "virtual/tests/x.rs": test,
+                 "crates/a/b/Cargo.toml": '[package]\nname = "b"\n', "crates/a/b/tests/y.rs": test,
+                 "alice-lol/tests/sub/z.rs": test}
+        read = files.get
+        self.assertIsNone(crc.test_fn_gap("alice-lol/tests/x.rs::member_tie", paths, read))
+        self.assertIsNone(crc.test_fn_gap("crates/a/b/tests/y.rs::member_tie", paths, read))
+        for ref in ("src/foo/tests/x.rs::member_tie",      # a helper module under src/ without #[cfg(test)]
+                    "docs/tests/x.rs::member_tie",         # no Cargo.toml in docs/
+                    "virtual/tests/x.rs::member_tie",      # a virtual manifest has no [package]
+                    "alice-lol/tests/sub/z.rs::member_tie"):  # a subdirectory of tests/ is a module, not a target
+            self.assertIn("outside tests/", crc.test_fn_gap(ref, paths, read) or "", ref)
+
     def test_symbol_lookup_reads_the_ref_not_the_name_in_a_comment(self):
         paths = {"src/a.rs"}
         read = {"src/a.rs": "// fn ghost() appears only here\nfn real() {}\n"}.get

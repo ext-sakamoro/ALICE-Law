@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/conformance_roster_check.py`: G2 の tie test は、root の `tests/<file>.rs` に加えて workspace の member (`<dir>/Cargo.toml` に `[package]` がある directory) の `<dir>/tests/<file>.rs` も integration test として受け取る それ以外の場所の `tests/` (src の下の module、virtual manifest の下、manifest の無い directory、`tests/` の下の sub directory) は今まで通り `#[cfg(test)]` が要る
 - `conformance/holder-baseline.toml`: 直った 9 件を外す (`holder_live.py --shrink`、5 repository の license の切り替えで権利の表示と authors が規則に合った) 表は 110 件 `conformance/manifest-state.toml` と README の Law の状態の行を今の main の manifest に合わせる 表を今の main に合わせて ALICE-Physics を `tools/fneg-fma-ir-probes/` の 50 行に足す (同じ bytes) 表の写しの数の lock は 947
 - `conformance/shared-files.toml`: `scripts/check_py_license.py` の行を最初の移動の計画にする (owner ALICE-DB、planned 89360c6c / target bc1999d6、ALICE-DB と ALICE-Edge、docstring の 2 行だけが違う) 計画した bytes を `conformance/planned/` に置く 表の写しの数の lock は 899 から 897
 - `scripts/shared_files_check.py`: exempt の値は理由か `{ reason, until = "YYYY-MM-DD" }` (期限つき) 期限を過ぎると、その repo の写しが行の bytes (揃った行の sha256、pending の行の target) でない間は finding (live と `--repo` の両方、`--repo` でも `--today` を取る) 理由の役目が終わった exempt が残り続けない `gen_shared_files.py` は期限つきの exempt をそのまま書き戻す `.github/actions/alice-siblings/action.yml` の行の製品の 1 repo の exempt に期限 2026-11-11 (最初の移動の 3 日 + 14 日)

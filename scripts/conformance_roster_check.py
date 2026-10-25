@@ -226,10 +226,31 @@ def symbol_defined(ref: str, paths: set[str], read) -> str | None:
     return None
 
 
+MEMBER_TEST_RE = re.compile(r"^(?P<dir>.+)/tests/[^/]+\.rs$")
+
+
+def integration_test_file(path: str, paths: set[str], read) -> bool:
+    """whether `path` is an integration-test target: `tests/<file>.rs` of the repository's root package, or
+    `<dir>/tests/<file>.rs` of a workspace member (`<dir>/Cargo.toml` has a [package]); a tests/ directory under
+    any other directory (a module under src/, a virtual manifest, no manifest) is not one"""
+    if path.startswith("tests/"):
+        return True
+    m = MEMBER_TEST_RE.match(path)
+    if not m:
+        return False
+    manifest = f"{m['dir']}/Cargo.toml"
+    if manifest not in paths or read is None:
+        return False
+    try:
+        return isinstance(tomllib.loads(read(manifest) or "").get("package"), dict)
+    except tomllib.TOMLDecodeError:
+        return False
+
+
 def test_fn_gap(ref: str, paths: set[str], read) -> str | None:
     """None when `<path>.rs::<fn>` is a test that runs: a `fn` carrying `#[test]`, with no `#[ignore]`
-    and no always-false `#[cfg(any())]` among its attributes, in a file under tests/ or after a
-    `#[cfg(test)]` in a file under src/; otherwise why not"""
+    and no always-false `#[cfg(any())]` among its attributes, in an integration-test file (tests/ of the root or
+    of a workspace member, integration_test_file) or after a `#[cfg(test)]`; otherwise why not"""
     why = symbol_defined(ref, paths, read)
     if why:
         return why
@@ -260,8 +281,8 @@ def test_fn_gap(ref: str, paths: set[str], read) -> str | None:
         return f"{path}: {name} is #[ignore]d"
     if re.search(r"#\[\s*cfg\s*\(\s*any\s*\(\s*\)\s*\)\s*\]", block):
         return f"{path}: {name} is under #[cfg(any())], never built"
-    if not path.startswith("tests/") and not re.search(r"#\[\s*cfg\s*\(\s*test\s*\)\s*\]", head):
-        return f"{path}: {name} is outside tests/ and no #[cfg(test)] precedes it"
+    if not integration_test_file(path, paths, read) and not re.search(r"#\[\s*cfg\s*\(\s*test\s*\)\s*\]", head):
+        return f"{path}: {name} is outside tests/ (of the root or of a workspace member) and no #[cfg(test)] precedes it"
     return None
 
 
