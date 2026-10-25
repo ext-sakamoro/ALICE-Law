@@ -658,7 +658,7 @@ def remove_tree(path: str) -> None:
                     rmtree(p)  # listing it may be what failed, so its entries were never visited
             else:
                 if not os.path.islink(p):
-                    os.chmod(p, stat.S_IWRITE | stat.S_IREAD)
+                    pass  # mutant: the read-only bit is not cleared
                 func(p)
         except OSError as e:
             left.append(f"{p} ({e.strerror or e})")
