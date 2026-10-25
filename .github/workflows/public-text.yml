@@ -38,6 +38,9 @@ jobs:
       - name: Test the rights-holder reader of the public repositories
         run: python scripts/test_holder_live.py
 
+      - name: Test the public text reader of the public repositories
+        run: python scripts/test_public_text_live.py
+
       # the declared licences have their full texts in this repository; the rights-holder rule against
       # conformance/holder-baseline.toml, which may not grow against the merge base with main
       - name: The licence files
