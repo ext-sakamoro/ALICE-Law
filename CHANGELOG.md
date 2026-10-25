@@ -226,6 +226,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/shared-files.toml`: ALICE-Channel と ALICE-Crypto で同じ bytes の共有の道具 4 つに行を足す (`.github/workflows/changed-paths-oracle.yml`、`scripts/changed_paths_yaml_oracle.py`、`scripts/tracked_generated_check.py` と試験) `scripts/clippy_canary_calls.tsv` は repository ごとの data (その repository の clippy.toml から生成) なので、持つ 13 repository をすべて例外にした行にする 表の写しの数の lock は 1226
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Identity の最初の manifest (ca228655) を着地の前に記録し、`conformance/missing-manifests.toml` から行を外す 前の表の作り直しで、ALICE-Sign も `scripts/g11_table.sh` / `scripts/shared_files.sh` / `scripts/test_shared_files.py` の行に入った (Sign の main がその bytes を持つ)
 - `conformance/shared-files.toml`: 表を今の main から作り直す ALICE-Identity を写しを持つ行に足す `scripts/test_law_boundary_scan.py` は repository ごとの試験 (scanner の `scripts/law_boundary_scan.py` は repository ごとに違う) なので、持つ 3 repository をすべて例外にした行にする 表の写しの数の lock は 1230
+- `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Channel の G11 の pass (82475ef0) を着地の前に記録し、着地した ALICE-Identity の pending を外す
 
 ### Fixed
 - `scripts/g11_self_check.py`: 改行を変換する checkout (Windows の core.autocrlf) で、pin の SHA-256 を checkout の bytes と比べて何も確かめずに exit 2 になっていた pin は pin した版の blob と比べ、表・行・写しの検査には crate の commit した tree (HEAD の各 blob をそのまま) を渡す `.gitattributes` を `* -text` にし、ALICE-Law の clone は OS によらず commit した bytes のまま

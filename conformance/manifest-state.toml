@@ -11,8 +11,8 @@ crates = ["alice-analytics"]
 
 [manifest."ALICE-Channel"]
 crates = ["alice-channel"]
-"pass" = 10
-"fail-known" = 1
+"pass" = 11
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 3
 
