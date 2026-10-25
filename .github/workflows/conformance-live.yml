@@ -92,6 +92,34 @@ jobs:
             python3 scripts/holder_live.py --local "${GITHUB_REPOSITORY#*/}=." --growth-only
           fi
 
+  # The public text check over every public repository of the account, at its default branch, against
+  # conformance/public-text-baseline.toml (scripts/public_text_live.py): a repository that never adopted
+  # its own public-text workflow is read here too. The repositories are the ones listed as public at run
+  # time. More findings at a place than the baseline has is red, fewer is red (stale), and a repository
+  # that could not be read is red, never a pass. Daily and by hand only, like the holder job.
+  public-text:
+    name: Every public repository against the public text baseline
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      # 3.14, as the Public text workflow: the checker reads zstd streams with the standard library, and a
+      # different reader would count different findings than the baseline was made with
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the reader
+        run: python3 scripts/test_public_text_live.py
+
+      - name: The public repositories against the baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # this repository at the commit under test (its own tree), every other one at its default branch
+        run: python3 scripts/public_text_live.py --local "${GITHUB_REPOSITORY#*/}=."
+
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
   # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a
