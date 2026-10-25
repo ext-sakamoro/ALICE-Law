@@ -12,7 +12,10 @@ first: `git -C <ALICE-Law checkout> checkout --detach <rev>`). Then, from that c
   1. g11-table   scripts/g11_table_gen.py --check: conformance/g11.toml is the generated table (the shared
                  checkers' rows and conformance/g11-own.toml), every pass gate has a row, every reference resolves
   2. g11-rows    scripts/g11_table_check.py: the table's rows (F1-F7 in that script)
-  3. copies      scripts/shared_files_check.py --repo: every shared copy listed for the crate has its row's bytes
+  3. copies      scripts/shared_files_check.py --repo: every shared copy listed for the crate has its row's bytes,
+                 and how many of its copies on pending rows are not yet the row's target (N); a manifest that
+                 declares G11 `pass` while N > 0 is a finding (G11 is a pass per crate: a row still pending on
+                 other repositories' mains does not hold it back, the crate's own copies must all be at target)
   4. manifest    scripts/conformance_roster_check.py --check-manifest: the manifest and its anchors at HEAD
 
 Each prints one line (its exit status and its summary). No GitHub API is used. Exit 0 when all four pass, 1 when
@@ -25,11 +28,24 @@ import hashlib
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 LAW = Path(__file__).resolve().parent.parent
 PIN = ".github/shared-files-pin"
 G11_PIN = ".github/g11-table-pin"
+MANIFEST = "alice-law-conformance.toml"
+OFF_TARGET_RE = re.compile(r"^shared_files_check: own copies not at a pending row's target: (\d+)", re.M)
+
+
+def declared_g11(repo: Path) -> str | None:
+    """the G11 status the crate's manifest declares in its working tree, or None when it declares none"""
+    try:
+        doc = tomllib.loads((repo / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None  # the manifest check reports an unreadable or missing manifest
+    g = doc.get("G11")
+    return g.get("status") if isinstance(g, dict) else None
 
 
 def pin_fields(text: str) -> dict[str, str]:
@@ -133,6 +149,19 @@ def main(argv: list[str] | None = None, law: Path = LAW) -> int:
         if r.returncode != 0:
             for ln in lines[-12:-1]:
                 print(f"  {ln}")
+        if label == "copies" and r.returncode in (0, 1):
+            m = OFF_TARGET_RE.search(r.stdout)
+            if m is None:
+                codes.append(2)
+                print("g11 self-check: own-target: the copies check printed no count of own copies off target")
+            elif declared_g11(repo) == "pass" and int(m.group(1)) > 0:
+                codes.append(1)
+                print(f"g11 self-check: own-target: {MANIFEST} declares G11 pass, and {m.group(1)} own cop"
+                      f"{'y is' if m.group(1) == '1' else 'ies are'} not at a pending row's target (a pass needs "
+                      "every own copy at target)")
+            else:
+                print(f"g11 self-check: own-target: {m.group(1)} own copies off target, G11 declared "
+                      f"{declared_g11(repo) or '(none)'}")
     verdict = 1 if 1 in codes else 2 if any(c != 0 for c in codes) else 0
     print(f"g11 self-check: {a.name} at ALICE-Law {rev[:12]}: "
           + ("pass" if verdict == 0 else "finding" if verdict == 1 else "not checked (an input could not be read or nothing was compared)"))

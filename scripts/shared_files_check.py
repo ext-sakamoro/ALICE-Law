@@ -12,8 +12,10 @@ different file at the same path), and either
     repositories that have it ("absent" for a listed repository without the file), `target`
     is the SHA-256 that becomes the file's bytes and `owner` the repository that holds them,
     `since` is the date the row became pending and `exit` says what ends it. A pending row
-    pins no bytes and never makes a crate's cell a pass; it is listed and counted in every
-    mode, and one older than PENDING_MAX_DAYS days is a finding (pending is not a parking
+    pins no bytes; a crate's cell is a pass only while each of its own copies on pending rows
+    is the row's target (a row still pending on other mains does not hold the crate back:
+    --repo prints the copies that are not, and g11_self_check.py refuses a G11 pass while any
+    is not); the row is listed and counted in every mode, and one older than PENDING_MAX_DAYS days is a finding (pending is not a parking
     place). A planned row (`planned` = the git blob id the shared-file registry moves the
     file to) is a rollout in progress: its owner has landed the new bytes first. The owner's
     main must hold the target (its SHA-256 and its blob id equal to `planned`), a planned row
@@ -88,7 +90,8 @@ repository that gains the path without an exemption is a finding.
   shared_files_check.py --table TABLE --repo DIR --name ALICE-X
       a crate's tree: each uniform file listed for ALICE-X present with the entry's bytes;
       each pending file listed for it present as one of the row's variants (listed as
-      pending, so the crate's cell is not a pass); a table path present for an entry that
+      pending; the copies that are not yet its target, absent ones included, are printed as
+      "own copies not at a pending row's target: N", and the cell is not a pass while N > 0); a table path present for an entry that
       neither lists nor exempts ALICE-X is a finding, except a copy with exactly a uniform
       entry's bytes or a pending row's target, which is a counted "adopting" note (the commit
       that adds a shared file to a crate cannot be listed first; the Law side's strict check
@@ -473,6 +476,21 @@ def check_repo(entries: list[dict], root: Path, name: str,
     return problems, notes, counts(files, 1, copies, pending)
 
 
+OFF_TARGET = "own copies not at a pending row's target"
+
+
+def off_target(entries: list[dict], root: Path, name: str) -> list[str]:
+    """the crate's copies on pending rows that are not the row's target (absent included): the per-crate G11 pass
+    needs none (a row still pending on other repositories' mains does not hold the crate back)"""
+    out = []
+    for e in entries:
+        if name in e["repos"] and "pending" in e:
+            f = root / path_in(e, name)
+            if not f.is_file() or sha256(f.read_bytes()) != e["pending"]["target"]:
+                out.append(path_in(e, name))
+    return out
+
+
 class Remote:
     """Blob-less clones of the repositories' main, one per repository (blobs fetched lazily)."""
 
@@ -834,6 +852,8 @@ def main(argv: list[str]) -> int:
                 raise Unreadable(f"--name {a.name!r} is not a repository name (ALICE-… or a listed product)")
             problems, notes, c = check_repo(entries, a.repo, a.name,
                                             datetime.date.fromisoformat(a.today) if a.today else None)
+            off = off_target(entries, a.repo, a.name)
+            print(f"shared_files_check: {OFF_TARGET}: {len(off)}" + (f" ({', '.join(off)})" if off else ""))
         elif a.fetch or a.live:
             with tempfile.TemporaryDirectory() as d:
                 remote = Remote(Path(d))

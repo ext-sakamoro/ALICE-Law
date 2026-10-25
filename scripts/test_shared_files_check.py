@@ -559,6 +559,27 @@ class Repo(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("pending: scripts/s.sh: pending since 2026-10-10, not yet the target", out)
         self.assertIn("pending 1", out)
+        self.assertIn("own copies not at a pending row's target: 1 (scripts/s.sh)", out)
+
+    def test_own_copies_off_target_are_counted_and_a_copy_at_target_is_not(self):
+        new = b"new bytes\n"
+        row = self.w.pending()
+        row["pending"] = {**row["pending"], "target": h(new)}
+        code, out = self.crate("ALICE-C", self.w.table(row))
+        self.assertIn("own copies not at a pending row's target: 1 (scripts/s.sh)", out)
+        (self.w.work / "ALICE-C" / "scripts/s.sh").write_bytes(new)
+        code, out = self.crate("ALICE-C", self.w.table(row))
+        self.assertEqual(code, 0, out)
+        self.assertIn("own copies not at a pending row's target: 0", out)
+        # an absent copy on a row that lists the crate is not at target either
+        (self.w.work / "ALICE-C" / "scripts/s.sh").unlink()
+        self.assertEqual(sfc.off_target(sfc.load(self.w.table(row)), self.w.work / "ALICE-C", "ALICE-C"),
+                         ["scripts/s.sh"])
+
+    def test_a_uniform_row_is_never_off_target(self):
+        code, out = self.crate("ALICE-B", self.w.table())
+        self.assertEqual(code, 0, out)
+        self.assertIn("own copies not at a pending row's target: 0", out)
 
     def test_a_per_repository_path_held_without_an_exemption_is_red(self):
         code, out = self.crate("ALICE-C", self.w.table(self.w.per_repo()))

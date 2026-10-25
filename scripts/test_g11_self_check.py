@@ -44,6 +44,8 @@ class SelfCheck(unittest.TestCase):
             (self.law / "scripts" / n).write_text(
                 "import json, os, sys\n"
                 f"open({str(self.log)!r}, 'a').write(json.dumps([{n!r}] + sys.argv[1:]) + '\\n')\n"
+                + ("print(\"shared_files_check: own copies not at a pending row's target: \" + os.environ.get('OFF_N', '0'))\n"
+                   if n == "shared_files_check.py" else "") +
                 f"print('summary of {n}')\n"
                 f"sys.exit(int(os.environ.get('RC_' + {n.split('.')[0]!r}, '0')))\n", encoding="utf-8")
         subprocess.run(["git", "init", "-q", str(self.law)], check=True, env=ENV)
@@ -79,7 +81,7 @@ class SelfCheck(unittest.TestCase):
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
         self.assertEqual([c[0] for c in calls], list(NAMES))
-        self.assertEqual(out.count("g11 self-check: "), 5)
+        self.assertEqual(out.count("g11 self-check: "), 6)
         law = f"{self.rev}={self.law}"
         self.assertEqual(calls[0][-3:], ["--check", "--law", law])
         self.assertEqual(calls[1][-2:], ["--law", law])
@@ -136,6 +138,44 @@ class SelfCheck(unittest.TestCase):
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
         self.assertEqual(len(calls), 4)
+
+    def manifest(self, status):
+        (self.crate / "alice-law-conformance.toml").write_text(f'[G11]\nstatus = "{status}"\n', encoding="utf-8")
+
+    def test_a_g11_pass_with_an_own_copy_off_target_is_a_finding(self):
+        self.manifest("pass")
+        os.environ["OFF_N"] = "1"
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 1, out)
+        self.assertEqual(len(calls), 4)
+        self.assertIn("declares G11 pass, and 1 own copy is not at a pending row's target", out)
+
+    def test_own_copies_off_target_do_not_fail_a_crate_that_does_not_declare_pass(self):
+        for status in ("fail-known", "unverified"):
+            self.manifest(status)
+            os.environ["OFF_N"] = "3"
+            code, out, _ = self.run_check()
+            self.assertEqual(code, 0, (status, out))
+            self.assertIn("3 own copies off target", out)
+
+    def test_a_g11_pass_with_every_own_copy_at_target_passes(self):
+        # rows still pending on other mains do not hold the crate back
+        self.manifest("pass")
+        os.environ["OFF_N"] = "0"
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 0, out)
+
+    def test_a_copies_check_without_the_count_is_not_checked(self):
+        self.manifest("pass")
+        f = self.law / "scripts" / "shared_files_check.py"
+        f.write_text(f.read_text(encoding="utf-8").replace("own copies not at", "own copies off"), encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.law), "commit", "-qam", "older checker"], check=True, env=ENV)
+        self.rev = subprocess.run(["git", "-C", str(self.law), "rev-parse", "HEAD"], capture_output=True,
+                                  text=True, check=True).stdout.strip()
+        self.pin()
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 2, out)
+        self.assertIn("printed no count of own copies off target", out)
 
     def g11_pin(self, rev=None, checker=None):
         (self.crate / ".github" / "g11-table-pin").write_text(

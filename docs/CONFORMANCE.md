@@ -369,8 +369,12 @@ crate but neither listed nor exempted for it is a finding (except a copy with ex
 entry's bytes or a pending row's target: a crate adopting a shared file cannot be listed before
 its main has it, so that copy is a counted "adopting" note, and the strict check on this
 repository's landing path makes the next table list it), and a run that compared nothing
-fails. A crate with a pending row is not a pass for that file: its cell is `fail-known`
-naming the row. `.github/workflows/conformance-live.yml` compares every listed repository's
+fails. A pending row does not hold a crate back by itself: G11 is a pass for a crate whose
+own copy on each pending row it is listed on is the row's target, while other repositories'
+mains still converge. A copy not yet at its target (absent included) makes the cell
+`fail-known` naming the row; `--repo` prints those copies ("own copies not at a pending row's
+target: N"), and `scripts/g11_self_check.py` refuses a manifest that declares G11 `pass`
+while N > 0. `.github/workflows/conformance-live.yml` compares every listed repository's
 main with the table on every push to main and daily (count-locked on the copies of uniform
 rows, which move only with the table; the table is regenerated immediately before a change
 to it lands), fails a pending row
