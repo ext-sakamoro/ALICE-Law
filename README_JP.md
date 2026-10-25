@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-release train (`release-train.toml`) に載る crate をまたいだ統合の検査: ALICE-LOL、ALICE-DetMath、ALICE-SDF、ALICE-Physics、ALICE-DB、ALICE-Zip、ALICE-Crypto、ALICE-Analytics、ALICE-Edge、ALICE-ML、ALICE-LLM、ALICE-Kinematics、ALICE-Sync この文が roster より遅れると、この file 自身の検査 `scripts/readme_roster_check.py` が失敗する
+release train (`release-train.toml`) に載る crate をまたいだ統合の検査: ALICE-LOL、ALICE-DetMath、ALICE-SDF、ALICE-Physics、ALICE-DB、ALICE-Zip、ALICE-Crypto、ALICE-Analytics、ALICE-Edge、ALICE-ML、ALICE-LLM、ALICE-Kinematics、ALICE-Sync、ALICE-Identity、ALICE-Channel、ALICE-Sign この文が roster より遅れると、この file 自身の検査 `scripts/readme_roster_check.py` が失敗する
 
 ここにあるものはすべて crates.io に公開された版から build し、path 依存を使わない 検査は 2 種類:
 
@@ -163,6 +163,9 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-ml | 0.2.0 | published | 13 | ALICE-ML | v0.2.0 |
 | alice-kinematics | 0.2.1 | published | 14 | ALICE-Kinematics | alice-kinematics-v0.2.1 |
 | alice-sync | 0.6.1 | published | 15 | ALICE-Sync | v0.6.1 |
+| alice-identity | 1.2.0 | planned | 16 | ALICE-Identity | v1.2.0 |
+| alice-channel | 0.1.0 | planned | 17 | ALICE-Channel | v0.1.0 |
+| alice-sign | 0.1.0 | planned | 18 | ALICE-Sign | v0.1.0 |
 
 ### 公開まで失敗を予期する step
 
@@ -177,7 +180,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 ### Conformance manifest (各 repository の main の manifest における 14 gate の状態の件数)
 
-repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 13 の manifest × 14 の gate = 182 の gate の entry
+repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 14 の manifest × 14 の gate = 196 の gate の entry
 
 | repository | 読む crate | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
@@ -188,16 +191,20 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 | ALICE-Edge | alice-edge | 13 | 1 | 0 | 0 |
 | ALICE-Kinematics | alice-kinematics | 12 | 1 | 1 | 0 |
 | ALICE-LLM | alice-llm | 12 | 1 | 1 | 0 |
-| ALICE-LOL | alice-lol, alice-lol-macro | 12 | 0 | 2 | 0 |
+| ALICE-LOL | alice-lol, alice-lol-macro | 13 | 0 | 1 | 0 |
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
 | ALICE-Physics | alice-physics | 12 | 1 | 1 | 0 |
-| ALICE-SDF | alice-sdf | 9 | 3 | 2 | 0 |
+| ALICE-SDF | alice-sdf | 10 | 3 | 1 | 0 |
+| ALICE-Sign | alice-sign | 3 | 0 | 11 | 0 |
 | ALICE-Sync | alice-sync | 12 | 1 | 1 | 0 |
 | ALICE-Zip | alice-zip, alice-zip-cli | 13 | 1 | 0 | 0 |
 
 ### manifest がまだ無い crate
 
-なし
+| crate | 追加する repository | 理由 |
+|---|---|---|
+| alice-channel | ALICE-Channel | the manifest has not been written yet |
+| alice-identity | ALICE-Identity | the manifest has not been written yet |
 
 <!-- law-status:end -->
 

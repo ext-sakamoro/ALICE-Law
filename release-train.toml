@@ -523,6 +523,27 @@ UE5_ENGINE_ROOTS = { purpose = "the engine install folders (a JSON list) the Unr
 # entry is removed (and the requirements that release lets this repository raise are
 # raised). An item that matches no problem fails the check too.
 
+[crate.alice-identity]
+version = "1.2.0"
+state = "planned"
+order = 16
+repo = "ALICE-Identity"
+law-dependency = false
+
+[crate.alice-channel]
+version = "0.1.0"
+state = "planned"
+order = 17
+repo = "ALICE-Channel"
+law-dependency = false
+
+[crate.alice-sign]
+version = "0.1.0"
+state = "planned"
+order = 18
+repo = "ALICE-Sign"
+law-dependency = false
+
 # CI steps that fail until a release (scripts/expected_failure.py, wrapped around the
 # step): reported as expected and the steps that need them skipped. A step listed here
 # that passes, or still fails after its release, or fails another way, is red.

@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `release-train.toml`: alice-identity (ALICE-Identity、1.2.0)、alice-channel (ALICE-Channel、0.1.0)、alice-sign (ALICE-Sign、0.1.0) を planned の crate として roster に足す 2 つの repository にはまだ `alice-law-conformance.toml` が無いので `conformance/missing-manifests.toml` に載せる README の roster の文と Status、`conformance/manifest-state.toml` を作り直す
 - `conformance/shared-files.toml`: `scripts/law_readme_block_check.py` を ALICE-Analytics の新しい bytes への最初の移動にし (planned 1aaa82a0 / target 5c8dada5)、`scripts/test_law_readme_block_check.py` の最初の移動を同じ版の試験に引き直す (planned 700f3f6b / target f0754d9c、日付はそのまま) 新しい検査は README の Law の block の `law=` の rev が repository の `.github/shared-files-pin` の rev と違えば失敗する 計画した bytes を `conformance/planned/` に置き、引き直す前の計画の bytes を外す 表の写しの数の lock は 943
 - `conformance/shared-files.toml`: 計画の無かった 5 行を、owner の main にある target の bytes で計画する (日付は pending になった日のまま) `scripts/changed_paths.py` / `scripts/test_changed_paths.py` (owner ALICE-Crypto、planned 63a579a5 / e835e395)、`scripts/gen_clippy_canary_calls.py` / `scripts/test_gen_clippy_canary_calls.py` (owner ALICE-Analytics、planned e7599550 / 43b02bf0)、`scripts/stub_guard.sh` (owner ALICE-Analytics、planned 7d7ad567) 計画した bytes と、`scripts/fneg_fma_ir_check.py` の計画 (9d4029a7、owner ALICE-Edge) の bytes を `conformance/planned/` に置く 計画の無い pending の行は 5 から 0
 - `scripts/gen_shared_files.py`: 計画の無い pending の行を後から計画にしても、その行の日付 (`since`) を保つ (pending になった日のまま、表は pending の行の日付が後ろへ動くのを拒む) それまでは計画にした日に動き、行の期限も数え直されていた
