@@ -180,22 +180,23 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 ### Conformance manifest (各 repository の main の manifest における 14 gate の状態の件数)
 
-repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 14 の manifest × 14 の gate = 196 の gate の entry
+repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 15 の manifest × 14 の gate = 210 の gate の entry
 
 | repository | 読む crate | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
 | ALICE-Analytics | alice-analytics | 12 | 0 | 0 | 2 |
+| ALICE-Channel | alice-channel | 10 | 1 | 0 | 3 |
 | ALICE-Crypto | alice-crypto | 10 | 1 | 0 | 3 |
-| ALICE-DB | alice-db | 13 | 1 | 0 | 0 |
+| ALICE-DB | alice-db | 14 | 0 | 0 | 0 |
 | ALICE-DetMath | alice-det-math | 11 | 1 | 0 | 2 |
 | ALICE-Edge | alice-edge | 13 | 1 | 0 | 0 |
 | ALICE-Kinematics | alice-kinematics | 13 | 1 | 0 | 0 |
 | ALICE-LLM | alice-llm | 13 | 1 | 0 | 0 |
 | ALICE-LOL | alice-lol, alice-lol-macro | 14 | 0 | 0 | 0 |
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
-| ALICE-Physics | alice-physics | 12 | 1 | 1 | 0 |
-| ALICE-SDF | alice-sdf | 10 | 3 | 1 | 0 |
-| ALICE-Sign | alice-sign | 12 | 1 | 0 | 1 |
+| ALICE-Physics | alice-physics | 13 | 1 | 0 | 0 |
+| ALICE-SDF | alice-sdf | 11 | 3 | 0 | 0 |
+| ALICE-Sign | alice-sign | 13 | 0 | 0 | 1 |
 | ALICE-Sync | alice-sync | 14 | 0 | 0 | 0 |
 | ALICE-Zip | alice-zip, alice-zip-cli | 13 | 1 | 0 | 0 |
 
@@ -203,7 +204,6 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 
 | crate | 追加する repository | 理由 |
 |---|---|---|
-| alice-channel | ALICE-Channel | the manifest has not been written yet |
 | alice-identity | ALICE-Identity | the manifest has not been written yet |
 
 <!-- law-status:end -->

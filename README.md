@@ -180,22 +180,23 @@ None.
 
 ### Conformance manifests (status counts of the 14 gates in each repository's manifest at main)
 
-One row per repository: crates that share a repository share its one manifest at the root (the "read for" column), so each manifest is counted once; 14 manifests × 14 gates = 196 gate entries.
+One row per repository: crates that share a repository share its one manifest at the root (the "read for" column), so each manifest is counted once; 15 manifests × 14 gates = 210 gate entries.
 
 | repository | read for | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
 | ALICE-Analytics | alice-analytics | 12 | 0 | 0 | 2 |
+| ALICE-Channel | alice-channel | 10 | 1 | 0 | 3 |
 | ALICE-Crypto | alice-crypto | 10 | 1 | 0 | 3 |
-| ALICE-DB | alice-db | 13 | 1 | 0 | 0 |
+| ALICE-DB | alice-db | 14 | 0 | 0 | 0 |
 | ALICE-DetMath | alice-det-math | 11 | 1 | 0 | 2 |
 | ALICE-Edge | alice-edge | 13 | 1 | 0 | 0 |
 | ALICE-Kinematics | alice-kinematics | 13 | 1 | 0 | 0 |
 | ALICE-LLM | alice-llm | 13 | 1 | 0 | 0 |
 | ALICE-LOL | alice-lol, alice-lol-macro | 14 | 0 | 0 | 0 |
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
-| ALICE-Physics | alice-physics | 12 | 1 | 1 | 0 |
-| ALICE-SDF | alice-sdf | 10 | 3 | 1 | 0 |
-| ALICE-Sign | alice-sign | 12 | 1 | 0 | 1 |
+| ALICE-Physics | alice-physics | 13 | 1 | 0 | 0 |
+| ALICE-SDF | alice-sdf | 11 | 3 | 0 | 0 |
+| ALICE-Sign | alice-sign | 13 | 0 | 0 | 1 |
 | ALICE-Sync | alice-sync | 14 | 0 | 0 | 0 |
 | ALICE-Zip | alice-zip, alice-zip-cli | 13 | 1 | 0 | 0 |
 
@@ -203,7 +204,6 @@ One row per repository: crates that share a repository share its one manifest at
 
 | crate | added in | why |
 |---|---|---|
-| alice-channel | ALICE-Channel | the manifest has not been written yet |
 | alice-identity | ALICE-Identity | the manifest has not been written yet |
 
 <!-- law-status:end -->

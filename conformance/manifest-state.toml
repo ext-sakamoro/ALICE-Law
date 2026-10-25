@@ -9,6 +9,13 @@ crates = ["alice-analytics"]
 "unverified" = 0
 "n/a" = 2
 
+[manifest."ALICE-Channel"]
+crates = ["alice-channel"]
+"pass" = 10
+"fail-known" = 1
+"unverified" = 0
+"n/a" = 3
+
 [manifest."ALICE-Crypto"]
 crates = ["alice-crypto"]
 "pass" = 10
@@ -18,8 +25,8 @@ crates = ["alice-crypto"]
 
 [manifest."ALICE-DB"]
 crates = ["alice-db"]
-"pass" = 13
-"fail-known" = 1
+"pass" = 14
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 0
 
@@ -67,22 +74,22 @@ crates = ["alice-ml"]
 
 [manifest."ALICE-Physics"]
 crates = ["alice-physics"]
-"pass" = 12
+"pass" = 13
 "fail-known" = 1
-"unverified" = 1
+"unverified" = 0
 "n/a" = 0
 
 [manifest."ALICE-SDF"]
 crates = ["alice-sdf"]
-"pass" = 10
+"pass" = 11
 "fail-known" = 3
-"unverified" = 1
+"unverified" = 0
 "n/a" = 0
 
 [manifest."ALICE-Sign"]
 crates = ["alice-sign"]
-"pass" = 12
-"fail-known" = 1
+"pass" = 13
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 1
 
