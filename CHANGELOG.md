@@ -222,6 +222,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/shared-files.toml`: 表を今の main から作り直す ALICE-Sign と ALICE-Identity が持つ写しの行に 2 つを足し、ALICE-Sync を `scripts/g11_table.sh` の行に足す すべての写しが target になった 7 行 (`scripts/check_py_license.py`、`scripts/gen_clippy_canary_calls.py` と試験、`scripts/package_integrity.py` と試験ほか) を uniform にし、その計画の bytes を `conformance/planned/` から外す `scripts/test_version_sync.py` の最初の移動は owner より先に ALICE-SDF が target を着地したので owner を ALICE-SDF にする target は変えない 表の写しの数の lock は 1133
 - `conformance/shared-files.toml`: `scripts/build_config_allowlist.toml` (repository ごとの data) の例外に ALICE-Font を足す (同じ理由)
 - `conformance/shared-files.toml`: `scripts/id_move_check.py` と試験の行を ALICE-Physics の新しい bytes に計画し直す (planned 3c49d4fe / 07fd716f、moved_from は今の計画 400420c8 / f3b4003b、ALICE-Physics の main が今の計画の bytes を着地済み、日付はそのまま) 計画した bytes を `conformance/planned/` に置き、引き直す前と収束した行の計画の bytes を外す 今の main から作り直し、写しを持つ ALICE-Channel を行に足す
+- `conformance/shared-files.toml`: ALICE-Channel と ALICE-Crypto で同じ bytes の共有の道具 4 つに行を足す (`.github/workflows/changed-paths-oracle.yml`、`scripts/changed_paths_yaml_oracle.py`、`scripts/tracked_generated_check.py` と試験) `scripts/clippy_canary_calls.tsv` は repository ごとの data (その repository の clippy.toml から生成) なので、持つ 13 repository をすべて例外にした行にする 表の写しの数の lock は 1226
 
 ### Fixed
 - `scripts/public_text_check.py`: code の識別子 2 形を見つけない 非同期 runtime の builder の `worker_threads(n)`、`_` が続く 2 文字 (`session = fb_open()` の関数名の頭) は id ではない 散文の語は従来どおり見つける
