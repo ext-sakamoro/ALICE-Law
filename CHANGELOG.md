@@ -201,6 +201,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/public_text_check.py`: text-to-print の項目を直す その repository の製品の package の directory を path として読む hash を足し、何も許さなくなった 2 件と issue template の 1 件を外し、利用者が鍵を持ち込む LLM の provider の名前を、provider の設定・その UI と翻訳・保存する設定・provider 互換の backend とその文書の file ごとに許す (19 件、数の上限つき)
 - **Behavior change:** `scripts/holder_live.py --local NAME=DIR` は repository NAME を checkout DIR の HEAD から読み、他の公開 repository は既定 branch から読む Conformance (live) の `holder` job はこの repository を試験する commit の tree で読む (`--local "${GITHUB_REPOSITORY#*/}=."`) ので、権利の表示と baseline の行を一緒に外す変更は着地の前に通る NAME が公開 repository の一覧に無いか DIR が無ければ exit 2
 - `scripts/shared_files_check.py` / `scripts/gen_shared_files.py`: repository の名前は `is_repo_name` の 1 つの規則で読む ALICE-* の名前に加えて、Law の道具の写しを持つ account の製品の repository (名前の小文字の sha256 だけを `PRODUCT_REPO_HASHES` に持つ、今は text-to-print) を表の repos / source / owner / exempt に書ける 載っていない名前は従来どおり拒否する
+- `conformance/shared-files.toml`: text-to-print を表に加える (同じ bytes を持つ 9 行に載せる) `.github/actions/alice-siblings/action.yml` は text-to-print が別の bytes を持つので pending (owner ALICE-Analytics)、正本の action が依存ごとの鍵の入力を取り込んでから全部の写しがその bytes に揃う 表の写しの数の lock は 901 から 899
 
 ### Fixed
 - `scripts/public_text_check.py`: code の識別子 2 形を見つけない 非同期 runtime の builder の `worker_threads(n)`、`_` が続く 2 文字 (`session = fb_open()` の関数名の頭) は id ではない 散文の語は従来どおり見つける
