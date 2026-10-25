@@ -194,6 +194,16 @@ def planned_proof_problems(entries: list[dict], proofs: dict[str, bytes]) -> lis
     return problems
 
 
+def row_but_variants(e: dict) -> dict:
+    """the row as a change can edit it: everything but a pending row's variants (which move with the mains), with
+    absent paths / exempt read as empty"""
+    out = {k: v for k, v in e.items() if k not in ("paths", "exempt", "pending")}
+    out["paths"], out["exempt"] = e.get("paths", {}) or {}, e.get("exempt", {}) or {}
+    if "pending" in e:
+        out["pending"] = {k: v for k, v in e["pending"].items() if k != "variants"}
+    return out
+
+
 def is_planned(e: dict) -> bool:
     return "planned" in e.get("pending", {})
 
@@ -663,7 +673,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
     unlisted: list[tuple[str, str, str, str]] = []
     repos = sorted({r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})})
     base_listed = {e["path"]: set(e["repos"]) for e in (base or [])}
-    base_planned = {e["path"]: e["pending"] for e in (base or []) if is_planned(e)}
+    base_rows = {e["path"]: row_but_variants(e) for e in (base or [])}
     trees = {r: tree(remote(r)) for r in repos}
     if not trees:
         raise Unreadable("no repository read (compared nothing)")
@@ -726,11 +736,9 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                         notes.append(f"{e['path']}: no main holds the bytes the planned row moved from any more "
                                      "(regenerate the table: moved_from goes)")
                 if set(found) == {p["target"]}:
-                    b = base_planned.get(e["path"])
-                    if (not strict and b is not None and b["planned"] == p["planned"] and b["target"] == p["target"]
-                            and set(e["repos"]) == base_listed.get(e["path"], set())):
-                        # the landing mode: the base planned it too and the change left it, so the rollout finished
-                        # on the mains while the change was checked (the daily run regenerates the table)
+                    if not strict and base_rows.get(e["path"]) == row_but_variants(e):
+                        # the landing mode: the change left the row as the base has it (all but the variants), so
+                        # the rollout finished on the mains while the change was checked (the daily run regenerates)
                         notes.append(f"{e['path']}: converged since the base (every copy has the target "
                                      f"{p['target'][:12]}; the next table makes it uniform)")
                     else:

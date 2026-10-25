@@ -398,20 +398,18 @@ def unlisted_same_bytes(old: list[dict], new: list[dict],
 def converged_since_base(old: list[dict], new: list[dict],
                          base: list[dict]) -> tuple[list[dict], list[tuple[str, list[str]]]]:
     """new entries with each row that only converged since the base put back to the table's row, and those (path,
-    added holders): the table and the base both have it planned at the same planned id and target, and the regenerated
-    row is uniform over the same repositories, or more of them (a holder that took the target bytes while a change was
-    checked); any other difference stays. A uniform row at other bytes than the target, or one that lost a holder,
-    never reaches here: the regeneration refuses a planned row its owner moved off, and a dropped copy leaves the row
-    pending"""
+    added holders): the table's row is planned and equal to the base's in everything but the variants (the change left
+    it), and the regenerated row is uniform (with the table's repositories, or more: a holder that took the target bytes
+    while a change was checked); any other difference stays. A uniform row at other bytes than the target, or one that
+    lost a holder, never reaches here: the regeneration refuses a planned row its owner moved off, and a dropped copy
+    leaves the row pending; the regenerated row keeps the table's paths and exemptions"""
     before = {e["path"]: e for e in old}
     planned = {e["path"]: e for e in base if sfc.is_planned(e)}
     out, done = [], []
     for e in new:
         o, b = before.get(e["path"]), planned.get(e["path"])
         if (o is not None and b is not None and sfc.is_planned(o) and "sha256" in e
-                and o["pending"]["planned"] == b["pending"]["planned"] and o["pending"]["target"] == b["pending"]["target"]
-                and o["repos"] == b["repos"]
-                and e.get("paths", {}) == o.get("paths", {}) and e.get("exempt", {}) == o.get("exempt", {})):
+                and sfc.row_but_variants(o) == sfc.row_but_variants(b)):
             out.append(o)
             done.append((e["path"], [r for r in e["repos"] if r not in o["repos"]]))
         else:

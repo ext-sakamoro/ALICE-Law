@@ -924,7 +924,12 @@ class Planned(Base):
         for row in (self.w.planned(pending={**self.w.planned()["pending"], "planned": sfc.git_blob(OTHER)}),
                     self.w.pending(),
                     self.w.planned(repos=["ALICE-A", "ALICE-B"],
-                                   pending={**self.w.planned()["pending"], "variants": {h(SHARED): ["ALICE-A", "ALICE-B"]}})):
+                                   pending={**self.w.planned()["pending"], "variants": {h(SHARED): ["ALICE-A", "ALICE-B"]}}),
+                    # any other field of the row the change edited: an exemption, a path, the date, what ends it
+                    self.w.planned(exempt={"ALICE-D": "its own copy"}),
+                    self.w.planned(paths={"ALICE-B": "tools/s.sh"}),
+                    self.w.planned(since="2026-10-09"),
+                    self.w.planned(pending={**self.w.planned()["pending"], "exit": "another way the rollout ends"})):
             base = self.converged_since(row)
             code, out = self.live("--base-table", str(base))
             self.assertIn("it has converged", out, row)
