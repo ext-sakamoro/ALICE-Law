@@ -213,6 +213,8 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 
 Enquiries: https://extoria.co.jp/
 
+## link する公開版のライセンス
+
 end to end の試験の crate は公開版を link し、それらは Cargo.lock の版の license のまま:
 alice-physics 3.1.0、alice-db 0.5.1、alice-crypto 0.4.1 は
 `AGPL-3.0-or-later OR LicenseRef-Commercial`、alice-lol 0.4.1、alice-zip 0.10.0、

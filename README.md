@@ -213,6 +213,8 @@ None.
 
 Enquiries: https://extoria.co.jp/
 
+## Licences of the linked releases
+
 The end to end test crate links published releases, which keep their own
 licences at the versions in Cargo.lock: alice-physics 3.1.0, alice-db 0.5.1
 and alice-crypto 0.4.1 are `AGPL-3.0-or-later OR LicenseRef-Commercial`;
