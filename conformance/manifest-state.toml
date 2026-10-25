@@ -4,8 +4,8 @@
 
 [manifest."ALICE-Analytics"]
 crates = ["alice-analytics"]
-"pass" = 11
-"fail-known" = 1
+"pass" = 12
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 2
 
@@ -39,23 +39,23 @@ crates = ["alice-edge"]
 
 [manifest."ALICE-Kinematics"]
 crates = ["alice-kinematics"]
-"pass" = 12
+"pass" = 13
 "fail-known" = 1
-"unverified" = 1
+"unverified" = 0
 "n/a" = 0
 
 [manifest."ALICE-LLM"]
 crates = ["alice-llm"]
-"pass" = 12
+"pass" = 13
 "fail-known" = 1
-"unverified" = 1
+"unverified" = 0
 "n/a" = 0
 
 [manifest."ALICE-LOL"]
 crates = ["alice-lol", "alice-lol-macro"]
-"pass" = 13
+"pass" = 14
 "fail-known" = 0
-"unverified" = 1
+"unverified" = 0
 "n/a" = 0
 
 [manifest."ALICE-ML"]
@@ -81,16 +81,16 @@ crates = ["alice-sdf"]
 
 [manifest."ALICE-Sign"]
 crates = ["alice-sign"]
-"pass" = 3
-"fail-known" = 0
-"unverified" = 11
-"n/a" = 0
+"pass" = 12
+"fail-known" = 1
+"unverified" = 0
+"n/a" = 1
 
 [manifest."ALICE-Sync"]
 crates = ["alice-sync"]
-"pass" = 12
-"fail-known" = 1
-"unverified" = 1
+"pass" = 14
+"fail-known" = 0
+"unverified" = 0
 "n/a" = 0
 
 [manifest."ALICE-Zip"]

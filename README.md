@@ -184,19 +184,19 @@ One row per repository: crates that share a repository share its one manifest at
 
 | repository | read for | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
-| ALICE-Analytics | alice-analytics | 11 | 1 | 0 | 2 |
+| ALICE-Analytics | alice-analytics | 12 | 0 | 0 | 2 |
 | ALICE-Crypto | alice-crypto | 10 | 1 | 0 | 3 |
 | ALICE-DB | alice-db | 13 | 1 | 0 | 0 |
 | ALICE-DetMath | alice-det-math | 11 | 1 | 0 | 2 |
 | ALICE-Edge | alice-edge | 13 | 1 | 0 | 0 |
-| ALICE-Kinematics | alice-kinematics | 12 | 1 | 1 | 0 |
-| ALICE-LLM | alice-llm | 12 | 1 | 1 | 0 |
-| ALICE-LOL | alice-lol, alice-lol-macro | 13 | 0 | 1 | 0 |
+| ALICE-Kinematics | alice-kinematics | 13 | 1 | 0 | 0 |
+| ALICE-LLM | alice-llm | 13 | 1 | 0 | 0 |
+| ALICE-LOL | alice-lol, alice-lol-macro | 14 | 0 | 0 | 0 |
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
 | ALICE-Physics | alice-physics | 12 | 1 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 10 | 3 | 1 | 0 |
-| ALICE-Sign | alice-sign | 3 | 0 | 11 | 0 |
-| ALICE-Sync | alice-sync | 12 | 1 | 1 | 0 |
+| ALICE-Sign | alice-sign | 12 | 1 | 0 | 1 |
+| ALICE-Sync | alice-sync | 14 | 0 | 0 | 0 |
 | ALICE-Zip | alice-zip, alice-zip-cli | 13 | 1 | 0 | 0 |
 
 ### Crates whose manifest is not written yet
