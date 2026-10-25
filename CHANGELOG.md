@@ -231,6 +231,7 @@ workflows are the interface, so changes to what they check are recorded here.
 
 ### Fixed
 - `scripts/g11_table_check.py`: ALICE-Law を取ってきた一時 repository (`g11-law-*`) を消していなかった crate の `scripts/g11_table.sh` が走るたびに 1 つ残っていた 失敗した時はすぐ、それ以外は process の終わりに消す 試験の一時 directory も消す (`test_holder_live.py` / `test_licence_files_check.py` / `test_gen_law_status.py` / `test_conformance_roster_check.py`)、すべての試験で残りは 0
+- `scripts/g11_table_check.py`: 一時 repository の削除で、Windows の git が読み取り専用で書く object を書き込み可にしてから消す 再試行も失敗した entry は記録して残りを消し続け、残った path を stderr に出す 読めない directory は中を歩き直し、一時 repository を置いた directory の mode は変えない
 - `scripts/g11_self_check.py`: 改行を変換する checkout (Windows の core.autocrlf) で、pin の SHA-256 を checkout の bytes と比べて何も確かめずに exit 2 になっていた pin は pin した版の blob と比べ、表・行・写しの検査には crate の commit した tree (HEAD の各 blob をそのまま) を渡す `.gitattributes` を `* -text` にし、ALICE-Law の clone は OS によらず commit した bytes のまま
 - `scripts/public_text_check.py`: code の識別子 2 形を見つけない 非同期 runtime の builder の `worker_threads(n)`、`_` が続く 2 文字 (`session = fb_open()` の関数名の頭) は id ではない 散文の語は従来どおり見つける
 - `scripts/test_land_law_state.py` と `scripts/test_conformance_roster_check.py`: tool を呼ぶ試験はすべて `--today` を渡す 2026-10-18 の fixture を日付なしで読む試験が、2026-10-22 (UTC) から "4 days old" で exit 2 になり、main の試験が落ちていた

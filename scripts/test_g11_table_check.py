@@ -12,7 +12,9 @@ import os
 import shutil
 import sys
 import tempfile
+import stat
 import unittest
+import warnings
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
@@ -455,6 +457,73 @@ class Fetch(unittest.TestCase):
         os.chmod(d / "objects", 0o555)  # a read-only directory makes the unlink fail on POSIX too
         g.remove_tree(str(d))
         self.assertFalse(d.exists())
+
+    def test_an_unreadable_directory_is_removed_with_its_entries(self):
+        # listing a directory without read permission fails; its entries are reached only after the bit is set
+        d = Path(tempfile.mkdtemp(prefix="g11-law-"))
+        (d / "objects" / "ab").mkdir(parents=True)
+        (d / "objects" / "ab" / "cd").write_bytes(b"x")
+        os.chmod(d / "objects" / "ab", 0)
+        with redirect_stderr(io.StringIO()) as err:
+            g.remove_tree(str(d))
+        self.assertFalse(d.exists())
+        self.assertEqual(err.getvalue(), "")
+
+    def test_the_pre_3_12_onerror_form_removes_the_same_tree(self):
+        d = Path(tempfile.mkdtemp(prefix="g11-law-"))
+        (d / "objects").mkdir()
+        (d / "objects" / "pack").write_bytes(b"x")
+        os.chmod(d / "objects" / "pack", 0o444)
+        os.chmod(d / "objects", 0o555)
+        saved = g.RMTREE_ONEXC
+        g.RMTREE_ONEXC = False
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)  # onerror is deprecated from 3.12
+                g.remove_tree(str(d))
+        finally:
+            g.RMTREE_ONEXC = saved
+        self.assertFalse(d.exists())
+
+    def test_an_entry_that_cannot_be_removed_is_named_and_the_rest_removed(self):
+        # a file another process holds open on Windows: the retry fails too; the walk goes on and stderr names it
+        d = Path(tempfile.mkdtemp(prefix="g11-law-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        for name in ("a", "held", "z"):
+            (d / name).write_bytes(b"x")
+        unlink = os.unlink
+
+        def held_open(p, *a, **k):
+            if os.path.basename(p) == "held":
+                raise PermissionError(13, "held open", p)
+            return unlink(p, *a, **k)
+        os.unlink = held_open
+        try:
+            with redirect_stderr(io.StringIO()) as err:
+                g.remove_tree(str(d))
+        finally:
+            os.unlink = unlink
+        self.assertEqual(sorted(p.name for p in d.iterdir()), ["held"])
+        self.assertIn(f"left behind in {d}", err.getvalue())
+        self.assertIn("held", err.getvalue())
+
+    def test_the_directory_holding_the_tree_keeps_its_mode(self):
+        # the handler opens up a parent inside the tree, never the directory the tree sits in
+        base = Path(tempfile.mkdtemp(prefix="g11-law-base-"))
+        self.addCleanup(shutil.rmtree, base, True)
+        os.chmod(base, 0o755)
+        before = stat.S_IMODE(os.stat(base).st_mode)  # 0o755 on POSIX; Windows reports a writable directory as 0o777
+        d = base / "fetch"
+        d.mkdir()
+        unlink, rmdir = os.unlink, os.rmdir
+        os.rmdir = lambda p, *a, **k: (_ for _ in ()).throw(PermissionError(13, "denied", p)) \
+            if os.path.abspath(p) == str(d) else rmdir(p, *a, **k)
+        try:
+            with redirect_stderr(io.StringIO()):
+                g.remove_tree(str(d))
+        finally:
+            os.rmdir = rmdir
+        self.assertEqual(stat.S_IMODE(os.stat(base).st_mode), before)
 
     def test_the_fetched_law_is_removed_when_the_process_ends(self):
         # every crate's g11_table.sh fetches ALICE-Law through git_law: the fetch must not outlive the run

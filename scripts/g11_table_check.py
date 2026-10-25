@@ -621,22 +621,55 @@ def pin_rev(tree: Tree, pin: str) -> tuple[str | None, str | None]:
     return revs[0], None
 
 
+# shutil.rmtree takes onexc from 3.12 (onerror before it, deprecated since); a name so the tests reach both forms
+RMTREE_ONEXC = sys.version_info >= (3, 12)
+
+
 def remove_tree(path: str) -> None:
     """remove a directory git wrote: on Windows git's object files are read-only, which rmtree cannot delete until
-    the read-only bit is cleared (ignore_errors alone would leave the whole fetch behind silently)"""
-    def writable_then_retry(func, p, _exc):
-        # the entry (a read-only file on Windows) and the directory holding it (a read-only directory on POSIX)
-        os.chmod(os.path.dirname(p) or ".", stat.S_IRWXU)
-        if os.path.lexists(p) and not os.path.islink(p):
-            os.chmod(p, stat.S_IRWXU if os.path.isdir(p) else stat.S_IWRITE | stat.S_IREAD)
-        func(p)
-    try:
-        if sys.version_info >= (3, 12):
-            shutil.rmtree(path, onexc=writable_then_retry)
+    the read-only bit is cleared (ignore_errors alone would leave the whole fetch behind silently); whatever is still
+    left is named on stderr"""
+    top = os.path.abspath(path)
+    left: list[str] = []
+    listed: set[str] = set()  # directories walked again after their bits were set (once each, so a retry ends)
+
+    def rmtree(p: str) -> None:
+        if RMTREE_ONEXC:
+            shutil.rmtree(p, onexc=writable_then_retry)
         else:
-            shutil.rmtree(path, onerror=writable_then_retry)
-    except OSError:
-        pass  # best effort at exit: a file another process still holds open is left
+            shutil.rmtree(p, onerror=writable_then_retry)
+
+    def writable_then_retry(func, p, _exc):
+        # one entry rmtree could not remove: clear the bits in the way (the entry, a read-only file on Windows or an
+        # unreadable directory, and the directory holding it, a read-only directory on POSIX) and retry; a retry that
+        # fails again is noted and the walk goes on, so the rest of the tree is still removed
+        try:
+            if not os.path.lexists(p):
+                return
+            parent = os.path.dirname(os.path.abspath(p))
+            if parent != os.path.dirname(top):  # never the directory the tree sits in (the system's temp directory)
+                os.chmod(parent, stat.S_IRWXU)
+            if os.path.isdir(p) and not os.path.islink(p):
+                os.chmod(p, stat.S_IRWXU)
+                if p in listed:
+                    func(p)
+                else:
+                    listed.add(p)
+                    rmtree(p)  # listing it may be what failed, so its entries were never visited
+            else:
+                if not os.path.islink(p):
+                    os.chmod(p, stat.S_IWRITE | stat.S_IREAD)
+                func(p)
+        except OSError as e:
+            left.append(f"{p} ({e.strerror or e})")
+
+    try:
+        rmtree(path)
+    except OSError as e:
+        left.append(f"{path} ({e.strerror or e})")
+    if left or os.path.lexists(path):
+        shown = ", ".join(left[:3]) + (f" and {len(left) - 3} more" if len(left) > 3 else "")
+        print(f"g11_table_check: left behind in {path}: {shown or 'the directory itself'}", file=sys.stderr)
 
 
 def git_law(rev: str, url: str = LAW_URL) -> Tree | None:
