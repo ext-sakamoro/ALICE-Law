@@ -3,9 +3,10 @@
 # scripts/conformance_roster_check.py in its default mode: every crate that is not exempt
 # holds alice-law-conformance.toml at the main of its repository with every gate, valid
 # statuses, located fail-known entries, and the committed conformance/manifest-state.toml
-# equals what those mains show. A manifest that changed upstream turns this red with the
-# command that regenerates the state; the regeneration is a commit in this repository
-# (CI does not commit). Nothing compared is a failure.
+# equals what those mains show. A manifest that changed upstream turns the daily run red with
+# the command that regenerates the state (a push or a dispatched run reports it as a note: a
+# crate landing while a change here is checked does not fail that change); the regeneration
+# is a commit in this repository (CI does not commit). Nothing compared is a failure.
 #
 # On every push to main and daily, and on demand. It is not part of the branch / pull
 # request checks or the pre-push gate: those run the same script with --internal (the
@@ -41,10 +42,26 @@ jobs:
       - name: Test the landing check of the conformance state
         run: python3 scripts/test_land_law_state.py
 
+      # daily: a state behind the members' mains is a finding (regenerate it); a push or a dispatched run checks a
+      # change of this repository, where a crate landing meanwhile is a note
       - name: The committed state equals the members' mains
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/conformance_roster_check.py
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        # the base the change is compared with: the previous main on a push, main on a dispatched run
+        run: |
+          if [ "$EVENT" = schedule ]; then
+            python3 scripts/conformance_roster_check.py
+          else
+            if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+              git fetch -q --depth 1 origin "$BEFORE"
+            else
+              git fetch -q --depth 1 origin main
+            fi
+            git show FETCH_HEAD:conformance/manifest-state.toml > "$RUNNER_TEMP/base-state.toml"
+            python3 scripts/conformance_roster_check.py --state-drift-note "$RUNNER_TEMP/base-state.toml"
+          fi
 
   # The only rights holder is the author: every public repository of the account, at its default
   # branch, against conformance/holder-baseline.toml (scripts/holder_live.py). A new occurrence or a
@@ -97,6 +114,7 @@ jobs:
           python3 scripts/test_shared_files_check.py
           python3 scripts/test_gen_shared_files.py
           python3 scripts/test_shared_files_strict.py
+          python3 scripts/test_conformance_live_workflow.py
 
       - name: Each source commit is on main with the entry's bytes
         run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --fetch
@@ -107,11 +125,23 @@ jobs:
       - name: The table is the generated one
         run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
 
-      # the strict pair on every push to main (an unlisted holder of the same bytes is a finding too): it also runs
-      # right before the push, and this is the backstop for a push made without it
+      # the landing gate on every push to main (it also runs right before the push, and this is the backstop for a
+      # push made without it): a rollout or a crate's gate landing elsewhere meanwhile is a note there
       - name: Strict on a push to main (scripts/shared_files_strict.sh)
         if: github.event_name == 'push'
         env:
-          # the state checks (conformance_roster_check.py --strict) read the crates' mains through gh api
+          # the state checks (conformance_roster_check.py) read the crates' mains through gh api
           GH_TOKEN: ${{ github.token }}
-        run: scripts/shared_files_strict.sh
+          BEFORE: ${{ github.event.before }}
+        # compared with the previous main (the base of this push)
+        run: |
+          git fetch -q --depth 1 origin "$BEFORE"
+          LAW_BASE_REF=FETCH_HEAD scripts/shared_files_strict.sh
+
+      # the daily run is strict: an unlisted holder of the same bytes and a state
+      # behind the crates' mains are findings, and the owner regenerates the table and the state
+      - name: Strict every day (scripts/shared_files_strict.sh --daily)
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/shared_files_strict.sh --daily

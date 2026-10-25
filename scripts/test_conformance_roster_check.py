@@ -98,7 +98,7 @@ class LeakDetector(unittest.TestCase):
 
 class Check(unittest.TestCase):
     def run_check(self, repos: dict, missing: str = "", state: str | None = None, write=True, roster=ROSTER,
-                  gates=GATES):
+                  gates=GATES, extra=()):
         """repos: {repo: manifest text or None}; returns (code, output, state text)"""
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
@@ -116,7 +116,7 @@ class Check(unittest.TestCase):
             out = io.StringIO()
             args = ["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing", str(d / "m.toml"),
                     "--state", str(st), "--pending", str(d / "p.toml"),
-                    "--line-baseline", exact_line_baseline(d, repos)] + (["--write"] if write else [])
+                    "--line-baseline", exact_line_baseline(d, repos)] + (["--write"] if write else []) + list(extra)
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(args, fetch=fetch)
             self.assertNotIn("Law", calls)  # an exempt crate is not read
@@ -155,6 +155,61 @@ class Check(unittest.TestCase):
         self.assertIn("s.toml differs from the manifests at main", out)
         code, out, _ = self.run_check(repos, state=None, write=False)
         self.assertEqual(code, 1, out)
+
+    def drift_run(self, repos, state, base):
+        with tempfile.TemporaryDirectory() as d:
+            b = Path(d) / "base-state.toml"
+            b.write_text(base, encoding="utf-8")
+            return self.run_check(repos, state=state, write=False, extra=["--state-drift-note", str(b)])
+
+    def test_a_section_this_change_did_not_touch_is_a_note_when_the_mains_moved(self):
+        # the fleet moved: Alpha's gate flipped on its main after the state commit; the change leaves Alpha's section
+        # as the base has it, so the drift is a note there (the daily run, without the flag, fails on it)
+        before = {"Alpha": manifest(), "Beta": manifest()}
+        state = self.green_state(before)
+        after = {"Alpha": manifest(G3='status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs:12, no helper"'), "Beta": manifest()}
+        code, out, _ = self.drift_run(after, state, base=state)
+        self.assertEqual(code, 0, out)
+        self.assertIn('note: s.toml: [manifest."Alpha"] differs from the manifests at main', out)
+        self.assertNotIn("found:", out)
+        self.assertEqual(self.run_check(after, state=state, write=False)[0], 1)  # the daily run
+
+    def test_a_section_this_change_edited_must_equal_the_regenerated_one(self):
+        # a hand edit (pass 1 -> 2) with nothing moved upstream: the change touched Alpha's section, so it is a finding
+        repos = {"Alpha": manifest(), "Beta": manifest()}
+        base = self.green_state(repos)
+        edited = base.replace('"pass" = 1', '"pass" = 2', 1)
+        code, out, _ = self.drift_run(repos, edited, base=base)
+        self.assertEqual(code, 1, out)
+        self.assertIn('found: s.toml: [manifest."Alpha"] was changed by this change and differs from the manifests at main', out)
+        # an edit that regenerates the section correctly passes
+        self.assertEqual(self.drift_run(repos, base, base=edited)[0], 0)
+
+    def test_a_section_the_change_adds_or_removes_is_touched(self):
+        repos = {"Alpha": manifest(), "Beta": manifest()}
+        state = self.green_state(repos)
+        without_beta = state[:state.index('[manifest."Beta"]')]
+        code, out, _ = self.drift_run(repos, without_beta, base=state)
+        self.assertEqual(code, 1, out)
+        self.assertIn('[manifest."Beta"]', out)
+
+    def test_a_section_the_change_adds_must_equal_the_regenerated_one(self):
+        # the base has no Beta section; the change adds one that is not what the mains give: a finding, not drift
+        repos = {"Alpha": manifest(), "Beta": manifest()}
+        state = self.green_state(repos)
+        base = state[:state.index('[manifest."Beta"]')]
+        beta = state.index('[manifest."Beta"]')
+        added_wrong = state[:beta] + state[beta:].replace('"pass" = 1', '"pass" = 3', 1)
+        code, out, _ = self.drift_run(repos, added_wrong, base=base)
+        self.assertEqual(code, 1, out)
+        self.assertIn('[manifest."Beta"] was changed by this change', out)
+        self.assertEqual(self.drift_run(repos, state, base=base)[0], 0)  # added as the mains give it
+
+    def test_an_unreadable_base_state_is_no_result(self):
+        repos = {"Alpha": manifest(), "Beta": manifest()}
+        state = self.green_state(repos)
+        code, out, _ = self.drift_run(repos, state, base="not [toml")
+        self.assertEqual(code, 2, out)
 
     def test_a_missing_manifest_fails_with_the_crate_name(self):
         code, out, _ = self.run_check({"Alpha": manifest(), "Beta": None})

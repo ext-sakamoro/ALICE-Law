@@ -230,9 +230,10 @@ MEMBER_TEST_RE = re.compile(r"^(?P<dir>.+)/tests/[^/]+\.rs$")
 
 
 def integration_test_file(path: str, paths: set[str], read) -> bool:
-    """whether `path` is an integration-test target: `tests/<file>.rs` of the repository's root package, or
-    `<dir>/tests/<file>.rs` of a workspace member (`<dir>/Cargo.toml` has a [package]); a tests/ directory under
-    any other directory (a module under src/, a virtual manifest, no manifest) is not one"""
+    """whether `path` is an integration-test target: `tests/<file>.rs` at the root, or `<dir>/tests/<file>.rs` of a
+    package directory (`<dir>/Cargo.toml` has a [package]: a workspace member, or a package the root workspace does
+    not list, which cargo builds the same way when it is built); a tests/ directory under any other directory (a
+    module under src/, a virtual manifest, no manifest) and a subdirectory of tests/ are not one"""
     if path.startswith("tests/"):
         return True
     m = MEMBER_TEST_RE.match(path)
@@ -754,6 +755,20 @@ def render_pending(pending: dict[str, dict]) -> str:
     return "\n".join(out)
 
 
+def state_sections(state_text: str) -> dict[str, dict]:
+    """repository -> its whole [manifest."<repo>"] table (crates and counts) of a manifest-state.toml text"""
+    if not state_text.strip():
+        return {}
+    try:
+        data = tomllib.loads(state_text)
+    except tomllib.TOMLDecodeError as e:
+        raise InputError(f"manifest-state.toml: {e}") from e
+    m = data.get("manifest", {})
+    if not isinstance(m, dict):
+        raise InputError("manifest-state.toml: [manifest] is not a table")
+    return m
+
+
 def table_counts(state_text: str) -> dict[str, dict]:
     """repository -> status counts recorded in a manifest-state.toml text (empty for an empty text)"""
     if not state_text.strip():
@@ -928,6 +943,12 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
     ap.add_argument("--strict", action="store_true",
                     help="a pending entry whose commit has landed, or a manifest below its line-reference "
                          "baseline, is a finding (the pre-push receipt), not a note")
+    ap.add_argument("--state-drift-note", metavar="BASE_STATE",
+                    help="the landing gate of a change in this repository, with BASE_STATE the state file at the base "
+                         "(origin/main): a section of the committed state the change left as the base has it and that "
+                         "differs from the crates' mains is a note (a crate landed meanwhile); a section the change "
+                         "added, removed or edited must equal the regenerated one (a finding otherwise); the daily run, "
+                         "without this flag, fails on any difference and the state is regenerated")
     ap.add_argument("--today", help="the date pending entries are aged against (default: today, UTC)")
     ap.add_argument("--line-baseline", default=str(ROOT / "conformance" / "line-refs-baseline.toml"),
                     help="the line-number references each manifest may still hold (absent: none may)")
@@ -1012,6 +1033,12 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
         return 2
     state_path = Path(a.state)
     rendered = render_state(expected)
+    if a.state_drift_note is not None:
+        try:  # the base is read whether or not the state differs: an unreadable input is never a pass
+            state_sections(Path(a.state_drift_note).read_text(encoding="utf-8"))
+        except (OSError, InputError) as e:
+            print(f"error: the base state {a.state_drift_note}: {e}", file=sys.stderr)
+            return 2
     if not findings:
         if a.write:
             state_path.write_text(rendered, encoding="utf-8")
@@ -1020,10 +1047,30 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
                 pending_path.write_text(render_pending(kept), encoding="utf-8")
                 print(f"conformance roster: wrote {pending_path.name} ({len(kept)} pending)")
         elif not state_path.exists() or state_path.read_text(encoding="utf-8") != rendered:
-            findings.append(f"{state_path.name} differs from the manifests at main (regenerate manifest-state: "
-                            f"run python3 scripts/conformance_roster_check.py --write && "
-                            f"python3 scripts/gen_law_status.py, and commit both)")
-            print(f"found: {findings[-1]}")
+            regen = ("(regenerate manifest-state: run python3 scripts/conformance_roster_check.py --write && "
+                     "python3 scripts/gen_law_status.py, and commit both)")
+            if a.state_drift_note is None:
+                findings.append(f"{state_path.name} differs from the manifests at main {regen}")
+                print(f"found: {findings[-1]}")
+            else:
+                try:
+                    committed = state_sections(state_path.read_text(encoding="utf-8") if state_path.exists() else "")
+                    base = state_sections(Path(a.state_drift_note).read_text(encoding="utf-8"))
+                except (OSError, InputError) as e:
+                    print(f"error: the base state {a.state_drift_note}: {e}", file=sys.stderr)
+                    return 2
+                want = state_sections(rendered)
+                for repo in sorted(set(committed) | set(base) | set(want)):
+                    c, b, w = committed.get(repo), base.get(repo), want.get(repo)
+                    if c == w:
+                        continue
+                    if c == b:
+                        print(f'note: {state_path.name}: [manifest."{repo}"] differs from the manifests at main '
+                              f"(a crate landed after the base; the daily run fails on it) {regen}")
+                    else:
+                        findings.append(f'{state_path.name}: [manifest."{repo}"] was changed by this change and '
+                                        f"differs from the manifests at main {regen}")
+                        print(f"found: {findings[-1]}")
     print(f"conformance roster: {files} manifests read for {read} crates (crates that share a repository share "
           f"its manifest), {compared} gates compared, {len(findings)} findings")
     return 1 if findings else 0

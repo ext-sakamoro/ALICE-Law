@@ -6,6 +6,7 @@ finding, a check that could not run is never a pass), with the checks replaced b
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -19,15 +20,67 @@ class Strict(unittest.TestCase):
     CHECKS = ("shared_files_check.py", "gen_shared_files.py", "conformance_roster_check.py", "gen_law_status.py")
 
     def run_with(self, first: tuple[int, str] = (0, ""), second: tuple[int, str] = (0, ""),
-                 state: tuple[int, str] = (0, ""), readme: tuple[int, str] = (0, "")) -> subprocess.CompletedProcess:
+                 state: tuple[int, str] = (0, ""), readme: tuple[int, str] = (0, ""),
+                 *args: str) -> subprocess.CompletedProcess:
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             (root / "scripts").mkdir()
             shutil.copy(HERE / "shared_files_strict.sh", root / "scripts" / "shared_files_strict.sh")
             for name, (rc, err) in zip(self.CHECKS, (first, second, state, readme)):
-                (root / "scripts" / name).write_text(f"import sys\nsys.stderr.write({err!r})\nsys.exit({rc})\n")
-            return subprocess.run(["bash", str(root / "scripts" / "shared_files_strict.sh")], capture_output=True,
-                                  text=True, timeout=60)
+                (root / "scripts" / name).write_text(
+                    f"import sys\nsys.stderr.write({err!r})\nprint('argv', {name!r}, *sys.argv[1:])\nsys.exit({rc})\n")
+            env = dict(os.environ)
+            for name in ("LAW_BASE_TABLE", "LAW_BASE_STATE"):
+                f = root / f"{name.lower()}.toml"
+                f.write_text("# base\n", encoding="utf-8")
+                env.setdefault(name, str(f))
+            env.update(self.env)
+            return subprocess.run(["bash", str(root / "scripts" / "shared_files_strict.sh"), *args],
+                                  capture_output=True, text=True, timeout=60, env=env)
+
+    env: dict[str, str] = {}
+
+    def argv(self, p: subprocess.CompletedProcess) -> dict[str, list[str]]:
+        return {ln.split()[1]: ln.split()[2:] for ln in p.stdout.splitlines() if ln.startswith("argv ")}
+
+    def test_the_landing_mode_leaves_drift_to_the_daily_run(self):
+        # a change landing on main: an adoption with the same bytes and a state behind the crates' mains are notes
+        a = self.argv(self.run_with())
+        self.assertEqual(len(a), 4, a)
+        self.assertNotIn("--strict", a["shared_files_check.py"])
+        self.assertNotIn("--strict", a["gen_shared_files.py"])
+        self.assertIn("--base-table", a["shared_files_check.py"])
+        self.assertIn("--base-table", a["gen_shared_files.py"])
+        self.assertIn("--live", a["shared_files_check.py"])
+        self.assertIn("--check", a["gen_shared_files.py"])
+        self.assertIn("--lock-file", a["gen_shared_files.py"])
+        self.assertIn("--state-drift-note", a["conformance_roster_check.py"])
+        self.assertEqual(len(a["conformance_roster_check.py"]), 2, a)  # the flag and its base state file
+        self.assertIn("--check", a["gen_law_status.py"])
+
+    def test_the_daily_mode_is_strict(self):
+        a = self.argv(self.run_with((0, ""), (0, ""), (0, ""), (0, ""), "--daily"))
+        self.assertEqual(len(a), 4, a)
+        self.assertIn("--strict", a["shared_files_check.py"])
+        self.assertIn("--strict", a["gen_shared_files.py"])
+        self.assertIn("--strict", a["conformance_roster_check.py"])
+        self.assertNotIn("--state-drift-note", a["conformance_roster_check.py"])
+
+    def test_an_unreadable_base_is_not_a_pass(self):
+        # no base file and no git repository to read origin/main from: the landing mode cannot compare
+        self.env = {"LAW_BASE_TABLE": "/nonexistent/base.toml", "LAW_BASE_STATE": "/nonexistent/state.toml",
+                    "GIT_DIR": "/nonexistent"}
+        try:
+            p = self.run_with()
+        finally:
+            self.env = {}
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("could not be read", p.stderr)
+        self.assertEqual(self.argv(p), {})
+
+    def test_an_unknown_argument_is_not_a_pass(self):
+        p = self.run_with((0, ""), (0, ""), (0, ""), (0, ""), "--dialy")
+        self.assertEqual(p.returncode, 2, p.stderr)
 
     def test_both_pass(self):
         p = self.run_with((0, ""), (0, ""))
@@ -58,7 +111,7 @@ class Strict(unittest.TestCase):
         # the roster check finds manifest-state.toml behind the crates' mains: no receipt for a stale state
         p = self.run_with(state=(1, ""))
         self.assertEqual(p.returncode, 1, p.stderr)
-        self.assertIn("finding (conformance_roster_check.py --strict)", p.stderr)
+        self.assertIn("finding (conformance_roster_check.py", p.stderr)
         p = self.run_with(readme=(1, ""))
         self.assertEqual(p.returncode, 1, p.stderr)
         self.assertIn("finding (gen_law_status.py --check)", p.stderr)
@@ -66,7 +119,7 @@ class Strict(unittest.TestCase):
     def test_the_state_checks_run_and_are_not_a_pass_when_they_compare_nothing(self):
         p = self.run_with(state=(2, "error: nothing was compared (0 manifests, 0 gates)\n"))
         self.assertEqual(p.returncode, 2, p.stderr)
-        self.assertIn("nothing compared (conformance_roster_check.py --strict)", p.stderr)
+        self.assertIn("nothing compared (conformance_roster_check.py", p.stderr)
         p = self.run_with(readme=(2, "error: no README was compared\n"))
         self.assertEqual(p.returncode, 2, p.stderr)
         self.assertIn("nothing compared (gen_law_status.py --check)", p.stderr)

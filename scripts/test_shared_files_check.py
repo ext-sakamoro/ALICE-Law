@@ -621,6 +621,26 @@ class Live(Base):
         self.w.commit("ALICE-B", {"scripts/s.sh": SHARED + b"#\n"})
         self.assertEqual(self.live()[0], 1)
 
+    def test_a_holder_this_change_dropped_is_a_finding_not_an_unlisted_note(self):
+        # the base table lists ALICE-C with the shared bytes; the change removes it from the row (ALICE-C stays read
+        # through another row); the landing path (no --strict) must not read it back as a rollout landed elsewhere
+        t2 = b"t\n"
+        for r in ("ALICE-A", "ALICE-C"):
+            self.w.commit(r, {"scripts/t.sh": t2})
+        self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
+        other = {"path": "scripts/t.sh", "sha256": h(t2), "source": {"repo": "ALICE-A", "rev": self.w.revs["ALICE-A"]},
+                 "repos": ["ALICE-A", "ALICE-C"], "paths": {}}
+        other["source"]["rev"] = git("rev-parse", "HEAD", cwd=self.w.work / "ALICE-A").strip()
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.w.table(self.w.uniform(repos=["ALICE-A", "ALICE-B", "ALICE-C"]), other), encoding="utf-8")
+        self.t.write_text(self.w.table(self.w.uniform(), other), encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 0, out)  # without a base: a rollout note, as before
+        self.assertIn("unlisted holder, same bytes", out)
+        code, out = self.live("--base-table", str(base))
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: ALICE-C is listed in the base table and this change removed it", out)
+
     def expiring(self, until: str) -> None:
         self.t.write_text(self.w.table(exempt={"ALICE-C": {"reason": "its own script until it converges",
                                                            "until": until}}), encoding="utf-8")

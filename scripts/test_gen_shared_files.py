@@ -507,6 +507,25 @@ class Generate(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("unlisted holder, same bytes: scripts/s.sh on ALICE-C", out)
 
+    def test_check_with_a_base_fails_on_a_holder_the_change_dropped(self):
+        # the base table lists ALICE-C on s.sh (same bytes); the change's table drops it: with the base it is not a
+        # rollout landed elsewhere but the change's own removal, so the non-strict check fails
+        self.gained_holder(SHARED)
+        without_c = self.t.read_text(encoding="utf-8")
+        self.assertEqual(self.gen("--write")[0], 0)
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
+        self.assertIn("ALICE-C", self.entries()["scripts/s.sh"]["repos"])
+        self.t.write_text(without_c, encoding="utf-8")
+        self.assertEqual(self.gen("--check")[0], 0)  # without a base: reported, as before
+        code, out = self.gen("--check", "--base-table", str(base))
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: ALICE-C is listed in the base table and this change removed it", out)
+        # an unlisted holder the base did not list either stays a report with the base
+        code, out = self.gen("--check", "--base-table", str(Path(self.tmp.name) / "same.toml")
+                             if (Path(self.tmp.name) / "same.toml").write_text(without_c, encoding="utf-8") else "")
+        self.assertEqual(code, 0, out)
+
     def test_check_fails_when_a_holder_drops_the_file_while_another_gains_it(self):
         # gaining a same-bytes holder does not hide a carrier that lost the file
         self.gained_holder(SHARED)

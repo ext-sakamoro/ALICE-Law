@@ -350,10 +350,12 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
     return entries
 
 
-def unlisted_same_bytes(old: list[dict], new: list[dict]) -> tuple[list[dict], list[tuple[str, list[str]]]]:
+def unlisted_same_bytes(old: list[dict], new: list[dict],
+                        base: list[dict] | None = None) -> tuple[list[dict], list[tuple[str, list[str]]]]:
     """new entries with each row that differs from the table only by added holders carrying the row's own
     bytes put back to the table's row, and the (path, added holders) of those rows"""
     before = {e["path"]: e for e in old}
+    base_repos = {e["path"]: e["repos"] for e in (base or [])}
     out, held = [], []
     for e in new:
         o = before.get(e["path"])
@@ -361,6 +363,13 @@ def unlisted_same_bytes(old: list[dict], new: list[dict]) -> tuple[list[dict], l
             out.append(e)
             continue
         added = [r for r in e["repos"] if r not in o["repos"]]
+        dropped = sorted(set(added) & set(base_repos.get(e["path"], ())))
+        if dropped:
+            # the base table listed them: the change removed them, which is not a rollout that landed elsewhere
+            print(f"gen_shared_files: {e['path']}: {', '.join(dropped)} is listed in the base table and this change "
+                  "removed it", file=sys.stderr)
+            out.append(e)
+            continue
         if not added or [r for r in o["repos"] if r not in e["repos"]]:
             out.append(e)
             continue
@@ -406,6 +415,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--discover", action="store_true")
     ap.add_argument("--checkouts", type=Path)
     ap.add_argument("--today", help="the date a new pending row records (default: today, UTC)")
+    ap.add_argument("--base-table", type=Path,
+                    help="with --check: the table at the base (origin/main); a holder it lists that the table under "
+                         "check dropped is a difference, not an unlisted holder that landed elsewhere")
     ap.add_argument("--strict", action="store_true",
                     help="with --check: a row that gained holders with its own bytes is a difference too (the"
                          " regeneration and landing path, and the pre-publish gate)")
@@ -463,7 +475,8 @@ def main(argv: list[str]) -> int:
         if not a.strict:
             # a rollout that landed before the table was regenerated: a row that only gained holders with
             # the row's own bytes is reported, not a difference (--strict: it is one)
-            entries, held = unlisted_same_bytes(sfc.load(current), entries)
+            base = sfc.load(a.base_table.read_text(encoding="utf-8")) if a.base_table else None
+            entries, held = unlisted_same_bytes(sfc.load(current), entries, base)
             for path, repos in held:
                 print(f"gen_shared_files: unlisted holder, same bytes: {path} on {', '.join(repos)}"
                       " (regenerate the table before the next publish)")

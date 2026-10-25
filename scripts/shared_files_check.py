@@ -636,7 +636,7 @@ def introduction_problems(e: dict, found: dict[str, list[str]], remote: Remote, 
 
 
 def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False,
-         proofs: dict[str, bytes] | None = None):
+         proofs: dict[str, bytes] | None = None, base: list[dict] | None = None):
     """Every listed repository's main against the table, and the discovery pass."""
     problems: list[str] = []
     notes: list[str] = []
@@ -644,6 +644,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
     uniform_copies = 0
     unlisted: list[tuple[str, str, str, str]] = []
     repos = sorted({r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})})
+    base_listed = {e["path"]: set(e["repos"]) for e in (base or [])}
     trees = {r: tree(remote(r)) for r in repos}
     if not trees:
         raise Unreadable("no repository read (compared nothing)")
@@ -765,6 +766,11 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                 continue
             data = show(remote(r), "origin/main", e["path"])
             got = sha256(data) if data is not None else ""
+            if got and got in known_bytes and base is not None and r in base_listed.get(e["path"], set()):
+                # not a rollout that landed elsewhere: the base lists this holder and the change dropped it
+                problems.append(f"{e['path']}: {r} is listed in the base table and this change removed it (its main "
+                                "still has the entry's bytes)")
+                continue
             if got and got in known_bytes and not strict:
                 # a rollout landed before the table was regenerated: the same bytes, not drift
                 since = subprocess.run(["git", "-C", str(remote(r)), "log", "-1", "--format=%cs", "--diff-filter=A",
@@ -811,6 +817,7 @@ def main(argv: list[str]) -> int:
         lock = None if a.lock_file is None else lock_in(a.lock_file.read_text(encoding="utf-8"), str(a.lock_file))
         proofs = planned_proofs(a.table)
         base_pending = None
+        base_entries = None
         base_since: dict[str, str] = {}
         base_planned: dict[str, dict] = {}
         base_variants: dict[str, dict] = {}
@@ -835,7 +842,8 @@ def main(argv: list[str]) -> int:
                 else:
                     today = (datetime.date.fromisoformat(a.today) if a.today
                              else datetime.datetime.now(datetime.timezone.utc).date())
-                    problems, notes, c, locked = live(entries, remote, today, strict=a.strict, proofs=proofs)
+                    problems, notes, c, locked = live(entries, remote, today, strict=a.strict, proofs=proofs,
+                                                      base=base_entries)
         else:
             problems = []
             c = counts(len(entries), len({r for e in entries for r in e["repos"]}),

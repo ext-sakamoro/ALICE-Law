@@ -41,6 +41,7 @@ python3 scripts/test_measure_conformance.py
 python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py
 python3 scripts/test_shared_files_strict.py
+python3 scripts/test_conformance_live_workflow.py
 
 echo "== the line-number reference baseline does not rise against origin/main"
 python3 scripts/test_line_refs_ratchet.py
