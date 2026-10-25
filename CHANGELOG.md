@@ -220,6 +220,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/shared-files.toml`: 表を今の main から作り直す `scripts/stub_guard.sh` はすべての写しが target になったので uniform の行にし、計画の bytes を `conformance/planned/` から外す `scripts/g11_table.sh` (ALICE-Analytics / ALICE-DB / ALICE-LOL で同じ bytes) に行を足す pending の行の variants を今の main に合わせる (target は変えない) 表の写しの数の lock は 950
 - `scripts/shared_files_check.py --live --base-table` と `scripts/gen_shared_files.py --check --base-table` (着地の gate): base も同じ planned id と target で計画していて、この変更が触っていない行が、確かめている間に main で収束した (すべての写しが target、足された holder も target) なら note (`converged since the base`) 計画し直した行、repository の違う行、`--strict` (毎日の run) と base の無い run では今まで通り finding 他の repository の着地で着地の gate が red にならない
 - `conformance/shared-files.toml`: 表を今の main から作り直す ALICE-Sign と ALICE-Identity が持つ写しの行に 2 つを足し、ALICE-Sync を `scripts/g11_table.sh` の行に足す すべての写しが target になった 7 行 (`scripts/check_py_license.py`、`scripts/gen_clippy_canary_calls.py` と試験、`scripts/package_integrity.py` と試験ほか) を uniform にし、その計画の bytes を `conformance/planned/` から外す `scripts/test_version_sync.py` の最初の移動は owner より先に ALICE-SDF が target を着地したので owner を ALICE-SDF にする target は変えない 表の写しの数の lock は 1133
+- `conformance/shared-files.toml`: `scripts/build_config_allowlist.toml` (repository ごとの data) の例外に ALICE-Font を足す (同じ理由)
 
 ### Fixed
 - `scripts/public_text_check.py`: code の識別子 2 形を見つけない 非同期 runtime の builder の `worker_threads(n)`、`_` が続く 2 文字 (`session = fb_open()` の関数名の頭) は id ではない 散文の語は従来どおり見つける
