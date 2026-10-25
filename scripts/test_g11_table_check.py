@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import os
 import shutil
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -442,6 +444,34 @@ class Fetch(unittest.TestCase):
         self.assertIsNotNone(tree, "the local repository could not be fetched")
         self.assertIn("scripts/t.py", tree.paths)
         self.assertEqual(tree.read("scripts/t.py"), text)
+
+    def test_the_fetched_law_is_removed_when_the_process_ends(self):
+        # every crate's g11_table.sh fetches ALICE-Law through git_law: the fetch must not outlive the run
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as tmpdir:
+            run = lambda *a: subprocess.run(["git", "-C", tmp, *a], capture_output=True, check=True)
+            run("init", "-q")
+            (Path(tmp) / "scripts").mkdir()
+            (Path(tmp) / "scripts" / "t.py").write_text("x = 1\n", encoding="utf-8")
+            run("add", "scripts/t.py")
+            run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "t")
+            rev = run("rev-parse", "HEAD").stdout.decode().strip()
+            code = ("import sys; sys.path.insert(0, sys.argv[1]); import g11_table_check as g; "
+                    "t = g.git_law(sys.argv[2], sys.argv[3]); assert t is not None; "
+                    "assert t.read('scripts/t.py') == 'x = 1\\n'; "
+                    "import pathlib; assert list(pathlib.Path(sys.argv[4]).glob('g11-law-*'))")  # there while it runs
+            env = {**os.environ, "TMPDIR": tmpdir}
+            r = subprocess.run([sys.executable, "-c", code, str(Path(g.__file__).parent), rev, Path(tmp).as_uri(),
+                                tmpdir], env=env, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(list(Path(tmpdir).glob("g11-law-*")), [])
+            # and when the fetch fails (an unknown revision), nothing is left either
+            r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                                "import g11_table_check as g; assert g.git_law('0' * 40, sys.argv[2]) is None",
+                                str(Path(g.__file__).parent), Path(tmp).as_uri()], env=env, capture_output=True,
+                               text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(list(Path(tmpdir).glob("g11-law-*")), [])
 
 
 if __name__ == "__main__":

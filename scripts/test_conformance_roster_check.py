@@ -63,6 +63,7 @@ _real_root = crc.ROOT
 def poison_root() -> Path:
     """a stand-in for the repository root whose conformance files all name LEAK_REPO"""
     root = Path(tempfile.mkdtemp(prefix="crc-leak-"))
+    __import__("atexit").register(__import__("shutil").rmtree, root, True)
     (root / "conformance").mkdir()
     (root / "conformance" / "pending-state.toml").write_text(
         f'[pending."{LEAK_REPO}"]\nsha = "{"0" * 40}"\nsince = "2026-10-19"\n', encoding="utf-8")

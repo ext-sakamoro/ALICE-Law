@@ -5,6 +5,8 @@ Usage: python3 scripts/test_holder_live.py
 """
 from __future__ import annotations
 
+import atexit
+import shutil
 import subprocess
 import sys
 import contextlib
@@ -19,11 +21,19 @@ sys.path.insert(0, str(HERE))
 import holder_live as hl  # noqa: E402
 import licence_files_check as lfc  # noqa: E402
 
+
+def scratch() -> Path:
+    """a temporary directory removed when the test process ends (a fixture repository is read after the call
+    that made it returns, so it cannot be a with-block)"""
+    d = Path(tempfile.mkdtemp(prefix="law-test-"))
+    atexit.register(shutil.rmtree, d, ignore_errors=True)
+    return d
+
 OTHER = "Ex" + "toria"  # split, so this file's own text is not an occurrence
 
 
 def upstream(files: dict[str, str]) -> Path:
-    d = Path(tempfile.mkdtemp())
+    d = scratch()
     for rel, text in files.items():
         (d / rel).parent.mkdir(parents=True, exist_ok=True)
         (d / rel).write_text(text, encoding="utf-8")
@@ -40,7 +50,7 @@ class ScanGit(unittest.TestCase):
     def test_a_blobless_clone_is_read_through_the_rule(self):
         up = upstream({"LICENSE": f"(c) {OTHER}\n", "Cargo.toml": '[package]\nname = "x"\nauthors = ["you"]\n',
                        "vendor/x/LICENSE": f"(c) {OTHER}\n", "src/lib.rs": f"// {OTHER}\n"})
-        base = Path(tempfile.mkdtemp())
+        base = scratch()
         with mock.patch.object(hl, "GITHUB", "file://"):
             name, occ, n, err = hl.read_repo(base, {"name": "r", "full_name": str(up), "default_branch": "main", "size": 1})
         self.assertIsNone(err)
@@ -48,7 +58,7 @@ class ScanGit(unittest.TestCase):
         self.assertEqual(n, 2)
 
     def test_an_unreachable_repository_is_an_error_not_a_pass(self):
-        base = Path(tempfile.mkdtemp())
+        base = scratch()
         with mock.patch.object(hl, "GITHUB", "file:///nonexistent/"):
             _, occ, _, err = hl.read_repo(base, {"name": "r", "full_name": "r", "default_branch": "main", "size": 1})
         self.assertIsNone(occ)
@@ -87,7 +97,7 @@ class GrowthOnly(unittest.TestCase):
         repos = [{"name": n} for n in results]
         with mock.patch.object(hl, "public_repos", return_value=repos), \
                 mock.patch.object(hl, "read_repo", side_effect=lambda base, r: results[r["name"]]):
-            b = Path(tempfile.mkdtemp()) / "b.toml"
+            b = scratch() / "b.toml"
             b.write_text(lfc.dump_baseline(baseline_rows), encoding="utf-8")
             out = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
@@ -128,7 +138,7 @@ class Exit(unittest.TestCase):
     def run_main(self, repos, results):
         with mock.patch.object(hl, "public_repos", return_value=repos), \
                 mock.patch.object(hl, "read_repo", side_effect=lambda base, r: results[r["name"]]):
-            b = Path(tempfile.mkdtemp()) / "b.toml"
+            b = scratch() / "b.toml"
             b.write_text("", encoding="utf-8")
             return hl.main(["--baseline", str(b)])
 
@@ -166,7 +176,7 @@ class UnderTest(unittest.TestCase):
 
         with mock.patch.object(hl, "public_repos", return_value=repos), \
                 mock.patch.object(hl, "read_repo", side_effect=remote):
-            b = Path(tempfile.mkdtemp()) / "b.toml"
+            b = scratch() / "b.toml"
             b.write_text(baseline, encoding="utf-8")
             args = ["--baseline", str(b)] + (["--local", f"law={local}"] if local is not None else [])
             return hl.main(args)
@@ -193,7 +203,7 @@ class UnderTest(unittest.TestCase):
         tree = self.checkout({"LICENSE": "(c) the author\n"})
         with mock.patch.object(hl, "public_repos", return_value=[{"name": "other"}]), \
                 mock.patch.object(hl, "read_repo", return_value=("other", set(), 1, None)):
-            b = Path(tempfile.mkdtemp()) / "b.toml"
+            b = scratch() / "b.toml"
             b.write_text("", encoding="utf-8")
             self.assertEqual(hl.main(["--baseline", str(b), "--local", f"law={tree}"]), 2)
             # a listed name without a checkout is malformed, not a read of something else

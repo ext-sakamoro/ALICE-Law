@@ -9,11 +9,21 @@ Usage: python3 scripts/test_licence_files_check.py
 from __future__ import annotations
 
 import importlib.util
+import atexit
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+
+def scratch() -> Path:
+    """a temporary directory removed when the test process ends (a fixture repository is read after the call
+    that made it returns, so it cannot be a with-block)"""
+    d = Path(tempfile.mkdtemp(prefix="law-test-"))
+    atexit.register(shutil.rmtree, d, ignore_errors=True)
+    return d
 
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("lfc", HERE / "licence_files_check.py")
@@ -64,7 +74,7 @@ def without_network_clause(text: str) -> str:
 
 
 def repo(files: dict[str, str]) -> str:
-    d = tempfile.mkdtemp()
+    d = str(scratch())
     for rel, text in files.items():
         p = Path(d) / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -438,7 +448,7 @@ class HolderRepoMode(unittest.TestCase):
 
     def cli(self, files, baseline: str, *extra):
         d = repo(files)
-        b = Path(tempfile.mkdtemp()) / "holder-baseline.toml"
+        b = scratch() / "holder-baseline.toml"
         b.write_text(baseline, encoding="utf-8")
         return subprocess.run([sys.executable, str(HERE / "licence_files_check.py"), "--repo", d, "--repo-name", "r",
                                "--holder-baseline", str(b), *extra], capture_output=True, text=True)

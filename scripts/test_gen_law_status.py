@@ -49,6 +49,8 @@ README = "# T\n\n## Status\n\n<!-- law-status:begin -->\nold text\n<!-- law-stat
 class Gen(unittest.TestCase):
     def setUp(self):
         self.d = Path(tempfile.mkdtemp())
+        # registered per directory: a test that calls setUp again gets a fresh one, and each is removed
+        self.addCleanup(__import__("shutil").rmtree, self.d, True)
         (self.d / "conformance").mkdir()
         (self.d / "e2e" / "golden").mkdir(parents=True)
         self.files = {"conformance/gates.toml": '[[gate]]\nid = "G1"\n\n[[gate]]\nid = "G2"\n', "release-train.toml": ROSTER, "conformance/manifest-state.toml": STATE,
@@ -56,10 +58,6 @@ class Gen(unittest.TestCase):
                       "README.md": README}
         for k, v in self.files.items():
             (self.d / k).write_text(v, encoding="utf-8")
-
-    def tearDown(self):
-        import shutil
-        shutil.rmtree(self.d, True)
 
     def run_main(self, *args):
         out = io.StringIO()
