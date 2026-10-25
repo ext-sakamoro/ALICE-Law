@@ -145,8 +145,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/law_readme_block_check.py"
-sha256 = "7afcaac8fa65121748ae65a52853f3b40eb98beeaf41dd85d096714c64d2e45a"
-source = { repo = "ALICE-Analytics", rev = "6f373928cfffa39f58f7ce0abf225752a71ab5e5" }
+pending = { since = "2026-10-25", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "5c8dada5434a355b5c10749d4a315197f0257fe64b49a2c9ee431b3c22731975", owner = "ALICE-Analytics", planned = "1aaa82a003f3bffe2ec86bb362be70382607600f", moved_from = { planned = "f95554304760e561e97c8338aa3e9da19e67db9a", target = "7afcaac8fa65121748ae65a52853f3b40eb98beeaf41dd85d096714c64d2e45a" }, first_move = true, variants = { "7afcaac8fa65121748ae65a52853f3b40eb98beeaf41dd85d096714c64d2e45a" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
@@ -326,7 +325,7 @@ repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-
 
 [[file]]
 path = "scripts/test_law_readme_block_check.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "1daa7fd4362bfb7bbf966031074201cfe6a324fb89bfd4a4d2768bf555233326", owner = "ALICE-Analytics", planned = "37c65d3f67281bacb687127acfa4f34e3b14ec0b", moved_from = { planned = "97061d1feb09b12064e9d001a42c8052b01f5651", target = "6b1694e80d3687c164d5552d8a0d679122a42726f087edd4054bb7a01a432d2f" }, first_move = true, variants = { "6b1694e80d3687c164d5552d8a0d679122a42726f087edd4054bb7a01a432d2f" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF", "ALICE-Zip"] } }
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "f0754d9ce8c437f086e6c5c74ba24900904003b7d98efac2ab19441b6b1d855f", owner = "ALICE-Analytics", planned = "700f3f6bd9d04304126adf9b285b7aca939b32e7", moved_from = { planned = "97061d1feb09b12064e9d001a42c8052b01f5651", target = "6b1694e80d3687c164d5552d8a0d679122a42726f087edd4054bb7a01a432d2f" }, first_move = true, variants = { "6b1694e80d3687c164d5552d8a0d679122a42726f087edd4054bb7a01a432d2f" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-ML", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
