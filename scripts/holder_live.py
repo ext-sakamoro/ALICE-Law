@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The rights-holder rule of licence_files_check.py over every public repository of the account, at its default branch.
 
-    holder_live.py [--owner NAME] [--baseline FILE] [--local NAME=DIR] [--write | --shrink [--repo NAME ...]]
+    holder_live.py [--owner NAME] [--baseline FILE] [--local NAME=DIR] [--growth-only] [--write | --shrink [--repo NAME ...]]
                    [--jobs N]
 
 Lists the owner's public repositories (GitHub REST, with GITHUB_TOKEN / GH_TOKEN when set, retrying on rate limits
@@ -9,7 +9,9 @@ and server errors), fetches each default branch without blobs, reads only the ri
 compares the occurrences with the baseline (conformance/holder-baseline.toml): an occurrence not listed is a finding,
 a listed one that is gone (or whose repository is no longer public) is a finding (stale), so the list only goes down.
 --shrink removes the entries that are gone (for every repository, or only those named with --repo) and never adds
-one; --write rewrites the baseline from what was read (used when the list is first made).
+one; --write rewrites the baseline from what was read (used when the list is first made). --growth-only (the
+branch and dispatched runs) fails only on a new occurrence and prints a stale entry as a note: a repository fixed
+upstream while a change is in flight does not fail that change; the daily run, without the flag, fails on it.
 --local NAME=DIR reads repository NAME (the one a CI run tests) from the git checkout DIR at its HEAD instead of its
 default branch, so a change is judged on its own tree: a change that removes a rights statement and its baseline row
 together passes before it lands. Every other repository is still read at its default branch; NAME must be one of
@@ -123,20 +125,27 @@ def read_local(d: Path) -> tuple[set[tuple[str, str]], int]:
     return scan_git(Path(d), "HEAD", fetch=False)
 
 
-def compare_all(read: dict[str, set[tuple[str, str]]],
-                baseline: dict[str, set[tuple[str, str]]]) -> list[str]:
-    """findings: a new occurrence, a listed one that is gone, an entry for a repository that was not listed"""
-    findings = []
+def compare_split(read: dict[str, set[tuple[str, str]]],
+                  baseline: dict[str, set[tuple[str, str]]]) -> tuple[list[str], list[str]]:
+    """(growth, stale): a new occurrence; a listed one that is gone, an entry for a repository that was not listed"""
+    growth, stale_out = [], []
     keys = {}
     for name, occ in sorted(read.items()):
         keys[lfc.repo_key(name)] = name
         new, stale = lfc.compare_baseline(name, occ, baseline)
-        findings += [f"{name}: {kind} {path} (not in the baseline)" for kind, path in sorted(new)]
-        findings += [f"{name}: stale baseline entry {kind} {path} (fixed: remove it)" for kind, path in sorted(stale)]
+        growth += [f"{name}: {kind} {path} (not in the baseline)" for kind, path in sorted(new)]
+        stale_out += [f"{name}: stale baseline entry {kind} {path} (fixed: remove it)" for kind, path in sorted(stale)]
     for key in sorted(set(baseline) - set(keys)):
-        findings += [f"repository {key[:12]}: stale baseline entry {kind} {path} (the repository is not public or "
-                     "has no content)" for kind, path in sorted(baseline[key])]
-    return findings
+        stale_out += [f"repository {key[:12]}: stale baseline entry {kind} {path} (the repository is not public or "
+                      "has no content)" for kind, path in sorted(baseline[key])]
+    return growth, stale_out
+
+
+def compare_all(read: dict[str, set[tuple[str, str]]],
+                baseline: dict[str, set[tuple[str, str]]]) -> list[str]:
+    """findings: a new occurrence, a listed one that is gone, an entry for a repository that was not listed"""
+    growth, stale = compare_split(read, baseline)
+    return growth + stale
 
 
 def shrink(baseline: dict[str, set[tuple[str, str]]], read: dict[str, set[tuple[str, str]]],
@@ -164,6 +173,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", action="append", default=[], help="with --shrink: only this repository (repeatable)")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--local", help="NAME=DIR: read repository NAME from the checkout DIR at HEAD")
+    ap.add_argument("--growth-only", action="store_true",
+                    help="only a new occurrence fails; a stale entry (fixed upstream) is a note, red on the daily run "
+                         "without this flag, where the baseline is shrunk")
     a = ap.parse_args(argv)
     local = None
     if a.local is not None:
@@ -224,7 +236,12 @@ def main(argv: list[str] | None = None) -> int:
         Path(a.baseline).write_text(lfc.dump_baseline(shrunk), encoding="utf-8")
         print(f"shrank {a.baseline}: {removed} entries removed")
         return 0
-    findings = compare_all(read, baseline)
+    findings, stale = compare_split(read, baseline)
+    if a.growth_only:
+        for n in stale:
+            print(f"note: {n} (the daily run fails on it; shrink the baseline there)")
+    else:
+        findings += stale
     for f in findings:
         print(f"found: {f}")
     print(f"holder live: {len(findings)} findings")

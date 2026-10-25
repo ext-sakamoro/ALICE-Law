@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -68,6 +70,46 @@ class CompareAll(unittest.TestCase):
     def test_equal_is_clean(self):
         b = {lfc.repo_key("a"): {("holder", "LICENSE")}}
         self.assertEqual(hl.compare_all({"a": {("holder", "LICENSE")}, "b": set()}, b), [])
+
+
+class GrowthOnly(unittest.TestCase):
+    """the branch path: growth fails, a fixed (stale) entry is a note that the daily run turns red"""
+
+    def test_stale_and_vanished_entries_are_notes_and_growth_still_fails(self):
+        b = {lfc.repo_key("a"): {("holder", "LICENSE")}, lfc.repo_key("gone"): {("authors", "Cargo.toml")}}
+        findings, notes = hl.compare_split({"a": {("authors", "Cargo.toml")}}, b)
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("not in the baseline", findings[0])
+        self.assertEqual(len(notes), 2, notes)
+        self.assertTrue(all("stale" in n for n in notes))
+
+    def run_main(self, results, baseline_rows, *flags):
+        repos = [{"name": n} for n in results]
+        with mock.patch.object(hl, "public_repos", return_value=repos), \
+                mock.patch.object(hl, "read_repo", side_effect=lambda base, r: results[r["name"]]):
+            b = Path(tempfile.mkdtemp()) / "b.toml"
+            b.write_text(lfc.dump_baseline(baseline_rows), encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = hl.main(["--baseline", str(b), *flags])
+            return code, out.getvalue()
+
+    def test_a_stale_entry_fails_the_daily_run_and_is_a_note_on_growth_only(self):
+        base = {lfc.repo_key("a"): {("holder", "LICENSE")}}
+        fixed = {"a": ("a", set(), 2, None)}
+        self.assertEqual(self.run_main(fixed, base)[0], 1)
+        code, out = self.run_main(fixed, base, "--growth-only")
+        self.assertEqual(code, 0, out)
+        self.assertIn("stale", out)
+
+    def test_growth_fails_on_growth_only(self):
+        grown = {"a": ("a", {("holder", "LICENSE"), ("holder", "NOTICE")}, 2, None)}
+        code, out = self.run_main(grown, {lfc.repo_key("a"): {("holder", "LICENSE")}}, "--growth-only")
+        self.assertEqual(code, 1, out)
+
+    def test_growth_only_still_needs_something_read(self):
+        code, out = self.run_main({"a": ("a", set(), 0, None)}, {}, "--growth-only")
+        self.assertEqual(code, 2, out)
 
 
 class Shrink(unittest.TestCase):

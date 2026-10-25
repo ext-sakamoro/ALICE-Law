@@ -62,10 +62,18 @@ jobs:
         run: python3 scripts/test_holder_live.py
 
       - name: The public repositories against the baseline
+        # the daily run fails on a stale entry too (fixed upstream: shrink the baseline); a dispatched run checks a
+        # change in flight and fails only on growth, so a repository fixed meanwhile does not fail it
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
         # this repository at the commit under test (its own tree), every other one at its default branch
-        run: python3 scripts/holder_live.py --local "${GITHUB_REPOSITORY#*/}=."
+        run: |
+          if [ "$EVENT" = schedule ]; then
+            python3 scripts/holder_live.py --local "${GITHUB_REPOSITORY#*/}=."
+          else
+            python3 scripts/holder_live.py --local "${GITHUB_REPOSITORY#*/}=." --growth-only
+          fi
 
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
