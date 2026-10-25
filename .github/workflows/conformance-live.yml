@@ -105,7 +105,7 @@ jobs:
   shared-files:
     name: Every shared file equals the table at each repository's main
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
@@ -119,8 +119,12 @@ jobs:
       - name: Each source commit is on main with the entry's bytes
         run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --fetch
 
+      # and every public repository the table does not name: a copy of a shared path there with the entry's bytes is
+      # a note (the next table lists it), with other bytes a finding (the listing only goes through the API)
       - name: Every listed repository's main carries each copy
-        run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies 943
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --carriers --expect-copies 943
 
       - name: The table is the generated one
         run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml

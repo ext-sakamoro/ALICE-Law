@@ -480,15 +480,17 @@ class Remote:
         self.base = base
         self.made: dict[str, Path] = {}
 
-    def __call__(self, repo: str) -> Path:
+    def __call__(self, repo: str, branch: str = "main") -> Path:
+        """the clone of repo at branch (main for a listed repository, an unlisted carrier's default branch), read as
+        origin/main"""
         if repo not in self.made:
             g = self.base / repo
             for args in (["init", "-q", str(g)], ["-C", str(g), "remote", "add", "origin", GITHUB + repo]):
                 subprocess.run(["git", *args], check=True, capture_output=True)
             r = subprocess.run(["git", "-C", str(g), "fetch", "-q", "--filter=blob:none", "origin",
-                                "+refs/heads/main:refs/remotes/origin/main"], capture_output=True, text=True)
+                                f"+refs/heads/{branch}:refs/remotes/origin/main"], capture_output=True, text=True)
             if r.returncode != 0:
-                raise Unreadable(f"{repo}: fetching main failed: {r.stderr.strip()}")
+                raise Unreadable(f"{repo}: fetching {branch} failed: {r.stderr.strip()}")
             self.made[repo] = g
         return self.made[repo]
 
@@ -633,6 +635,66 @@ def introduction_problems(e: dict, found: dict[str, list[str]], remote: Remote, 
         problems.append(f"{e['path']}: new file planned since {p['since']} and the owner {p['owner']} has not landed "
                         f"{p['planned'][:12]} in more than {FIRST_MOVE_MAX_DAYS} days")
     return problems + planned_bytes_problems(e, remote, proof, "new file")
+
+
+def account_repos(owner: str) -> tuple[dict[str, str], dict[str, int]]:
+    """the owner's public repositories to read, name -> default branch (GitHub REST, the listing only: the files are
+    read over git), and how many were left out: a fork (another project's files), an archived repository (frozen, it
+    cannot take a fix) and an empty one"""
+    import holder_live  # the listing, its retries and its token handling live there
+    names: dict[str, str] = {}
+    skipped = {"fork": 0, "archived": 0, "empty": 0}
+    for r in holder_live.public_repos(owner):
+        why = "fork" if r.get("fork") else "archived" if r.get("archived") else "empty" if r.get("size", 1) == 0 else None
+        if why:
+            skipped[why] += 1
+        else:
+            names[r["name"]] = r.get("default_branch") or "main"
+    return names, skipped
+
+
+def known_bytes(e: dict) -> set[str]:
+    """the SHA-256 values a copy of the entry may have: a uniform row's, or a pending row's variants and target"""
+    if "sha256" in e:
+        return {e["sha256"]}
+    p = e.get("pending", {})
+    return ({k for k in p.get("variants", {}) if k != "absent"} | ({p["target"]} if p.get("target") else set())
+            | moving_bytes(e))
+
+
+def carriers_check(entries: list[dict], remote: Remote, names: dict[str, str],
+                   strict: bool) -> tuple[list[str], list[str]]:
+    """(problems, notes) of the repositories the table does not name (name -> the branch to read): a copy of a shared
+    path with the entry's bytes is a note (strict: a finding, the table must list it), with other bytes a finding;
+    every one must be read. A row that lists no repository (every copy exempted: per-repository data under a shared
+    name) has no shared bytes, so a copy of it elsewhere is not compared"""
+    problems: list[str] = []
+    notes: list[str] = []
+    named = {r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})}
+    others = sorted(set(names) - named)
+    shared = [e for e in entries if e["repos"]]
+    carrying = 0
+    for r in others:
+        files = tree(remote(r, names[r]))
+        hits = [(e, q) for e in shared for q in sorted({e["path"], *e.get("paths", {}).values()}) if q in files]
+        if not hits:
+            continue
+        carrying += 1
+        remote.prefetch(r, "origin/main", [q for _, q in hits])
+        for e, q in hits:
+            data = show(remote(r), "origin/main", q)
+            got = sha256(data) if data is not None else ""
+            if got and got in known_bytes(e):
+                if strict:
+                    problems.append(f"{e['path']}: {r} carries it (the entry's bytes) and the table does not list it "
+                                    "(regenerate the table)")
+                else:
+                    notes.append(f"unlisted carrier: {e['path']} on {r} (the entry's bytes; the next table lists it)")
+            else:
+                problems.append(f"{e['path']}: {r} carries other bytes (sha256 {got or '(unreadable)'}) and the table "
+                                "does not list it")
+    notes.append(f"carriers: {len(others)} unlisted repository read, {carrying} carrying a shared path")
+    return problems, notes
 
 
 def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False,
@@ -805,6 +867,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--strict", action="store_true",
                     help="with --live: an unlisted holder is a finding even with the same bytes (the regeneration "
                          "and landing path of this repository, and the pre-publish gate)")
+    ap.add_argument("--carriers", action="store_true",
+                    help="with --live: also read every public repository of the account the table does not name; a "
+                         "copy of a shared path there with the entry's bytes is a note (--strict: a finding), with "
+                         "other bytes a finding; no repository listed or one that cannot be read is exit 2")
     ap.add_argument("--base-table", type=Path,
                     help="the table this one replaces (origin/main's): more pending rows than it is a finding")
     a = ap.parse_args(argv)
@@ -844,6 +910,17 @@ def main(argv: list[str]) -> int:
                              else datetime.datetime.now(datetime.timezone.utc).date())
                     problems, notes, c, locked = live(entries, remote, today, strict=a.strict, proofs=proofs,
                                                       base=base_entries)
+                    if a.carriers:
+                        try:
+                            names, skipped = account_repos(GITHUB.rstrip("/").rsplit("/", 1)[-1])
+                        except Exception as e:  # the listing's own error type (holder_live.Unreadable) and network
+                            raise Unreadable(f"listing the repositories failed: {e}") from e
+                        if not names:
+                            raise Unreadable("no repository was listed (compared nothing)")
+                        cp, cn = carriers_check(entries, remote, names, a.strict)
+                        problems += cp
+                        notes += cn + [f"carriers: not read: {skipped['fork']} fork(s), {skipped['archived']} archived, "
+                                       f"{skipped['empty']} empty"]
         else:
             problems = []
             c = counts(len(entries), len({r for e in entries for r in e["repos"]}),
@@ -947,5 +1024,17 @@ def main(argv: list[str]) -> int:
     return 1 if problems else 0
 
 
+def cli(argv: list[str]) -> int:
+    """main, with an unexpected crash as no result (2): it compared nothing it can stand behind, and exit 1 would read
+    as a finding"""
+    try:
+        return main(argv)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        print("shared_files_check: crashed (no result)", file=sys.stderr)
+        return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(cli(sys.argv[1:]))

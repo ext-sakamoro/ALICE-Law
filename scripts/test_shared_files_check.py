@@ -641,6 +641,100 @@ class Live(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("scripts/s.sh: ALICE-C is listed in the base table and this change removed it", out)
 
+    def carriers(self, names, branches=None):
+        saved = sfc.account_repos
+        listed = {n: (branches or {}).get(n, "main") for n in names}
+        sfc.account_repos = lambda owner: (listed, {"fork": 0, "archived": 0, "empty": 0})
+        self.addCleanup(setattr, sfc, "account_repos", saved)
+
+    def test_an_unlisted_carrier_with_the_row_s_bytes_is_a_note_and_strict_a_finding(self):
+        # a repository the table never names takes the shared file with its bytes: the landing path counts it,
+        # the daily (strict) run asks for the table to list it
+        self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
+        self.w.commit("ALICE-D", {"scripts/s.sh": SHARED})
+        self.carriers(["ALICE-A", "ALICE-B", "ALICE-C", "ALICE-D"])
+        code, out = self.live("--carriers")
+        self.assertEqual(code, 0, out)
+        self.assertIn("unlisted carrier: scripts/s.sh on ALICE-D", out)
+        code, out = self.live("--carriers", "--strict")
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: ALICE-D carries it (the entry's bytes) and the table does not list it", out)
+
+    def test_an_unlisted_carrier_with_other_bytes_is_a_finding(self):
+        self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
+        self.w.commit("ALICE-E", {"scripts/s.sh": SHARED + b"# drifted\n"})
+        self.carriers(["ALICE-A", "ALICE-B", "ALICE-C", "ALICE-E"])
+        code, out = self.live("--carriers")
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: ALICE-E carries other bytes", out)
+        # without --carriers the repository is not read (the gap this closes)
+        self.assertEqual(self.live()[0], 0)
+
+    def test_a_carrier_of_no_shared_path_compares_nothing_of_its_own(self):
+        self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
+        self.w.commit("ALICE-F", {"README": b"F\n"})
+        self.carriers(["ALICE-A", "ALICE-B", "ALICE-C", "ALICE-F"])
+        code, out = self.live("--carriers")
+        self.assertEqual(code, 0, out)
+        self.assertIn("carriers: 1 unlisted repository read, 0 carrying a shared path", out)
+
+    def test_an_unlisted_carrier_of_an_exempt_only_row_is_not_compared(self):
+        # a row that lists no repository (each copy exempted: per-repository data under a shared name) has no shared
+        # bytes: a copy elsewhere is that repository's own file, not drift (and reading it must not crash)
+        own = {"path": "scripts/own.toml", "repos": [], "exempt": {"ALICE-A": "each repository's own list"}}
+        self.t.write_text(self.w.table(self.w.uniform(exempt={"ALICE-C": "a different script of its own"}), own),
+                          encoding="utf-8")
+        self.w.commit("ALICE-H", {"scripts/own.toml": b"h = 1\n"})
+        self.carriers(["ALICE-A", "ALICE-B", "ALICE-C", "ALICE-H"])
+        code, out = self.live("--carriers")
+        self.assertEqual(code, 0, out)
+        self.assertIn("carriers: 1 unlisted repository read, 0 carrying a shared path", out)
+
+    def test_an_unlisted_carrier_is_read_at_its_default_branch(self):
+        # its main (if any) is not what the account publishes: the drifted copy is on its default branch
+        self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
+        self.w.commit("ALICE-G", {"README": b"G\n"})
+        self.w.ci("ALICE-G", "master", {"scripts/s.sh": SHARED + b"# drifted\n"}, prefix="")
+        self.carriers(["ALICE-A", "ALICE-B", "ALICE-C", "ALICE-G"], branches={"ALICE-G": "master"})
+        code, out = self.live("--carriers")
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: ALICE-G carries other bytes", out)
+
+    def test_the_listing_leaves_out_forks_archived_and_empty_repositories(self):
+        import holder_live
+        saved = holder_live.public_repos
+        holder_live.public_repos = lambda owner: [
+            {"name": "ALICE-A", "default_branch": "main", "size": 5},
+            {"name": "docs", "fork": True, "default_branch": "master", "size": 5},
+            {"name": "Old", "archived": True, "default_branch": "main", "size": 5},
+            {"name": "Blank", "size": 0},
+            {"name": "ALICE-M", "default_branch": "trunk", "size": 5}]
+        self.addCleanup(setattr, holder_live, "public_repos", saved)
+        names, skipped = sfc.account_repos("x")
+        self.assertEqual(names, {"ALICE-A": "main", "ALICE-M": "trunk"})
+        self.assertEqual(skipped, {"fork": 1, "archived": 1, "empty": 1})
+
+    def test_a_crash_is_no_result_not_a_finding(self):
+        saved = sfc.main
+        sfc.main = lambda argv: {}["pending"]
+        self.addCleanup(setattr, sfc, "main", saved)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(sfc.cli([]), 2)
+        self.assertIn("crashed (no result)", err.getvalue())
+
+    def test_no_repository_listed_is_no_result(self):
+        self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
+        self.carriers([])
+        code, out = self.live("--carriers")
+        self.assertEqual(code, 2, out)
+
+    def test_an_unreadable_carrier_is_no_result(self):
+        self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
+        self.carriers(["ALICE-A", "ALICE-B", "ALICE-C", "ALICE-Nowhere"])
+        code, out = self.live("--carriers")
+        self.assertEqual(code, 2, out)
+
     def expiring(self, until: str) -> None:
         self.t.write_text(self.w.table(exempt={"ALICE-C": {"reason": "its own script until it converges",
                                                            "until": until}}), encoding="utf-8")

@@ -57,6 +57,7 @@ class Strict(unittest.TestCase):
         self.assertIn("--state-drift-note", a["conformance_roster_check.py"])
         self.assertEqual(len(a["conformance_roster_check.py"]), 2, a)  # the flag and its base state file
         self.assertIn("--check", a["gen_law_status.py"])
+        self.assertNotIn("--carriers", a["shared_files_check.py"])  # the landing gate stays quick
 
     def test_the_daily_mode_is_strict(self):
         a = self.argv(self.run_with((0, ""), (0, ""), (0, ""), (0, ""), "--daily"))
@@ -65,6 +66,7 @@ class Strict(unittest.TestCase):
         self.assertIn("--strict", a["gen_shared_files.py"])
         self.assertIn("--strict", a["conformance_roster_check.py"])
         self.assertNotIn("--state-drift-note", a["conformance_roster_check.py"])
+        self.assertIn("--carriers", a["shared_files_check.py"])
 
     def test_an_unreadable_base_is_not_a_pass(self):
         # no base file and no git repository to read origin/main from: the landing mode cannot compare

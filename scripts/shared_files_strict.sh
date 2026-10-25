@@ -11,7 +11,9 @@
 # else, and nothing compared stay findings. A pending row whose copies moved is reported in both modes (its copies
 # move by definition). --daily (the scheduled run) is strict: the unlisted holder and the state behind the mains are
 # findings too, and the owner regenerates the table and the state. The base must not be the tree under check (with
-# the committed files as their own base nothing reads as changed). What follows describes the --daily mode.
+# the committed files as their own base nothing reads as changed). --daily also reads every public
+# repository the table does not name (shared_files_check.py --carriers), where a copy of a shared path is a
+# finding until the table lists it. What follows describes the --daily mode.
 # Every listed repository's main against the table, with an unlisted holder of the same bytes a finding, and the
 # table compared with the one regenerated in memory, also strict. It reads the mains from GitHub (blob-less, no
 # build) and takes about two minutes, so it runs right before a push to main (on the tree to be pushed) and on
@@ -36,7 +38,7 @@ case "${1:-}" in
   *) echo "shared-files strict: unknown argument $1 (scripts/shared_files_strict.sh [--daily]): not a pass" >&2; exit 2 ;;
 esac
 if [ "$mode" = daily ]; then
-  table_args="--strict"; gen_args="--strict"; state_args="--strict"
+  table_args="--strict --carriers"; gen_args="--strict"; state_args="--strict"
 else
   # the landing mode compares with the base (LAW_BASE_REF, default origin/main; LAW_BASE_TABLE / LAW_BASE_STATE
   # name the files directly): what this change itself edited must equal what the mains give, and only what it
