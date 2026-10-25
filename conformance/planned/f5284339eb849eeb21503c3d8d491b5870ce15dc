@@ -93,9 +93,10 @@ runs:
             mkdir -p "$keydir"
             chmod 700 "$keydir"
             (umask 077; printf '%s\n' "${!var}" > "$keydir/$repo")
-            # GitHub's published ed25519 host key (gh api meta)
+            # GitHub's published ed25519 host key (gh api meta), the only one accepted: the runner's
+            # system known_hosts is not read (GlobalKnownHostsFile=/dev/null)
             echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$keydir/known_hosts"
-            ssh_cmd="ssh -F /dev/null -i $keydir/$repo -o IdentitiesOnly=yes -o UserKnownHostsFile=$keydir/known_hosts -o StrictHostKeyChecking=yes"
+            ssh_cmd="ssh -F /dev/null -i $keydir/$repo -o IdentitiesOnly=yes -o UserKnownHostsFile=$keydir/known_hosts -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=yes"
             if [ ! -d "$dest/.git" ]; then
               GIT_SSH_COMMAND="$ssh_cmd" git clone -q --filter=blob:none "$private_base/$repo.git" "$dest"
             fi
