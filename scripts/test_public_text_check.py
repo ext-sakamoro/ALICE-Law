@@ -519,6 +519,49 @@ class Shapes(unittest.TestCase):
             self.assertIn("internal note", ptc.kinds(line, "a.rs"), line)
         self.assertIn("internal tracker", ptc.kinds("`memory/text-to-print.md`", "a.rs"))
 
+    # names that the published text uses for what they are, never held as a private name, each for its reason
+    NOT_NOTE_NAMES = {
+        "text-to-print": "the name of a public product repository, written in its own and other READMEs",
+        "alice-rtos-bsp": "the name of a public repository, listed in the ecosystem index",
+        "alice-sdf-mobile": "a package name of a public crate (its Cargo.toml and samples)",
+        "alice-raw": "a crate name a public source file depends on",
+        "pattern_index": "a variable name in public code",
+    }
+
+    def with_note(self, name: str):
+        h = hashlib.sha256(name.encode("utf-8")).hexdigest()
+        saved = ptc.NOTE_BASENAME_HASHES
+        ptc.NOTE_BASENAME_HASHES = saved | {h}
+        self.addCleanup(setattr, ptc, "NOTE_BASENAME_HASHES", saved)
+
+    def test_hashed_note_file_names_are_found_in_prose_and_in_comments(self):
+        self.with_note("sample-private-note")
+        for line, path in (("see sample-private-note.md", "README.md"), ("the Sample-Private-Note page", "docs/a.md"),
+                           ("// from sample-private-note", "src/a.rs"), ("# sample-private-note", "a.py"),
+                           ('let s = "sample-private-note";', "src/a.rs")):
+            self.assertIn("internal note", ptc.kinds(line, path), line)
+        for line, path in (("see x-sample-private-note.md", "README.md"), ("sample-private-note-2", "docs/a.md"),
+                           ("let sample_private = 1;", "src/a.rs")):
+            self.assertNotIn("internal note", ptc.kinds(line, path), line)
+        self.with_note("sample_private_note")
+        for line, path in (("let sample_private_note = 1;", "src/a.rs"), ("x = sample_private_note + 1", "a.py")):
+            # a code identifier is code, not a note (only comments and strings are read in a code file)
+            self.assertNotIn("internal note", ptc.kinds(line, path), line)
+
+    def test_the_hashed_note_names_are_held_and_the_published_names_are_not(self):
+        self.assertGreaterEqual(len(ptc.NOTE_BASENAME_HASHES), 100)
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in ptc.NOTE_BASENAME_HASHES))
+        for name, why in self.NOT_NOTE_NAMES.items():
+            self.assertGreaterEqual(len(why), 12, name)
+            self.assertNotIn(hashlib.sha256(name.encode("utf-8")).hexdigest(), ptc.NOTE_BASENAME_HASHES, name)
+            self.assertNotIn("internal note", ptc.kinds(f"see {name}", "README.md"), name)
+
+    def test_an_empty_note_name_set_compares_nothing(self):
+        saved = ptc.NOTE_BASENAME_HASHES
+        ptc.NOTE_BASENAME_HASHES = frozenset()
+        self.addCleanup(setattr, ptc, "NOTE_BASENAME_HASHES", saved)
+        self.assertIn("note-name", ptc.private_sets_problem() or "")
+
     def test_note_prefixed_identifiers_in_code_pass(self):
         # a field or variable whose name starts like a note name is code, not a note (real lines)
         for line in ("        success_count: usize,", "                success_count: 4,", "                success_count,",
