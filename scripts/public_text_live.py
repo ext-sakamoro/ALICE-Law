@@ -26,6 +26,7 @@ import argparse
 import concurrent.futures
 import hashlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -85,6 +86,9 @@ def read_repo(base: Path, repo: dict) -> tuple[str, list[str] | None, int, str |
         return name, found, n, None
     except (Unreadable, hl.Unreadable, subprocess.CalledProcessError) as e:
         return name, None, 0, str(e)
+    finally:
+        # the findings are read: the clone goes now, so the run holds one clone per job, not one per repository
+        shutil.rmtree(g, ignore_errors=True)
 
 
 def counts(read: dict[str, list[str]]) -> dict[str, int]:

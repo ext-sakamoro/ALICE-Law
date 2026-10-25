@@ -74,6 +74,15 @@ class Live(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("0 findings", out)
 
+    def test_each_clone_is_removed_once_it_is_read(self):
+        # the run keeps one clone per job, not one per repository (the account has hundreds)
+        base = Path(self.tmp.name) / "clones"
+        base.mkdir()
+        for repo in self.w.repos + [{"name": "ALICE-Nowhere", "full_name": "ext/ALICE-Nowhere",
+                                      "default_branch": "main", "size": 1}]:
+            pl.read_repo(base, repo)
+        self.assertEqual(list(base.iterdir()), [])
+
     def test_the_baseline_names_no_repository_and_no_path(self):
         self.run_live("--write")
         text = self.baseline.read_text(encoding="utf-8")
