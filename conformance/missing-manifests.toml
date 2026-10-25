@@ -7,7 +7,3 @@
 [missing."alice-identity"]
 fixed-in = "ALICE-Identity"
 why = "the manifest has not been written yet"
-
-[missing."alice-channel"]
-fixed-in = "ALICE-Channel"
-why = "the manifest has not been written yet"
