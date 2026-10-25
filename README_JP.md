@@ -184,13 +184,13 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 | ALICE-Analytics | alice-analytics | 11 | 1 | 0 | 2 |
 | ALICE-Crypto | alice-crypto | 10 | 1 | 0 | 3 |
 | ALICE-DB | alice-db | 13 | 1 | 0 | 0 |
-| ALICE-DetMath | alice-det-math | 10 | 2 | 0 | 2 |
+| ALICE-DetMath | alice-det-math | 11 | 1 | 0 | 2 |
 | ALICE-Edge | alice-edge | 13 | 1 | 0 | 0 |
 | ALICE-Kinematics | alice-kinematics | 12 | 1 | 1 | 0 |
 | ALICE-LLM | alice-llm | 12 | 1 | 1 | 0 |
 | ALICE-LOL | alice-lol, alice-lol-macro | 12 | 0 | 2 | 0 |
 | ALICE-ML | alice-ml | 13 | 1 | 0 | 0 |
-| ALICE-Physics | alice-physics | 10 | 3 | 1 | 0 |
+| ALICE-Physics | alice-physics | 12 | 1 | 1 | 0 |
 | ALICE-SDF | alice-sdf | 9 | 3 | 2 | 0 |
 | ALICE-Sync | alice-sync | 12 | 1 | 1 | 0 |
 | ALICE-Zip | alice-zip, alice-zip-cli | 13 | 1 | 0 | 0 |

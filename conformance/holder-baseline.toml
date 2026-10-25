@@ -89,11 +89,6 @@ path = "Cargo.toml"
 [[entry]]
 repo = "373fddf8f059d21f3a5e539e04abf943b7ff569aba590c486b4bac19e3e47430"
 kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "373fddf8f059d21f3a5e539e04abf943b7ff569aba590c486b4bac19e3e47430"
-kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -152,11 +147,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "4c32980deda42f0977074d4334853e28b4805cd9e82321204d50cc893ebf0f6a"
-kind = "holder"
-path = "LICENSE-COMMERCIAL"
-
-[[entry]]
 repo = "4de52b5ee0c53c617c91db974d74c1e70f8c4a4492c38e09b48eb0c8e8252c0c"
 kind = "authors"
 path = "Cargo.toml"
@@ -185,11 +175,6 @@ path = "TRADEMARK_NOTICE"
 repo = "569e59fdd3172d0b37f76bf346066ee89dd2a87fe2d60aa44b59bda36d1abc6e"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "569e59fdd3172d0b37f76bf346066ee89dd2a87fe2d60aa44b59bda36d1abc6e"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "569e59fdd3172d0b37f76bf346066ee89dd2a87fe2d60aa44b59bda36d1abc6e"
@@ -255,11 +240,6 @@ path = "Cargo.toml"
 repo = "7e889a2755e1e0adeb76844653110ef6339e9a8beb4cbd9137f6da064959d832"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "7ee23f6d9c6e3bd0f4d8f27baf0a6236ebae0e93912ef7fd50c2dbe7602b9d60"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
@@ -395,31 +375,6 @@ path = "TRADEMARK_NOTICE"
 repo = "ac703d22ffea43351d568be4cfcade90b2bf963f19a757cea11053fc6013fbc3"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
-kind = "authors"
-path = "crates/alice-physics/Cargo.toml"
-
-[[entry]]
-repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
-kind = "holder"
-path = "crates/alice-physics/LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "b4836d6f58132d63dea52a28ddfcbf71f604fccc51689c0cd35829176ff4e97f"

@@ -25,8 +25,8 @@ crates = ["alice-db"]
 
 [manifest."ALICE-DetMath"]
 crates = ["alice-det-math"]
-"pass" = 10
-"fail-known" = 2
+"pass" = 11
+"fail-known" = 1
 "unverified" = 0
 "n/a" = 2
 
@@ -67,8 +67,8 @@ crates = ["alice-ml"]
 
 [manifest."ALICE-Physics"]
 crates = ["alice-physics"]
-"pass" = 10
-"fail-known" = 3
+"pass" = 12
+"fail-known" = 1
 "unverified" = 1
 "n/a" = 0
 
