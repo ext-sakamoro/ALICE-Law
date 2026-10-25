@@ -144,6 +144,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/shared-files.toml`: `scripts/alice_dup_check.py` の行 (owner ALICE-LOL、planned b197c1e4) `cargo metadata --all-features` の解決結果で同じ `alice-*` の crate が 2 つ以上 (版か source が違う) link されていれば失敗し、`alice-*` を 1 つも比べなければ失敗する ALICE-LOL が持ち、ALICE-Eco-System と ALICE-Text はまだ持たない
 - `conformance/shared-files.toml`: `scripts/changed_paths.py` の行に ALICE-Markup を足す (未設置) ALICE-Text の `scripts/stub_guard.sh` を行に足す
 - `conformance/shared-files.toml`: `.github/actions/alice-siblings/action.yml` の行から ALICE-API と ALICE-Kinematics を外して exempt にする (兄弟の checkout を使わなくなり、写しを消す) 表の写しの数の lock は 903 から 901
+- `scripts/public_text_check.py`: ALICE-SDF の許可を今の text に合わせる 製品の LLM 連携が呼ぶ provider の名前を server の設定・入口・依存・LLM の service と text-to-3D の仕様書 2 つで許し (6 行)、設定の comment から名前を外した 2 行の数を 7 から 6 に、VRChat の package の 3 文書から外した例の名前の許可を外す
 
 ### Changed
 - **Behavior change:** `scripts/main_mode.py patch` は `[patch.crates-io]` に加えて、解決した graph が core crate を git の commit で名指す source ごとに `[patch."<git URL>"]` を書き、新しい source が出なくなるまで繰り返す (8 回で収束しなければ config を残さず exit 2)、graph が名指さない source には entry を書かない `verify` は使われない entry を problem にし、使われた entry が 0 なら exit 2 これまでは git の commit で名指された core crate が checkout の隣に link された (同じ crate が 2 つ)
