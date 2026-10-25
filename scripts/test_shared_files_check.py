@@ -852,6 +852,85 @@ class Planned(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("it has converged", out)
 
+    def converged_since(self, base_row: dict) -> Path:
+        """the table plans the row, the base has base_row, and ALICE-C (the last copy) has since taken the target"""
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.w.table(base_row), encoding="utf-8")
+        if (self.w.work / "ALICE-C" / "scripts/s.sh").read_bytes() != SHARED:
+            self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
+        return base
+
+    def gen_check(self, *argv: str):
+        return run(gen.main, ["--table", str(self.t), "--check", *argv])
+
+    def test_a_row_the_base_planned_that_converged_on_the_mains_is_a_note_in_the_landing_mode(self):
+        # a rollout that finished elsewhere while this change was checked: the change did not touch the row
+        base = self.converged_since(self.w.planned())
+        code, out = self.live("--base-table", str(base))
+        self.assertEqual(code, 0, out)
+        self.assertIn("scripts/s.sh: converged since the base", out)
+        code, out = self.gen_check("--base-table", str(base))
+        self.assertEqual(code, 0, out)
+        self.assertIn("converged since the base: scripts/s.sh", out)
+
+    def test_a_converged_row_that_also_gained_a_holder_at_the_target_is_a_note(self):
+        # ALICE-D, a table repository by an exemption on another row, took the target too: every copy is at it
+        own = {"path": "scripts/own.toml", "repos": [], "paths": {}, "exempt": {"ALICE-D": "its own list"}}
+        self.w.commit("ALICE-D", {"scripts/s.sh": SHARED})
+        self.converged_since(self.w.planned())
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.w.table(self.w.planned(), own), encoding="utf-8")
+        self.t.write_text(self.w.table(self.w.planned(), own), encoding="utf-8")
+        code, out = self.gen_check("--base-table", str(base))
+        self.assertEqual(code, 0, out)
+        self.assertIn("converged since the base: scripts/s.sh (every copy has the target, and ALICE-D took it", out)
+        # a holder at other bytes is not a convergence
+        self.w.commit("ALICE-D", {"scripts/s.sh": OTHER})
+        self.assertEqual(self.gen_check("--base-table", str(base))[0], 1)
+
+    def test_uniform_at_other_bytes_a_dropped_copy_or_another_base_target_is_no_convergence(self):
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        # none of these may pass as converged (a refusal, 2, is as good as a finding)
+        # every main went back to the bytes the row moves from: uniform, but not at the target (a regression)
+        self.w.commit("ALICE-A", {"scripts/s.sh": OTHER})
+        self.w.commit("ALICE-B", {"scripts/s.sh": OTHER})
+        self.assertNotEqual(self.gen_check("--base-table", str(base))[0], 0)
+        # a copy dropped from a main: the others at the target, but the row lost a holder
+        self.w.commit("ALICE-A", {"scripts/s.sh": SHARED})
+        self.w.commit("ALICE-B", {"scripts/s.sh": SHARED})
+        self.w.commit("ALICE-C", {"scripts/s.sh": None})
+        self.assertNotEqual(self.gen_check("--base-table", str(base))[0], 0)
+        # the base planned the same id at another target
+        self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
+        other = self.w.planned()
+        other["pending"] = {**other["pending"], "target": h(OTHER),
+                            "variants": {h(OTHER): ["ALICE-A"], h(SHARED): ["ALICE-B", "ALICE-C"]}}
+        base.write_text(self.w.table(other), encoding="utf-8")
+        self.assertNotEqual(self.gen_check("--base-table", str(base))[0], 0)
+
+    def test_the_daily_strict_run_and_a_run_without_a_base_keep_converged_a_finding(self):
+        base = self.converged_since(self.w.planned())
+        self.assertEqual(self.live("--base-table", str(base), "--strict")[0], 1)
+        self.assertEqual(self.live()[0], 1)
+        self.assertEqual(self.gen_check("--base-table", str(base), "--strict")[0], 1)
+        self.assertEqual(self.gen_check()[0], 1)
+
+    def test_converged_is_a_finding_when_the_base_planned_other_bytes_or_other_repositories(self):
+        # the change re-planned the row (another planned id or target than the base), or listed other repositories:
+        # what converged is not what the base was rolling out
+        for row in (self.w.planned(pending={**self.w.planned()["pending"], "planned": sfc.git_blob(OTHER)}),
+                    self.w.pending(),
+                    self.w.planned(repos=["ALICE-A", "ALICE-B"],
+                                   pending={**self.w.planned()["pending"], "variants": {h(SHARED): ["ALICE-A", "ALICE-B"]}})):
+            base = self.converged_since(row)
+            code, out = self.live("--base-table", str(base))
+            self.assertIn("it has converged", out, row)
+            code, out = self.gen_check("--base-table", str(base))
+            self.assertEqual(code, 1, (row, out))
+
     def test_a_planned_row_past_its_own_time_is_red(self):
         # 20 days: inside the unplanned 21, outside the planned 14
         self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")

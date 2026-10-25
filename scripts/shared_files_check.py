@@ -663,6 +663,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
     unlisted: list[tuple[str, str, str, str]] = []
     repos = sorted({r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})})
     base_listed = {e["path"]: set(e["repos"]) for e in (base or [])}
+    base_planned = {e["path"]: e["pending"] for e in (base or []) if is_planned(e)}
     trees = {r: tree(remote(r)) for r in repos}
     if not trees:
         raise Unreadable("no repository read (compared nothing)")
@@ -725,8 +726,16 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                         notes.append(f"{e['path']}: no main holds the bytes the planned row moved from any more "
                                      "(regenerate the table: moved_from goes)")
                 if set(found) == {p["target"]}:
-                    problems.append(f"{e['path']}: planned row whose every copy has the target: it has converged "
-                                    "(regenerate the table)")
+                    b = base_planned.get(e["path"])
+                    if (not strict and b is not None and b["planned"] == p["planned"] and b["target"] == p["target"]
+                            and set(e["repos"]) == base_listed.get(e["path"], set())):
+                        # the landing mode: the base planned it too and the change left it, so the rollout finished
+                        # on the mains while the change was checked (the daily run regenerates the table)
+                        notes.append(f"{e['path']}: converged since the base (every copy has the target "
+                                     f"{p['target'][:12]}; the next table makes it uniform)")
+                    else:
+                        problems.append(f"{e['path']}: planned row whose every copy has the target: it has converged "
+                                        "(regenerate the table)")
                 if p.get("first_move"):
                     problems += first_move_problems(e, found, remote, age, (proofs or {}).get(p["planned"]))
                 if age > PLANNED_MAX_DAYS:

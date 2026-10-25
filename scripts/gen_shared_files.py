@@ -395,6 +395,30 @@ def unlisted_same_bytes(old: list[dict], new: list[dict],
     return out, held
 
 
+def converged_since_base(old: list[dict], new: list[dict],
+                         base: list[dict]) -> tuple[list[dict], list[tuple[str, list[str]]]]:
+    """new entries with each row that only converged since the base put back to the table's row, and those (path,
+    added holders): the table and the base both have it planned at the same planned id and target, and the regenerated
+    row is uniform over the same repositories, or more of them (a holder that took the target bytes while a change was
+    checked); any other difference stays. A uniform row at other bytes than the target, or one that lost a holder,
+    never reaches here: the regeneration refuses a planned row its owner moved off, and a dropped copy leaves the row
+    pending"""
+    before = {e["path"]: e for e in old}
+    planned = {e["path"]: e for e in base if sfc.is_planned(e)}
+    out, done = [], []
+    for e in new:
+        o, b = before.get(e["path"]), planned.get(e["path"])
+        if (o is not None and b is not None and sfc.is_planned(o) and "sha256" in e
+                and o["pending"]["planned"] == b["pending"]["planned"] and o["pending"]["target"] == b["pending"]["target"]
+                and o["repos"] == b["repos"]
+                and e.get("paths", {}) == o.get("paths", {}) and e.get("exempt", {}) == o.get("exempt", {})):
+            out.append(o)
+            done.append((e["path"], [r for r in e["repos"] if r not in o["repos"]]))
+        else:
+            out.append(e)
+    return out, done
+
+
 def without_variants(text: str) -> tuple[str, dict[str, dict]]:
     entries = sfc.load(text)
     stripped = copy.deepcopy(entries)
@@ -481,6 +505,12 @@ def main(argv: list[str]) -> int:
             for path, repos in held:
                 print(f"gen_shared_files: unlisted holder, same bytes: {path} on {', '.join(repos)}"
                       " (regenerate the table before the next publish)")
+            if base is not None:
+                entries, done = converged_since_base(sfc.load(current), entries, base)
+                for path, added in done:
+                    print(f"gen_shared_files: converged since the base: {path} (every copy has the target"
+                          + (f", and {', '.join(added)} took it as an unlisted holder" if added else "")
+                          + "; the next table makes it uniform)")
             text = render(entries)
         new_plain, new_var = without_variants(text)
         for path in sorted(set(cur_var) & set(new_var)):
