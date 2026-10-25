@@ -57,6 +57,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -620,20 +621,38 @@ def pin_rev(tree: Tree, pin: str) -> tuple[str | None, str | None]:
     return revs[0], None
 
 
+def remove_tree(path: str) -> None:
+    """remove a directory git wrote: on Windows git's object files are read-only, which rmtree cannot delete until
+    the read-only bit is cleared (ignore_errors alone would leave the whole fetch behind silently)"""
+    def writable_then_retry(func, p, _exc):
+        # the entry (a read-only file on Windows) and the directory holding it (a read-only directory on POSIX)
+        os.chmod(os.path.dirname(p) or ".", stat.S_IRWXU)
+        if os.path.lexists(p) and not os.path.islink(p):
+            os.chmod(p, stat.S_IRWXU if os.path.isdir(p) else stat.S_IWRITE | stat.S_IREAD)
+        func(p)
+    try:
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(path, onexc=writable_then_retry)
+        else:
+            shutil.rmtree(path, onerror=writable_then_retry)
+    except OSError:
+        pass  # best effort at exit: a file another process still holds open is left
+
+
 def git_law(rev: str, url: str = LAW_URL) -> Tree | None:
     """ALICE-Law at `rev`, fetched (depth 1) into a temporary repository; git's output is read as UTF-8 (the
     locale's code page on Windows cannot decode the files' text)"""
     tmp = tempfile.mkdtemp(prefix="g11-law-")
     # the returned Tree reads from this repository until the process ends: removed then (and at once on a failure),
     # so every crate's run does not leave a fetch of ALICE-Law behind
-    atexit.register(shutil.rmtree, tmp, ignore_errors=True)
+    atexit.register(remove_tree, tmp)
     run = lambda *a: subprocess.run(["git", "-C", tmp, *a], capture_output=True, text=True, encoding="utf-8")
     if run("init", "-q").returncode or run("fetch", "-q", "--depth", "1", url, rev).returncode:
-        shutil.rmtree(tmp, ignore_errors=True)
+        remove_tree(tmp)
         return None
     ls = run("ls-tree", "-r", "--name-only", "FETCH_HEAD")
     if ls.returncode:
-        shutil.rmtree(tmp, ignore_errors=True)
+        remove_tree(tmp)
         return None
 
     def read(p: str) -> str | None:

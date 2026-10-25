@@ -445,6 +445,17 @@ class Fetch(unittest.TestCase):
         self.assertIn("scripts/t.py", tree.paths)
         self.assertEqual(tree.read("scripts/t.py"), text)
 
+    def test_a_tree_with_read_only_files_is_removed(self):
+        # git writes its objects read-only; on Windows rmtree cannot delete those without clearing the bit first
+        d = Path(tempfile.mkdtemp(prefix="g11-law-"))
+        (d / "objects").mkdir()
+        f = d / "objects" / "pack"
+        f.write_bytes(b"x")
+        os.chmod(f, 0o444)
+        os.chmod(d / "objects", 0o555)  # a read-only directory makes the unlink fail on POSIX too
+        g.remove_tree(str(d))
+        self.assertFalse(d.exists())
+
     def test_the_fetched_law_is_removed_when_the_process_ends(self):
         # every crate's g11_table.sh fetches ALICE-Law through git_law: the fetch must not outlive the run
         import subprocess
