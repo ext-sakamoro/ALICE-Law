@@ -90,8 +90,7 @@ repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Ph
 
 [[file]]
 path = "scripts/check_py_license.py"
-sha256 = "520fc5f54a3a99e2fb06ebcbc0fd93d5cbf9760bbbc9a96b55a9443ea35ee97c"
-source = { repo = "ALICE-DB", rev = "6e7595bcbb014b7db415c881c8bcc32236930a25" }
+pending = { since = "2026-10-25", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "bc1999d65842c4f60128cd7029d90570ac0898eac546e2208cea5672aee92c34", owner = "ALICE-DB", planned = "89360c6c2417abf3d75961e159f6530fe7128a41", moved_from = { planned = "3cc4c40ab90ab5d19fadbecf5802624776a0cba3", target = "520fc5f54a3a99e2fb06ebcbc0fd93d5cbf9760bbbc9a96b55a9443ea35ee97c" }, first_move = true, variants = { "520fc5f54a3a99e2fb06ebcbc0fd93d5cbf9760bbbc9a96b55a9443ea35ee97c" = ["ALICE-DB", "ALICE-Edge"] } }
 repos = ["ALICE-DB", "ALICE-Edge"]
 
 [[file]]
