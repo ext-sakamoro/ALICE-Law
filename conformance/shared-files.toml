@@ -13,7 +13,7 @@ exempt = { "ALICE-API" = "takes no sibling checkout any more; its unused copy is
 path = ".github/workflows/changed-paths-oracle.yml"
 sha256 = "32414b46e22b1cc9121997b7f32a44e9c88307d5d929570733fe89b5510a99ef"
 source = { repo = "ALICE-Channel", rev = "296cc891e0c55357087a30c71dc2cc9f02b3d7f9" }
-repos = ["ALICE-Channel", "ALICE-Crypto"]
+repos = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Identity"]
 
 [[file]]
 path = ".github/workflows/eol.yml"
@@ -88,7 +88,7 @@ repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE
 path = "scripts/changed_paths_yaml_oracle.py"
 sha256 = "b22790753041fcd83497098ea78671ae3353b170bf518be8a4b431e9d502d1cd"
 source = { repo = "ALICE-Channel", rev = "296cc891e0c55357087a30c71dc2cc9f02b3d7f9" }
-repos = ["ALICE-Channel", "ALICE-Crypto"]
+repos = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Identity"]
 
 [[file]]
 path = "scripts/check_eol.py"
@@ -156,7 +156,7 @@ repos = ["ALICE-DetMath", "ALICE-LOL", "ALICE-SDF", "ALICE-Zip"]
 path = "scripts/g11_table.sh"
 sha256 = "563d859efd49a3766cc55e4c862908ed9ecfe243b64fb1d5e32d593526bf0b28"
 source = { repo = "ALICE-Analytics", rev = "321d90cc9e72618dfb477d199d6660f98c2783c0" }
-repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/gen_clippy_canary_calls.py"
@@ -352,6 +352,11 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = "scripts/test_id_move_check.py"
 pending = { since = "2026-10-17", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "760bbaf36b7101cbf1e25f11298dd5fd589cad647b22d991a758dfc8c0a4e3e8", owner = "ALICE-Physics", planned = "07fd716f13a6d5009033076ddcafb4d91b3e2da2", moved_from = { planned = "f3b4003b3c840ff7d393ef8cfc7e2d1932d919c0", target = "d71afd14271847de717c35cbb1de9fa38533a7d5e0604fa308cf778bfb48b6f2" }, variants = { "21cf1838aa4975d0533b0ac13acbcb96f2e1ebb73eb834ab76e5e6868df74699" = ["ALICE-Crypto", "ALICE-DetMath", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Zip"], "absent" = ["ALICE-SDF"], "cc99632dcf98bd8b2919ff65b3d4748f2d627a583b8a789f88d529d2bf9993ad" = ["ALICE-Edge"], "d71afd14271847de717c35cbb1de9fa38533a7d5e0604fa308cf778bfb48b6f2" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-DB", "ALICE-Identity", "ALICE-LOL", "ALICE-Physics", "ALICE-Sign", "ALICE-Sync"] } }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+
+[[file]]
+path = "scripts/test_law_boundary_scan.py"
+repos = []
+exempt = { "ALICE-Channel" = "this repository's own tests of its Law boundary scanner (scripts/law_boundary_scan.py differs per repository)", "ALICE-Crypto" = "this repository's own tests of its Law boundary scanner (scripts/law_boundary_scan.py differs per repository)", "ALICE-Identity" = "this repository's own tests of its Law boundary scanner (scripts/law_boundary_scan.py differs per repository)" }
 
 [[file]]
 path = "scripts/test_law_readme_block_check.py"
@@ -785,7 +790,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = "tools/no-outer-fneg-of-fma/Cargo.lock"
 sha256 = "8063ea31facf7433aebd74e0f09537f2aaa2f61be82fb6955f07124d36c87b6f"
 source = { repo = "ALICE-Crypto", rev = "50ea19c4fd9bb3ab9dd4a0d12e452f212c92eaa7" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "tools/no-outer-fneg-of-fma/Cargo.toml"
