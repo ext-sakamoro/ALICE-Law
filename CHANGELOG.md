@@ -227,6 +227,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Identity の最初の manifest (ca228655) を着地の前に記録し、`conformance/missing-manifests.toml` から行を外す 前の表の作り直しで、ALICE-Sign も `scripts/g11_table.sh` / `scripts/shared_files.sh` / `scripts/test_shared_files.py` の行に入った (Sign の main がその bytes を持つ)
 - `conformance/shared-files.toml`: 表を今の main から作り直す ALICE-Identity を写しを持つ行に足す `scripts/test_law_boundary_scan.py` は repository ごとの試験 (scanner の `scripts/law_boundary_scan.py` は repository ごとに違う) なので、持つ 3 repository をすべて例外にした行にする 表の写しの数の lock は 1230
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Channel の G11 の pass (82475ef0) を着地の前に記録し、着地した ALICE-Identity の pending を外す
+- `conformance/shared-files.toml`: 表を今の main から作り直す `scripts/id_move_check.py` と試験の計画の owner は、target の bytes を最初に持った ALICE-Analytics になる (ALICE-Physics の main はまだ前の bytes) target は変えない
 
 ### Fixed
 - `scripts/g11_table_check.py`: ALICE-Law を取ってきた一時 repository (`g11-law-*`) を消していなかった crate の `scripts/g11_table.sh` が走るたびに 1 つ残っていた 失敗した時はすぐ、それ以外は process の終わりに消す 試験の一時 directory も消す (`test_holder_live.py` / `test_licence_files_check.py` / `test_gen_law_status.py` / `test_conformance_roster_check.py`)、すべての試験で残りは 0
