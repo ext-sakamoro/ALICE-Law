@@ -52,7 +52,10 @@ different file at the same path), and either
     today is a finding (live).
 
 A repository that legitimately has a different file at a shared path is exempted on that
-path's entry with its reason; the discovery scope itself has no exceptions. A path that looks
+path's entry with its reason, or with `{ reason, until = "YYYY-MM-DD" }` for one that is
+converging: after `until` its copy must have the row's bytes (a uniform row's sha256, a pending
+row's target), live and in --repo, so the exemption cannot outlive its reason. The discovery
+scope itself has no exceptions. A path that looks
 shared but is per-repository data (each repository's own content) is an entry with `repos =
 []` and every repository that has it exempted: it pins nothing and compares nothing, and a
 repository that gains the path without an exemption is a finding.
@@ -218,6 +221,36 @@ def reason(s: object) -> bool:
     return isinstance(s, str) and len(s.strip()) >= MIN_REASON
 
 
+def exemption(w: object) -> bool:
+    """A reason, or `{ reason = "...", until = "YYYY-MM-DD" }`: after `until` the copy must be the row's bytes."""
+    if reason(w):
+        return True
+    if not isinstance(w, dict) or set(w) != {"reason", "until"} or not reason(w["reason"]):
+        return False
+    # DATE first: fromisoformat also reads other forms (an ISO week date, digits without dashes) on newer
+    # interpreters, so the same table would read differently per Python
+    if not isinstance(w["until"], str) or not DATE.match(w["until"]):
+        return False
+    try:
+        datetime.date.fromisoformat(w["until"])
+    except ValueError:
+        return False
+    return True
+
+
+def expired(e: dict, name: str, today: datetime.date) -> str | None:
+    """The `until` of `name`'s exemption on `e` when it has passed, else None."""
+    w = e.get("exempt", {}).get(name)
+    if isinstance(w, dict) and datetime.date.fromisoformat(w["until"]) < today:
+        return w["until"]
+    return None
+
+
+def row_bytes(e: dict) -> str | None:
+    """The bytes an expired exemption's copy must have: a uniform row's sha256, or a pending row's target."""
+    return e["sha256"] if "sha256" in e else e["pending"]["target"] if "pending" in e else None
+
+
 def is_repos(v: object) -> bool:
     return (isinstance(v, list) and bool(v) and all(is_repo_name(r) for r in v)
             and len(set(v)) == len(v) and v == sorted(v))
@@ -260,6 +293,9 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
         if per_repo:
             if not f.get("exempt"):
                 raise Unreadable(f"{where}: a per-repository entry (repos = []) must exempt each repository that has it")
+            if any(isinstance(w, dict) for w in f["exempt"].values() if isinstance(f["exempt"], dict)):
+                raise Unreadable(f"{where}: a per-repository entry (repos = []) has no bytes to converge on, so its "
+                                 "exemptions take a reason, never an until date")
         elif not is_repos(repos):
             raise Unreadable(f"{where}: repos must be a sorted list of distinct repository names (ALICE-… or a listed product)")
         if per_repo:
@@ -326,9 +362,9 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
         if not isinstance(alt, dict) or not all(r in repos and safe_path(q) for r, q in alt.items()):
             raise Unreadable(f"{where}: paths must map listed repositories to relative paths")
         ex = f.get("exempt", {})
-        if not isinstance(ex, dict) or not all(is_repo_name(r) and r not in repos and reason(w) for r, w in ex.items()):
+        if not isinstance(ex, dict) or not all(is_repo_name(r) and r not in repos and exemption(w) for r, w in ex.items()):
             raise Unreadable(f"{where}: exempt must map unlisted repositories (ALICE-… or a listed product) to a reason "
-                             f"of at least {MIN_REASON} characters")
+                             f"of at least {MIN_REASON} characters, or to {{ reason, until = \"YYYY-MM-DD\" }}")
     return files, []
 
 
@@ -365,7 +401,8 @@ def summary(c: tuple[int, int, int, int]) -> str:
     return f"compared: files {c[0]}, repos {c[1]}, copies {c[2]}, pending {c[3]}"
 
 
-def check_repo(entries: list[dict], root: Path, name: str) -> tuple[list[str], list[str], tuple]:
+def check_repo(entries: list[dict], root: Path, name: str,
+               today: datetime.date | None = None) -> tuple[list[str], list[str], tuple]:
     """Findings, pending notes and counts for a crate's tree."""
     problems: list[str] = []
     notes: list[str] = []
@@ -404,7 +441,13 @@ def check_repo(entries: list[dict], root: Path, name: str) -> tuple[list[str], l
             if got != e["sha256"]:
                 problems.append(f"{rel}: sha256 {got}, the table has {e['sha256']} "
                                 f"(the bytes of {e['source']['repo']} at {e['source']['rev'][:12]})")
-        elif name not in e.get("exempt", {}):
+        elif name in e.get("exempt", {}):
+            until = expired(e, name, today or datetime.datetime.now(datetime.timezone.utc).date())
+            f = root / e["path"]
+            if until is not None and f.is_file() and sha256(f.read_bytes()) != row_bytes(e):
+                problems.append(f"{e['path']}: the exemption of {name} expired on {until} and its copy still differs "
+                                "(converge on the row's bytes, or move the date with a reason)")
+        else:
             for rel in sorted({e["path"], *e.get("paths", {}).values()}):
                 if not (root / rel).is_file():
                     continue
@@ -705,6 +748,14 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
             problems.append(f"{path}: byte-identical in {', '.join(sorted(max(shared.values(), key=len)))} "
                             f"but has no entry")
     for e in entries:
+        for r in sorted(e.get("exempt", {})):
+            until = expired(e, r, today)
+            if until is None or e["path"] not in trees.get(r, {}):
+                continue
+            data = show(remote(r), "origin/main", e["path"])
+            if data is None or sha256(data) != row_bytes(e):
+                problems.append(f"{e['path']}: the exemption of {r} expired on {until} and its copy on main still "
+                                "differs (converge on the row's bytes, or move the date with a reason)")
         listed = set(e["repos"]) | set(e.get("exempt", {}))
         known_bytes = ({e["sha256"]} if "sha256" in e
                        else {k for k in e.get("pending", {}).get("variants", {}) if k != "absent"}
@@ -741,7 +792,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--name", help="the crate's repository name (ALICE-…), with --repo")
     ap.add_argument("--expect-copies", type=int,
                     help="with --live: the number of copies that must be compared (count lock)")
-    ap.add_argument("--today", help="with --live: the date pending rows are aged against (default: today, UTC)")
+    ap.add_argument("--today", help="with --live or --repo: the date pending rows and dated exemptions are aged against (default: today, UTC)")
     ap.add_argument("--lock-file", type=Path,
                     help="a file holding the count lock (`--expect-copies N`): N must equal the copies of uniform "
                          "rows the table lists")
@@ -774,7 +825,8 @@ def main(argv: list[str]) -> int:
         if a.repo is not None:
             if not is_repo_name(a.name):
                 raise Unreadable(f"--name {a.name!r} is not a repository name (ALICE-… or a listed product)")
-            problems, notes, c = check_repo(entries, a.repo, a.name)
+            problems, notes, c = check_repo(entries, a.repo, a.name,
+                                            datetime.date.fromisoformat(a.today) if a.today else None)
         elif a.fetch or a.live:
             with tempfile.TemporaryDirectory() as d:
                 remote = Remote(Path(d))

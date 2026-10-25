@@ -83,7 +83,8 @@ def q(s: str) -> str:
 
 
 def inline(d: dict) -> str:
-    return "{ " + ", ".join(f"{q(k)} = {q(v)}" for k, v in sorted(d.items())) + " }"
+    return "{ " + ", ".join(f"{q(k)} = {inline(v) if isinstance(v, dict) else q(v)}"
+                            for k, v in sorted(d.items())) + " }"
 
 
 def render(entries: list[dict]) -> str:

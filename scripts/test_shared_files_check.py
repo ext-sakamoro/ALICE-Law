@@ -188,6 +188,28 @@ class Schema(Base):
             self.assertEqual(code, 2, out)
             self.assertIn("needs exactly one", out)
 
+    def test_an_exemption_is_a_reason_or_a_reason_with_an_until_date(self):
+        ok = {"reason": "its own script until it converges", "until": "2026-11-11"}
+        self.assertEqual(sfc.load(self.w.table(exempt={"ALICE-C": ok}))[0]["exempt"], {"ALICE-C": ok})
+        for bad in ({"reason": "its own script until it converges"},  # a table without until
+                    {"reason": "short", "until": "2026-11-11"},
+                    {"reason": "its own script until it converges", "until": "2026-13-40"},
+                    # DATE, not what the interpreter's fromisoformat also reads (3.11+ takes these as dates)
+                    {"reason": "its own script until it converges", "until": "20261111xx"},
+                    {"reason": "its own script until it converges", "until": "2026-W45-3"},
+                    {"reason": "its own script until it converges", "until": "20261111"},
+                    {"reason": "its own script until it converges", "until": "2026-11-11", "x": "y"},
+                    {"until": "2026-11-11"}):
+            with self.assertRaises(sfc.Unreadable, msg=str(bad)):
+                sfc.load(self.w.table(exempt={"ALICE-C": bad}))
+
+    def test_gen_writes_an_expiring_exemption_back_as_it_reads(self):
+        ex = {"ALICE-C": {"reason": "its own script until it converges", "until": "2026-11-11"},
+              "ALICE-D": "a different script of its own"}
+        text = gen.render([{"path": "scripts/s.sh", "sha256": h(b"s\n"), "source": {"repo": "ALICE-A", "rev": "0" * 40},
+                            "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": ex}])
+        self.assertEqual(sfc.load(text)[0]["exempt"], ex)
+
     def test_a_product_repository_in_the_hashed_set_is_a_repository_name(self):
         # a product of the account outside the ALICE-* names (text-to-print) holds copies of the Law tooling too;
         # it is named only through sha256 of its lower-case name, and every rule that reads a name takes it
@@ -282,6 +304,13 @@ class Schema(Base):
         self.t.write_text(text, encoding="utf-8")
         self.assertEqual(self.check()[0], 2)
         del p
+
+    def test_a_per_repository_entry_takes_no_dated_exemption(self):
+        # a per-repository row has no bytes for an expired exemption's copy to converge on
+        dated = {"ALICE-C": {"reason": "its own data, never shared", "until": "2026-11-11"}}
+        with self.assertRaises(sfc.Unreadable) as cm:
+            sfc.load(self.w.table(self.w.per_repo(exempt=dated)))
+        self.assertIn("until", str(cm.exception))
 
     def test_a_per_repository_entry_must_exempt_its_holders(self):
         self.assertEqual(sfc.load(self.w.table(self.w.per_repo()))[0]["repos"], [])
@@ -451,6 +480,13 @@ class Repo(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("missing", out)
 
+    def test_an_expired_exemption_whose_copy_differs_is_red_in_the_crate(self):
+        t = self.w.table(exempt={"ALICE-C": {"reason": "its own script until it converges", "until": "2026-10-20"}})
+        self.t.write_text(t, encoding="utf-8")
+        code, out = self.check("--repo", str(self.w.work / "ALICE-C"), "--name", "ALICE-C", "--today", "2026-10-21")
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: the exemption of ALICE-C expired on 2026-10-20", out)
+
     def test_an_unlisted_copy_at_a_listed_path_is_red(self):
         code, out = self.crate("ALICE-C")
         self.assertEqual(code, 1, out)
@@ -584,6 +620,28 @@ class Live(Base):
         self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
         self.w.commit("ALICE-B", {"scripts/s.sh": SHARED + b"#\n"})
         self.assertEqual(self.live()[0], 1)
+
+    def expiring(self, until: str) -> None:
+        self.t.write_text(self.w.table(exempt={"ALICE-C": {"reason": "its own script until it converges",
+                                                           "until": until}}), encoding="utf-8")
+
+    def test_an_exemption_with_until_holds_until_its_date(self):
+        self.expiring("2026-10-20")
+        code, out = self.live(today="2026-10-20")
+        self.assertEqual(code, 0, out)
+
+    def test_an_expired_exemption_whose_copy_still_differs_is_red(self):
+        # the exemption cannot outlive its reason: after `until`, ALICE-C's copy must be the row's bytes
+        self.expiring("2026-10-20")
+        code, out = self.live(today="2026-10-21")
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/s.sh: the exemption of ALICE-C expired on 2026-10-20", out)
+
+    def test_an_expired_exemption_whose_copy_converged_passes(self):
+        self.expiring("2026-10-20")
+        self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
+        code, out = self.live(today="2026-10-21")
+        self.assertEqual(code, 0, out)
 
     def test_the_count_lock_is_red_on_a_different_count(self):
         self.t.write_text(self.w.table(exempt={"ALICE-C": "a different script of its own"}), encoding="utf-8")
