@@ -1,0 +1,3 @@
+# every file is checked out byte for byte as committed: the shared files, the table and the checkers are compared
+# by SHA-256, and a converted checkout (core.autocrlf) would hold other bytes
+* -text

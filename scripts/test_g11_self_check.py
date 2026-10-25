@@ -45,6 +45,10 @@ class SelfCheck(unittest.TestCase):
                 "import json, os, sys\n"
                 f"open({str(self.log)!r}, 'a').write(json.dumps([{n!r}] + sys.argv[1:]) + '\\n')\n"
                 + ("print(\"shared_files_check: own copies not at a pending row's target: \" + os.environ.get('OFF_N', '0'))\n"
+                   "import pathlib\n"
+                   "probe = pathlib.Path(sys.argv[sys.argv.index('--repo') + 1]) / 'probe.txt'\n"
+                   "sys.exit(1) if probe.exists() and b'\\r' in probe.read_bytes() else None\n"
+                   "sys.exit(1) if (probe.parent / 'link.txt').exists() else None\n"
                    if n == "shared_files_check.py" else "") +
                 f"print('summary of {n}')\n"
                 f"sys.exit(int(os.environ.get('RC_' + {n.split('.')[0]!r}, '0')))\n", encoding="utf-8")
@@ -54,6 +58,7 @@ class SelfCheck(unittest.TestCase):
         self.rev = subprocess.run(["git", "-C", str(self.law), "rev-parse", "HEAD"], capture_output=True,
                                   text=True, check=True).stdout.strip()
         (self.crate / ".github").mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(self.crate)], check=True, env=ENV)
         self.pin()
         self.saved_env = dict(os.environ)
 
@@ -68,7 +73,13 @@ class SelfCheck(unittest.TestCase):
             f"table-sha256 {table or h(self.law / 'conformance' / 'shared-files.toml')}\n"
             f"checker-sha256 {checker or h(self.law / 'scripts' / 'shared_files_check.py')}\n", encoding="utf-8")
 
+    def commit_crate(self):
+        # the checks read the crate's committed tree (git archive HEAD): commit what the test wrote
+        subprocess.run(["git", "-C", str(self.crate), "add", "-A"], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(self.crate), "commit", "-q", "--allow-empty", "-m", "c"], check=True, env=ENV)
+
     def run_check(self, **rcs):
+        self.commit_crate()
         for k, v in rcs.items():
             os.environ[f"RC_{k}"] = str(v)
         out = io.StringIO()
@@ -176,6 +187,63 @@ class SelfCheck(unittest.TestCase):
         code, out, _ = self.run_check()
         self.assertEqual(code, 2, out)
         self.assertIn("printed no count of own copies off target", out)
+
+    def test_a_law_checkout_that_converted_line_endings_still_matches_its_pins(self):
+        # Windows with core.autocrlf: git sees a clean checkout, but the files hold CRLF; the pins are of the blobs
+        self.g11_pin()  # pinned from the committed bytes, as a crate pins them
+        subprocess.run(["git", "-C", str(self.law), "config", "core.autocrlf", "true"], check=True, env=ENV)
+        rels = ("conformance/shared-files.toml", "scripts/shared_files_check.py", "scripts/g11_table_check.py")
+        for rel in rels:
+            (self.law / rel).unlink()
+        subprocess.run(["git", "-C", str(self.law), "checkout", "--", *rels], check=True, env=ENV)  # git converts
+        self.assertIn(b"\r\n", (self.law / rels[0]).read_bytes())
+        st = subprocess.run(["git", "-C", str(self.law), "status", "--porcelain"], capture_output=True, text=True, env=ENV)
+        self.assertEqual(st.stdout, "")  # the checkout is the pinned revision as git reads it
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(calls), 4)
+
+    def test_the_checks_read_the_crate_s_committed_tree_not_its_converted_checkout(self):
+        subprocess.run(["git", "-C", str(self.crate), "config", "core.autocrlf", "true"], check=True, env=ENV)
+        (self.crate / "probe.txt").write_bytes(b"a shared line\n")
+        self.commit_crate()
+        (self.crate / "probe.txt").unlink()
+        subprocess.run(["git", "-C", str(self.crate), "checkout", "--", "probe.txt"], check=True, env=ENV)
+        self.assertIn(b"\r\n", (self.crate / "probe.txt").read_bytes())  # the checkout converted it
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 0, out)
+        copies = next(c for c in calls if c[0] == "shared_files_check.py")
+        self.assertNotEqual(copies[copies.index("--repo") + 1], str(self.crate))
+
+    def test_a_committed_symbolic_link_is_left_out_of_the_tree_the_checks_read(self):
+        # a shared copy is a file: a link (here to a real file) is not written as one, nor followed
+        (self.crate / "real.txt").write_bytes(b"x\n")
+        os.symlink("real.txt", self.crate / "link.txt")
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(calls), 4)
+
+    def test_a_crate_whose_head_has_no_file_is_not_checked(self):
+        # an empty HEAD (the pin only in the checkout): nothing to compare, never a pass
+        empty = Path(self.tmp.name) / "empty"
+        subprocess.run(["git", "init", "-q", str(empty)], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(empty), "commit", "-q", "--allow-empty", "-m", "c"], check=True, env=ENV)
+        (empty / ".github").mkdir()
+        (empty / ".github" / "shared-files-pin").write_text((self.crate / ".github" / "shared-files-pin").read_text())
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = sc.main(["--repo", str(empty), "--name", "ALICE-X"], law=self.law)
+        self.assertEqual(code, 2, out.getvalue())
+        self.assertIn("HEAD has no file", out.getvalue())
+
+    def test_a_crate_that_is_no_git_repository_is_not_checked(self):
+        import shutil
+        shutil.rmtree(self.crate / ".git")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = sc.main(["--repo", str(self.crate), "--name", "ALICE-X"], law=self.law)
+        self.assertEqual(code, 2, out.getvalue())
+        self.assertIn("git ls-tree HEAD failed", out.getvalue())
 
     def g11_pin(self, rev=None, checker=None):
         (self.crate / ".github" / "g11-table-pin").write_text(

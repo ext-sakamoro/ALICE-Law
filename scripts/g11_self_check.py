@@ -18,6 +18,9 @@ first: `git -C <ALICE-Law checkout> checkout --detach <rev>`). Then, from that c
                  other repositories' mains does not hold it back, the crate's own copies must all be at target)
   4. manifest    scripts/conformance_roster_check.py --check-manifest: the manifest and its anchors at HEAD
 
+The pin's SHA-256 values are compared with the blobs at the pinned revision, and the table, rows and copies
+checks read the crate's committed tree (each blob at HEAD, raw), so a checkout that converts line endings (Windows,
+core.autocrlf) gives the same result as any other.
 Each prints one line (its exit status and its summary). No GitHub API is used. Exit 0 when all four pass, 1 when
 any has a finding, 2 when any compared nothing or could not read its input, or the pin does not match.
 """
@@ -28,6 +31,7 @@ import hashlib
 import re
 import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -68,6 +72,48 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def blob_sha256(law: Path, rev: str, rel: str) -> str | None:
+    """SHA-256 of the file as committed at rev (the blob, not the checkout: a Windows checkout with core.autocrlf
+    holds other bytes than the ones pinned), or None when rev has no such file"""
+    r = subprocess.run(["git", "-C", str(law), "show", f"{rev}:{rel}"], capture_output=True)
+    return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else None
+
+
+def committed_tree(repo: Path, dest: Path) -> None:
+    """the crate's committed tree at HEAD into dest, each file written as its raw blob (git archive would apply
+    core.autocrlf and eol attributes, a converted checkout holds other bytes again): the bytes the crates share"""
+    ls = subprocess.run(["git", "-C", str(repo), "ls-tree", "-r", "-z", "HEAD"], capture_output=True)
+    if ls.returncode != 0:
+        raise ValueError(f"{repo}: git ls-tree HEAD failed ({ls.stderr.decode(errors='replace').strip()[:200]})")
+    entries = []
+    for item in ls.stdout.split(b"\0"):
+        if not item:
+            continue
+        meta, path = item.split(b"\t", 1)
+        mode, kind, oid = meta.split()
+        # a symbolic link is not a shared copy: it is left out (a listed copy there is reported missing), never
+        # written as a file holding its target path, nor followed out of the tree
+        if kind == b"blob" and mode != b"120000":
+            entries.append((oid.decode(), path.decode("utf-8", errors="surrogateescape")))
+    if not entries:
+        raise ValueError(f"{repo}: HEAD has no file (nothing to check)")
+    batch = subprocess.run(["git", "-C", str(repo), "cat-file", "--batch"],
+                           input=b"".join(f"{oid}\n".encode() for oid, _ in entries), capture_output=True)
+    if batch.returncode != 0:
+        raise ValueError(f"{repo}: git cat-file --batch failed")
+    out, pos = batch.stdout, 0
+    for oid, rel in entries:
+        header_end = out.index(b"\n", pos)
+        size = int(out[pos:header_end].split()[2])
+        data = out[header_end + 1:header_end + 1 + size]
+        pos = header_end + 1 + size + 1  # the blob, then its newline
+        target = dest / rel
+        if dest.resolve() not in target.resolve().parents:
+            raise ValueError(f"{repo}: path {rel!r} leaves the tree")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+
 def pin_problem(repo: Path, law: Path) -> str | None:
     """why the ALICE-Law checkout is not the crate's pinned one, or None"""
     pin = repo / PIN
@@ -84,7 +130,7 @@ def pin_problem(repo: Path, law: Path) -> str | None:
         return (f"ALICE-Law is at {head.stdout.strip()[:12]}, the crate pins {f['rev'][:12]} "
                 f"(git -C {law} checkout --detach {f['rev']})")
     for key, rel in (("table-sha256", "conformance/shared-files.toml"), ("checker-sha256", "scripts/shared_files_check.py")):
-        if not (law / rel).is_file() or sha256(law / rel) != f[key]:
+        if blob_sha256(law, f["rev"], rel) != f[key]:
             return f"{rel} at {f['rev'][:12]} does not have the pin's {key}"
     # the checks run from the working tree: it must be the pinned revision's files, nothing edited or added (an
     # untracked module would be imported); the one exception is an untracked copy of this script, for a pin that
@@ -111,7 +157,7 @@ def pin_problem(repo: Path, law: Path) -> str | None:
         if rev[0] != f["rev"]:
             return (f"{G11_PIN} names {rev[0][:12]} and {PIN} names {f['rev'][:12]}: the crate's G11 table would be "
                     "checked by another revision than its own scripts check it with (pin both to one revision)")
-        if sha256(law / "scripts" / "g11_table_check.py") != chk[0]:
+        if blob_sha256(law, f["rev"], "scripts/g11_table_check.py") != chk[0]:
             return f"scripts/g11_table_check.py at {f['rev'][:12]} does not have {G11_PIN}'s checker-sha256"
     return None
 
@@ -129,19 +175,13 @@ def checks(repo: Path, name: str, law: Path, rev: str) -> list[tuple[str, list[s
     ]
 
 
-def main(argv: list[str] | None = None, law: Path = LAW) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--repo", required=True, type=Path)
-    ap.add_argument("--name", required=True)
-    a = ap.parse_args(argv)
-    repo = a.repo.resolve()
-    why = pin_problem(repo, law)
-    if why:
-        print(f"g11 self-check: {why}: nothing was checked", file=sys.stderr)
-        return 2
-    rev = pin_fields((repo / PIN).read_text(encoding="utf-8"))["rev"]
-    codes = []
-    for label, cmd in checks(repo, a.name, law, rev):
+def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path) -> list[int]:
+    """each check's exit status (and the own-target verdict), printing one line per check"""
+    codes: list[int] = []
+    # the tree checks read the committed tree; the manifest check reads HEAD itself (--ref HEAD)
+    commands = [(label, [tree.as_posix() if x == str(repo) and label != "manifest" else x for x in cmd])
+                for label, cmd in checks(repo, name, law, rev)]
+    for label, cmd in commands:
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         lines = [ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()]
         codes.append(r.returncode)
@@ -162,6 +202,28 @@ def main(argv: list[str] | None = None, law: Path = LAW) -> int:
             else:
                 print(f"g11 self-check: own-target: {m.group(1)} own copies off target, G11 declared "
                       f"{declared_g11(repo) or '(none)'}")
+    return codes
+
+
+def main(argv: list[str] | None = None, law: Path = LAW) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--repo", required=True, type=Path)
+    ap.add_argument("--name", required=True)
+    a = ap.parse_args(argv)
+    repo = a.repo.resolve()
+    why = pin_problem(repo, law)
+    if why:
+        print(f"g11 self-check: {why}: nothing was checked", file=sys.stderr)
+        return 2
+    rev = pin_fields((repo / PIN).read_text(encoding="utf-8"))["rev"]
+    with tempfile.TemporaryDirectory() as tmp:  # removed however the checks end
+        tree = Path(tmp)
+        try:
+            committed_tree(repo, tree)
+        except (ValueError, OSError) as e:
+            print(f"g11 self-check: {e}: nothing was checked", file=sys.stderr)
+            return 2
+        codes = run_checks(repo, a.name, law, rev, tree)
     verdict = 1 if 1 in codes else 2 if any(c != 0 for c in codes) else 0
     print(f"g11 self-check: {a.name} at ALICE-Law {rev[:12]}: "
           + ("pass" if verdict == 0 else "finding" if verdict == 1 else "not checked (an input could not be read or nothing was compared)"))
