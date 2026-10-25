@@ -336,6 +336,24 @@ class AllowSkillWord(Base):
         self.assertIn("allows 3 lines", out)
 
 
+class AllowNoDevice(Base):
+    """a device's model name is never allowed by an entry of ALLOWED (only by class, for a linter's one file)"""
+
+    def setUp(self):
+        super().setUp()
+        self.saved_allowed = ptc.ALLOWED
+        self.addCleanup(lambda: setattr(ptc, "ALLOWED", self.saved_allowed))
+        self.word = "jet" + "son"  # split so this file's own text stays clean
+        commit(self.repo, {"docs/a.md": f"measured on a {self.word} board\n"})
+        ptc.ALLOWED = {ptc.repo_key("r"): {ptc.allow_hash("docs/a.md", self.word): 1}}
+
+    def test_an_entry_for_a_device_name_does_not_allow_it(self):
+        self.assertNotIn("device", ptc.ALLOWABLE)
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("docs/a.md:1: device", out)
+
+
 class AllowList(Base):
     """a product's mention of a name, allowed per repository, file and name"""
 
@@ -429,29 +447,37 @@ class AllowList(Base):
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 0, out)
 
-    def test_a_device_a_protocol_session_and_ram_can_be_allowed_in_their_file_only(self):
-        # a product's supported board, a protocol's session and memory as RAM: scoped rows, never a relaxed word
-        commit(self.repo, {"docs/hw.md": "runs on Raspberry Pi 5\n", "src/p.rs": "// client が session を切る\n",
-                           "src/r.rs": "//! data を memory に載せずに済む\n"})
-        rows = {self.entry("docs/hw.md", "Raspberry Pi"): 1, self.entry("src/p.rs", "が session"): 1,
-                self.entry("src/r.rs", "memory に"): 1, self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}
+    def test_a_protocol_session_and_ram_can_be_allowed_in_their_file_only(self):
+        # a protocol's session and memory as RAM: scoped rows, never a relaxed word
+        commit(self.repo, {"src/p.rs": "// client が session を切る\n", "src/r.rs": "//! data を memory に載せずに済む\n"})
+        rows = {self.entry("src/p.rs", "が session"): 1, self.entry("src/r.rs", "memory に"): 1,
+                self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}
         ptc.ALLOWED = {ptc.repo_key("r"): rows}
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 0, out)
-        # a real leak in the same files is still found: another device, another tracker word
-        commit(self.repo, {"docs/hw.md": "runs on Raspberry Pi 5\nmeasured on a Mac mini\n",
-                           "src/r.rs": "//! data を memory に載せずに済む\n//! the Back" "log row\n"})
+        # a real leak in the same file is still found: another tracker word
+        commit(self.repo, {"src/r.rs": "//! data を memory に載せずに済む\n//! the Back" "log row\n"})
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
-        self.assertIn("docs/hw.md:2: device", out)
         self.assertIn("src/r.rs:2: internal tracker", out)
-        self.assertNotIn("docs/hw.md:1:", out)
+        self.assertNotIn("src/r.rs:1:", out)
         # and the allowed words in another file are findings
-        commit(self.repo, {"docs/hw.md": "runs on Raspberry Pi 5\n", "src/r.rs": "//! data を memory に載せずに済む\n",
-                           "README.md": "runs on Raspberry Pi 5\n"})
+        commit(self.repo, {"src/r.rs": "//! data を memory に載せずに済む\n", "src/q.rs": "// client が session を切る\n"})
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 1, out)
-        self.assertIn("README.md:1: device", out)
+        self.assertIn("src/q.rs:1: work session", out)
+
+    def test_a_device_name_has_no_entry(self):
+        # a device's model name is not allowed by entry: the helper refuses it, and the line stays a finding
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            self.assertEqual(ptc.main(["--allow-hash", "docs/hw.md", "Raspberry Pi"]), 2)
+        commit(self.repo, {"docs/hw.md": "runs on Raspberry Pi 5\n"})
+        ptc.ALLOWED = {ptc.repo_key("r"): {ptc.allow_hash("docs/hw.md", "Raspberry Pi"): 1,
+                                           self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("docs/hw.md:1: device", out)
 
     def test_a_literal_pathspec_keeps_a_glob_name_to_itself(self):
         # "a*.md" next to "a.md": without a literal pathspec, a.md's added lines are read under a*.md
