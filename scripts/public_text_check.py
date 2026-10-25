@@ -475,6 +475,72 @@ ALLOWED: dict[str, dict[str, int]] = {
     "38e19ab81bc34c0b638d4f0fa92e95d030e127bb8897517fe70ba91c5227e5b5": {
         "b1b065b5f49f4b5fa7b6c07d114bc8398be43a8635a8753ecd4155c2f3af524b": 4,
     },
+    "f0cdc2604f121709f35a9dd09d3ff3084c09c9b1dfd970332c55a0fdd06e0da9": {
+        # a board the product supports or was measured on, named as a target in its own documentation
+        "14c7f222ebaeea91c2853d7429f1080a275796db257a53597e8307d71326eb4e": 1,
+        "4caae45390e911c313c3885aca12abd074fc0a08f41f5ad005968933cd28a5b0": 1,
+    },
+    "42bfebe261d4d5ce9815f04b602444cf653bc2e3cd7375efe8004ae934b128ce": {
+        # a board the product supports or was measured on, named as a target in its own documentation
+        "2645d25bc853103f5738475a6e911ec4374dd4fa9e626afcd7c90221d1582cb3": 2,
+        "5c7ddce8e914bd09839e015879c572d48a290faa34be3fce5965465cbc602c77": 1,
+        "b01f80407cbdfaa3ace54970a8c33c52e1850a549e57b7b04958941522105e61": 1,
+        "13bfd03c62e2a0f47067768eb1e6b4c7488d3bb31e9337145065e9e17c499552": 1,
+        "14c7f222ebaeea91c2853d7429f1080a275796db257a53597e8307d71326eb4e": 10,
+        "2da8df1dea0351abde27e81e21587499c2c5c3631fd2fe80c7e5e93a34bf3e43": 10,
+        "d512ea8f10109c6e10d6a4c98a27e21e037d17c06f286104354e6e491e317454": 1,
+        "c882561fa87a3b304c6e79b97d3bcc947b37f4a412c3278f898dda3d31b42560": 1,
+        "e5c617c941f81c9dc228854a1fe648bfbd143de771a4e9140b7c1d3ce1b600c9": 1,
+        "95e4f0693ad6aa8dd1e2053febe07a8cd1168d552adaf77613aa5a5d79d9ca78": 1,
+    },
+    "3ef7c23054fecceba84393adf2be7da3e61c15adafac87399f90c9ffd92b43ee": {
+        # a technical worker / session of the code (a job system's workers, a protocol or training session)
+        # the product's own integration: the providers and clients it registers with or calls
+        # a protocol's session (the client closing it), or a session directory of the tool
+        "81195d09e3aeaac8cb290b152c0e37377b5bcc9b7e966915df3111ea4fdb8591": 1,
+        "1209f54b283cf7865dc0434e97cb522ad893f30cee011e38815cc3c263aa6983": 1,
+        "72e0017523ef42bf45e930d6eb6fcc2d709d50a0a975ad57054033e9eed77916": 3,
+        "1bb151f42e42a7fc080b78fd66dcbb9cba7110368148a493a2e598a131f0e96b": 1,
+        "3437b42afa7ea96db3ef6cf324d967a25ec9d88cee5cc3663eb57caf010e71e0": 1,
+        "d7d94612de7a8b15676b089967d90fc02d65825e651d6133e523fe323ed7901d": 1,
+        "e7286202f212188286f43f8fe9ce6b0863a93f47e1c8d0ec31956eee02e5e7c4": 2,
+        "559a86e79330f637a9184cb58fc3fdda4a11258335d439d70650c20d0247aa2f": 1,
+        "307d20155e0afe1d89c9c4c4c4da266136b13d94dbc310fd8877f0b4ae50053d": 2,
+        "18a79de1f8029c9c7dca68e2aca663114defd9e7004767d9231f37cd26037a9b": 1,
+        "60c485082a968c73fcad4a35d464edaa60d2f93824c0811737e8c89802b8254d": 1,
+        "cbdb15d22f7b8b1ae7248e9155db19674412e650206a3dc59fb2fac273d235b8": 1,
+    },
+    "e42a1f4ae9070e759b04e9b00380f1381c1c8ab9b1e2baaf832b3ff3c6f44059": {
+        # a technical worker / session of the code (a job system's workers, a protocol or training session)
+        "df9edbabb365aa396c27e7ec628280d7bdbcc921080e847c5ec89f577f438c6e": 1,
+    },
+    "2368fbbea5ea4043cb84a5ae027905aec833fcd7648a68e5b9473d5cdd8b941a": {
+        # a technical worker / session of the code (a job system's workers, a protocol or training session)
+        "cd05384f63a4f3cc53317a433ba2c4d01a58e1ae6b71177c6d2573eb395f3209": 2,
+    },
+    "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0": {
+        # a board the product supports or was measured on, named as a target in its own documentation
+        "14c7f222ebaeea91c2853d7429f1080a275796db257a53597e8307d71326eb4e": 2,
+        "32d3075a14361d72f4544891eea0289cfb8c4a6f4fdf5e49900c7f0d68197162": 1,
+    },
+    "853a08873479add5fda50b6b6fe19b02fbd35e2200af2fb0df9caeb08311f234": {
+        # a technical worker / session of the code (a job system's workers, a protocol or training session)
+        "5d453f19b84b8d17468a349ebdb12b9dac5977e334745cd59c9c2a5e6597f44b": 1,
+    },
+    "b4836d6f58132d63dea52a28ddfcbf71f604fccc51689c0cd35829176ff4e97f": {
+        # a board the product supports or was measured on, named as a target in its own documentation
+        "14c7f222ebaeea91c2853d7429f1080a275796db257a53597e8307d71326eb4e": 1,
+    },
+    "fc71052a2f100219b2c5c56c1994fee66e48d897e022dbf542a80c7ec0d8cde8": {
+        # a technical worker / session of the code (a job system's workers, a protocol or training session)
+        # a board the product supports or was measured on, named as a target in its own documentation
+        # memory as RAM (data not loaded into memory)
+        # a protocol's session (the client closing it), or a session directory of the tool
+        "3724de7fdb6551685b16bdc6e78dbbe9f2f87f89b22fce841bd5d98ad137358c": 1,
+        "036aae4298569f1143c65987c50cd495398db6f6da378a24bb70f12a71af4ac5": 1,
+        "9fa56597015935f99b8ec5493bbc1ace356fa8d3736769f7a1e7c783434708e0": 1,
+        "ad012f40aba992c16e99d53796b1bec4dcce6a7a49974f34ebd5b03593b7b1c2": 1,
+    },
 }
 
 
@@ -1431,7 +1497,12 @@ def note_names(line: str, path: str | None, spans: list[tuple[int, int]] | None 
             if any(a <= m.start() < b for a, b in spans) or beside_quote(line, m.start(), m.end())]
 
 
-ALLOWABLE = ("private name", "agent process", "note link")
+# the kinds an entry of ALLOWED can allow, each by its token in one file (or under one prefix) of one
+# repository at a pinned count: a product's own integration names, a technical "worker" / "session", a
+# supported board ("device"), a protocol's session ("work session"), memory as RAM ("internal tracker")
+ALLOWABLE = ("private name", "agent process", "note link", "device", "work session", "internal tracker")
+# GPU / OS "shared memory" is the hardware term, not the internal tracker (a whole word before it)
+SHARED_MEMORY_RE = re.compile(r"(?<![A-Za-z])(?i:shared)\s+$")
 
 
 def allowed_entry(path: str, token: str) -> str | None:
@@ -1445,7 +1516,8 @@ def kinds(line: str, path: str | None = None, spans: list[tuple[int, int]] | Non
     tokens: dict[str, list[str]] = {}
     for label, pattern in FORBIDDEN:
         own = own_skill_prefixes(line) if label == "agent process" else []
-        hits = [m.group(0) for m in pattern.finditer(line) if not any(a <= m.start() < b for a, b in own)]
+        hits = [m.group(0) for m in pattern.finditer(line) if not any(a <= m.start() < b for a, b in own)
+                and not (label == "internal tracker" and SHARED_MEMORY_RE.search(line[:m.start()]))]
         if not hits:
             continue
         if label == "agent process" and all(h.lower() in ("worker", "workers") for h in hits) \
@@ -2028,9 +2100,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.allow_hash is not None:
         path, name = a.allow_hash
         allowable = (hashlib.sha256(" ".join(name.split()).lower().encode("utf-8")).hexdigest() in PRIVATE_NAME_HASHES
-                     or any(p.fullmatch(name) for label, p in FORBIDDEN if label in ("agent process", "note link")))
+                     or any(p.fullmatch(name) for label, p in FORBIDDEN if label in ALLOWABLE))
         if not allowable:
-            print("error: NAME is not a name, agent word or note link this check finds (give it as one word, the "
+            print("error: NAME is not a name, agent word, note link, device, work session or tracker word this check finds (give it as one word, the "
                   "words of the phrase, or the [[link]])", file=sys.stderr)
             return 2
         print(allow_hash(path, name))

@@ -429,6 +429,30 @@ class AllowList(Base):
         code, out = run(self.repo, "--repo-name", "r", "--tree")
         self.assertEqual(code, 0, out)
 
+    def test_a_device_a_protocol_session_and_ram_can_be_allowed_in_their_file_only(self):
+        # a product's supported board, a protocol's session and memory as RAM: scoped rows, never a relaxed word
+        commit(self.repo, {"docs/hw.md": "runs on Raspberry Pi 5\n", "src/p.rs": "// client が session を切る\n",
+                           "src/r.rs": "//! data を memory に載せずに済む\n"})
+        rows = {self.entry("docs/hw.md", "Raspberry Pi"): 1, self.entry("src/p.rs", "が session"): 1,
+                self.entry("src/r.rs", "memory に"): 1, self.entry("docs/plugin.md"): 1, self.entry("docs/other.md"): 1}
+        ptc.ALLOWED = {ptc.repo_key("r"): rows}
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 0, out)
+        # a real leak in the same files is still found: another device, another tracker word
+        commit(self.repo, {"docs/hw.md": "runs on Raspberry Pi 5\nmeasured on a Mac mini\n",
+                           "src/r.rs": "//! data を memory に載せずに済む\n//! the Back" "log row\n"})
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("docs/hw.md:2: device", out)
+        self.assertIn("src/r.rs:2: internal tracker", out)
+        self.assertNotIn("docs/hw.md:1:", out)
+        # and the allowed words in another file are findings
+        commit(self.repo, {"docs/hw.md": "runs on Raspberry Pi 5\n", "src/r.rs": "//! data を memory に載せずに済む\n",
+                           "README.md": "runs on Raspberry Pi 5\n"})
+        code, out = run(self.repo, "--repo-name", "r", "--tree")
+        self.assertEqual(code, 1, out)
+        self.assertIn("README.md:1: device", out)
+
     def test_a_literal_pathspec_keeps_a_glob_name_to_itself(self):
         # "a*.md" next to "a.md": without a literal pathspec, a.md's added lines are read under a*.md
         ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("a*.md"): 1}}
@@ -502,6 +526,13 @@ class Shapes(unittest.TestCase):
                      "集中 session で"):
             self.assertIn("work session", ptc.kinds(line), line)
         self.assertEqual(ptc.scan_text("f", "/// Phase A2 (next\n/// session) work\n"), ["f:1: work session"])
+
+    def test_shared_memory_is_the_hardware_term(self):
+        # GPU / OS shared memory is not the internal tracker; memory with the same particles still is
+        for line in ("/// 状態行列 S を shared memory に保持し", "// Shared  memory に置く"):
+            self.assertNotIn("internal tracker", ptc.kinds(line, "src/a.rs"), line)
+        for line in ("/// 詳細は memory に記録", "// 結果を memory 化する", "/// unshared memory に書く"):
+            self.assertIn("internal tracker", ptc.kinds(line, "src/a.rs"), line)
 
     def test_technical_sessions_pass(self):
         for line in ("checkout.session.completed", "Stripe Checkout Session", "a later session can resume",
