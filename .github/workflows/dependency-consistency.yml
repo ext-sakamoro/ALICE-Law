@@ -235,3 +235,9 @@ jobs:
         run: |
           py=$(command -v python3 || command -v python)
           "$py" scripts/test_g11_table_gen.py
+
+      - name: Test the G11 self-check
+        shell: bash
+        run: |
+          py=$(command -v python3 || command -v python)
+          "$py" scripts/test_g11_self_check.py

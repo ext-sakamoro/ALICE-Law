@@ -435,6 +435,19 @@ fetches the checker at a revision it pins with the checker's SHA-256, as it does
 checker. The table is a prerequisite: it does not make G11 `pass` by itself, and the evidence
 below is still required.
 
+**Self-check.** From the crate's checkout, with an ALICE-Law checkout at the revision the crate's
+`.github/shared-files-pin` names:
+
+    python3 <ALICE-Law checkout>/scripts/g11_self_check.py --repo . --name ALICE-<crate>
+
+It refuses to run unless that checkout is at the pinned `rev`, its `scripts/` and `conformance/` are
+unmodified with no extra file (the checks run from the working tree), its table and shared-file checker
+have the pinned SHA-256 values, and, where the crate has `.github/g11-table-pin`, that pin names the
+same revision and the SHA-256 of its `scripts/g11_table_check.py`; then it runs the four checks above (`g11_table_gen.py --check`,
+`g11_table_check.py`, `shared_files_check.py --repo`, `conformance_roster_check.py --check-manifest`)
+and prints one line each. It exits 0 when all four pass, 1 on a finding, and 2 when one compared
+nothing or the pin does not match. It reads no GitHub API.
+
 **Claim.** Each machine-checked gate of the crate has (a) a canary its checker must flag, (b) a failure when it compared nothing, and (c) where its checker or helper is shared with other crates, a check that the copies are identical.
 
 **Evidence for `pass`.** per gate, the names of the canary test, the zero-compared test and (where shared) the copy check.

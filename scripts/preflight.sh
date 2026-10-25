@@ -29,6 +29,7 @@ python3 scripts/test_workflow_gh_token_check.py
 python3 scripts/workflow_gh_token_check.py
 python3 scripts/test_g11_table_check.py
 python3 scripts/test_g11_table_gen.py
+python3 scripts/test_g11_self_check.py
 python3 scripts/test_main_mode.py
 python3 scripts/test_gen_law_status.py
 python3 scripts/test_readme_parity_check.py
