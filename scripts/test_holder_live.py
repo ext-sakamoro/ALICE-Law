@@ -104,5 +104,58 @@ class Exit(unittest.TestCase):
         self.assertEqual(self.run_main([{"name": "a"}], {"a": ("a", set(), 1, None)}), 0)
 
 
+class UnderTest(unittest.TestCase):
+    """--local NAME=DIR: the repository under test (the change CI runs on) is read from its checkout at HEAD, every
+    other one at its live default branch, so a change that removes a rights statement and its baseline row together
+    is judged on its own tree, not on a main that still has the file"""
+
+    def checkout(self, files: dict[str, str]) -> Path:
+        return upstream(files)
+
+    def run_main(self, local: Path | None, baseline: str, main_result):
+        repos = [{"name": "law"}, {"name": "other"}]
+
+        def remote(base, r):
+            if r["name"] == "law":
+                if local is not None:
+                    raise AssertionError("the repository under test was fetched from its main")
+                return main_result
+            return ("other", set(), 1, None)
+
+        with mock.patch.object(hl, "public_repos", return_value=repos), \
+                mock.patch.object(hl, "read_repo", side_effect=remote):
+            b = Path(tempfile.mkdtemp()) / "b.toml"
+            b.write_text(baseline, encoding="utf-8")
+            args = ["--baseline", str(b)] + (["--local", f"law={local}"] if local is not None else [])
+            return hl.main(args)
+
+    def test_a_statement_removed_with_its_row_passes_on_the_change(self):
+        # main still has the statement (and so does not match a baseline without its row); the change removed both
+        on_main = ("law", {("holder", "LICENSE-COMMERCIAL.md")}, 1, None)
+        tree = self.checkout({"LICENSE": "(c) the author\n", "Cargo.toml": '[package]\nname = "x"\n'})
+        self.assertEqual(self.run_main(tree, "", on_main), 0)
+        self.assertEqual(self.run_main(None, "", on_main), 1)  # read at main, the same change is red
+
+    def test_the_statement_still_present_on_the_change_is_a_finding(self):
+        on_main = ("law", {("holder", "LICENSE-COMMERCIAL.md")}, 1, None)
+        tree = self.checkout({"LICENSE-COMMERCIAL.md": f"(c) {OTHER}\n", "Cargo.toml": '[package]\nname = "x"\n'})
+        self.assertEqual(self.run_main(tree, "", on_main), 1)
+
+    def test_the_checkout_is_read_at_head_not_at_its_working_files(self):
+        tree = self.checkout({"LICENSE": f"(c) {OTHER}\n"})
+        (tree / "LICENSE").write_text("(c) the author\n", encoding="utf-8")  # uncommitted: not what CI tests
+        occ, n = hl.read_local(tree)
+        self.assertEqual((occ, n), ({("holder", "LICENSE")}, 1))
+
+    def test_a_local_name_that_is_not_a_listed_repository_is_exit_2(self):
+        tree = self.checkout({"LICENSE": "(c) the author\n"})
+        with mock.patch.object(hl, "public_repos", return_value=[{"name": "other"}]), \
+                mock.patch.object(hl, "read_repo", return_value=("other", set(), 1, None)):
+            b = Path(tempfile.mkdtemp()) / "b.toml"
+            b.write_text("", encoding="utf-8")
+            self.assertEqual(hl.main(["--baseline", str(b), "--local", f"law={tree}"]), 2)
+            self.assertEqual(hl.main(["--baseline", str(b), "--local", "law"]), 2)
+
+
 if __name__ == "__main__":
     sys.exit(unittest.main())
