@@ -154,7 +154,9 @@ class UnderTest(unittest.TestCase):
             b = Path(tempfile.mkdtemp()) / "b.toml"
             b.write_text("", encoding="utf-8")
             self.assertEqual(hl.main(["--baseline", str(b), "--local", f"law={tree}"]), 2)
-            self.assertEqual(hl.main(["--baseline", str(b), "--local", "law"]), 2)
+            # a listed name without a checkout is malformed, not a read of something else
+            for bad in ("other", "other=", f"={tree}"):
+                self.assertEqual(hl.main(["--baseline", str(b), "--local", bad]), 2, bad)
 
 
 if __name__ == "__main__":

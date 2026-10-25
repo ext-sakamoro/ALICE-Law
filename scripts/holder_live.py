@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The rights-holder rule of licence_files_check.py over every public repository of the account, at its default branch.
 
-    holder_live.py [--owner NAME] [--baseline FILE] [--write | --shrink [--repo NAME ...]] [--jobs N]
+    holder_live.py [--owner NAME] [--baseline FILE] [--local NAME=DIR] [--write | --shrink [--repo NAME ...]]
+                   [--jobs N]
 
 Lists the owner's public repositories (GitHub REST, with GITHUB_TOKEN / GH_TOKEN when set, retrying on rate limits
 and server errors), fetches each default branch without blobs, reads only the rights statements and manifests, and
@@ -9,6 +10,10 @@ compares the occurrences with the baseline (conformance/holder-baseline.toml): a
 a listed one that is gone (or whose repository is no longer public) is a finding (stale), so the list only goes down.
 --shrink removes the entries that are gone (for every repository, or only those named with --repo) and never adds
 one; --write rewrites the baseline from what was read (used when the list is first made).
+--local NAME=DIR reads repository NAME (the one a CI run tests) from the git checkout DIR at its HEAD instead of its
+default branch, so a change is judged on its own tree: a change that removes a rights statement and its baseline row
+together passes before it lands. Every other repository is still read at its default branch; NAME must be one of
+the listed public repositories.
 Exit 0 when every repository was read and nothing differs, 1 on a finding, 2 when a repository could not be read,
 no repository was listed, or no file was read.
 """
@@ -82,12 +87,12 @@ def git(g: Path, *args: str, binary: bool = False):
     return r.stdout
 
 
-def scan_git(g: Path, ref: str) -> tuple[set[tuple[str, str]], int]:
-    """(occurrences, files read) of a blob-less clone at ref"""
+def scan_git(g: Path, ref: str, fetch: bool = True) -> tuple[set[tuple[str, str]], int]:
+    """(occurrences, files read) of a blob-less clone at ref (with fetch: its blobs are fetched first)"""
     paths = [p for p in git(g, "ls-tree", "-r", "-z", "--name-only", ref).split("\0") if p]
     wanted = [p for p in paths if lfc.read_paths(p) and (lfc.RIGHTS_FILE_RE.match(p.rsplit("/", 1)[-1])
                                                            or p.rsplit("/", 1)[-1] in ("Cargo.toml", "pyproject.toml"))]
-    if wanted:
+    if wanted and fetch:
         oids = [git(g, "rev-parse", f"{ref}:{p}").strip() for p in wanted]
         for i in range(0, len(oids), 200):
             git(g, "-c", "fetch.negotiationAlgorithm=noop", "fetch", "-q", "--no-tags", "--no-write-fetch-head",
@@ -111,6 +116,11 @@ def read_repo(base: Path, repo: dict) -> tuple[str, set[tuple[str, str]] | None,
         return name, occ, n, None
     except Unreadable as e:
         return name, None, 0, str(e)
+
+
+def read_local(d: Path) -> tuple[set[tuple[str, str]], int]:
+    """(occurrences, files read) of the checkout d at HEAD: the committed tree CI tests, not uncommitted files"""
+    return scan_git(Path(d), "HEAD", fetch=False)
 
 
 def compare_all(read: dict[str, set[tuple[str, str]]],
@@ -153,7 +163,15 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--shrink", action="store_true")
     ap.add_argument("--repo", action="append", default=[], help="with --shrink: only this repository (repeatable)")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--local", help="NAME=DIR: read repository NAME from the checkout DIR at HEAD")
     a = ap.parse_args(argv)
+    local = None
+    if a.local is not None:
+        name, sep, d = a.local.partition("=")
+        if not name or not sep or not d:
+            print(f"error: --local {a.local!r}: needs NAME=DIR", file=sys.stderr)
+            return 2
+        local = (name, Path(d))
     try:
         repos = public_repos(a.owner)
     except Unreadable as e:
@@ -162,11 +180,25 @@ def main(argv: list[str] | None = None) -> int:
     if not repos:
         print("error: no public repository was listed", file=sys.stderr)
         return 2
+    if local is not None and local[0] not in {r["name"] for r in repos}:
+        print(f"error: --local names {local[0]}, which is not a listed public repository", file=sys.stderr)
+        return 2
     read: dict[str, set[tuple[str, str]]] = {}
     errors: list[str] = []
     empty = files = 0
+    if local is not None:
+        try:
+            occ, n = read_local(local[1])
+        except Unreadable as e:
+            print(f"error: couldn't read the checkout of {local[0]}: {e}", file=sys.stderr)
+            return 2
+        head = git(local[1], "rev-parse", "HEAD").strip()
+        print(f"holder live: {local[0]} read from its checkout at {head} ({n} files)")
+        read[local[0]] = occ
+        files += n
+    others = [r for r in repos if local is None or r["name"] != local[0]]
     with tempfile.TemporaryDirectory() as tmp, concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
-        for name, occ, n, err in ex.map(lambda r: read_repo(Path(tmp), r), repos):
+        for name, occ, n, err in ex.map(lambda r: read_repo(Path(tmp), r), others):
             if err:
                 errors.append(err)
             elif occ is None:

@@ -64,7 +64,8 @@ jobs:
       - name: The public repositories against the baseline
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/holder_live.py
+        # this repository at the commit under test (its own tree), every other one at its default branch
+        run: python3 scripts/holder_live.py --local "${GITHUB_REPOSITORY#*/}=."
 
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
