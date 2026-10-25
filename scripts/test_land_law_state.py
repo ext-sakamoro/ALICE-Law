@@ -62,7 +62,9 @@ class LeakDetector(unittest.TestCase):
         self.assertIn("README.md is missing", out.getvalue())
 
 
-class LandLawState(unittest.TestCase):
+class LandBase(unittest.TestCase):
+    """the Law root, the mains and the fakes the land tests share"""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name) / "law"
@@ -117,6 +119,8 @@ class LandLawState(unittest.TestCase):
     def state(self) -> str:
         return (self.root / "conformance" / "manifest-state.toml").read_text(encoding="utf-8")
 
+
+class LandLawState(LandBase):
     def test_a_candidate_with_the_same_statuses_does_not_move_the_state(self):
         code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": manifest()}))
         self.assertEqual(code, 0, out)
@@ -376,6 +380,116 @@ class LandLawState(unittest.TestCase):
                     code = lls.main(["--today", "2026-10-19", "--candidate", f"Alpha={repo}@{rev}"], remote=self.remote, root=self.root,
                                     at=self.at)
                 self.assertEqual(code, want, out.getvalue())
+
+
+
+FIRST_ROSTER = ROSTER + '''
+[crate.gamma]
+version = "0.1.0"
+state = "planned"
+order = 4
+repo = "Gamma"
+
+[crate.delta]
+version = "0.1.0"
+state = "planned"
+order = 5
+repo = "Delta"
+'''
+FIRST = manifest(G2='status = "fail-known"\nevidence = []\nnote = "raw max, no helper (src/lib.rs)"')
+FIRST_G3 = manifest(G2='status = "fail-known"\nevidence = []\nnote = "raw max, no helper (src/lib.rs)"',
+                    G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
+FIRST_MISSING = ("[missing.gamma]\nfixed-in = \"Gamma\"\nwhy = \"not written yet\"\n\n"
+                 "[missing.delta]\nfixed-in = \"Delta\"\nwhy = \"not written yet\"\n")
+
+
+class FirstManifest(LandBase):
+    """two repositories that join the roster bring their first manifest: the state records each before it lands"""
+
+    def setUp(self):
+        super().setUp()
+        (self.root / "release-train.toml").write_text(FIRST_ROSTER, encoding="utf-8")
+        self.missing(FIRST_MISSING)
+        self.mains.update({"Gamma": None, "Delta": None})
+        self.local = self.fake_local({"e": FIRST, "d": FIRST_G3})
+        self.at_texts.update({("Gamma", "e" * 40): FIRST, ("Delta", "d" * 40): FIRST_G3})
+
+    def missing(self, text: str):
+        (self.root / "conformance" / "missing-manifests.toml").write_text(text, encoding="utf-8")
+
+    def pending_entries(self) -> dict:
+        return crc.load_pending(self.root / "conformance" / "pending-state.toml")
+
+    def roster_check(self, *extra: str):
+        out = io.StringIO()
+        texts = {r: t for r, t in self.mains.items()}
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = crc.main(["--today", "2026-10-19", "--roster", str(self.root / "release-train.toml"),
+                             "--gates", str(self.root / "conformance" / "gates.toml"),
+                             "--missing", str(self.root / "conformance" / "missing-manifests.toml"),
+                             "--state", str(self.root / "conformance" / "manifest-state.toml"),
+                             "--pending", str(self.root / "conformance" / "pending-state.toml"),
+                             "--line-baseline", exact_line_baseline(self.root, texts), *extra],
+                            fetch=self.remote, at=self.at)
+        return code, out.getvalue()
+
+    def land_both(self, *extra: str):
+        return self.run_land("--candidate", "Gamma=/c@e", "--candidate", "Delta=/c@d", *extra, local=self.local)
+
+    def test_two_first_manifests_are_recorded_and_the_roster_check_accepts_them_before_they_land(self):
+        self.missing("")  # the Law change that records them removes their missing-manifests entries
+        code, out = self.land_both("--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("state moves: yes", out)
+        self.assertIn('[manifest."Gamma"]\ncrates = ["gamma"]', self.state())
+        self.assertIn('[manifest."Delta"]\ncrates = ["delta"]', self.state())
+        self.assertEqual(set(self.pending_entries()), {"Gamma", "Delta"})
+        self.assertEqual(self.pending_entries()["Delta"]["sha"], "d" * 40)
+        # the mains still have no manifest: the roster check reads each at its pending commit
+        code, out = self.roster_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("gamma: no alice-law-conformance.toml at main yet: pending-state.toml records its first manifest", out)
+        self.assertIn("Delta: pending: the state records dddddddddddd (its first manifest)", out)
+        # once both land, the entries have landed (a note, and the next --write drops them)
+        self.mains.update({"Gamma": FIRST, "Delta": FIRST_G3})
+        code, out = self.roster_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("Gamma: pending entry eeeeeeeeeeee: main's counts are the recorded ones, so it has landed", out)
+        self.assertEqual(self.roster_check("--strict")[0], 1)
+
+    def test_a_missing_manifest_without_its_entry_or_a_pending_record_is_a_finding(self):
+        self.missing("")
+        code, out = self.roster_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("gamma: no alice-law-conformance.toml at the main of Gamma", out)
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": manifest()}))
+        self.assertEqual(code, 2, out)
+        self.assertIn("delta: no alice-law-conformance.toml at the main of Delta", out)
+
+    def test_the_entry_is_removed_in_the_change_that_records_the_first_manifest(self):
+        code, out = self.land_both()
+        self.assertEqual(code, 2, out)
+        self.assertIn("gamma: alice-law-conformance.toml is at main, so its missing-manifests.toml entry is stale", out)
+
+    def test_a_recorded_first_manifest_stays_when_another_candidate_is_recorded(self):
+        self.missing(FIRST_MISSING.split("\n\n")[1])  # delta's entry stays: only gamma is recorded now
+        code, out = self.run_land("--candidate", "Gamma=/c@e", "--write", local=self.local)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(set(self.pending_entries()), {"Gamma"})
+        self.missing("")
+        code, out = self.run_land("--candidate", "Delta=/c@d", "--write", local=self.local)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(set(self.pending_entries()), {"Gamma", "Delta"})
+        self.assertIn('[manifest."Gamma"]', self.state())
+        self.assertEqual(self.roster_check()[0], 0)
+
+    def test_a_first_manifest_the_state_does_not_match_is_a_finding(self):
+        self.missing("")
+        self.assertEqual(self.land_both("--write")[0], 1)
+        self.at_texts[("Delta", "d" * 40)] = FIRST  # the recorded counts are no longer the commit's
+        code, out = self.roster_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("Delta: the state records counts that are neither main's nor those of pending entry", out)
 
 
 if __name__ == "__main__":

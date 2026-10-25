@@ -166,6 +166,14 @@ def load_toml(path: Path) -> dict:
         raise InputError(f"{path}: {e}") from e
 
 
+def repo_crates(roster: dict) -> dict[str, list[str]]:
+    """{repository: its crates, sorted} of the crates that are not exempt (a repository's state section lists them)"""
+    out: dict[str, list[str]] = {}
+    for crate, repo in sorted(roster_crates(roster).items()):
+        out.setdefault(repo, []).append(crate)
+    return out
+
+
 def roster_crates(roster: dict) -> dict[str, str]:
     """{crate: repository} of the crates that are not exempt"""
     out = {}
@@ -781,7 +789,8 @@ def table_counts(state_text: str) -> dict[str, dict]:
 
 
 def apply_pending(states: dict[str, dict], table: dict[str, dict], pending: dict[str, dict], gates: dict, at,
-                  today: datetime.date, strict: bool) -> tuple[dict, dict, list[str], list[str]]:
+                  today: datetime.date, strict: bool,
+                  repo_crates: dict[str, list[str]] | None = None) -> tuple[dict, dict, list[str], list[str]]:
     """(the state the table must record, the entries still pending, findings, notes). The rule is on the counts,
     not on the history (a landing may rebase, and other commits may land first): for a repository a pending entry
     names, when main's counts equal the table's the entry has landed (a note; a finding with `strict` or after
@@ -797,10 +806,11 @@ def apply_pending(states: dict[str, dict], table: dict[str, dict], pending: dict
         age = (today - since).days
         if age < 0:
             findings.append(f"{repo}: pending entry {sha[:12]} is dated {e['since']}, after today")
-        if repo not in states:
+        first = repo not in states  # no manifest at main: the entry records the repository's first manifest
+        if first and repo not in (repo_crates or {}):
             findings.append(f"{repo}: pending entry {sha[:12]} names a repository the state does not record")
             continue
-        if states[repo]["counts"] == table.get(repo):
+        if not first and states[repo]["counts"] == table.get(repo):
             msg = (f"{repo}: pending entry {sha[:12]}: main's counts are the recorded ones, so it has landed "
                    f"(drop the entry: land_law_state.py --write or conformance_roster_check.py --write)")
             if strict or age > PENDING_MAX_DAYS:
@@ -821,18 +831,24 @@ def apply_pending(states: dict[str, dict], table: dict[str, dict], pending: dict
             findings.append(f"{repo}: the state records counts that are neither main's nor those of pending entry "
                             f"{sha[:12]} (recorded {table.get(repo)}, at {sha[:12]} {counts})")
             continue
-        expected[repo]["counts"] = counts
-        notes.append(f"{repo}: pending: the state records {sha[:12]}, not landed yet (since {e['since']})")
+        if first:
+            expected[repo] = {"crates": list(repo_crates[repo]), "counts": counts}
+        else:
+            expected[repo]["counts"] = counts
+        notes.append(f"{repo}: pending: the state records {sha[:12]}" + (" (its first manifest)" if first else "")
+                     + f", not landed yet (since {e['since']})")
         if age > PENDING_MAX_DAYS:
             findings.append(f"{repo}: pending entry {sha[:12]} since {e['since']}, more than {PENDING_MAX_DAYS} "
                             f"days without landing")
     return expected, kept, findings, notes
 
 
-def check(roster: dict, gates: dict, missing: dict, fetch, texts: dict | None = None
-          ) -> tuple[list[str], list[str], dict, int, int, int]:
+def check(roster: dict, gates: dict, missing: dict, fetch, texts: dict | None = None,
+          pending: dict | None = None) -> tuple[list[str], list[str], dict, int, int, int]:
     """(findings, notes, states, manifests read, gates compared, distinct manifest files); `texts`, when given,
-    receives each repository's manifest text"""
+    receives each repository's manifest text. A crate with no manifest at main is expected when missing-manifests.toml
+    lists it, or when `pending` (pending-state.toml) names its repository: the state records the first manifest
+    before the crate lands it (apply_pending reads and checks it at the pending commit)"""
     crates = roster_crates(roster)
     vocab = gate_vocabulary(gates)
     if not crates:
@@ -863,6 +879,9 @@ def check(roster: dict, gates: dict, missing: dict, fetch, texts: dict | None = 
             if crate in listed:
                 notes.append(f"{crate}: no {MANIFEST} at main, as missing-manifests.toml expects "
                              f"(fixed in {listed[crate]['fixed-in']}: {listed[crate]['why']})")
+            elif repo in (pending or {}):
+                notes.append(f"{crate}: no {MANIFEST} at main yet: pending-state.toml records its first manifest "
+                             f"at {pending[repo]['sha'][:12]}")
             else:
                 findings.append(f"{crate}: no {MANIFEST} at the main of {repo}")
             continue
@@ -1004,8 +1023,10 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
         if not owner:
             raise InputError("no GitHub owner ([train] github in the roster, or --owner)")
         texts: dict[str, str] = {}
+        pending_path = Path(a.pending)
+        pending = load_pending(pending_path)
         findings, notes, states, read, compared, files = check(roster, gates, missing, fetch or gh_fetcher(owner),
-                                                               texts)
+                                                               texts, pending)
         today = (datetime.date.fromisoformat(a.today) if a.today
                  else datetime.datetime.now(datetime.timezone.utc).date())
         at = at or (lambda repo, sha: gh_fetcher(owner, sha)(repo))
@@ -1013,12 +1034,10 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
                                    below_since_from(history or gh_manifest_history(owner), at), today)
         findings += lf
         notes += ln
-        pending_path = Path(a.pending)
-        pending = load_pending(pending_path)
         state_text = Path(a.state).read_text(encoding="utf-8") if Path(a.state).exists() else ""
         expected, kept, pf, pn = apply_pending(
             states, table_counts(state_text), pending, gates,
-            at, today, a.strict)
+            at, today, a.strict, repo_crates(roster))
         findings += pf
         notes += pn
     except InputError as e:

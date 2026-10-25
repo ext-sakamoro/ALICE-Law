@@ -136,7 +136,10 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
             return candidates[repo]() if repo in candidates else remote(repo)
 
         texts: dict[str, str] = {}
-        findings, notes, landed, read, compared, files = crc.check(roster, gates, missing, fetch, texts)
+        # a first manifest recorded earlier (pending-state) is expected at main without its missing-manifests entry,
+        # and so is each candidate's, which this change records
+        recorded = {**crc.load_pending(pending_path), **{r: {"sha": shas[r]} for r in candidates}}
+        findings, notes, landed, read, compared, files = crc.check(roster, gates, missing, fetch, texts, recorded)
         baseline = crc.load_line_baseline(baseline_path)
         lowered = {}
         for repo in sorted(texts):
@@ -153,22 +156,23 @@ def main(argv: list[str] | None = None, remote=None, local=crc.git_fetcher, root
         if baseline is not None:
             findings += [f"{r}: in {baseline_path.name} but no manifest was read for it"
                          for r in sorted(set(baseline) - set(texts))]
-        mfindings, _, at_main, *_ = crc.check(roster, gates, missing, remote)
+        mfindings, _, at_main, *_ = crc.check(roster, gates, missing, remote, pending=recorded)
         findings += [f for f in mfindings if f not in findings]
         # the entries of other repositories still pending (a landed one is dropped: part of the Law change)
         pending = crc.load_pending(pending_path)
         others = {r: e for r, e in pending.items() if r not in candidates}
         current = state_path.read_text(encoding="utf-8") if state_path.exists() else ""
         expected, kept, pf, pn = crc.apply_pending(at_main, crc.table_counts(current), others, gates, at, today,
-                                                   strict=False)
+                                                   strict=False, repo_crates=crc.repo_crates(roster))
         findings += pf
         notes += pn
         new_pending = dict(kept)
         for repo in sorted(candidates):
-            if repo not in landed or repo not in at_main:
+            if repo not in landed:
                 continue  # a manifest with findings, or none: not computed (exit 2 below)
             expected[repo] = landed[repo]
-            if landed[repo]["counts"] != at_main[repo]["counts"]:
+            if repo not in at_main or landed[repo]["counts"] != at_main[repo]["counts"]:
+                # (no manifest at main: the candidate brings the repository's first one, recorded as pending too)
                 # a re-rolled candidate keeps the date its entry was first recorded
                 since = pending[repo]["since"] if repo in pending else today.isoformat()
                 new_pending[repo] = {"sha": shas[repo], "since": since}
