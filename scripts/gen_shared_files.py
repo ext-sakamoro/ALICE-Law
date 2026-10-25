@@ -234,9 +234,10 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
                 # the owner is whoever holds the planned bytes: the recorded one while it does, else the first holder
                 # (a non-owner landing a new file first becomes its owner: the bytes, not the name, are the plan)
                 owner = prev["owner"] if prev and prev["owner"] in holders else holders[0]
-                # the clock runs from when the row became planned, under whatever id: a re-rolled target does not
-                # restart it (it resets only when the row leaves the planned state)
-                pending = {"since": prev["since"] if was_planned else today, "exit": EXIT_NEXT,
+                # the clock runs from when the row became pending, under whatever id: a re-rolled target does not
+                # restart it, and neither does planning a row that was already pending unplanned (the table refuses
+                # a pending row's date moving later); only a row that was not pending starts today
+                pending = {"since": prev["since"] if prev is not None else today, "exit": EXIT_NEXT,
                            "target": target, "owner": owner, "planned": nxt, "variants": variants}
                 moved = prev.get("moved_from") if was_planned else None
                 if moved and moved["target"] in found:

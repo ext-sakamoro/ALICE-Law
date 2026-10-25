@@ -501,6 +501,21 @@ class Generate(Base):
         self.gen("--write", "--registry", str(reg))
         self.w.commit("ALICE-C", {"scripts/s.sh": data})
 
+    def test_an_unplanned_pending_row_planned_later_keeps_its_date(self):
+        # a row pending since TODAY (the copies differ) is planned a week later at the bytes one main holds: the
+        # date stays (the table refuses a pending row's date moving later, and the age limits must not restart)
+        self.w.commit("ALICE-B", {"scripts/s.sh": b"b variant\n"})
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        e = self.entries()["scripts/s.sh"]
+        self.assertEqual(e["pending"]["since"], TODAY)
+        self.assertNotIn("planned", e["pending"])
+        planned = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(SHARED)}\n")
+        self.assertEqual(self.gen("--write", "--registry", str(planned), "--today", "2026-10-24")[0], 0)
+        e = self.entries()["scripts/s.sh"]
+        self.assertEqual(e["pending"]["planned"], sfc.git_blob(SHARED))
+        self.assertEqual(e["pending"]["since"], TODAY)
+
     def test_check_reports_an_unlisted_holder_with_the_same_bytes(self):
         self.gained_holder(SHARED)
         code, out = self.gen("--check")
