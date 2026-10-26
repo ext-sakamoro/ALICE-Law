@@ -448,5 +448,37 @@ class Verify(unittest.TestCase):
         self.assertIn("the patch did not run", err.getvalue())
 
 
+class Packages(unittest.TestCase):
+    def setUp(self):
+        saved = (mm.E2E, mm.CONFIG, mm.CRATES)
+        self.addCleanup(lambda: (setattr(mm, "E2E", saved[0]), setattr(mm, "CONFIG", saved[1]),
+                                 setattr(mm, "CRATES", saved[2])))
+
+    def test_the_trust_package_has_its_own_directory_config_and_crates(self):
+        mm.select("e2e-trust")
+        self.assertEqual(mm.E2E, mm.ROOT / "e2e-trust")
+        self.assertEqual(mm.CONFIG, mm.ROOT / "e2e-trust" / ".cargo" / "config.toml")
+        for crate in ("alice-identity", "alice-sign", "alice-channel", "alice-sync", "alice-lol"):
+            self.assertIn(crate, mm.CRATES)
+        self.assertNotIn("alice-physics", mm.CRATES)
+
+    def test_the_default_package_is_the_round_trip(self):
+        self.assertEqual(mm.CRATES, {c: mm.REPOSITORY[c] for c in mm.PACKAGES["e2e"]})
+        self.assertNotIn("alice-sync", mm.CRATES)
+
+    def test_every_package_crate_has_a_repository(self):
+        for name, crates in mm.PACKAGES.items():
+            self.assertGreater(len(crates), 0, name)
+            self.assertEqual([c for c in crates if c not in mm.REPOSITORY], [], name)
+
+    def test_an_unknown_package_is_refused(self):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(mm.main(["main_mode.py", "--package", "nope", "verify"]), 2)
+        self.assertIn("no end to end package 'nope'", err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

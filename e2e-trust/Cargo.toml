@@ -1,0 +1,29 @@
+[package]
+name = "alice-law-e2e-trust"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "LicenseRef-Proprietary"
+description = "End to end check of the trust path: issue a device certificate, sign a law, carry it over an authenticated channel under a Sync handshake, evaluate it, store and restore it, compare bit for bit"
+
+# These crates are not on crates.io, so this package runs in main mode only
+# (scripts/main_mode.py --package e2e-trust patches every one with its main branch);
+# the revisions below are the mains it was written against. The published-mode check
+# (e2e/, .github/workflows/e2e.yml) does not depend on them.
+[dependencies]
+alice-identity = { version = "1.2.0", git = "https://github.com/ext-sakamoro/ALICE-Identity", rev = "7e4379b43b63c6e08a345e1b266cb4d908161441" }
+alice-sign = { version = "0.1", git = "https://github.com/ext-sakamoro/ALICE-Sign", rev = "bb79209e376ec3989bf721f48d5894032a221e8b" }
+alice-channel = { version = "0.1.0", git = "https://github.com/ext-sakamoro/ALICE-Channel", rev = "5829dde06c3687b307d6050af7be49511eba77ca", features = ["async"] }
+alice-sync = { version = "0.7.0", git = "https://github.com/ext-sakamoro/ALICE-Sync", rev = "099e482b5f97512e100434ff523c40eb5dfb0f69", features = ["secure-transport"] }
+alice-lol = { version = "0.5.0", git = "https://github.com/ext-sakamoro/ALICE-LOL", rev = "816735818326f4e2de3693f5a11c8d90dd09d86c" }
+alice-zip = { version = "0.11", git = "https://github.com/ext-sakamoro/ALICE-Zip", rev = "2a0aafacb9ec6693a3d2270df8c079ff01434bfb", default-features = false }
+alice-db = { version = "0.6.0", git = "https://github.com/ext-sakamoro/ALICE-DB", rev = "034b069800fdc119e90963456b1ef90d4e92ce32", default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+
+[features]
+# turned on by scripts/main_mode.py in the CI checkout (the same switch as e2e/)
+main-mode = []
+
+[workspace]

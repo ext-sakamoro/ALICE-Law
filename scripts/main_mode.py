@@ -19,6 +19,7 @@ crate in one build. A source the graph does not name gets no entry.
 
     python3 scripts/main_mode.py patch  <checkouts>   # writes e2e/.cargo/config.toml
     python3 scripts/main_mode.py verify               # after `cargo metadata` can resolve
+    python3 scripts/main_mode.py --package e2e-trust patch <checkouts>   # the same for e2e-trust/
 
 `patch` also raises e2e/Cargo.toml's own direct requirements on these crates to the
 version on main where they do not accept it, and turns on the e2e crate's `main-mode`
@@ -51,10 +52,20 @@ ROOT = Path(__file__).resolve().parent.parent
 E2E = ROOT / "e2e"
 CONFIG = E2E / ".cargo" / "config.toml"
 
+
+def select(package: str) -> None:
+    """point patch / verify at one end to end package: its directory, its config and its crates"""
+    global E2E, CONFIG, CRATES
+    if package not in PACKAGES:
+        raise LookupError(f"no end to end package {package!r} (packages: {', '.join(PACKAGES)})")
+    E2E = ROOT / package
+    CONFIG = E2E / ".cargo" / "config.toml"
+    CRATES = {c: REPOSITORY[c] for c in PACKAGES[package]}
+
 # crate -> repository; the crate's directory is found by its package name (crate_dir), so a
 # crate that moves inside its repository (ALICE-Physics: the root package became
 # alice-physics-core and alice-physics a member) is still patched from where it is
-CRATES = {
+REPOSITORY = {
     "alice-det-math": "ALICE-DetMath",
     "alice-crypto": "ALICE-Crypto",
     "alice-zip": "ALICE-Zip",
@@ -65,7 +76,23 @@ CRATES = {
     "alice-lol": "ALICE-LOL",
     "alice-lol-macro": "ALICE-LOL",
     "alice-edge": "ALICE-Edge",
+    "alice-identity": "ALICE-Identity",
+    "alice-sign": "ALICE-Sign",
+    "alice-channel": "ALICE-Channel",
+    "alice-sync": "ALICE-Sync",
 }
+
+# each end to end package (a directory of this repository) and the core crates its graph must take
+# from main, every one at least once: e2e/ (the round trip, also run against the published releases)
+# and e2e-trust/ (the trust path, whose crates are not published, so it runs in main mode only)
+PACKAGES = {
+    "e2e": ["alice-det-math", "alice-crypto", "alice-zip", "alice-analytics", "alice-db", "alice-physics",
+            "alice-sdf", "alice-lol", "alice-lol-macro", "alice-edge"],
+    "e2e-trust": ["alice-det-math", "alice-crypto", "alice-zip", "alice-db", "alice-sdf", "alice-lol",
+                  "alice-lol-macro", "alice-identity", "alice-sign", "alice-channel", "alice-sync"],
+}
+
+CRATES = {c: REPOSITORY[c] for c in PACKAGES["e2e"]}
 
 # checked out next to the core repositories because alice-lol names them by path
 # (optional dependencies still have to be found for Cargo to resolve)
@@ -356,6 +383,14 @@ def verify() -> int:
 
 
 def main(argv: list[str]) -> int:
+    if "--package" in argv:
+        i = argv.index("--package")
+        try:
+            select(argv[i + 1])
+        except (IndexError, LookupError) as e:
+            print(f"main mode: {e}", file=sys.stderr)
+            return 2
+        argv = argv[:i] + argv[i + 2:]
     if len(argv) == 3 and argv[1] == "patch":
         return patch(Path(argv[2]))
     if len(argv) == 2 and argv[1] == "verify":
