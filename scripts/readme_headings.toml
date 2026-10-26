@@ -77,3 +77,8 @@ ja = "manifest がまだ無い crate"
 level = 2
 en = "License"
 ja = "ライセンス"
+
+[[heading]]
+level = 2
+en = "Licences of the linked releases"
+ja = "link する公開版のライセンス"
