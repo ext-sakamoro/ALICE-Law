@@ -10,6 +10,12 @@
 # to fail with the expected message (scripts/e2e_teeth.py); it rebuilds the test for
 # each change, so it runs on demand and when the test or the mutations change.
 #
+# The trust path (e2e-trust/tests/trust_path.rs) runs here only: alice-identity,
+# alice-sign, alice-channel and alice-sync are not on crates.io, so e2e.yml cannot
+# build it. It issues device certificates, signs a law under its law reference,
+# carries it over the authenticated channel under the Sync handshake (refused before
+# it), evaluates it, stores and restores it in alice-db and compares bit for bit.
+#
 # Daily and on demand, and on a push that changes the check. One run at a time;
 # the teeth job waits for the round trip and does not run on the daily schedule.
 
@@ -23,6 +29,7 @@ on:
     branches: [main, "ci/**"]
     paths:
       - "e2e/**"
+      - "e2e-trust/**"
       - "scripts/main_mode.py"
       - "scripts/e2e_teeth.py"
       - "scripts/expected_failure.py"
@@ -39,7 +46,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
-  REPOSITORIES: ALICE-DetMath ALICE-Crypto ALICE-Zip ALICE-Analytics ALICE-DB ALICE-Physics ALICE-SDF ALICE-LOL ALICE-Edge ALICE-LLM
+  REPOSITORIES: ALICE-DetMath ALICE-Crypto ALICE-Zip ALICE-Analytics ALICE-DB ALICE-Physics ALICE-SDF ALICE-LOL ALICE-Edge ALICE-LLM ALICE-Identity ALICE-Sign ALICE-Channel ALICE-Sync
 
 jobs:
   roundtrip:
@@ -89,6 +96,27 @@ jobs:
         working-directory: e2e
         run: cargo test --release --locked -- --nocapture
 
+  trust:
+    name: Issue, sign, carry, receive, store, restore, compare (main)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - *clone
+      - &patch-trust
+        name: Patch the trust path's crates with the checkouts
+        run: |
+          python3 scripts/main_mode.py --package e2e-trust patch "$RUNNER_TEMP/core"
+          cd e2e-trust && cargo --version && cargo generate-lockfile
+      - name: Every trust path crate taken from main
+        run: python3 scripts/main_mode.py --package e2e-trust verify | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Test
+        working-directory: e2e-trust
+        run: cargo test --release --locked -- --nocapture | tee -a "$GITHUB_STEP_SUMMARY"
+
   teeth:
     name: Mutations the test has to catch (main)
     # rebuilds the test once per mutation: on demand and when the check changes.
@@ -108,6 +136,9 @@ jobs:
       - name: Mutations
         if: steps.patch.outputs.expected != 'true'
         run: python3 scripts/e2e_teeth.py "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
+      - *patch-trust
+      - name: Mutations of the trust path
+        run: python3 scripts/e2e_teeth.py --package e2e-trust "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
 
   digest:
     # f32::max / f32::min leave the sign of an equal-zero result to the target, and

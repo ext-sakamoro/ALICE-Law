@@ -8,6 +8,10 @@
 # today: it is red until every core crate it needs is published at a version that
 # fits the others.
 #
+# The trust path (e2e-trust/) is not built here: alice-identity, alice-sign,
+# alice-channel and alice-sync are not published, so it runs only in main mode
+# (e2e-main.yml) until they are.
+#
 # Weekly and on demand, and on a push that changes the check. It does not run on
 # pushes to the core crates.
 

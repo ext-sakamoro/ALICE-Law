@@ -1,0 +1,4 @@
+# The toolchain the golden digest was recorded with
+[toolchain]
+channel = "1.98.1"
+profile = "minimal"

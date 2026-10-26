@@ -8,6 +8,7 @@ unmutated test must pass before and after, and every checkout must be back to it
 original contents at the end.
 
     python3 scripts/e2e_teeth.py <checkouts>
+    python3 scripts/e2e_teeth.py --package e2e-trust <checkouts>   # the trust path (main mode for it too)
 
 Exit 0 when every mutation was caught, 1 when one was not (or the baseline did not
 pass), 2 when a mutation could not be applied (its line is not in the source any
@@ -107,13 +108,44 @@ MUTATIONS = [
     ),
 ]
 
+# the trust path (e2e-trust/, patched by `main_mode.py --package e2e-trust`): each refusal it asserts
+TRUST_MUTATIONS = [
+    (
+        "zip: a law reference whose recomputed identifier differs is accepted",
+        "ALICE-Zip/src/law_ref.rs",
+        "        if computed != stated {",
+        "        if false {",
+        "a tampered law reference was accepted",
+    ),
+    (
+        "identity: an artifact signature is accepted without checking it",
+        "ALICE-Identity/src/artifact.rs",
+        "    if !device.verify_strict(&sig.signed_message(), &Signature(sig.signature)) {",
+        "    if false {",
+        "a tampered signature verified",
+    ),
+    (
+        "sync: bytes from a peer whose Hello was not accepted are received",
+        "ALICE-Sync/src/session.rs",
+        "            Frame::Bytes { from, .. } => self.gate.handshaken(*from).await,",
+        "            Frame::Bytes { .. } => Ok(()),",
+        "bytes before the handshake were not refused",
+    ),
+]
 
-def run_test() -> tuple[bool, str]:
+# package directory -> (its test, its mutations)
+SUITES = {
+    "e2e": ("law_to_storage_roundtrip", MUTATIONS),
+    "e2e-trust": ("trust_path", TRUST_MUTATIONS),
+}
+
+
+def run_test(package: str = "e2e") -> tuple[bool, str]:
     env = dict(os.environ)
     env.pop("ALICE_LAW_E2E_BLESS", None)
     p = subprocess.run(
-        ["cargo", "test", "--release", "--test", "law_to_storage_roundtrip"],
-        cwd=E2E,
+        ["cargo", "test", "--release", "--test", SUITES[package][0]],
+        cwd=ROOT / package,
         env=env,
         capture_output=True,
         text=True, encoding="utf-8"
@@ -122,23 +154,29 @@ def run_test() -> tuple[bool, str]:
 
 
 def resolve(checkouts: Path, rel: str) -> Path:
-    return ROOT / rel if rel.startswith("e2e/") else checkouts / rel
+    return ROOT / rel if rel.split("/", 1)[0] in SUITES else checkouts / rel
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
+    package = "e2e"
+    if "--package" in argv:
+        i = argv.index("--package")
+        package = argv[i + 1] if i + 1 < len(argv) else ""
+        argv = argv[:i] + argv[i + 2:]
+    if len(argv) != 2 or package not in SUITES:
         print(__doc__, file=sys.stderr)
         return 2
     checkouts = Path(argv[1])
+    mutations = SUITES[package][1]
     originals = {}
-    for _, rel, old, _, _ in MUTATIONS:
+    for _, rel, old, _, _ in mutations:
         path = resolve(checkouts, rel)
         text = originals.setdefault(path, path.read_text(encoding="utf-8"))
         if text.count(old) != 1:
             print(f"teeth: {rel}: the line to mutate is there {text.count(old)} times, not once", file=sys.stderr)
             return 2
 
-    ok, out = run_test()
+    ok, out = run_test(package)
     if not ok:
         print(out[-3000:])
         print("teeth: the unmutated test does not pass")
@@ -147,11 +185,11 @@ def main(argv: list[str]) -> int:
     caught = 0
     rows = []
     try:
-        for name, rel, old, new, expect in MUTATIONS:
+        for name, rel, old, new, expect in mutations:
             path = resolve(checkouts, rel)
             path.write_text(originals[path].replace(old, new, 1), encoding="utf-8")
             try:
-                ok, out = run_test()
+                ok, out = run_test(package)
             finally:
                 path.write_text(originals[path], encoding="utf-8")
             if ok:
@@ -168,13 +206,13 @@ def main(argv: list[str]) -> int:
         for path, text in originals.items():
             path.write_text(text, encoding="utf-8")
 
-    ok, out = run_test()
+    ok, out = run_test(package)
     if not ok:
         print(out[-3000:])
         print("teeth: the test does not pass after the mutations were put back")
         return 1
-    print(f"teeth: {caught} of {len(MUTATIONS)} mutations caught")
-    return 0 if caught == len(MUTATIONS) and caught > 0 else 1
+    print(f"teeth: {package}: {caught} of {len(mutations)} mutations caught")
+    return 0 if caught == len(mutations) and caught > 0 else 1
 
 
 if __name__ == "__main__":
