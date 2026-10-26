@@ -2,6 +2,10 @@
 # a crate commit that has not landed yet, whose status counts manifest-state.toml already records
 # (the state is recorded before the crate lands; do not edit by hand)
 
-[pending."ALICE-Zip"]
-sha = "d8f3b6f9d30aa4c3e1f8c891af5cd873e41886ff"
+[pending."ALICE-Edge"]
+sha = "5c440c2f7be207b4d1410d0fc57efa6c8f5d1717"
+since = "2026-10-26"
+
+[pending."ALICE-SDF"]
+sha = "28b77cc9fb2b51802a1957eacec233e5ccf9f92f"
 since = "2026-10-26"
