@@ -32,8 +32,8 @@ crates = ["alice-db"]
 
 [manifest."ALICE-DetMath"]
 crates = ["alice-det-math"]
-"pass" = 11
-"fail-known" = 1
+"pass" = 12
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 2
 
