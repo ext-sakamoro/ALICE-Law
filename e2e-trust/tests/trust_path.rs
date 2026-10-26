@@ -19,8 +19,11 @@
 //! 7. compare: the signature bytes, the law identifier, every value (`to_bits`) and each
 //!    crate's semantics identifier, sender against receiver against restored
 //!
-//! Each comparison counts what it compared and the run fails on zero. A tampered signature, a
-//! tampered law reference and bytes before the handshake must each be refused.
+//! Each comparison counts what it compared and the run fails on zero. The values are also held to
+//! the signs the program fixes at six points (not only to themselves). A tampered signature, a
+//! tampered law reference (by its identifier and by the signature's binding) and bytes before the
+//! handshake must each be refused, each for its own reason. The semantics identifiers are compared
+//! across the store in one build: they show that storing keeps them, not that two devices agree.
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 
@@ -32,7 +35,8 @@ use alice_channel::noise::Keypair;
 use alice_channel::{Credential, PeerPolicy};
 use alice_db::{AliceDB, StorageConfig};
 use alice_identity::artifact::{
-    sha256_payload, sign_artifact, verify_artifact, ArtifactSignature, PayloadDigest, Revocation,
+    sha256_payload, sign_artifact, verify_artifact, ArtifactError, ArtifactSignature, PayloadDigest,
+    Revocation,
 };
 use alice_identity::device_cert::DeviceCert;
 use alice_identity::did::Did;
@@ -144,6 +148,17 @@ fn grid() -> Vec<Vec3> {
     }
     out
 }
+
+/// What the program itself says at some points, independent of the evaluator: a sphere of radius 10
+/// at the origin, and a box of half extent 4 centred at x = 12 (so it spans x in [8, 16])
+const SIGNS: [((f32, f32, f32), bool); 6] = [
+    ((0.0, 0.0, 0.5), true),    // the centre of the sphere
+    ((9.5, 0.0, 0.5), true),    // inside the sphere, near its surface
+    ((14.0, 0.0, 0.5), true),   // inside the box only
+    ((20.0, 0.0, 0.5), false),  // outside both
+    ((-12.0, 0.0, 0.5), false), // outside the sphere on the other side
+    ((0.0, 12.0, 0.5), false),  // above the sphere
+];
 
 fn evaluate(law_ref: &LawRef) -> Vec<u32> {
     let shape = resolve_program(law_ref).unwrap();
@@ -262,6 +277,17 @@ async fn a_signed_law_is_carried_evaluated_stored_and_restored_bit_for_bit() {
     compared.bits("law semantics identifier", law_ref.semantics_id(), got_law.semantics_id());
     let got_values = evaluate(&got_law);
     assert_eq!(got_values.len(), grid().len());
+    // the values are the program's, not a constant: the evaluator agrees with the signs the
+    // program fixes, and the grid gives many distinct values
+    let shape = resolve_program(&got_law).unwrap();
+    for ((x, y, z), inside) in SIGNS {
+        let d = alice_lol::eval(&shape, Vec3::new(x, y, z));
+        assert_eq!(d < 0.0, inside, "the law's value at ({x}, {y}, {z}) is {d}: not the program's shape");
+        compared.0.entry("sign from the program").and_modify(|n| *n += 1).or_insert(1);
+    }
+    // the grid is symmetric about y = 0 and partly about x = 0, so values repeat; a constant would not
+    let distinct: std::collections::BTreeSet<u32> = got_values.iter().copied().collect();
+    assert!(distinct.len() > 1, "every value of the grid is the same: {distinct:?}");
     for (a, b) in sent_values.iter().zip(&got_values) {
         compared.bits("value", &a.to_le_bytes(), &b.to_le_bytes());
     }
@@ -270,11 +296,13 @@ async fn a_signed_law_is_carried_evaluated_stored_and_restored_bit_for_bit() {
     let mut tampered = got_sig.clone();
     let last = tampered.len() - 1;
     tampered[last] ^= 1;
+    // the last bytes of the encoding are the Ed25519 signature: only the signature check refuses it
     let tampered = ArtifactSignature::from_bytes(&tampered).unwrap();
+    let verdict =
+        verify_artifact(&tampered, &sender.master.public(), CONTEXT, &got_digest, NOW, Revocation::NoListAvailable);
     assert!(
-        verify_artifact(&tampered, &sender.master.public(), CONTEXT, &got_digest, NOW, Revocation::NoListAvailable)
-            .is_err(),
-        "a tampered signature verified"
+        matches!(verdict, Err(ArtifactError::BadSignature)),
+        "a tampered signature verified, or was refused for another reason: {verdict:?}"
     );
     // one digit of the program changed inside the reference: the bytes still parse, and only the
     // identifier recomputed from them can refuse it
@@ -282,6 +310,15 @@ async fn a_signed_law_is_carried_evaluated_stored_and_restored_bit_for_bit() {
     let at = tampered_ref.windows(4).position(|w| w == b"10.0").expect("the program is in the reference");
     tampered_ref[at + 1] = b'1';
     assert!(LawRef::from_bytes(&tampered_ref).is_err(), "a tampered law reference was accepted");
+    // and the signature binds the reference: the untouched signature does not cover the same payload
+    // under the changed reference
+    let rebound = bound_digest(&tampered_ref, got_payload);
+    let verdict =
+        verify_artifact(&got_signature, &sender.master.public(), CONTEXT, &rebound, NOW, Revocation::NoListAvailable);
+    assert!(
+        matches!(verdict, Err(ArtifactError::DigestMismatch)),
+        "the signature covered another law reference: {verdict:?}"
+    );
 
     // 6. store, write to bytes, open again
     let identifiers: [(&str, [u8; 32]); 5] = [
@@ -317,6 +354,7 @@ async fn a_signed_law_is_carried_evaluated_stored_and_restored_bit_for_bit() {
     let total: usize = compared.0.values().sum();
     assert_eq!(compared.0.get("value"), Some(&grid().len()), "not every value was compared");
     assert_eq!(compared.0.get("semantics identifier"), Some(&identifiers.len()));
+    assert_eq!(compared.0.get("sign from the program"), Some(&SIGNS.len()));
     assert!(total > 0, "nothing was compared");
     println!("trust path: {total} comparisons, 0 differences");
 }
