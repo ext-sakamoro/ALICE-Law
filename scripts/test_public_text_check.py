@@ -1547,5 +1547,19 @@ class Devices(Base):
         for line in ("zorb box", "zorb-boxes", "a zorb-box2 run"):
             self.assertNotIn("host name", ptc.kinds(line), line)
 
+
+class TrackerPathInIdentifier(Base):
+    """`memory/` inside a dotted identifier (a kind tag) is not a note path"""
+
+    def test_a_dotted_identifier_is_not_a_tracker_path(self):
+        for line in ('pub const MEMORY_LAW_KIND: &[u8] = b"lol.law.memory/v1";',
+                     '"memory": b"lol.law.memory/v1"}', "kind tag `lol.law.memory/v1`"):
+            self.assertNotIn("internal tracker", ptc.kinds(line), line)
+
+    def test_a_note_path_is_still_found(self):
+        for line in ("see memory/feedback_x.md", " memory/feedback_x.md", "`memory/text-to-print.md`",
+                     "(memory/project_y.md)"):
+            self.assertIn("internal tracker", ptc.kinds(line), line)
+
 if __name__ == "__main__":
     unittest.main()

@@ -94,7 +94,7 @@ FORBIDDEN = [
     ("session name", re.compile(r"(?<![A-Za-z0-9])(?:ys|sakamoro)-[0-9a-f]{2}(?![A-Za-z0-9])")),
     # the frontmatter of a private note
     ("internal note", re.compile(r"^\s*node_type\s*:\s*memory\b|(?<![A-Za-z])originSessionId(?![A-Za-z])")),
-    ("internal tracker", re.compile(words(r"Backlog") + r"|memory\s*(?:側|化|に|へ|file)|(?<![A-Za-z0-9_])memory/")),
+    ("internal tracker", re.compile(words(r"Backlog") + r"|memory\s*(?:側|化|に|へ|file)|(?<![A-Za-z0-9_.])memory/")),
     # a link to a private note: any `[[name]]` with an underscore or a hyphen, in any case
     # (a single word such as `[[gate]]` names a TOML table in prose); a TOML
     # array-of-tables header at the start of a line in a .toml file is not one (kinds())
