@@ -2,6 +2,14 @@
 # a crate commit that has not landed yet, whose status counts manifest-state.toml already records
 # (the state is recorded before the crate lands; do not edit by hand)
 
-[pending."ALICE-DetMath"]
-sha = "39507d1b99960f260a0b760b3fba6cb60823340d"
+[pending."ALICE-Crypto"]
+sha = "ca223fe33c20861e26b5592449f22af6b6cd4221"
+since = "2026-10-26"
+
+[pending."ALICE-LLM"]
+sha = "6ecd8a82bdc6e02c5ee0cc784dc9d0cdf0f70943"
+since = "2026-10-26"
+
+[pending."ALICE-ML"]
+sha = "16097f5fe5cb000ba64c43981c769f277a74dbd9"
 since = "2026-10-26"

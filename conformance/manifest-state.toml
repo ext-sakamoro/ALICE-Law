@@ -18,8 +18,8 @@ crates = ["alice-channel"]
 
 [manifest."ALICE-Crypto"]
 crates = ["alice-crypto"]
-"pass" = 10
-"fail-known" = 1
+"pass" = 11
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 3
 
@@ -60,8 +60,8 @@ crates = ["alice-kinematics"]
 
 [manifest."ALICE-LLM"]
 crates = ["alice-llm"]
-"pass" = 13
-"fail-known" = 1
+"pass" = 14
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 0
 
@@ -74,8 +74,8 @@ crates = ["alice-lol", "alice-lol-macro"]
 
 [manifest."ALICE-ML"]
 crates = ["alice-ml"]
-"pass" = 13
-"fail-known" = 1
+"pass" = 14
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 0
 
