@@ -8,8 +8,9 @@ description = "End to end check of the trust path: issue a device certificate, s
 
 # These crates are not on crates.io, so this package runs in main mode only
 # (scripts/main_mode.py --package e2e-trust patches every one with its main branch);
-# the revisions below are the mains it was written against. The published-mode check
-# (e2e/, .github/workflows/e2e.yml) does not depend on them.
+# the revisions below are the mains it was written against, and the file does not build outside
+# main mode (alice-lol names its siblings by path, ../../ALICE-Sign and others). The published-mode
+# check (e2e/, .github/workflows/e2e.yml) does not depend on them.
 [dependencies]
 alice-identity = { version = "1.2.0", git = "https://github.com/ext-sakamoro/ALICE-Identity", rev = "7e4379b43b63c6e08a345e1b266cb4d908161441" }
 alice-sign = { version = "0.1", git = "https://github.com/ext-sakamoro/ALICE-Sign", rev = "bb79209e376ec3989bf721f48d5894032a221e8b" }

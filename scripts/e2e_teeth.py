@@ -131,6 +131,13 @@ TRUST_MUTATIONS = [
         "            Frame::Bytes { .. } => Ok(()),",
         "bytes before the handshake were not refused",
     ),
+    (
+        "lol: the evaluator returns one constant whatever the law",
+        "ALICE-LOL/alice-lol/src/lib.rs",
+        "    alice_sdf::eval(node, point)\n}",
+        "    let _ = (node, point);\n    1.0\n}",
+        "not the program's shape",
+    ),
 ]
 
 # package directory -> (its test, its mutations)
