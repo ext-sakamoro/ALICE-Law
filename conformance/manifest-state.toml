@@ -109,7 +109,7 @@ crates = ["alice-sync"]
 
 [manifest."ALICE-Zip"]
 crates = ["alice-zip", "alice-zip-cli"]
-"pass" = 13
-"fail-known" = 1
+"pass" = 14
+"fail-known" = 0
 "unverified" = 0
 "n/a" = 0

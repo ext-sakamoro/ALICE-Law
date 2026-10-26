@@ -199,7 +199,7 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 | ALICE-SDF | alice-sdf | 11 | 3 | 0 | 0 |
 | ALICE-Sign | alice-sign | 13 | 0 | 0 | 1 |
 | ALICE-Sync | alice-sync | 14 | 0 | 0 | 0 |
-| ALICE-Zip | alice-zip, alice-zip-cli | 13 | 1 | 0 | 0 |
+| ALICE-Zip | alice-zip, alice-zip-cli | 14 | 0 | 0 | 0 |
 
 ### manifest がまだ無い crate
 
