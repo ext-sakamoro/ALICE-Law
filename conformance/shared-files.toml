@@ -5,10 +5,9 @@
 
 [[file]]
 path = ".github/actions/alice-siblings/action.yml"
-sha256 = "de56a65e67a46b45c7c7cdbf278985bcc591182d6fe2d0137e4341251c5dc81a"
-source = { repo = "ALICE-Analytics", rev = "bf265676b75df9160f23cc7afd274c626515cde5" }
+pending = { since = "2026-10-26", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "dbf112b30db1b196be0fe4eaa575e49de26790b5be085f90c8508851c9223905", owner = "ALICE-Analytics", planned = "f0e8f9de5a43024e355a2bc3955e9cf5819843b8", moved_from = { planned = "f5284339eb849eeb21503c3d8d491b5870ce15dc", target = "de56a65e67a46b45c7c7cdbf278985bcc591182d6fe2d0137e4341251c5dc81a" }, first_move = true, variants = { "de56a65e67a46b45c7c7cdbf278985bcc591182d6fe2d0137e4341251c5dc81a" = ["ALICE-Analytics", "ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-Queue"] } }
 repos = ["ALICE-Analytics", "ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-Queue"]
-exempt = { "ALICE-API" = "takes no sibling checkout any more; its unused copy is being removed", "ALICE-Kinematics" = "takes no sibling checkout any more; its unused copy is being removed", "text-to-print" = { "reason" = "its own action with per-dependency deploy keys, until the canonical one (owner ALICE-Analytics) takes that mechanism and every copy converges on it", "until" = "2026-11-11" } }
+exempt = { "ALICE-API" = { "reason" = "its ci.yml still uses its copy (earlier bytes) on main; a pending change replaces the sibling checkout by git dependencies and deletes the copy", "until" = "2026-11-10" }, "ALICE-Kinematics" = "takes no sibling checkout any more; its unused copy is being removed", "text-to-print" = { "reason" = "its own action with per-dependency deploy keys, until the canonical one (owner ALICE-Analytics) takes that mechanism and every copy converges on it", "until" = "2026-11-11" } }
 
 [[file]]
 path = ".github/workflows/changed-paths-oracle.yml"
