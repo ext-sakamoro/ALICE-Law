@@ -629,6 +629,17 @@ meet. A feature the table does not list is not declared, and the README block
 generator refuses a feature marked `inside` without evidence, and a listed
 feature the crate does not have.
 
+### ALICE-Law revisions next to a pin file
+
+A clause of a manifest string (cut at `;` and at the end of a sentence) that names a pin, by
+its file (`.github/<x>-pin`) or by the script that reads it (`shared_files.sh`,
+`g11_table.sh`, `public_text.sh`), and writes an ALICE-Law revision (`ALICE-Law <hex>` or
+`revision (<hex>)`) claims the crate is checked at that revision. The roster check and
+`--check-manifest` read the pin files the clause names at the same ref and fail when no
+`rev` among them starts with the written revision, or when a pin file is missing or has no
+`rev` line, so a pin moved without its text is a finding. A revision in a clause that names
+no pin (the revision a table was first generated at, say) is history and is not compared.
+
 ### Line-number references
 
 A place is named by an anchor, never by a line number. The line numbers that manifests

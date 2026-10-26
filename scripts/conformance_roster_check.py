@@ -398,6 +398,58 @@ def anchor_gap(path: str, token: str, paths: set[str], read) -> str | None:
     return f"{token!r} occurs {n} times in {path} (an anchor must name one place: lengthen it or scope it as A>B)"
 
 
+# A clause (a string cut at `;` and at the end of a sentence) that names a pin, by its file or by the
+# script that reads it, makes every ALICE-Law revision it writes a claim about that pin: `ALICE-Law <hex>`
+# or `revision (<hex>)`. A clause that names no pin (the revision a table was first generated at, say)
+# is history and is not compared.
+CLAUSE_SPLIT_RE = re.compile(r";|(?<=[.!?])\s")
+PIN_NAME_RES = (
+    (re.compile(r"\.github/([a-z0-9][a-z0-9-]*-pin)\b"), None),
+    (re.compile(r"\bshared_files\.sh\b"), "shared-files-pin"),
+    (re.compile(r"\bg11_table\.sh\b"), "g11-table-pin"),
+    (re.compile(r"\bpublic_text\.sh\b"), "public-text-pin"),
+)
+PIN_CLAIM_RE = re.compile(r"\bALICE-Law ([0-9a-f]{7,40})\b|\brevision \(([0-9a-f]{7,40})\)")
+PIN_REV_RE = re.compile(r"^rev ([0-9a-f]{40})\s*$", re.M)
+
+
+def pin_mentions(text: str) -> list[tuple[tuple[str, ...], str]]:
+    """(pin files the clause names, revision) for every ALICE-Law revision written in a clause that
+    names a pin"""
+    out = []
+    for clause in CLAUSE_SPLIT_RE.split(text):
+        pins = []
+        for r, pin in PIN_NAME_RES:
+            for m in r.finditer(clause):
+                p = pin or m.group(1)
+                if p not in pins:
+                    pins.append(p)
+        if not pins:
+            continue
+        for m in PIN_CLAIM_RE.finditer(clause):
+            out.append((tuple(pins), m.group(1) or m.group(2)))
+    return out
+
+
+def pin_mention_gap(pins: tuple[str, ...], rev: str, read) -> str | None:
+    """None when one of the clause's pin files at the ref pins a revision that starts with `rev`;
+    otherwise why not"""
+    seen = []
+    for pin in pins:
+        text = read(f".github/{pin}") if read is not None else None
+        if text is None:
+            seen.append(f".github/{pin} could not be read at the ref")
+            continue
+        m = PIN_REV_RE.search(text)
+        if m is None:
+            seen.append(f".github/{pin} has no `rev <40 hex>` line")
+            continue
+        if m.group(1).startswith(rev):
+            return None
+        seen.append(f".github/{pin} pins {m.group(1)[:12]}")
+    return f"names ALICE-Law {rev} next to its pin, but " + ", ".join(seen)
+
+
 def strings_in(value, field: str):
     """(field, string) for every string inside a gate's value: a list's items and a table's values,
     recursively, each under the top-level field it sits in"""
@@ -432,6 +484,7 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
     compared = 0
     na_checked = na_downgraded = 0
     anchors: dict[str, int] = {}
+    pin_mentions_checked = 0
     for gid in sorted(ids & set(vocab), key=lambda g: int(g[1:])):
         e = manifest[gid]
         compared += 1
@@ -461,6 +514,11 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
                     why = anchor_gap(m["path"], m["token"], paths, read)
                     if why:
                         findings.append(f"{where}: {gid} {field} anchor `{m['path']}#{m['token']}`: {why}")
+                for pins, rev in pin_mentions(x):
+                    pin_mentions_checked += 1
+                    why = pin_mention_gap(pins, rev, read)
+                    if why:
+                        findings.append(f"{where}: {gid} {field} {why}")
         mutant = e.get("mutant", "")
         if "mutant" in e and not isinstance(mutant, str):
             findings.append(f"{where}: {gid} mutant is not a string")
@@ -496,6 +554,8 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
     if anchors:
         per = ", ".join(f"{k} {v}" for k, v in sorted(anchors.items()))
         warnings.append(f"{where}: {sum(anchors.values())} anchor(s) checked ({per})")
+    if pin_mentions_checked:
+        warnings.append(f"{where}: {pin_mentions_checked} ALICE-Law revision(s) next to a pin file checked")
     if na_checked:
         warnings.append(f"{where}: {na_checked} n/a cell(s) checked for a measured scanner, "
                         f"{na_downgraded} read as unverified")

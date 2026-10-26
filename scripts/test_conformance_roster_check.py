@@ -537,6 +537,58 @@ class CheckManifest(unittest.TestCase):
         self.assertEqual(code, 2, out)
         self.assertIn("compared nothing", out)
 
+    PIN = "a1b2c3d4" + "0" * 32
+    OLD = "0a5de013"
+
+    def pinned(self, note: str):
+        f = self.files(manifest(G2=f'status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs:12; {note}"'))
+        f[".github/shared-files-pin"] = f"name Beta\nrev {self.PIN}\ntable-sha256 x\nchecker-sha256 y\n"
+        return f
+
+    # the phrasings the manifests use: the pin file or the script that reads it, before or after the
+    # revision, `ALICE-Law <hex>` or `revision (<hex>)`, in one clause
+    PHRASINGS = (
+        "held at ALICE-Law {rev} (.github/shared-files-pin)",
+        "read through .github/shared-files-pin (ALICE-Law {rev})",
+        "with ALICE-Law's table at the .github/shared-files-pin revision ({rev}): every copy has its bytes",
+        "(scripts/shared_files.sh: 103 copies, 0 findings at ALICE-Law {rev})",
+        "(.github/shared-files-pin, ALICE-Law {rev})",
+        "ALICE-Law {rev} pinned in .github/shared-files-pin",
+        "every copy is at the target of ALICE-Law {rev}'s table (scripts/shared_files.sh: 0 findings)",
+    )
+
+    def test_a_revision_in_a_clause_naming_its_pin_is_compared_in_every_phrasing(self):
+        for p in self.PHRASINGS:
+            code, out = self.run_cm(self.repo(self.pinned(p.format(rev=self.PIN[:8]))))
+            self.assertEqual(code, 0, f"{p}\n{out}")
+            self.assertIn("1 ALICE-Law revision(s) next to a pin file checked", out, p)
+
+    def test_a_revision_the_pin_no_longer_pins_is_a_finding_in_every_phrasing(self):
+        for p in self.PHRASINGS:
+            code, out = self.run_cm(self.repo(self.pinned(p.format(rev=self.OLD))))
+            self.assertEqual(code, 1, f"{p}\n{out}")
+            self.assertIn(f"G2 note names ALICE-Law {self.OLD} next to its pin, but "
+                          f".github/shared-files-pin pins a1b2c3d40000", out, p)
+
+    def test_a_revision_in_a_clause_naming_no_pin_is_history_and_not_compared(self):
+        for p in (f"the table was first generated at ALICE-Law {self.OLD}, the first revision whose "
+                  f"shared-files table lists this repository",
+                  f"generated at ALICE-Law {self.OLD}; the copies are checked by scripts/shared_files.sh"):
+            code, out = self.run_cm(self.repo(self.pinned(p)))
+            self.assertEqual(code, 0, f"{p}\n{out}")
+            self.assertNotIn("next to a pin file checked", out, p)
+
+    def test_a_pin_file_missing_or_without_a_rev_is_a_finding(self):
+        f = self.pinned(f"held at ALICE-Law {self.OLD} (.github/g11-table-pin)")
+        code, out = self.run_cm(self.repo(f))
+        self.assertEqual(code, 1, out)
+        self.assertIn(".github/g11-table-pin could not be read at the ref", out)
+        f = self.pinned(f"held at ALICE-Law {self.PIN[:8]} (.github/shared-files-pin)")
+        f[".github/shared-files-pin"] = "name Beta\n"
+        code, out = self.run_cm(self.repo(f))
+        self.assertEqual(code, 1, out)
+        self.assertIn(".github/shared-files-pin has no `rev <40 hex>` line", out)
+
 
 class LawEvidence(unittest.TestCase):
     """a G2 / G8 pass counts only with the evidence the gate text asks for, named and present at the ref"""
