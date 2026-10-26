@@ -120,7 +120,7 @@ jobs:
         run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --fetch
 
       - name: Every listed repository's main carries each copy
-        run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies 1230
+        run: python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies 1304
 
       - name: The table is the generated one
         run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
