@@ -111,10 +111,10 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Test the reader
+      - name: Test the public text reader
         run: python3 scripts/test_public_text_live.py
 
-      - name: The public repositories against the baseline
+      - name: The public repositories' text against the baseline
         env:
           GH_TOKEN: ${{ github.token }}
         # this repository at the commit under test (its own tree), every other one at its default branch
