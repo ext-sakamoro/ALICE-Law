@@ -241,3 +241,12 @@ jobs:
         run: |
           py=$(command -v python3 || command -v python)
           "$py" scripts/test_g11_self_check.py
+
+      # a text-mode subprocess call decodes git's output with the locale's code page (cp1252 on
+      # Windows) unless it names its encoding; the scripts a crate runs at its pin read UTF-8 files
+      - name: Every text-mode subprocess call names its encoding (tests, then check)
+        shell: bash
+        run: |
+          py=$(command -v python3 || command -v python)
+          "$py" scripts/test_subprocess_encoding_check.py
+          "$py" scripts/subprocess_encoding_check.py

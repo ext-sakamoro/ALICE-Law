@@ -26,7 +26,7 @@ V3 = SHARED + b"# v3\n"
 
 
 def git(*args: str, cwd: Path | None = None) -> str:
-    return subprocess.run(["git", *args], cwd=cwd, env=ENV, check=True, capture_output=True, text=True).stdout
+    return subprocess.run(["git", *args], cwd=cwd, env=ENV, check=True, capture_output=True, text=True, encoding="utf-8").stdout
 
 
 def h(data: bytes) -> str:

@@ -28,7 +28,7 @@ MADE_UP = "zorblat quux"  # stands in for a private name; only its hash is in th
 
 def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
-                          env={**ENV, "HOME": str(repo)}).stdout
+                          env={**ENV, "HOME": str(repo)}, encoding="utf-8").stdout
 
 
 def commit(repo: Path, files: dict[str, str], message: str = "x", delete: tuple[str, ...] = ()) -> str:
@@ -727,7 +727,7 @@ class Shapes(unittest.TestCase):
 
     def run_standalone(self, d: Path, repo: Path) -> subprocess.CompletedProcess:
         return subprocess.run([sys.executable, str(d / "public_text_check.py"), "--repo", str(repo),
-                               "--repo-name", "fixture", "--tree", "HEAD"], capture_output=True, text=True)
+                               "--repo-name", "fixture", "--tree", "HEAD"], capture_output=True, text=True, encoding="utf-8")
 
     def test_the_private_repository_set_is_held_in_the_checker_itself(self):
         d = self.standalone()
@@ -735,7 +735,7 @@ class Shapes(unittest.TestCase):
                               "import hashlib, sys; sys.path.insert(0, sys.argv[1]); import public_text_check as p; "
                               "h = sorted(p.PRIVATE_REPO_HASHES); "
                               "print(len(h), hashlib.sha256('\\n'.join(h).encode()).hexdigest())", str(d)],
-                             capture_output=True, text=True, check=True).stdout.split()
+                             capture_output=True, text=True, check=True, encoding="utf-8").stdout.split()
         self.assertEqual(got, [str(self.PRIVATE_REPO_COUNT), self.PRIVATE_REPO_DIGEST])
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in ptc.PRIVATE_REPO_HASHES))
         self.assertFalse((Path(ptc.__file__).parent / "public_text_private_repos.txt").exists())

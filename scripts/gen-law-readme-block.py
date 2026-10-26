@@ -125,7 +125,7 @@ def show(repo: str, rev: str, path: str) -> str | None:
 
 def resolve(repo: str, rev: str) -> str:
     r = subprocess.run(["git", "-C", repo, "rev-parse", "--verify", f"{rev}^{{commit}}"], capture_output=True,
-                       text=True)
+                       text=True, encoding="utf-8")
     if r.returncode != 0:
         raise InputError(f"{repo}: no commit {rev} (fetch it)")
     return r.stdout.strip()
@@ -466,7 +466,7 @@ def write(law: str, law_rev: str, crate: str, repo: str) -> int:
     # the block is rendered from the committed inputs: refuse while they have uncommitted changes
     inputs = [law_facts(law, resolve(law, law_rev), crate)["manifest_path"], MANIFEST]
     dirty = subprocess.run(["git", "-C", repo, "status", "--porcelain", "--", *inputs], capture_output=True,
-                           text=True).stdout.strip()
+                           text=True, encoding="utf-8").stdout.strip()
     if dirty:
         raise InputError(f"{repo}: commit {', '.join(inputs)} first (the block is generated from the commit)")
     for lang, name in readme_names(lambda n: Path(repo, n).exists()).items():

@@ -155,7 +155,7 @@ def baseline_growth(old: dict[str, set[tuple[str, str]]],
 
 def repo_name_of(repo: str) -> str:
     """the repository's name: the last part of the origin URL, else the checkout's directory name"""
-    r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"], capture_output=True, text=True, encoding="utf-8")
     url = r.stdout.strip() if r.returncode == 0 else git(repo, "rev-parse", "--show-toplevel").strip()
     return re.sub(r"\.git$", "", url.rstrip("/").split("/")[-1].split(":")[-1])
 
@@ -179,7 +179,7 @@ def is_mit(text: str) -> bool:
 
 
 def git(repo: str, *args: str) -> str:
-    return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, check=True).stdout
+    return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, check=True, encoding="utf-8").stdout
 
 
 def spdx_ids(expr: str) -> list[str]:
@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
                       "(nothing would be compared)", file=sys.stderr)
                 return 2
             r = subprocess.run(["git", "-C", a.repo, "show", f"{ref}:conformance/holder-baseline.toml"],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, encoding="utf-8")
             if r.returncode == 0:
                 base_text = r.stdout
             else:

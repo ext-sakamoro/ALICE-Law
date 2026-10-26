@@ -123,7 +123,7 @@ def pin_problem(repo: Path, law: Path) -> str | None:
         f = pin_fields(pin.read_text(encoding="utf-8"))
     except (ValueError, UnicodeDecodeError) as e:
         return str(e)
-    head = subprocess.run(["git", "-C", str(law), "rev-parse", "HEAD"], capture_output=True, text=True)
+    head = subprocess.run(["git", "-C", str(law), "rev-parse", "HEAD"], capture_output=True, text=True, encoding="utf-8")
     if head.returncode != 0:
         return f"{law}: not a git checkout"
     if head.stdout.strip() != f["rev"]:
@@ -136,7 +136,7 @@ def pin_problem(repo: Path, law: Path) -> str | None:
     # untracked module would be imported); the one exception is an untracked copy of this script, for a pin that
     # predates it (a tracked one is held to HEAD like any other file)
     st = subprocess.run(["git", "-C", str(law), "status", "--porcelain", "--untracked-files=all", "--",
-                         "scripts", "conformance"], capture_output=True, text=True)
+                         "scripts", "conformance"], capture_output=True, text=True, encoding="utf-8")
     if st.returncode != 0:
         return f"{law}: git status failed"
     dirty = [ln for ln in st.stdout.splitlines() if ln.strip() and ln != f"?? scripts/{Path(__file__).name}"]

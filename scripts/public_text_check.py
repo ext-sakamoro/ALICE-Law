@@ -933,7 +933,7 @@ def range_base(repo: str, rng: str) -> str | None:
     """the base of "a..b" (a) or "a...b" (their merge base); None when the range has no base"""
     if "..." in rng:
         a, b = rng.split("...", 1)
-        r = subprocess.run(["git", "-C", repo, "merge-base", a or "HEAD", b or "HEAD"], capture_output=True, text=True)
+        r = subprocess.run(["git", "-C", repo, "merge-base", a or "HEAD", b or "HEAD"], capture_output=True, text=True, encoding="utf-8")
         return r.stdout.strip() or None if r.returncode == 0 else None
     if ".." in rng:
         return rng.split("..", 1)[0] or "HEAD"
@@ -967,7 +967,7 @@ PIN_CONFIG_RE = re.compile(r"^config-sha256\s+([0-9a-f]{64})\s*$", re.M)
 
 
 def pin_config_hash(repo: str, rev: str) -> str | None:
-    r = subprocess.run(["git", "-C", repo, "show", f"{rev}:{PIN_FILE}"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", repo, "show", f"{rev}:{PIN_FILE}"], capture_output=True, text=True, encoding="utf-8")
     m = PIN_CONFIG_RE.search(r.stdout) if r.returncode == 0 else None
     return m.group(1) if m else None
 
@@ -1823,7 +1823,7 @@ def repo_key(name: str) -> str:
 
 def repo_name(repo: str) -> str | None:
     """the repository's name from its origin URL (".../<name>.git"), or None"""
-    r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"], capture_output=True, text=True, encoding="utf-8")
     url = r.stdout.strip().rstrip("/")
     if r.returncode != 0 or not url:
         return None

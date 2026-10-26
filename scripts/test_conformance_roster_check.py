@@ -358,7 +358,9 @@ class Fetcher(unittest.TestCase):
         import types
         saved = crc.subprocess.run
 
-        def run(cmd, capture_output, text):
+        def run(cmd, capture_output, text, encoding):
+            # the API's JSON is UTF-8; the locale's code page (cp1252 on Windows) would not decode it
+            assert encoding == "utf-8", encoding
             path = cmd[2]
             for key, (code, body) in answers.items():
                 if key in path:

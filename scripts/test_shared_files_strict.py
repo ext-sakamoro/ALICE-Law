@@ -36,7 +36,7 @@ class Strict(unittest.TestCase):
                 env.setdefault(name, str(f))
             env.update(self.env)
             return subprocess.run(["bash", str(root / "scripts" / "shared_files_strict.sh"), *args],
-                                  capture_output=True, text=True, timeout=60, env=env)
+                                  capture_output=True, text=True, timeout=60, env=env, encoding="utf-8")
 
     env: dict[str, str] = {}
 

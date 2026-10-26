@@ -186,6 +186,7 @@ def metadata() -> dict:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         cwd=E2E,  # Cargo reads e2e/.cargo/config.toml from the working directory
     ).stdout
     return json.loads(out)

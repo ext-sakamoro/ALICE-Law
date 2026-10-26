@@ -116,7 +116,7 @@ def run_test() -> tuple[bool, str]:
         cwd=E2E,
         env=env,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8"
     )
     return p.returncode == 0, p.stdout + p.stderr
 

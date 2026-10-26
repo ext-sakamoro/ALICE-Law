@@ -341,7 +341,7 @@ GIT_ENV = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
 
 def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
-                          env=GIT_ENV).stdout
+                          env=GIT_ENV, encoding="utf-8").stdout
 
 
 def checkout_problems(repo: Path, ref: str) -> list[str]:
@@ -360,7 +360,7 @@ def checkout_problems(repo: Path, ref: str) -> list[str]:
 def cargo_package_list(repo: Path, manifest_path: str) -> list[str]:
     """the files `cargo package` puts in the crate, relative to the package root"""
     out = subprocess.run(["cargo", "package", "--list", "--manifest-path", str(repo / manifest_path)],
-                         cwd=repo, check=True, capture_output=True, text=True).stdout
+                         cwd=repo, check=True, capture_output=True, text=True, encoding="utf-8").stdout
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
@@ -480,7 +480,7 @@ def job_environment(block: list[str]) -> str | None:
 def environment_reviewers(owner_repo: str, name: str) -> int:
     """the number of required reviewers of a repository's deployment environment (0 when it has none
     or does not exist)"""
-    r = subprocess.run(["gh", "api", f"repos/{owner_repo}/environments/{name}"], capture_output=True, text=True)
+    r = subprocess.run(["gh", "api", f"repos/{owner_repo}/environments/{name}"], capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:
         return 0
     rules = json.loads(r.stdout).get("protection_rules", [])
@@ -549,7 +549,7 @@ def secret_inventory(owner_repo: str) -> dict:
         raise RuntimeError("no [train] github / repo in the roster, so the secrets cannot be read")
 
     def api(path):
-        r = subprocess.run(["gh", "api", path], capture_output=True, text=True)
+        r = subprocess.run(["gh", "api", path], capture_output=True, text=True, encoding="utf-8")
         if r.returncode != 0:
             raise RuntimeError(f"gh api {path}: {r.stderr.strip()[:200]}")
         return json.loads(r.stdout)
@@ -792,7 +792,7 @@ def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: s
             problems.append(f"{crate}: must contain {commit}, which is not in the repository")
             continue
         r = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, ref],
-                           capture_output=True, text=True, env=GIT_ENV)
+                           capture_output=True, text=True, env=GIT_ENV, encoding="utf-8")
         if r.returncode == 1:
             problems.append(f"{crate}: {ref} does not contain {commit}")
         elif r.returncode != 0:
@@ -831,7 +831,7 @@ def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: s
 
 
 def gh_json_lines(path: str, jq: str) -> list[dict]:
-    out = subprocess.run(["gh", "api", "--paginate", path, "--jq", jq], check=True, capture_output=True, text=True).stdout
+    out = subprocess.run(["gh", "api", "--paginate", path, "--jq", jq], check=True, capture_output=True, text=True, encoding="utf-8").stdout
     return [json.loads(line) for line in out.splitlines() if line.strip()]
 
 
@@ -940,7 +940,7 @@ def shared_files_strict() -> tuple[list[str], int]:
     here = Path(__file__).resolve().parent
     r = subprocess.run([sys.executable, str(here / "shared_files_check.py"), "--table",
                         str(here.parent / "conformance" / "shared-files.toml"), "--live", "--strict"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8")
     if r.returncode == 0:
         return [], 1
     lines = [ln.removeprefix("shared_files_check: ") for ln in r.stderr.splitlines() if ln.strip()]
@@ -1030,7 +1030,7 @@ def cargo_package(repo: Path, manifest_path: str, name: str, version: str, targe
     cmd = ["cargo", "package", "--manifest-path", str(repo / manifest_path), "--target-dir", str(target_dir)]
     if lock_tracked(repo, manifest_path):
         cmd.append("--locked")
-    subprocess.run(cmd, cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(cmd, cwd=repo, check=True, capture_output=True, text=True, encoding="utf-8")
     return target_dir / "package" / f"{name}-{version}.crate"
 
 

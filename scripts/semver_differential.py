@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     cmd = [a.oracle] if a.oracle else [
         "cargo", "run", "--quiet", "--release", "--manifest-path",
         str(ROOT / "tools" / "semver-oracle" / "Cargo.toml")]
-    proc = subprocess.run(cmd, input=text, capture_output=True, text=True)
+    proc = subprocess.run(cmd, input=text, capture_output=True, text=True, encoding="utf-8")
     if proc.returncode != 0:
         print(f"error: semver-oracle failed: {proc.stderr[-500:]}", file=sys.stderr)
         return 2

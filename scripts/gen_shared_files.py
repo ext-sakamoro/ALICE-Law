@@ -329,7 +329,7 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
             src = row["order"][0]
             rel = row["paths"].get(src, row["path"])
             rev = subprocess.run(["git", "-C", str(repo_of(src)), "log", "-1", "--format=%H", "origin/main", "--", rel],
-                                 check=True, capture_output=True, text=True).stdout.strip()
+                                 check=True, capture_output=True, text=True, encoding="utf-8").stdout.strip()
             entries.append({**base, "sha256": next(iter(found)), "source": {"repo": src, "rev": rev}})
         else:
             exit_ = prev["exit"] if prev else (row["hold"] or EXIT_DIFFER)

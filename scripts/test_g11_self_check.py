@@ -56,7 +56,7 @@ class SelfCheck(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.law), "add", "-A"], check=True, env=ENV)
         subprocess.run(["git", "-C", str(self.law), "commit", "-q", "-m", "c"], check=True, env=ENV)
         self.rev = subprocess.run(["git", "-C", str(self.law), "rev-parse", "HEAD"], capture_output=True,
-                                  text=True, check=True).stdout.strip()
+                                  text=True, check=True, encoding="utf-8").stdout.strip()
         (self.crate / ".github").mkdir(parents=True)
         subprocess.run(["git", "init", "-q", str(self.crate)], check=True, env=ENV)
         self.pin()
@@ -182,7 +182,7 @@ class SelfCheck(unittest.TestCase):
         f.write_text(f.read_text(encoding="utf-8").replace("own copies not at", "own copies off"), encoding="utf-8")
         subprocess.run(["git", "-C", str(self.law), "commit", "-qam", "older checker"], check=True, env=ENV)
         self.rev = subprocess.run(["git", "-C", str(self.law), "rev-parse", "HEAD"], capture_output=True,
-                                  text=True, check=True).stdout.strip()
+                                  text=True, check=True, encoding="utf-8").stdout.strip()
         self.pin()
         code, out, _ = self.run_check()
         self.assertEqual(code, 2, out)
@@ -197,7 +197,7 @@ class SelfCheck(unittest.TestCase):
             (self.law / rel).unlink()
         subprocess.run(["git", "-C", str(self.law), "checkout", "--", *rels], check=True, env=ENV)  # git converts
         self.assertIn(b"\r\n", (self.law / rels[0]).read_bytes())
-        st = subprocess.run(["git", "-C", str(self.law), "status", "--porcelain"], capture_output=True, text=True, env=ENV)
+        st = subprocess.run(["git", "-C", str(self.law), "status", "--porcelain"], capture_output=True, text=True, env=ENV, encoding="utf-8")
         self.assertEqual(st.stdout, "")  # the checkout is the pinned revision as git reads it
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)

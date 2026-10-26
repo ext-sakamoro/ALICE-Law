@@ -503,7 +503,7 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
 
 
 def gh_api(path: str) -> dict | None:
-    p = subprocess.run(["gh", "api", path], capture_output=True, text=True)
+    p = subprocess.run(["gh", "api", path], capture_output=True, text=True, encoding="utf-8")
     if p.returncode != 0:
         if "HTTP 404" in p.stderr or "Not Found" in p.stderr:
             return None
@@ -513,7 +513,7 @@ def gh_api(path: str) -> dict | None:
 
 def gh_fetcher(owner: str, ref: str = "main"):
     def api(path: str) -> dict | None:
-        p = subprocess.run(["gh", "api", path], capture_output=True, text=True)
+        p = subprocess.run(["gh", "api", path], capture_output=True, text=True, encoding="utf-8")
         if p.returncode != 0:
             if "HTTP 404" in p.stderr or "Not Found" in p.stderr:
                 return None
@@ -546,14 +546,14 @@ def gh_fetcher(owner: str, ref: str = "main"):
 def git_fetcher(repo_dir: Path, ref: str):
     """the (manifest text, blob paths) of one local clone at `ref`, the shape gh_fetcher returns for main"""
     def git(*args: str) -> str:
-        p = subprocess.run(["git", "-C", str(repo_dir), *args], capture_output=True, text=True)
+        p = subprocess.run(["git", "-C", str(repo_dir), *args], capture_output=True, text=True, encoding="utf-8")
         if p.returncode != 0:
             raise InputError(f"git {' '.join(args)} in {repo_dir}: {p.stderr.strip()[:200]}")
         return p.stdout
 
     def fetch() -> tuple[str | None, set[str]]:
         p = subprocess.run(["git", "-C", str(repo_dir), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8")
         if p.returncode != 0:
             raise InputError(f"{repo_dir}: ref {ref!r} not found")
         commit = p.stdout.strip()
@@ -569,7 +569,7 @@ def git_fetcher(repo_dir: Path, ref: str):
 
 def repo_name(repo_dir: Path) -> str:
     """the repository's name from its origin remote (ALICE-Physics), else the clone's directory name"""
-    p = subprocess.run(["git", "-C", str(repo_dir), "remote", "get-url", "origin"], capture_output=True, text=True)
+    p = subprocess.run(["git", "-C", str(repo_dir), "remote", "get-url", "origin"], capture_output=True, text=True, encoding="utf-8")
     url = p.stdout.strip() if p.returncode == 0 else ""
     name = url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1].removesuffix(".git") if url else ""
     return name or repo_dir.resolve().name
@@ -706,7 +706,7 @@ def gh_manifest_history(owner: str):
     """repo -> [(sha, commit date)] of the commits on main that changed its manifest, newest first"""
     def history(repo: str) -> list[tuple[str, datetime.date]]:
         p = subprocess.run(["gh", "api", f"repos/{owner}/{repo}/commits?sha=main&path={MANIFEST}"
-                            f"&per_page={LINE_HISTORY_DEPTH}"], capture_output=True, text=True)
+                            f"&per_page={LINE_HISTORY_DEPTH}"], capture_output=True, text=True, encoding="utf-8")
         if p.returncode != 0:
             raise InputError(f"gh api commits of {owner}/{repo}: {p.stderr.strip()[:200]}")
         return [(c["sha"], datetime.date.fromisoformat(c["commit"]["committer"]["date"][:10]))

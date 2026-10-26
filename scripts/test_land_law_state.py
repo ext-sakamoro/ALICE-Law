@@ -360,7 +360,7 @@ class LandLawState(LandBase):
         repo = Path(self.tmp.name) / "alpha"
 
         def git(*a):
-            return subprocess.run(["git", *a], cwd=repo, env=ENV, check=True, capture_output=True, text=True).stdout
+            return subprocess.run(["git", *a], cwd=repo, env=ENV, check=True, capture_output=True, text=True, encoding="utf-8").stdout
         repo.mkdir()
         git("init", "-q", "-b", "main")
         for p in PATHS:

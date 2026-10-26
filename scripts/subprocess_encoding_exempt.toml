@@ -1,0 +1,16 @@
+# Files under scripts/ that keep a text-mode subprocess call without encoding= for now, read by
+# scripts/subprocess_encoding_check.py: each entry names the owner who changes the file, why it
+# cannot change here yet and the date it must be fixed by (past it, or once the file no longer
+# has such a call, the check fails)
+
+[[exempt]]
+path = "semver_gate.py"
+owner = "ALICE-DetMath"
+reason = "a shared file whose bytes the table fixes (pending row, owner ALICE-DetMath); it changes in every holder at once with the next roll of its row, not in this repository alone"
+until = "2026-11-09"
+
+[[exempt]]
+path = "shared_files_check.py"
+owner = "ALICE-Law"
+reason = "the shared-file checker every crate pins by SHA-256 in .github/shared-files-pin; changing it moves that pin in every crate, so it changes with the next scheduled re-pin; its text-mode calls decode git object ids, refs, dates and table paths, which test_subprocess_encoding_check keeps ASCII"
+until = "2026-11-09"

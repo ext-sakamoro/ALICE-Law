@@ -35,7 +35,7 @@ class Repo:
     def __init__(self, path: Path, ref: str):
         self.path, self.ref = path, ref
         r = subprocess.run(["git", "-C", str(path), "ls-tree", "-r", "--name-only", ref], capture_output=True,
-                           text=True)
+                           text=True, encoding="utf-8")
         if r.returncode != 0:
             raise OSError(f"{path}: cannot list {ref}")
         self.files = r.stdout.split()
@@ -49,7 +49,7 @@ class Repo:
         if not paths:
             return []
         r = subprocess.run(["git", "-C", str(self.path), "grep", "-n", "-o", "-E", "-e", pattern, self.ref, "--",
-                            *paths], capture_output=True, text=True)
+                            *paths], capture_output=True, text=True, encoding="utf-8")
         out = []
         for line in r.stdout.splitlines():
             parts = line.split(":", 3)
@@ -61,7 +61,7 @@ class Repo:
         if not paths:
             return []
         r = subprocess.run(["git", "-C", str(self.path), "grep", "-n", "-F", "-e", pattern, self.ref, "--", *paths],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8")
         # each line is <ref>:<path>:<line>:<text>
         return [":".join(line.split(":")[1:3]) for line in r.stdout.splitlines()]
 

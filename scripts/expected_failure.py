@@ -100,7 +100,7 @@ def load_entries(text: str) -> dict[str, dict]:
 
 def run(cmd: list[str]) -> tuple[int, str]:
     """the command's status and its output (stdout and stderr), shown as it comes"""
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", encoding="utf-8")
     lines = []
     assert p.stdout is not None
     for line in p.stdout:

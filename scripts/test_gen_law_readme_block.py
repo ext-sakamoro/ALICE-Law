@@ -79,7 +79,7 @@ note = "lane order differs"
 
 
 def git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True, encoding="utf-8").stdout
 
 
 def commit(repo: Path, files: dict[str, str]) -> str:

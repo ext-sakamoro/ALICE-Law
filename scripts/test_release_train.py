@@ -148,7 +148,7 @@ def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
                           env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
                                "GIT_COMMITTER_EMAIL": "t@t", "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
-                               "HOME": str(repo)}).stdout
+                               "HOME": str(repo)}, encoding="utf-8").stdout
 
 
 def make_repo(d: str, files: dict[str, str]) -> tuple[Path, str]:

@@ -542,14 +542,14 @@ class Fetch(unittest.TestCase):
                     "import pathlib; assert list(pathlib.Path(sys.argv[4]).glob('g11-law-*'))")  # there while it runs
             env = {**os.environ, "TMPDIR": tmpdir}
             r = subprocess.run([sys.executable, "-c", code, str(Path(g.__file__).parent), rev, Path(tmp).as_uri(),
-                                tmpdir], env=env, capture_output=True, text=True)
+                                tmpdir], env=env, capture_output=True, text=True, encoding="utf-8")
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertEqual(list(Path(tmpdir).glob("g11-law-*")), [])
             # and when the fetch fails (an unknown revision), nothing is left either
             r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
                                 "import g11_table_check as g; assert g.git_law('0' * 40, sys.argv[2]) is None",
                                 str(Path(g.__file__).parent), Path(tmp).as_uri()], env=env, capture_output=True,
-                               text=True)
+                               text=True, encoding="utf-8")
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertEqual(list(Path(tmpdir).glob("g11-law-*")), [])
 

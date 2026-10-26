@@ -85,7 +85,7 @@ def render_baseline(text: str, lowered: dict[str, int]) -> str:
 def git_resolve(where: Path, rev: str) -> str:
     """the full commit id of `rev` in the clone `where`"""
     p = subprocess.run(["git", "-C", str(where), "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8")
     if p.returncode != 0:
         raise crc.InputError(f"{where}: ref {rev!r} not found")
     return p.stdout.strip()

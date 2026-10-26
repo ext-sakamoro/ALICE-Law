@@ -302,7 +302,7 @@ class Exit(unittest.TestCase):
     def cli(self, files, *extra):
         d = repo(files)
         return subprocess.run([sys.executable, str(HERE / "licence_files_check.py"), "--repo", d, *extra],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, encoding="utf-8")
 
     def test_nothing_declared_exits_2(self):
         self.assertEqual(self.cli({"README.md": "x\n"}).returncode, 2)
@@ -451,7 +451,7 @@ class HolderRepoMode(unittest.TestCase):
         b = scratch() / "holder-baseline.toml"
         b.write_text(baseline, encoding="utf-8")
         return subprocess.run([sys.executable, str(HERE / "licence_files_check.py"), "--repo", d, "--repo-name", "r",
-                               "--holder-baseline", str(b), *extra], capture_output=True, text=True)
+                               "--holder-baseline", str(b), *extra], capture_output=True, text=True, encoding="utf-8")
 
     def files(self, holder_line: str):
         return {"Cargo.toml": cargo_authors(ME), "LICENSE-MIT": MIT, "NOTICE": holder_line}
@@ -483,7 +483,7 @@ class HolderBaseRef(unittest.TestCase):
         d = repo(files)
         b = Path(d) / "conformance" / "holder-baseline.toml"
         run = lambda *x: subprocess.run([sys.executable, str(HERE / "licence_files_check.py"), "--repo", d,  # noqa: E731
-                                         "--repo-name", "r", "--holder-baseline", str(b), *x], capture_output=True, text=True)
+                                         "--repo-name", "r", "--holder-baseline", str(b), *x], capture_output=True, text=True, encoding="utf-8")
         b.parent.mkdir()
         b.write_text(lfc.dump_baseline({}), encoding="utf-8")
         p = run("--holder-base-ref", "HEAD")
@@ -511,7 +511,7 @@ class HolderBaseRefMustResolve(unittest.TestCase):
         subprocess.run(g + ["commit", "-qm", "base"], check=True)
         for ref in ("", " ", "no-such-ref", "0" * 40):
             p = subprocess.run([sys.executable, str(HERE / "licence_files_check.py"), "--repo", d, "--repo-name", "r",
-                                "--holder-baseline", str(b), "--holder-base-ref", ref], capture_output=True, text=True)
+                                "--holder-baseline", str(b), "--holder-base-ref", ref], capture_output=True, text=True, encoding="utf-8")
             self.assertEqual(p.returncode, 2, (ref, p.stdout + p.stderr))
             self.assertIn("base ref", p.stderr)
 
