@@ -120,25 +120,71 @@ def disabled_lines(lines: list[str]) -> set[int]:
     return out
 
 
-def run_texts(text: str, skip_disabled: bool = False) -> list[str]:
-    """the commands of each `run:` of a workflow (inline, or a | / > block by indentation);
-    with skip_disabled, not those of a step whose `if:` is literally false"""
+def run_steps(text: str, skip_disabled: bool = False, fold: bool = False) -> list[tuple[int, list[str]]]:
+    """(index of the `run:` line, its command lines) for each `run:` of a workflow (inline, or a | / >
+    block by indentation); with fold, a folded > block joins its lines with spaces (a blank line
+    starts a new one), as the shell gets it; with skip_disabled, not those of a step whose `if:` is
+    literally false"""
     out, lines, i = [], text.splitlines(), 0
     off = disabled_lines(lines) if skip_disabled else set()
     while i < len(lines):
         m = re.match(r"^(\s*)(?:-\s+)?run:\s*(.*)$", lines[i])
+        at = i
         i += 1
-        if not m or i - 1 in off:
+        if not m or at in off:
             continue
         indent, value = len(m.group(1)), m.group(2).strip()
         if not re.fullmatch(r"[|>][-+0-9]*", value):
-            out.append(value.strip("'\""))
+            out.append((at, [value.strip("'\"")]))
             continue
         block = []
         while i < len(lines) and (not lines[i].strip() or len(lines[i]) - len(lines[i].lstrip()) > indent):
             block.append(lines[i].strip())
             i += 1
-        out.extend(block)
+        if fold and value.startswith(">"):
+            block = [" ".join(p.split("\n")) for p in "\n".join(block).split("\n\n")]
+        out.append((at, block))
+    return out
+
+
+def run_texts(text: str, skip_disabled: bool = False) -> list[str]:
+    """the lines of all `run:` of a workflow, a > block not folded (see run_steps)"""
+    return [line for _, block in run_steps(text, skip_disabled) for line in block]
+
+
+# RUSTFLAGS (or CARGO_ENCODED_RUSTFLAGS) as a key of a workflow, job or step `env:`
+ENV_RUSTFLAGS = re.compile(r"^(\s*)(?:CARGO_ENCODED_)?RUSTFLAGS:\s*(.*?)\s*$")
+
+
+def indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip(" -")) if line.lstrip().startswith("- ") else len(line) - len(line.lstrip())
+
+
+def env_rustflags(lines: list[str]) -> list[tuple[int, int, int, str]]:
+    """(first line, end line, depth, value) of each RUSTFLAGS set in an `env:` of the workflow (the
+    whole file), a job or a step (the lines of that job or step); a deeper one overrides"""
+    out = []
+    for k, line in enumerate(lines):
+        m = ENV_RUSTFLAGS.match(line)
+        if not m:
+            continue
+        own = len(m.group(1))
+        env = next((j for j in range(k - 1, -1, -1) if lines[j].strip() and indent_of(lines[j]) < own), None)
+        if env is None or not re.match(r"^\s*(?:-\s+)?env:\s*$", lines[env]):
+            continue
+        depth = indent_of(lines[env])
+        value = m.group(2).strip("'\"")
+        if depth == 0:
+            out.append((0, len(lines), 0, value))
+            continue
+        owner = next((j for j in range(env, -1, -1) if lines[j].strip()
+                      and (len(lines[j]) - len(lines[j].lstrip()) < depth)), None)
+        if owner is None:
+            continue
+        top = len(lines[owner]) - len(lines[owner].lstrip())
+        end = next((j for j in range(owner + 1, len(lines)) if lines[j].strip()
+                    and len(lines[j]) - len(lines[j].lstrip()) <= top), len(lines))
+        out.append((owner, end, depth, value))
     return out
 
 
@@ -191,6 +237,92 @@ def commands(wf: dict[str, str]) -> list[str]:
 def invoked_scripts(wf: dict[str, str]) -> set[str]:
     """repository scripts (scripts/*.sh, scripts/*.py) that a workflow run step invokes"""
     return {m.group(1) for text in wf.values() for cmd in run_texts(text) for m in SCRIPT_CALL.finditer(cmd)}
+
+
+def shell_lines(lines: list[str]) -> list[str]:
+    """command lines without comments and blank lines, with backslash-continued lines joined"""
+    out, pending = [], ""
+    for line in map(strip_comment, lines):
+        line = line.strip()
+        if line.endswith("\\"):
+            pending += line[:-1] + " "
+            continue
+        if pending or line:
+            out.append(pending + line)
+        pending = ""
+    if pending:
+        out.append(pending)
+    return out
+
+
+def script_commands(text: str) -> list[str]:
+    """the command lines of a shell script, without comments, with backslash-continued lines joined"""
+    return shell_lines(text.splitlines())
+
+
+# a shell assignment of RUSTFLAGS / CARGO_ENCODED_RUSTFLAGS: the value, quotes removed
+SHELL_RUSTFLAGS = r"(?:CARGO_ENCODED_)?RUSTFLAGS=(\"[^\"]*\"|'[^']*'|\S*)"
+
+
+def ci_command_sources(repo: Repo, wf: dict[str, str]) -> list[tuple[str, str, str]]:
+    """(where, command, RUSTFLAGS in effect) for every command CI runs: the run steps (not those whose
+    `if:` is literally false) and, followed from them, the lines of the repository shell scripts they
+    call (and the scripts those call), each script read once; RUSTFLAGS comes from the workflow, job
+    or step `env:` (the deepest) and from an `export` before the command, and a called script inherits it"""
+    out: list[tuple[str, str, str]] = []
+    queue: list[tuple[str, str]] = []
+
+    def walk(where: str, cmds: list[str], flags: str) -> None:
+        for c in cmds:
+            out.append((where, c, flags))
+            for part in re.split(r"&&|\|\||;", c):
+                m = re.match(r"^\s*export\s+" + SHELL_RUSTFLAGS + r"\s*$", part)
+                if m:
+                    flags = m.group(1).strip("'\"")
+            queue.extend((m.group(1), flags) for m in SCRIPT_CALL.finditer(c))
+
+    for text in wf.values():
+        lines = text.splitlines()
+        envs = env_rustflags(lines)
+        for at, block in run_steps(text, skip_disabled=True, fold=True):
+            inner = [e for e in envs if e[0] <= at < e[1]]
+            walk("workflow", shell_lines(block), max(inner, key=lambda e: e[2])[3] if inner else "")
+    seen: set[str] = set()
+    while queue:
+        name, flags = queue.pop(0)
+        if name in seen or not name.endswith(".sh") or name not in repo.files:
+            continue
+        seen.add(name)
+        walk(name, script_commands(repo.show(name)), flags)
+    return out
+
+
+# lints turned into errors: `-D warnings`, or the disallowed-methods lint itself (on the clippy
+# command after `--`, or in RUSTFLAGS)
+CLIPPY_DENY = re.compile(r"(?:^|\s)(?:-D\s*|--deny[=\s]\s*)(?:warnings|clippy::disallowed[_-]methods)(?![\w-])")
+
+
+def ci_clippy_deny(repo: Repo, wf: dict[str, str]) -> tuple[list[str], int, int]:
+    """where CI runs `cargo clippy` with the lints denied (the workflow, or the script it calls; with
+    ` RUSTFLAGS` when the deny is in RUSTFLAGS), the number of CI commands read, and the number of
+    repository Python scripts CI calls (not followed)"""
+    sources = ci_command_sources(repo, wf)
+    found = []
+    for where, cmd, flags in sources:
+        for part in re.split(r"&&|\|\||;", cmd):
+            c = cargo_command(part)
+            if not c or not re.match(r"cargo\s+(?:\+\S+\s+)?clippy\b", c):
+                continue
+            prefix = part.strip()[:CMD_PREFIX.match(part.strip()).end()]
+            own = re.findall(r"(?:^|\s)" + SHELL_RUSTFLAGS, prefix)
+            rustflags = (own[-1] if own else flags).strip("'\"").replace("\x1f", " ")
+            label = (where if CLIPPY_DENY.search(c) else
+                     f"{where} RUSTFLAGS" if CLIPPY_DENY.search(rustflags) else None)
+            if label and label not in found:
+                found.append(label)
+    py = {m.group(1) for _, c, _ in sources for m in SCRIPT_CALL.finditer(c)
+          if m.group(1).endswith(".py") and m.group(1) in repo.files}
+    return found, len(sources), len(py)
 
 
 def rust_uncommented(text: str) -> str:
@@ -288,8 +420,12 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
             pend = sorted((default_banned - d["methods"]["f32"]) | (default_banned - d["methods"]["f64"]))
             if pend:
                 parts.append(f"{f}: not banned {', '.join(pend)} (pending, banned by default: allowed only if the manifest states a reason; not checked here)")
-        ci = "clippy" in wf_text and ("-D warnings" in wf_text or "disallowed_methods" in wf_text)
-        cells["G1"] = "; ".join(parts) + ("; CI clippy -D found" if ci else "; CI clippy -D not found")
+        found, read, py = ci_clippy_deny(repo, wf)
+        via = [w for w in found if w != "workflow"]
+        unread = f"; {py} .py script{'s' if py != 1 else ''} not followed" if py else ""
+        ci = (f"; CI clippy -D found{' (via ' + ', '.join(via) + ')' if via and 'workflow' not in found else ''}"
+              if found else f"; CI clippy -D not found ({read} CI commands read{unread})")
+        cells["G1"] = "; ".join(parts) + ci
 
     # G2: f32/f64 max and min banned in a clippy list; a raw_* manifest
     mm = [f for f, d in lists.items() if "methods" in d and {"max", "min"} <= d["methods"]["f32"] & d["methods"]["f64"]]
