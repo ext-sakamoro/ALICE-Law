@@ -182,7 +182,7 @@ None.
 
 ### Conformance manifests (status counts of the 14 gates in each repository's manifest at main)
 
-One row per repository: crates that share a repository share its one manifest at the root (the "read for" column), so each manifest is counted once; 16 manifests × 14 gates = 224 gate entries.
+One row per repository: crates that share a repository share its one manifest at the root (the "read for" column), so each manifest is counted once; 17 manifests × 14 gates = 238 gate entries.
 
 | repository | read for | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
@@ -192,6 +192,7 @@ One row per repository: crates that share a repository share its one manifest at
 | ALICE-DB | alice-db | 14 | 0 | 0 | 0 |
 | ALICE-DetMath | alice-det-math | 12 | 0 | 0 | 2 |
 | ALICE-Edge | alice-edge | 14 | 0 | 0 | 0 |
+| ALICE-Font | alice-font | 12 | 2 | 0 | 0 |
 | ALICE-Identity | alice-identity | 11 | 0 | 0 | 3 |
 | ALICE-Kinematics | alice-kinematics | 13 | 1 | 0 | 0 |
 | ALICE-LLM | alice-llm | 14 | 0 | 0 | 0 |
@@ -207,7 +208,6 @@ One row per repository: crates that share a repository share its one manifest at
 
 | crate | added in | why |
 |---|---|---|
-| alice-font | ALICE-Font | the manifest has not been written yet |
 | alice-os-keystore | ALICE-OS-Keystore | the manifest has not been written yet |
 
 <!-- law-status:end -->

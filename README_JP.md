@@ -182,7 +182,7 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 ### Conformance manifest (各 repository の main の manifest における 14 gate の状態の件数)
 
-repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 16 の manifest × 14 の gate = 224 の gate の entry
+repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 17 の manifest × 14 の gate = 238 の gate の entry
 
 | repository | 読む crate | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
@@ -192,6 +192,7 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 | ALICE-DB | alice-db | 14 | 0 | 0 | 0 |
 | ALICE-DetMath | alice-det-math | 12 | 0 | 0 | 2 |
 | ALICE-Edge | alice-edge | 14 | 0 | 0 | 0 |
+| ALICE-Font | alice-font | 12 | 2 | 0 | 0 |
 | ALICE-Identity | alice-identity | 11 | 0 | 0 | 3 |
 | ALICE-Kinematics | alice-kinematics | 13 | 1 | 0 | 0 |
 | ALICE-LLM | alice-llm | 14 | 0 | 0 | 0 |
@@ -207,7 +208,6 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 
 | crate | 追加する repository | 理由 |
 |---|---|---|
-| alice-font | ALICE-Font | the manifest has not been written yet |
 | alice-os-keystore | ALICE-OS-Keystore | the manifest has not been written yet |
 
 <!-- law-status:end -->

@@ -44,6 +44,13 @@ crates = ["alice-edge"]
 "unverified" = 0
 "n/a" = 0
 
+[manifest."ALICE-Font"]
+crates = ["alice-font"]
+"pass" = 12
+"fail-known" = 2
+"unverified" = 0
+"n/a" = 0
+
 [manifest."ALICE-Identity"]
 crates = ["alice-identity"]
 "pass" = 11

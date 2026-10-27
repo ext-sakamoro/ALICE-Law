@@ -4,10 +4,6 @@
 # change that lands it); a crate missing from main and from this list fails with its name.
 # `fixed-in` is the repository whose change adds the manifest.
 
-[missing."alice-font"]
-fixed-in = "ALICE-Font"
-why = "the manifest has not been written yet"
-
 [missing."alice-os-keystore"]
 fixed-in = "ALICE-OS-Keystore"
 why = "the manifest has not been written yet"
