@@ -1754,6 +1754,26 @@ class PrivateRepoNames(unittest.TestCase):
         self.assertEqual(ptc.repo_name_counts("ALICE-Public"),
                          {ptc.repo_name_key("ALICE-Public", "README.md", "alice-zorblat"): 2})
 
+    def test_a_public_file_name_that_holds_a_private_name_is_that_file(self):
+        # the conformance manifest's file name contains a private repository's name; as the whole file
+        # name it is the file, and the bare repository name, or the name as another file's stem, is not
+        conf = hashlib.sha256(b"alice-law-conformance").hexdigest()
+        ptc.PRIVATE_ALICE_REPO_HASHES = frozenset({self.h, conf})
+        hit = "private repository name"
+        for line in ("each member carries alice-law-conformance.toml", "`ALICE-Law-Conformance.toml` at the root",
+                     "see alice-law-conformance.toml."):
+            self.assertNotIn(hit, ptc.kinds(line, "README.md"), line)
+        for line in ("the ALICE-Law-Conformance repository", "see ALICE-Zorblat.md", "ALICE-Zorblat.rs holds it",
+                     "alice-law-conformance.md"):
+            self.assertIn(hit, ptc.kinds(line, "README.md"), line)
+
+    def test_the_public_file_names_hold_the_manifest_law_defines(self):
+        # the checker is fetched alone, so it holds the name as a literal; the source is MANIFEST
+        spec = importlib.util.spec_from_file_location("crc", Path(ptc.__file__).parent / "conformance_roster_check.py")
+        crc = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(crc)
+        self.assertIn(crc.MANIFEST, ptc.PUBLIC_FILE_NAMES)
+
     def test_the_committed_baseline_is_in_the_generators_form(self):
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", r) for r in ptc.PRIVATE_REPO_NAME_BASELINE))
         for entries in ptc.PRIVATE_REPO_NAME_BASELINE.values():
