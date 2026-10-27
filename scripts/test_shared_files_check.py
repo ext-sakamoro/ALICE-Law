@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -626,6 +627,34 @@ class Fetch(Base):
     def test_wrong_bytes_at_the_source_are_red(self):
         self.t.write_text(self.w.table(sha256=h(b"else")), encoding="utf-8")
         self.assertEqual(self.check("--fetch")[0], 1)
+
+
+    def test_the_mains_are_read_without_the_user_s_git_config(self):
+        # the live job reads with no credentials, so a local run must too: a user config that would reach a
+        # repository the job cannot (here a url rewrite of an unresolvable host to the fixture) is not used,
+        # and the refusal names the rule (public repositories only, a private one checks itself)
+        cfg = Path(self.tmp.name) / "user.gitconfig"
+        cfg.write_text(f'[url "file://{self.w.remote}/"]\n\tinsteadOf = https://github.invalid/\n', encoding="utf-8")
+        sfc.GITHUB = "https://github.invalid/"
+        saved = os.environ.get("GIT_CONFIG_GLOBAL")
+        os.environ["GIT_CONFIG_GLOBAL"] = str(cfg)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                with self.assertRaises(sfc.Unreadable) as cm:
+                    sfc.Remote(Path(d))("ALICE-A")
+            self.assertIn("without credentials", str(cm.exception))
+            self.assertIn("public repositories only", str(cm.exception))
+            self.assertIn("--repo", str(cm.exception))
+            # the same config is honoured by a plain git call (the rewrite itself works)
+            probe = Path(self.tmp.name) / "probe"
+            git("init", "-q", str(probe))
+            subprocess.run(["git", "fetch", "-q", "https://github.invalid/ALICE-A", "main"], cwd=probe,
+                           env={**ENV, "GIT_CONFIG_GLOBAL": str(cfg)}, check=True, capture_output=True)
+        finally:
+            if saved is None:
+                os.environ.pop("GIT_CONFIG_GLOBAL", None)
+            else:
+                os.environ["GIT_CONFIG_GLOBAL"] = saved
 
 
 class Live(Base):
