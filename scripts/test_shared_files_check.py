@@ -458,6 +458,72 @@ class Schema(Base):
         self.assertIn("not the base table's planned id", out)
 
 
+class Private(Base):
+    """a private repository's tree: the table (public repositories only) never names it"""
+
+    def tree(self, files: dict[str, bytes]) -> Path:
+        root = Path(self.tmp.name) / "ALICE-P"
+        for rel, data in files.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_bytes(data)
+        return root
+
+    def private(self, files: dict[str, bytes], table: str | None = None, name: str = "ALICE-P"):
+        self.t.write_text(table or self.w.table(), encoding="utf-8")
+        return self.check("--repo", str(self.tree(files)), "--name", name, "--private")
+
+    def test_a_copy_with_the_row_bytes_passes_and_is_never_adopting(self):
+        code, out = self.private({"scripts/s.sh": SHARED})
+        self.assertEqual(code, 0, out)
+        self.assertIn("scripts/s.sh: private copy, the row's bytes", out)
+        self.assertIn("copies 1", out)
+        self.assertNotIn("adopting", out)
+
+    def test_a_copy_that_differs_is_a_finding(self):
+        code, out = self.private({"scripts/s.sh": SHARED + b"#"})
+        self.assertEqual(code, 1, out)
+        self.assertIn("the private copy differs", out)
+
+    def test_on_a_pending_row_the_target_passes_and_another_variant_is_a_finding(self):
+        table = self.w.table(self.w.pending())
+        self.assertEqual(self.private({"scripts/s.sh": SHARED}, table)[0], 0)
+        code, out = self.private({"scripts/s.sh": OTHER}, table)
+        self.assertEqual(code, 1, out)
+        self.assertIn("the private copy differs", out)
+
+    def test_a_row_no_repository_holds_is_a_note_not_compared(self):
+        data = {**self.w.per_repo(), "path": "scripts/data.tsv"}
+        table = self.w.table(self.w.uniform(), data)
+        code, out = self.private({"scripts/s.sh": SHARED, "scripts/data.tsv": b"mine\n"}, table)
+        self.assertEqual(code, 0, out)
+        self.assertIn("scripts/data.tsv: per-repository data (no repository holds the row), not compared", out)
+        self.assertIn("copies 1", out)
+
+    def test_a_private_name_the_table_lists_or_exempts_is_refused(self):
+        code, out = self.private({"scripts/s.sh": SHARED}, name="ALICE-A")
+        self.assertEqual(code, 2, out)
+        self.assertIn("must not be in it", out)
+        # exempted counts as named: the tree would otherwise pass on the uniform row
+        data = {**self.w.per_repo({"ALICE-P": "its own data, not a shared copy"}), "path": "scripts/data.tsv"}
+        code, out = self.private({"scripts/s.sh": SHARED}, self.w.table(self.w.uniform(), data))
+        self.assertEqual(code, 2, out)
+        self.assertIn("must not be in it", out)
+
+    def test_a_tree_with_no_table_path_compares_nothing(self):
+        code, out = self.private({"README": b"x"})
+        self.assertEqual(code, 2, out)
+        self.assertIn("compared nothing", out)
+        data = {**self.w.per_repo(), "path": "scripts/data.tsv"}
+        code, out = self.private({"scripts/data.tsv": b"mine\n"}, self.w.table(self.w.uniform(), data))
+        self.assertEqual(code, 2, out)
+
+    def test_private_needs_repo(self):
+        self.t.write_text(self.w.table(), encoding="utf-8")
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                sfc.main(["--table", str(self.t), "--private"])
+
+
 class Repo(Base):
     def crate(self, name: str, table: str | None = None):
         self.t.write_text(table or self.w.table(), encoding="utf-8")

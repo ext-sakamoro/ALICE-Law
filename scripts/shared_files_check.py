@@ -96,6 +96,12 @@ repository that gains the path without an exemption is a finding.
       entry's bytes or a pending row's target, which is a counted "adopting" note (the commit
       that adds a shared file to a crate cannot be listed first; the Law side's strict check
       makes the next table list it)
+  shared_files_check.py --table TABLE --repo DIR --name ALICE-X --private
+      a private repository's tree (the table lists public repositories only, so it never names
+      ALICE-X; naming it is an input error): each table path present is compared with its row,
+      a copy with the row's bytes (a uniform entry's, or a pending row's target) is a pass and
+      any other bytes are a finding; a row no repository holds (per-repository data, every copy
+      exempted) is a note, not compared
 
 Every mode prints `compared: files N, repos M, copies K, pending P`. Exit 0 when everything
 compared is equal, 1 on a finding, 2 when nothing was compared or the input cannot be read
@@ -413,6 +419,38 @@ def counts(files: int, repos: int, copies: int, pending: int) -> tuple[int, int,
 
 def summary(c: tuple[int, int, int, int]) -> str:
     return f"compared: files {c[0]}, repos {c[1]}, copies {c[2]}, pending {c[3]}"
+
+
+def check_private(entries: list[dict], root: Path, name: str) -> tuple[list[str], list[str], tuple]:
+    """Findings, notes and counts for a private repository's tree: the table lists public repositories
+    only, so each table path present is compared with its row directly (never "adopting": no table
+    will list it)"""
+    listed = [e["path"] for e in entries if name in e["repos"] or name in e.get("exempt", {})]
+    if listed:
+        raise Unreadable(f"--private: the table names {name} ({', '.join(listed)}); it lists public "
+                         "repositories only, so a private repository must not be in it")
+    problems: list[str] = []
+    notes: list[str] = []
+    copies = files = 0
+    for e in entries:
+        for rel in sorted({e["path"], *e.get("paths", {}).values()}):
+            if not (root / rel).is_file():
+                continue
+            want = e["sha256"] if "sha256" in e else e["pending"]["target"] if "pending" in e else None
+            if want is None and not e["repos"]:
+                notes.append(f"{rel}: per-repository data (no repository holds the row), not compared")
+                continue
+            files += 1
+            copies += 1
+            got = sha256((root / rel).read_bytes())
+            if got != want:
+                problems.append(f"{rel}: sha256 {got}, the table's row has {want} "
+                                f"(carried by {', '.join(e['repos'])}): the private copy differs")
+            else:
+                notes.append(f"{rel}: private copy, the row's bytes")
+    if copies == 0:
+        raise Unreadable(f"--private: no table path is present in {name}'s tree (compared nothing)")
+    return problems, notes, counts(files, 1, copies, 0)
 
 
 def check_repo(entries: list[dict], root: Path, name: str,
@@ -863,6 +901,8 @@ def main(argv: list[str]) -> int:
     mode.add_argument("--live", action="store_true", help="compare every listed repository's main")
     mode.add_argument("--repo", type=Path, help="a crate checkout to check against the table")
     ap.add_argument("--name", help="the crate's repository name (ALICE-…), with --repo")
+    ap.add_argument("--private", action="store_true",
+                    help="with --repo: a private repository, which the table (public repositories only) never names")
     ap.add_argument("--expect-copies", type=int,
                     help="with --live: the number of copies that must be compared (count lock)")
     ap.add_argument("--today", help="with --live or --repo: the date pending rows and dated exemptions are aged against (default: today, UTC)")
@@ -877,6 +917,8 @@ def main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
     if (a.repo is None) != (a.name is None):
         ap.error("--repo and --name go together")
+    if a.private and a.repo is None:
+        ap.error("--private goes with --repo")
     notes: list[str] = []
     locked: int | None = None
     try:
@@ -899,10 +941,13 @@ def main(argv: list[str]) -> int:
         if a.repo is not None:
             if not is_repo_name(a.name):
                 raise Unreadable(f"--name {a.name!r} is not a repository name (ALICE-… or a listed product)")
-            problems, notes, c = check_repo(entries, a.repo, a.name,
-                                            datetime.date.fromisoformat(a.today) if a.today else None)
-            off = off_target(entries, a.repo, a.name)
-            print(f"shared_files_check: {OFF_TARGET}: {len(off)}" + (f" ({', '.join(off)})" if off else ""))
+            if a.private:
+                problems, notes, c = check_private(entries, a.repo, a.name)
+            else:
+                problems, notes, c = check_repo(entries, a.repo, a.name,
+                                                datetime.date.fromisoformat(a.today) if a.today else None)
+                off = off_target(entries, a.repo, a.name)
+                print(f"shared_files_check: {OFF_TARGET}: {len(off)}" + (f" ({', '.join(off)})" if off else ""))
         elif a.fetch or a.live:
             with tempfile.TemporaryDirectory() as d:
                 remote = Remote(Path(d))

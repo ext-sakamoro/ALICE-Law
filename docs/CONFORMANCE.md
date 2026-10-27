@@ -372,7 +372,10 @@ repository's landing path makes the next table list it), and a run that compared
 fails. The table lists public repositories only: the live comparison and the generator read each
 main without credentials and without the user's git configuration, so a repository that is not
 public fails locally as it does on the runner. A private repository is not listed; it checks
-its own copies by running `--repo` from a revision of this repository it pins (a public
+its own copies by running `--repo . --name <repository> --private` from a revision of this
+repository it pins: a copy with its row's bytes (a uniform entry's, or a pending row's target)
+passes, any other bytes are a finding, a row no repository holds (per-repository data) is a note,
+a table that names the repository is refused, and a tree with no table path fails (a public
 repository never depends on a private one, the reverse is allowed). A pending row does not hold a crate back by itself: G11 is a pass for a crate whose
 own copy on each pending row it is listed on is the row's target, while other repositories'
 mains still converge. A copy not yet at its target (absent included) makes the cell
