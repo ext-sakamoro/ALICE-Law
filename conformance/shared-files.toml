@@ -5,7 +5,7 @@
 
 [[file]]
 path = ".github/actions/alice-siblings/action.yml"
-pending = { since = "2026-10-26", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "dbf112b30db1b196be0fe4eaa575e49de26790b5be085f90c8508851c9223905", owner = "ALICE-Analytics", planned = "f0e8f9de5a43024e355a2bc3955e9cf5819843b8", moved_from = { planned = "f5284339eb849eeb21503c3d8d491b5870ce15dc", target = "de56a65e67a46b45c7c7cdbf278985bcc591182d6fe2d0137e4341251c5dc81a" }, first_move = true, variants = { "de56a65e67a46b45c7c7cdbf278985bcc591182d6fe2d0137e4341251c5dc81a" = ["ALICE-Analytics", "ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-Queue"] } }
+pending = { since = "2026-10-26", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "dbf112b30db1b196be0fe4eaa575e49de26790b5be085f90c8508851c9223905", owner = "ALICE-Analytics", planned = "f0e8f9de5a43024e355a2bc3955e9cf5819843b8", moved_from = { planned = "f5284339eb849eeb21503c3d8d491b5870ce15dc", target = "de56a65e67a46b45c7c7cdbf278985bcc591182d6fe2d0137e4341251c5dc81a" }, variants = { "dbf112b30db1b196be0fe4eaa575e49de26790b5be085f90c8508851c9223905" = ["ALICE-Analytics"], "de56a65e67a46b45c7c7cdbf278985bcc591182d6fe2d0137e4341251c5dc81a" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-Queue"] } }
 repos = ["ALICE-Analytics", "ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-Queue"]
 exempt = { "ALICE-API" = { "reason" = "its ci.yml still uses its copy (earlier bytes) on main; a pending change replaces the sibling checkout by git dependencies and deletes the copy", "until" = "2026-11-10" }, "ALICE-Kinematics" = "takes no sibling checkout any more; its unused copy is being removed", "text-to-print" = { "reason" = "its own action with per-dependency deploy keys, until the canonical one (owner ALICE-Analytics) takes that mechanism and every copy converges on it", "until" = "2026-11-11" } }
 
@@ -215,8 +215,7 @@ repos = ["ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/package_integrity.py"
-sha256 = "5e1f38090dd0c0c284c8c57795ffe63de4644b3574abc99c746ce18c2e02eb77"
-source = { repo = "ALICE-Analytics", rev = "f2a056aa73abb4a63d32e5f065d06e6d6d1f98a2" }
+pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "69aa736b71affbc15df1c6381217f1f9d992a0aff89ba7d44ba92e7d9ed2d802", owner = "ALICE-Edge", planned = "87ddcbaeb4514099ae6b85c229d20625728ae2d9", moved_from = { planned = "7704460e4f46bd0d068b72aa78956ad98024b819", target = "5e1f38090dd0c0c284c8c57795ffe63de4644b3574abc99c746ce18c2e02eb77" }, first_move = true, variants = { "5e1f38090dd0c0c284c8c57795ffe63de4644b3574abc99c746ce18c2e02eb77" = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
@@ -418,8 +417,7 @@ repos = ["ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/test_package_integrity.py"
-sha256 = "916a3a65f05bac715b80f2d2bcdd617f7be3448454d7f069ea0c041d9644592d"
-source = { repo = "ALICE-Analytics", rev = "ca4cf39ffbb3572db5357b22057157482bd6a10e" }
+pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "81a6a26e5b1f5074d8a2ff097ba97b9b81ec93436a4ed01b1727eda2bac9ef87", owner = "ALICE-Edge", planned = "150fbcb327eb0462f9c87914df643aaebf08911f", moved_from = { planned = "19e84bda0b8d7bc5acf9e68729e26aff7ee60eb1", target = "916a3a65f05bac715b80f2d2bcdd617f7be3448454d7f069ea0c041d9644592d" }, first_move = true, variants = { "916a3a65f05bac715b80f2d2bcdd617f7be3448454d7f069ea0c041d9644592d" = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 
 [[file]]
