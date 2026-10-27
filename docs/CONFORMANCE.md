@@ -369,7 +369,11 @@ crate but neither listed nor exempted for it is a finding (except a copy with ex
 entry's bytes or a pending row's target: a crate adopting a shared file cannot be listed before
 its main has it, so that copy is a counted "adopting" note, and the strict check on this
 repository's landing path makes the next table list it), and a run that compared nothing
-fails. A pending row does not hold a crate back by itself: G11 is a pass for a crate whose
+fails. The table lists public repositories only: the live comparison and the generator read each
+main without credentials and without the user's git configuration, so a repository that is not
+public fails locally as it does on the runner. A private repository is not listed; it checks
+its own copies by running `--repo` from a revision of this repository it pins (a public
+repository never depends on a private one, the reverse is allowed). A pending row does not hold a crate back by itself: G11 is a pass for a crate whose
 own copy on each pending row it is listed on is the row's target, while other repositories'
 mains still converge. A copy not yet at its target (absent included) makes the cell
 `fail-known` naming the row; `--repo` prints those copies ("own copies not at a pending row's

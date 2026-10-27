@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -626,6 +627,65 @@ class Fetch(Base):
     def test_wrong_bytes_at_the_source_are_red(self):
         self.t.write_text(self.w.table(sha256=h(b"else")), encoding="utf-8")
         self.assertEqual(self.check("--fetch")[0], 1)
+
+
+    def test_the_mains_are_read_without_the_user_s_git_config(self):
+        # the live job reads with no credentials, so a local run must too: a user config that would reach a
+        # repository the job cannot (here a url rewrite of an unresolvable host to the fixture) is not used,
+        # and the refusal names the rule (public repositories only, a private one checks itself)
+        cfg = Path(self.tmp.name) / "user.gitconfig"
+        cfg.write_text(f'[url "file://{self.w.remote}/"]\n\tinsteadOf = https://github.invalid/\n', encoding="utf-8")
+        sfc.GITHUB = "https://github.invalid/"
+        saved = os.environ.get("GIT_CONFIG_GLOBAL")
+        os.environ["GIT_CONFIG_GLOBAL"] = str(cfg)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                with self.assertRaises(sfc.Unreadable) as cm:
+                    sfc.Remote(Path(d))("ALICE-A")
+            self.assertIn("without credentials", str(cm.exception))
+            self.assertIn("public repositories only", str(cm.exception))
+            self.assertIn("--repo", str(cm.exception))
+            # the same config is honoured by a plain git call (the rewrite itself works)
+            probe = Path(self.tmp.name) / "probe"
+            git("init", "-q", str(probe))
+            subprocess.run(["git", "fetch", "-q", "https://github.invalid/ALICE-A", "main"], cwd=probe,
+                           env={**ENV, "GIT_CONFIG_GLOBAL": str(cfg)}, check=True, capture_output=True)
+        finally:
+            if saved is None:
+                os.environ.pop("GIT_CONFIG_GLOBAL", None)
+            else:
+                os.environ["GIT_CONFIG_GLOBAL"] = saved
+
+
+    def test_configuration_passed_through_the_environment_and_netrc_are_not_used(self):
+        # `git -c` through the environment (GIT_CONFIG_COUNT / KEY / VALUE) could set the same rewrite or a
+        # credential helper; HOME (and so ~/.netrc) is the empty base, and NETRC is dropped
+        sfc.GITHUB = "https://github.invalid/"
+        inject = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": f"url.file://{self.w.remote}/.insteadOf",
+                  "GIT_CONFIG_VALUE_0": "https://github.invalid/", "NETRC": str(Path(self.tmp.name) / "netrc"),
+                  "GIT_CONFIG_PARAMETERS": "'credential.helper'='store'"}
+        saved = {k: os.environ.get(k) for k in inject}
+        os.environ.update(inject)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                env = sfc.anonymous_git_env(Path(d))
+                self.assertEqual(env["HOME"], d)
+                self.assertFalse(any(k in env for k in inject), sorted(k for k in inject if k in env))
+                with self.assertRaises(sfc.Unreadable) as cm:
+                    sfc.Remote(Path(d))("ALICE-A")
+            self.assertIn("without credentials", str(cm.exception))
+            # the injected rewrite itself works for a plain git call with this environment
+            probe = Path(self.tmp.name) / "probe-env"
+            git("init", "-q", str(probe))
+            subprocess.run(["git", "fetch", "-q", "https://github.invalid/ALICE-A", "main"], cwd=probe,
+                           env={**ENV, **{k: inject[k] for k in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0")}},
+                           check=True, capture_output=True)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
 
 
 class Live(Base):

@@ -107,6 +107,7 @@ import argparse
 import collections
 import datetime
 import hashlib
+import os
 import re
 import subprocess
 import sys
@@ -501,31 +502,61 @@ def off_target(entries: list[dict], root: Path, name: str) -> list[str]:
     return out
 
 
+# The table lists public repositories only: what the live job can read with no credentials. A private
+# repository checks its own copies against a pinned revision of this repository (`--repo`).
+PUBLIC_ONLY = ("the shared-files table lists public repositories only; a private repository checks its "
+               "own copies against a pinned ALICE-Law revision (shared_files_check.py --repo)")
+
+
+# configuration passed through the environment (`git -c` / GIT_CONFIG_COUNT): it could set a credential
+# helper or a url rewrite as the user's config does
+CONFIG_FROM_ENV = re.compile(r"GIT_CONFIG_(?:PARAMETERS|COUNT|KEY_\d+|VALUE_\d+)")
+
+
+def anonymous_git_env(base: Path) -> dict[str, str]:
+    """The environment for reading the mains as the live job does: no user or system git config (no
+    credential helper, no url rewrite to ssh), no configuration passed through the environment, no
+    netrc (HOME is the empty base) and no prompt, so a repository that is not public fails here as it
+    does there"""
+    empty = base / ".empty-gitconfig"
+    if not empty.exists():
+        empty.write_text("", encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if not CONFIG_FROM_ENV.fullmatch(k) and k != "NETRC"}
+    env.update({"GIT_CONFIG_GLOBAL": str(empty), "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0",
+                "GIT_ASKPASS": "", "SSH_ASKPASS": "", "GCM_INTERACTIVE": "never",
+                "HOME": str(base), "XDG_CONFIG_HOME": str(base)})
+    return env
+
+
 class Remote:
-    """Blob-less clones of the repositories' main, one per repository (blobs fetched lazily)."""
+    """Blob-less clones of the repositories' main, one per repository (blobs fetched lazily), read
+    without credentials (see anonymous_git_env)."""
 
     def __init__(self, base: Path):
         self.base = base
         self.made: dict[str, Path] = {}
+        self.env = anonymous_git_env(base)
 
     def __call__(self, repo: str) -> Path:
         if repo not in self.made:
             g = self.base / repo
             for args in (["init", "-q", str(g)], ["-C", str(g), "remote", "add", "origin", GITHUB + repo]):
-                subprocess.run(["git", *args], check=True, capture_output=True)
+                subprocess.run(["git", *args], check=True, capture_output=True, env=self.env)
             r = subprocess.run(["git", "-C", str(g), "fetch", "-q", "--filter=blob:none", "origin",
-                                "+refs/heads/main:refs/remotes/origin/main"], capture_output=True, text=True)
+                                "+refs/heads/main:refs/remotes/origin/main"], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", env=self.env)
             if r.returncode != 0:
-                raise Unreadable(f"{repo}: fetching main failed: {r.stderr.strip()}")
+                raise Unreadable(f"{repo}: fetching main without credentials failed ({PUBLIC_ONLY}): "
+                                 f"{r.stderr.strip()}")
             self.made[repo] = g
         return self.made[repo]
 
     def prefetch(self, repo: str, rev: str, rels: list[str]) -> None:
         """Fetch the blobs of rels at rev in one request (instead of one lazy fetch each)."""
-        prefetch(self(repo), rev, rels)
+        prefetch(self(repo), rev, rels, self.env)
 
 
-def prefetch(g: Path, rev: str, rels: list[str]) -> None:
+def prefetch(g: Path, rev: str, rels: list[str], env: dict[str, str] | None = None) -> None:
     oids = []
     for rel in sorted(set(rels)):
         r = subprocess.run(["git", "-C", str(g), "rev-parse", "-q", "--verify", f"{rev}:{rel}"],
@@ -538,7 +569,8 @@ def prefetch(g: Path, rev: str, rels: list[str]) -> None:
                                  ).returncode != 0]
     for i in range(0, len(missing), 200):
         r = subprocess.run(["git", "-C", str(g), "-c", "fetch.negotiationAlgorithm=noop", "fetch", "-q", "--no-tags",
-                            "--no-write-fetch-head", "origin", *missing[i:i + 200]], capture_output=True, text=True)
+                            "--no-write-fetch-head", "origin", *missing[i:i + 200]], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", env=env)
         if r.returncode != 0:
             raise Unreadable(f"{g.name}: fetching {len(missing[i:i + 200])} blob(s) failed: {r.stderr.strip()}")
 
