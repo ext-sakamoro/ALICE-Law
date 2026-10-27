@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-release train (`release-train.toml`) に載る crate をまたいだ統合の検査: ALICE-LOL、ALICE-DetMath、ALICE-SDF、ALICE-Physics、ALICE-DB、ALICE-Zip、ALICE-Crypto、ALICE-Analytics、ALICE-Edge、ALICE-ML、ALICE-LLM、ALICE-Kinematics、ALICE-Sync、ALICE-Identity、ALICE-Channel、ALICE-Sign この文が roster より遅れると、この file 自身の検査 `scripts/readme_roster_check.py` が失敗する
+release train (`release-train.toml`) に載る crate をまたいだ統合の検査: ALICE-LOL、ALICE-DetMath、ALICE-SDF、ALICE-Physics、ALICE-DB、ALICE-Zip、ALICE-Crypto、ALICE-Analytics、ALICE-Edge、ALICE-ML、ALICE-LLM、ALICE-Kinematics、ALICE-Sync、ALICE-Identity、ALICE-Channel、ALICE-Sign、ALICE-Font、ALICE-OS-Keystore この文が roster より遅れると、この file 自身の検査 `scripts/readme_roster_check.py` が失敗する
 
 ここにあるものはすべて crates.io に公開された版から build し、path 依存を使わない 検査は 2 種類:
 
@@ -166,6 +166,8 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | alice-identity | 1.2.0 | planned | 16 | ALICE-Identity | v1.2.0 |
 | alice-channel | 0.1.0 | planned | 17 | ALICE-Channel | v0.1.0 |
 | alice-sign | 0.1.0 | planned | 18 | ALICE-Sign | v0.1.0 |
+| alice-font | 0.7.6 | planned | 19 | ALICE-Font | v0.7.6 |
+| alice-os-keystore | 0.2.0 | planned | 20 | ALICE-OS-Keystore | v0.2.0 |
 
 ### 公開まで失敗を予期する step
 
@@ -203,7 +205,10 @@ repository ごとに 1 行: repository を共有する crate は根にある 1 �
 
 ### manifest がまだ無い crate
 
-なし
+| crate | 追加する repository | 理由 |
+|---|---|---|
+| alice-font | ALICE-Font | the manifest has not been written yet |
+| alice-os-keystore | ALICE-OS-Keystore | the manifest has not been written yet |
 
 <!-- law-status:end -->
 

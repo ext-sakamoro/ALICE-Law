@@ -544,6 +544,20 @@ order = 18
 repo = "ALICE-Sign"
 law-dependency = false
 
+[crate.alice-font]
+version = "0.7.6"
+state = "planned"
+order = 19
+repo = "ALICE-Font"
+law-dependency = false
+
+[crate.alice-os-keystore]
+version = "0.2.0"
+state = "planned"
+order = 20
+repo = "ALICE-OS-Keystore"
+law-dependency = false
+
 # CI steps that fail until a release (scripts/expected_failure.py, wrapped around the
 # step): reported as expected and the steps that need them skipped. A step listed here
 # that passes, or still fails after its release, or fails another way, is red.
