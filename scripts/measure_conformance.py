@@ -193,6 +193,57 @@ def invoked_scripts(wf: dict[str, str]) -> set[str]:
     return {m.group(1) for text in wf.values() for cmd in run_texts(text) for m in SCRIPT_CALL.finditer(cmd)}
 
 
+def script_commands(text: str) -> list[str]:
+    """the command lines of a shell script, without comments, with backslash-continued lines joined"""
+    out, pending = [], ""
+    for line in map(strip_comment, text.splitlines()):
+        line = line.strip()
+        if line.endswith("\\"):
+            pending += line[:-1] + " "
+            continue
+        if pending or line:
+            out.append(pending + line)
+        pending = ""
+    if pending:
+        out.append(pending)
+    return out
+
+
+def ci_command_sources(repo: Repo, wf: dict[str, str]) -> list[tuple[str, str]]:
+    """(where, command) for every command CI runs: the run steps (not those whose `if:` is literally
+    false) and, followed from them, the lines of the repository shell scripts they call (and the
+    scripts those call), each script read once"""
+    out = [("workflow", c) for c in commands(wf)]
+    queue = [m.group(1) for _, c in out for m in SCRIPT_CALL.finditer(c)]
+    seen: set[str] = set()
+    while queue:
+        name = queue.pop(0)
+        if name in seen or not name.endswith(".sh") or name not in repo.files:
+            continue
+        seen.add(name)
+        for c in script_commands(repo.show(name)):
+            out.append((name, c))
+            queue.extend(m.group(1) for m in SCRIPT_CALL.finditer(c))
+    return out
+
+
+# a clippy run that turns the lints into errors: `-D warnings`, or the disallowed-methods lint itself
+CLIPPY_DENY = re.compile(r"(?:^|\s)(?:-D\s*|--deny[=\s]\s*)(?:warnings|clippy::disallowed[_-]methods)(?![\w-])")
+
+
+def ci_clippy_deny(repo: Repo, wf: dict[str, str]) -> tuple[list[str], int]:
+    """where CI runs `cargo clippy` with the lints denied (the workflow, or the script it calls), and
+    the number of CI commands read"""
+    sources = ci_command_sources(repo, wf)
+    found = []
+    for where, cmd in sources:
+        for part in re.split(r"&&|\|\||;", cmd):
+            c = cargo_command(part)
+            if c and re.match(r"cargo\s+(?:\+\S+\s+)?clippy\b", c) and CLIPPY_DENY.search(c) and where not in found:
+                found.append(where)
+    return found, len(sources)
+
+
 def rust_uncommented(text: str) -> str:
     """Rust source without its comments: `//` to the end of the line and `/* */` (nested), outside
     string, raw string, byte string and character literals (a lifetime `'a` is not a literal)"""
@@ -288,8 +339,11 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
             pend = sorted((default_banned - d["methods"]["f32"]) | (default_banned - d["methods"]["f64"]))
             if pend:
                 parts.append(f"{f}: not banned {', '.join(pend)} (pending, banned by default: allowed only if the manifest states a reason; not checked here)")
-        ci = "clippy" in wf_text and ("-D warnings" in wf_text or "disallowed_methods" in wf_text)
-        cells["G1"] = "; ".join(parts) + ("; CI clippy -D found" if ci else "; CI clippy -D not found")
+        found, read = ci_clippy_deny(repo, wf)
+        via = [w for w in found if w != "workflow"]
+        ci = (f"; CI clippy -D found{' (via ' + ', '.join(via) + ')' if via and 'workflow' not in found else ''}"
+              if found else f"; CI clippy -D not found ({read} CI commands read)")
+        cells["G1"] = "; ".join(parts) + ci
 
     # G2: f32/f64 max and min banned in a clippy list; a raw_* manifest
     mm = [f for f, d in lists.items() if "methods" in d and {"max", "min"} <= d["methods"]["f32"] & d["methods"]["f64"]]

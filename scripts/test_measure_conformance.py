@@ -53,6 +53,29 @@ class Measure(unittest.TestCase):
         repo = make(self.root, f"r{len(list(self.root.iterdir()))}", files)
         return mc.measure(mc.Repo(repo, "HEAD"), BANNED)
 
+    def test_g1_follows_the_ci_run_into_the_script_it_calls(self):
+        # the clippy run sits in a script the workflow calls (and one it calls in turn)
+        gate = "#!/bin/bash\nset -e\ncargo clippy --workspace --all-targets \\\n  -- -A clippy::all -D clippy::disallowed_methods\n"
+        call = "jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bash scripts/gate.sh\n"
+        for files in ({"scripts/gate.sh": gate},
+                      {"scripts/gate.sh": "#!/bin/bash\n./scripts/inner.sh && echo ok\n", "scripts/inner.sh": gate}):
+            c = self.cells({"clippy.toml": CLIPPY, ".github/workflows/ci.yml": call, "src/lib.rs": "", **files})
+            self.assertIn("CI clippy -D found (via scripts/", c["G1"], files)
+        # the same clippy line without a deny, in a script no workflow calls, behind `if: false`, or in a comment
+        nodeny = "#!/bin/bash\ncargo clippy --workspace\n"
+        for files, wf in (({"scripts/gate.sh": nodeny}, call),
+                          ({"scripts/gate.sh": gate}, "jobs:\n  t:\n    steps:\n      - run: cargo test\n"),
+                          ({"scripts/gate.sh": gate},
+                           "jobs:\n  t:\n    steps:\n      - if: false\n        run: bash scripts/gate.sh\n      - run: cargo test\n"),
+                          ({"scripts/gate.sh": "#!/bin/bash\ncargo clippy --workspace  # later: -- -D warnings\n"}, call)):
+            c = self.cells({"clippy.toml": CLIPPY, ".github/workflows/ci.yml": wf, "src/lib.rs": "", **files})
+            self.assertIn("CI clippy -D not found", c["G1"], (files, wf))
+        # the commands read are counted, so a measure that read nothing says so
+        repo = make(self.root, "counted", {".github/workflows/ci.yml": call, "scripts/gate.sh": gate})
+        found, read = mc.ci_clippy_deny(mc.Repo(repo, "HEAD"), mc.workflows(mc.Repo(repo, "HEAD")))
+        self.assertEqual(found, ["scripts/gate.sh"])
+        self.assertGreater(read, 1)
+
     def test_g1_names_the_banned_methods_a_clippy_list_lacks(self):
         c = self.cells({"clippy.toml": CLIPPY, ".github/workflows/ci.yml": WORKFLOW, "src/lib.rs": ""})
         self.assertIn("clippy.toml: missing sin_cos", c["G1"])
