@@ -2,6 +2,36 @@
 # of its name. The list only goes down; a fixed occurrence is removed in the same change that fixes it.
 
 [[entry]]
+repo = "003f5ad2181f13dd23c2925c50d35cc5f4420a5534d4435f7924d043db59ad68"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "014caf9be5b8a22edcb3172dcec78356b2ab6cd7f3cfde2a2f237722177dbec0"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "01dee5942860fce89d493b544b36b4811ed73b6066d841b3b8827bdb34e4f52a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "0242323f7c347dd5bc02de328e059118789fa7f2edf0d4acfa3574003703ebe4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "043124f49dfe4aa8cdde50708ae29d5f1384548ab842ec0cb06903bb46f4cc56"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "04b562ca0b7fe99996acc9c1bd74f4da3923bd7ecaaeabdf09e7bc9d94009a63"
 kind = "authors"
 path = "Cargo.toml"
@@ -9,6 +39,41 @@ path = "Cargo.toml"
 [[entry]]
 repo = "04b562ca0b7fe99996acc9c1bd74f4da3923bd7ecaaeabdf09e7bc9d94009a63"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "04b562ca0b7fe99996acc9c1bd74f4da3923bd7ecaaeabdf09e7bc9d94009a63"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "053f64bbe94e4b68d7f47e61e6301dadba6cd6c9d94a4b6461ec202af5485b4f"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "05e95c35703b6b59220149f1275152acbb4afca27a4931b7f94146d5b0a45797"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "0607acfb4c129b1ce84836e88e8c8281163d13caec9124800f4197ea625b2bd7"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "064698721b72dec42ddee7b074bb7f3cd20dd8c185d796fad625966876d8c638"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "06cdabd0ee1fb572eb9d8e3c2eac8c2021acbf3d6180411f95fc5ed619915493"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "08ae2add08e314dd75ad57f1507c5580b8274d941b473c721ec8ac855d0ba357"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -17,9 +82,69 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "0a99025bd77becb260c8fec10ce710a81b0bb5ba4b046739d7e9d6a4ceb3b2ef"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "0b3f0eefbcd101585118f952e0cc19a2710008f921bb401b397f0390cc65bcd2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "0ce34acc2cb457b09656fcdba9ef45ab5ed68df482a5db7e8d6dd45552d2227e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "0dc5da98ff8e3325f4be641bc0f894b94f06ee0b93b5657092379ed2f4c28c8d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "0f8a36eff4347097433a0a826c69e3b645373859c3158bee2156f773163439b4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1008313d35220b0356e60fd454a129ac1dc459f716212a639ead2b443e2e1225"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "108fee10d22aaefa1a2ade54c6b0e800479146eece4e11ba7403bfda3ccea035"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "118d1db8b0b639d91fe4af88ccb7a283ee2cf94ef454c92d5bdcab587fba0272"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "11a8f0b08cbc98f4336e7031ec5961094f8a9c9b5367fd4d8505e89693e450b4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "1492a5b04da7234099071ac0133ae428b0e3450ca2e3dfd47d1f77b4cbb94305"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "1492a5b04da7234099071ac0133ae428b0e3450ca2e3dfd47d1f77b4cbb94305"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "16369b29b1d3bd435b83b03b8924413851719bf2e5dc95e9af2ad209e85821f1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "18fd389bbec9436c2c10b076b08720170f66bb91c8f4014443cab7a8baaae10a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "1af6f0a948660d7aad2ed1822f5ce592114ff8c418b51248a352b2b952e31868"
@@ -29,6 +154,11 @@ path = "Cargo.toml"
 [[entry]]
 repo = "1af6f0a948660d7aad2ed1822f5ce592114ff8c418b51248a352b2b952e31868"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1af6f0a948660d7aad2ed1822f5ce592114ff8c418b51248a352b2b952e31868"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -37,6 +167,36 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "1b80d555bb43819ac4da24564236102f0c1999d00ab3faf330c03825a6afddf0"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1bbdac701bce1555e8f002cd817e7db27338a38719cf1028eff79b5baa6db4fa"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1c0618f611ca41cdc8d6b42c3b82b6d86d62db7800497ba3e6da14896505cb1a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1c78a5bf68486a93597491a6eccdc9dc8db3e221175aefc8abd4cd20c90ecd10"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1c8ced800560ed97a8670da1ad15622164522c38f0f3f1c5cc83aadbdfaa77e2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1d1ea4c1ba87130134486109630fabab829f636f0b1ce74d5288d68dc49f3621"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "1e0fbeb03c31c18cd536cf38787ca7d2240bd07956a2d708276515905de8c62a"
 kind = "authors"
 path = "Cargo.toml"
@@ -44,6 +204,11 @@ path = "Cargo.toml"
 [[entry]]
 repo = "1e0fbeb03c31c18cd536cf38787ca7d2240bd07956a2d708276515905de8c62a"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1e0fbeb03c31c18cd536cf38787ca7d2240bd07956a2d708276515905de8c62a"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -52,6 +217,26 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "1e2c8aead72e36cc4fbbe0d1c84fd2cf338b01873321c617dda37917006c129b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1fa15a005597410d33c3fddd21768fc76fbd6e3adcf1175df416aa240d858256"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "1fb562ee3f11040433b1cd4360e66b72b3f72e1c20910ea77b67dcd825d5dc9d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "22d7f1a316edb047bff2ce1f82c357be4290d19afcd2c0182bc3f5907373f3e4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "2368fbbea5ea4043cb84a5ae027905aec833fcd7648a68e5b9473d5cdd8b941a"
 kind = "authors"
 path = "Cargo.toml"
@@ -62,6 +247,96 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "2368fbbea5ea4043cb84a5ae027905aec833fcd7648a68e5b9473d5cdd8b941a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2438ec978edb397596ed64166db1216dac62334194ae9e7208db755e6b8d18d1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "255474b028eb9373537577f7cc909ce356c56c724ca0679d53e9e6d9272a4a59"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "25741e95966d225f62ff33c3e5d403c5c1b47726e582fc098582f9715ed14904"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "25f886f34f411016986cc8114bfbf4803f06c1b7fdeac99a9d74903dc3680323"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2605483d5a3c7fba1d3e62267f7a72ad0ef105551b004c1b93b0d1a471011539"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "27032b2f7011d57d0fb80453b5b203d0e03c8f7113625b48fba9084a057dc2ef"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "27dde1e3e4744a66c0156c0d1575a990204ae08b45e13a44c98e1ccfad19dbe5"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "280b1b02cd95972710d9f751e9759a87131bdb2f558a8f3accc27b990d5f27b4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "281f8f1ee8059c647461b9458f246edd680f6089679b53a51c4cf4eed0969c12"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2890c550045001351e1f6db9e93a82fde31e1e6c2e3bae6cf9575e54a32602b3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2896025aeedda5548b86c4acc697fd35107ee120810dbfad4c83e77ec8d82fca"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "291dee897f92100243c64e492f05ce0e591ad68763c8f7afeb109012b640779c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2a486a5d32eb97ed4905e208dd98a1a4e17bafd9fcd31fd07cedc4b92566da3e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2ba7e890d33f97d8494a7c42e64ed2c2f551018bb57139a5b196d7a75d8df9aa"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2ccf25d9103bd9df95cab75a3c4f3a232d978b73bdc209f72f73ef31cd49ad3d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2e72d9fbe094d8afb6de6ee4b793a5f5e5b14f31c6d5cc015e14e9eee2c0ae46"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "2ec7d9352a4781b513cedd4a001510e13c28a9eec48032147d7966222c5d96fd"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "30ab6a7b246586a5c0b052d4563ed4f9148cdacbe67706b38bd575daf04ccde9"
 kind = "authors"
 path = "Cargo.toml"
@@ -69,6 +344,21 @@ path = "Cargo.toml"
 [[entry]]
 repo = "30ab6a7b246586a5c0b052d4563ed4f9148cdacbe67706b38bd575daf04ccde9"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "30ab6a7b246586a5c0b052d4563ed4f9148cdacbe67706b38bd575daf04ccde9"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "3144f21c5a41d7ff51bdfc8346d5a716615660c592b4321b5a36db5e8661c8ff"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "32bb69ea50d8713a131035f7c02f59b0e5bb7d84b2cdda3ab5396d5b9c9438c8"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -77,9 +367,64 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "3311bb14ec92583276233d7010b9871bc3497fbf124b0a9f546d170d290de758"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "3335ec8ceae90371ec76390dd4a7941fc95986dbfc72f9db27e7dab12d6725c6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "3392e4b48acca6d601862c3f299d3a28ff86133803e1e20d15cb8a7130ee6ffb"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "3392e4b48acca6d601862c3f299d3a28ff86133803e1e20d15cb8a7130ee6ffb"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "33931f649a1683bef3538ef2c7e3de32fd45cb28c0ac64f5717cc67d196c92d1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "34a4c08c91a58eb25e09a2563fddac206f0f87c1ff80ba778fea41a59c53f71d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "354b0ecbc1d304a43ab133d7e867b5438212bbc811c6eeb126ce532864c4409c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "35665c3c68af2cebe8a5849b4696223bfc9b6546f294eb61d7f309005a751ea9"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "358b6a75d489ccb6f69de9294684abcb0979cc0c1bde6c78101f7b6e1c66630b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "35f8d24202d99b3deaca4c02c73ef3894d3e739b16f6bd3ca4b2cd1a34324931"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "36061616ca5fc615ba0b52a3942f7b560e207d82edfbf011dabf6559a5a447fd"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "36e59c98df3bc5eebac644518aae8fffd12346a604648206d2ef6bed8eb4ee89"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "373fddf8f059d21f3a5e539e04abf943b7ff569aba590c486b4bac19e3e47430"
@@ -92,9 +437,44 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "373fddf8f059d21f3a5e539e04abf943b7ff569aba590c486b4bac19e3e47430"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "3820291575db0dab32e50a4de65aa5a416366720a36978e3da69b2a553c3d3bc"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "385cb825a1b3a336baf52509923b4691b944c0621c05b0d3cc9d474e1715493c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "38e19ab81bc34c0b638d4f0fa92e95d030e127bb8897517fe70ba91c5227e5b5"
 kind = "authors"
 path = "tauri/src-tauri/Cargo.toml"
+
+[[entry]]
+repo = "3929b869153ebcc625b2601f984eb0564ac808d79f93f94717b2774547075393"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "39eeb41af01863338d1b00f586f4c1bc0a065ea929f87e9aa25603d7b66951a6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "39f3f09f1ca5cb16ac5d3916ba67b02fe4fdcef7b3e396ada2dac00774cf43e7"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "3b8c9656725ff2f054a4a2f56579ff001231176c761e929ca0fd830037ef5882"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "3b8f98eddf85ecec26b8f95ae9eb70154451813a4f74eb1a43825126aca90bcf"
@@ -107,11 +487,61 @@ kind = "holder"
 path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
+repo = "3b8f98eddf85ecec26b8f95ae9eb70154451813a4f74eb1a43825126aca90bcf"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "3bb574241ddba9b0abaed2e17c0e99793832e342614933831a9ca0520eac2792"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "3ef7c23054fecceba84393adf2be7da3e61c15adafac87399f90c9ffd92b43ee"
 kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "3ef7c23054fecceba84393adf2be7da3e61c15adafac87399f90c9ffd92b43ee"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "40ae6320466f7a5ca38c46fbd63bc8bf0b0ee1dc384bd88608728708e3048812"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "40cea3d645141a8b126927926c67b123b980147d2d4c3a9307b2029d2ebe0736"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4123d1288d3f9226907440c62ae07dc92e2c447150c6ca0fb69c19c2ba1283c2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "41753417da484dc96f1285049501035c1013a251bab4e7de20299d68af417c42"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4230bc381ed6daf85a0fc96bb60032ade75e9cc17184aea581546a8917acd290"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4234c76dc1b6ae63c83b1431771d92c65340565d2e2d0a11caca8b5860a828b7"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "429b5a173d6814f50aa55a4630d206dc176b0daafb2cb88d6314134e474b57a7"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "42bfebe261d4d5ce9815f04b602444cf653bc2e3cd7375efe8004ae934b128ce"
 kind = "authors"
 path = "Cargo.toml"
@@ -119,6 +549,21 @@ path = "Cargo.toml"
 [[entry]]
 repo = "42bfebe261d4d5ce9815f04b602444cf653bc2e3cd7375efe8004ae934b128ce"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "42bfebe261d4d5ce9815f04b602444cf653bc2e3cd7375efe8004ae934b128ce"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "430e8aa58f5001da89f4a0f448c106f85e339065121e7d930e16bcc83f373ef4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "44b6cfaac2d51c50958525028559b4617ef381d09ac40c43c3a2800936fa1f48"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -132,6 +577,36 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "4542ac49a6127dc74f12f4a59d4e07d7dd8dc64af739f48eabb3c1dbc99ef3ce"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4689594b15fb56d4aea18180f1e1e0d03f9827184c07dc9cbdfec33fd54c3a35"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "472381fc4a79527f3b7b09e3705ed16f2594a9d070b61bab24aff58074536b67"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "47478baa10ad68e5f952aa5d8bf62257cbd2871ff3fd7cbf1f569f490e75a813"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "48a7258a00686a6947f7f3f6b4f1cbdd131ad64fcaabd956659d18af282ce79f"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "48fb9e6a3733b77f52eb1a7aa84b3434fe3cab46af53777842c19bf02422f780"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0"
 kind = "authors"
 path = "Cargo.toml"
@@ -139,6 +614,26 @@ path = "Cargo.toml"
 [[entry]]
 repo = "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4987f7c3189afa78eb9c265a94d3120fad4c197b2e716ee359d7d035437aa8c0"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "49db09c2221965f1a19a8f4a11003938587037655ce36ca5fd70fbfdf1487ce9"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4adc845f63013bd83950bc14b48c090f96469582eac9ec9d75b304424fe53bae"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4c27e5a5ce6cffa1f9909f1eddb601d8c037788d2dda0f7630c8cd0bbb8d9df7"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -147,11 +642,36 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "4c32980deda42f0977074d4334853e28b4805cd9e82321204d50cc893ebf0f6a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4c41c632ff5b2a3b3a9f6fc1789d6e4fea5fff3b74896a07797741913e0710c9"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "4de52b5ee0c53c617c91db974d74c1e70f8c4a4492c38e09b48eb0c8e8252c0c"
 kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "4de52b5ee0c53c617c91db974d74c1e70f8c4a4492c38e09b48eb0c8e8252c0c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4e74e8de36888177d52e6234e432723b7a4a16c55936712d06bd6785814a133b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4ea85502ab2ec48cbbc9a797a466a9024f751d72bd77f0f5a2440cc1a9bdf7d7"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
 kind = "authors"
 path = "Cargo.toml"
@@ -159,6 +679,26 @@ path = "Cargo.toml"
 [[entry]]
 repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4ecf2208cc918a4f5c9089aa22f4e90b3feee043044fb97b61331e57f449bb70"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4fcab451543aad8ed8c1a7988365388da26783b0ad9ee0664a5584524e87d1b4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "4fd566720bf2bbe4b99f984d66b732c041873682df0abf66a556aac41a5cc587"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "5424c1dde65460c8efe0f197cd0ef2da9e2932c6749f5bd3998980ed59b6d26f"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -179,6 +719,16 @@ path = "Cargo.toml"
 [[entry]]
 repo = "569e59fdd3172d0b37f76bf346066ee89dd2a87fe2d60aa44b59bda36d1abc6e"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "569e59fdd3172d0b37f76bf346066ee89dd2a87fe2d60aa44b59bda36d1abc6e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "56d1b0541cde4c7334c6200660e74188f534ee2cd1e09e49abcc6c70b323d45e"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -187,9 +737,59 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "57c9065ce5b50297a0ad90c1d8fbb40731b9faee2299e00955dd84ee317ff9c8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "5aa02bab1aa65d72eecb2813f77d40e07ecc32b2a346ba803e728a764db576fc"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "5bb1f456e1e4a6711068aa897d8a3587d5d43dcd14fef4864fcf65cace9adb7f"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "5c03fd3dd75391b968af52319e155c8915b5550d2c1c2513f72a606e307f1d6c"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "5c03fd3dd75391b968af52319e155c8915b5550d2c1c2513f72a606e307f1d6c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "5ccd616c9d5132751781c95e34e06e2cff9a6153211adbcd0e4a6f9c03b8fecd"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "5d7e1d24979b47d3b9ca08b01736196780bb7a7e789ae768e0bdc9be8091961d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "5dffad3f1d056ad8792014f318e7a42f30e6e5fdf4798a31e5b208130609a416"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "5e2f1ce44133d049925f6dd694afe2f7dc36934e18b0f816abadb24b5c3d0a52"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6215745b8c6ef20f252451cfcc522fd490e250af0def98a6514a7b1116168ab6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "6226702ee85270dac34187b10c57139ee017758cf78d20f2539bb1d5dfad279b"
@@ -199,6 +799,66 @@ path = "Cargo.toml"
 [[entry]]
 repo = "6226702ee85270dac34187b10c57139ee017758cf78d20f2539bb1d5dfad279b"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6226702ee85270dac34187b10c57139ee017758cf78d20f2539bb1d5dfad279b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "62d7297ae7c662af9385ba015d10025ab1bbed7a22f76db8001e5b7ad60caac2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "63a9a8f210e5bc3bf5e1afdf5af3e75f06cfccb43a81acd82da3309815bd3a1f"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "645727898e1d7d7c6a6996c4bd81344ddc764500f3d5ecaf9aaf425f48cdcf8c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "64c7961c66da7ba80982c0ba23a53d265aa16629605e8952170a75db91d350da"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "680d1e04cd19a5f2ea83bbe057e4eb953f5c1a4adecb7e04f069d7ad533d593c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6a917192801581ba75eb72cc09f45f09f018912c7d64fa1da07cea83873c1898"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6af520bc862c6e29e7e677b5ad6c048611b11e8ece64650d870b9aed4723b731"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6b00fbd9629189ec56324210235c566aba9e26ec04eff908f791af2cbcd05bea"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6cf4045af34341a561594799b6712efc98332a3eb40fd67824c5cceb09830441"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6f279148e397dde2e3bf1d28d23ddf4a5be38674dfb16689e8d4328cbe74be02"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "6f590b7ede16f6d63a8553157fb87dbc2d584ca7a15e9467866953ebb7543003"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -207,9 +867,49 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "6ff0f2728e75a6b67bcb2540590cb7aab7d1fa2528a074b56aea8b220850ac12"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "70dc41d0540bdfe79fa57b7c7f50b12fa7534a83950c2253a1f6982992fc6a2e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "71e303fe0ee328276ceadfb40b1ad6881e7174d3d3c92ca630047c5e2ed8a673"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "7218f32b0e056930aa0b50b7188ffcded8e75ba4f201971c26a746a5a0661bba"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "7218f32b0e056930aa0b50b7188ffcded8e75ba4f201971c26a746a5a0661bba"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "72609e923a5a23f6b1c826fdbb1795d681225dc8f9e49b1103adbd9352a76c7b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "73e8f358b0a23bf422d8f5a91611730231245bb954f42abead1155508270339e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7630fb89b53c5500f3f21d7a9633d25ad024cd526358cf148721c026c4d98b0b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "778c334f2683014a70e39801b0c039660959e780d533b01239c78361f6384110"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "77c27f441163eb42122e0b0a2610588de91ccc1e370f8f4ea2edeeef04709fd3"
@@ -217,9 +917,34 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "77c27f441163eb42122e0b0a2610588de91ccc1e370f8f4ea2edeeef04709fd3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "78c020f3fcd917130c87560a19bb7baf61d0595f4d66e6eb5ce78835c8d73b7d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7a1b31be37a4d706b664865a85a9220b70146e80b12f1dd1efda9b0416bc52b5"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "7ab2d160450457417410b7fe04af5aaa1fc637aabb03c3eac5c1e317aa23b80b"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "7ab2d160450457417410b7fe04af5aaa1fc637aabb03c3eac5c1e317aa23b80b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7b4a561ce07ab2c593984e059678654909b192b77a1577934c223b90ff89f50b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "7bc7bbf1c0be20ad56186deeee18e365398c650bb49bc70e7cd01bc3d26467dc"
@@ -232,14 +957,64 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "7bc7bbf1c0be20ad56186deeee18e365398c650bb49bc70e7cd01bc3d26467dc"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7bca98eac767dd7cec2de082eee35509fae1d20512ad70f7b5814e7dcd1817f6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7cda2d9af8ad929873293994a00e3adc70aa5df3ba9cd3f4e6accaa7be0f6917"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "7d4b79a4762a666b78305a30ee1d8d1afc92011c5a1a52dba3a1727524226443"
 kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "7d4b79a4762a666b78305a30ee1d8d1afc92011c5a1a52dba3a1727524226443"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7dcb288ddb831f3af3999638f32b44bdf5ae24fe920b16d4db8c9a5b0eda3458"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7e27b8b99390ba0efa1fcdc04c6a6ddf6e2c9c986006e99c7072f2f1298f1243"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "7e889a2755e1e0adeb76844653110ef6339e9a8beb4cbd9137f6da064959d832"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "7e889a2755e1e0adeb76844653110ef6339e9a8beb4cbd9137f6da064959d832"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7ea0839350f91bcafa7a52e243cbf73285376d0160497d6f810b7f47fe9bf787"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7ee23f6d9c6e3bd0f4d8f27baf0a6236ebae0e93912ef7fd50c2dbe7602b9d60"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7f3d5e71f7986edeb8b532c865e566839a07d3a574e827e150428339d43773e6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
@@ -249,6 +1024,36 @@ path = "Cargo.toml"
 [[entry]]
 repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "7f9b31701051ac38c5ac583a98ecd7a61a3aba806544f604f7dc40042ffbf21e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "80be356cc8964433caf02db0c14ee0250bde3315b22d4cc23f22eecc7ac0d980"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8159b9624dcbd405aafb542894a3939254c02bc227268e698841e60fc5374cc3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8350b20e44f5e3fae5f73e34053b5db6fb4d25e59710638439dfe42bd766f5cb"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "83e78800ca359529636b41235be22e7a795438738d2ed9b6c994113e65a527b6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "841994d96626b312ed7beec7ddc9b19ec0921ac02dec20c91771f8ca628b0aad"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -262,6 +1067,16 @@ kind = "authors"
 path = "services/core-engine/Cargo.toml"
 
 [[entry]]
+repo = "85617c72de482957d81ad941c4653c850fd56478c100300498f4700e696a9047"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "85badfc9068bd9c2db71371cc2ba26d7811ebe3f8e3c9222c7d538d8d0e00b29"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "85ef98a05feb4a14851fc78b8837205a7e1fabd0247eb558c8e48c387ce99490"
 kind = "authors"
 path = "Cargo.toml"
@@ -277,14 +1092,89 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "85ef98a05feb4a14851fc78b8837205a7e1fabd0247eb558c8e48c387ce99490"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "868d893b877730d7fe5070aef71e6768a7396e20240195ae6fbe226cfbb71f52"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "86bf0ef670dfab03eba21037c979ef719e32e4c3e0dc38110be53806f1fa016a"
 kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "86bf0ef670dfab03eba21037c979ef719e32e4c3e0dc38110be53806f1fa016a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "870dedfaf4e929818362a10c3b8b08ea65219181ffd64291879b241581633ac9"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "87505828d8511a964d45f08b05e699c9d0eef7476f21e5dc8dab65992d860c2a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "87642598bfeb99166140dd2b22800b60f4e4047a40dfd3b1ce6f56524c40c24c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "87794005412da5783fbc37dabbee98120cb09e1a21af1c953de64e62df6d19b3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "877ac313cf73201b5497d02a86257e1aa01d5232b28f66d0fff6a1c4407b0d38"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "88d019df47413c435075c39720dbdbd74fabf191dc2ba98fdab18ec82e2529d7"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "89af820753e0b20458b5335ecb06fca8d3b6504625c81a11d91120d1cf4005c2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "89bc83cc26de2630a7783a2683bdfe628992d42d91eccaa42205897da9e0a724"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8bb6be796ddcba16f3364d648318891ae4dcbe46c8b560256c5b369bc380dc8e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8c6ef25edebe74946c6732a679964b7e6e7af00523566261cb6973b90ae85e2b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "8d1a8ff38e50cd7243014dc05db49e8f8d9a21bb1548e045ec6a740d3d7087d4"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "8d1a8ff38e50cd7243014dc05db49e8f8d9a21bb1548e045ec6a740d3d7087d4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8d1c644f598c73fec7b296572d875d68ff7c4ae4b7cdcebf7b01a3e69f689eb3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "8e52fe74cde323a2f416625b64e7afb67cdd94287f2a182f2f59dbfa14fca3e5"
@@ -294,6 +1184,11 @@ path = "Cargo.toml"
 [[entry]]
 repo = "8e52fe74cde323a2f416625b64e7afb67cdd94287f2a182f2f59dbfa14fca3e5"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8e52fe74cde323a2f416625b64e7afb67cdd94287f2a182f2f59dbfa14fca3e5"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -302,6 +1197,36 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "8e7d0e949c7f3ccc664e0104a4eb6f1daaa6b233f65d94121282adee4d571e08"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "8fd65512d67a3e7d7e259a13847e24cc87ba211a8da51ff36a371fb86cc64a58"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "90d0ae3c6406277b1cb038e1796192060953955bba505b1a6a1b4adf4f902fc7"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "911167159829a5f874df8a6147833490479cc0a6bc9ee7b2bf11996f6d0997e1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "918bd1d7dc49426d63bbd01a2decbf45d1cf8dbccfa68f282f7e8bb94df5f0f3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9275e940f4cab9fee5cccfb2d1623c6add11e2ee2be271a95ef68868492e6c8d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "939565c3177120a58a7b13cb316ecad5957379819ebc6db9013ae76ff5438d87"
 kind = "authors"
 path = "Cargo.toml"
@@ -309,6 +1234,36 @@ path = "Cargo.toml"
 [[entry]]
 repo = "939565c3177120a58a7b13cb316ecad5957379819ebc6db9013ae76ff5438d87"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "939565c3177120a58a7b13cb316ecad5957379819ebc6db9013ae76ff5438d87"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "94cd6013f3cf29121ea3e235c7abd89b392efc3ac12f946ae1ee97543aad6502"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "95697aabcad829eaa4d60f4d7bfebd0bf988c56eeec2cfbce36b569ed974815b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "96b72ba15e70aa0afccbd78d4dc6e0f0934e9fec677403afff82b0185c5149a2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "986c59a1fb74c2a8f49420a10ab57bbe7366dc1f4b8cfbae1ed7be000927d8b2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "98aab4e1407d521f28cb1b1a0c8d16ed531643460be1791f0db4fb0445531474"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -317,6 +1272,21 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "98fc04542fe3a6d7a13248828f363a6bcf1b91c1176de758239b1c9f6cced5b1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9990f2d21e4638da8f659b479323441f706884ae9e1db55d94683b8571573877"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "99e01e456f76d2294f7725144710ae4034e4357f6f916bff33a6e1a8cd1377d6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "9a0e45b93d7a3c91398f6ea80631c4cd208224450863c392157c3fb8c1c98578"
 kind = "authors"
 path = "Cargo.toml"
@@ -324,6 +1294,36 @@ path = "Cargo.toml"
 [[entry]]
 repo = "9a0e45b93d7a3c91398f6ea80631c4cd208224450863c392157c3fb8c1c98578"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9a0e45b93d7a3c91398f6ea80631c4cd208224450863c392157c3fb8c1c98578"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9a7add9d5168484463ac406df2d35707c00585bd490432b68ca22052119cdc21"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9b07dccfa2f3021e4038d9b864a360aca56c1861303953e014d40212eaf182ca"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9bb6145357c9f4f0ecf4f4b3dc07e57e516bfab9325aa4ffa1fcf120c0d9a755"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9bcd75cdf7deb4788ba9b44bc0f6e67fa4cb06c54f5797f49e984b3e14ba0b28"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9bd86cf51583b85c75dc1d28eefd48eeb35e41c5817231c36fd1bbfc38239dce"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -337,6 +1337,41 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "9c9affbb09120880f3e77400d2584c6997408f97acd289516f45eae66df43ea6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9d649f94bc5299974fb2dc79bf4b86218d827ea1d89882d6fd3025700f34d96c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9eae682f3291ff5f7c1cbe70fdb10d24194184e8f0b0917d639fad8f90ed092e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9ef33665a657836d2108fd531607a56f63d6e586795da580b7348ebeaa274cb1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9ef7cde64cb9128ff725ec1abebf24ede108db2c3f5d9e2c9f9d7c79f4062563"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "9f8b1e1a4c2947754956c65b5c5e38d71ba88c351dd5ba0d3829428875229770"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a0679c87029a3d74f934fa80c699f1559d8dd82ec381943a2ca4faaaa2d8606a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "a431e371846af56936eb500d22259b8e97913a04c00e47af6cdd49964410a32c"
 kind = "authors"
 path = "Cargo.toml"
@@ -344,6 +1379,31 @@ path = "Cargo.toml"
 [[entry]]
 repo = "a431e371846af56936eb500d22259b8e97913a04c00e47af6cdd49964410a32c"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a431e371846af56936eb500d22259b8e97913a04c00e47af6cdd49964410a32c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a56df97891327497d207988f70250c991ec4ad5c57ba4b5cfdda7baf5c5f2715"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a7a92e9bc8cfa5ff6f0f7e6658b4b838781fc3fd214143fbccb9d569da4cdda1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a87a35a11d6c917164f97c2c4636446d157ffdc09f12214c52b4209e2b2ed0ba"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "a9ed272aca00f34172e6ee5e575dc60b506d2497abfa3a3f0c8ceb145e7b46d0"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -362,6 +1422,11 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "aa878435373fbfa0bb3926d78f7d7ba79f6c20d2fe7ad72da011a595f2cd46f9"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "abbaa5b057eceb02af7a328a762aabd0ed60507dcb9d5049cced185cab0e8b41"
 kind = "authors"
 path = "Cargo.toml"
@@ -369,6 +1434,11 @@ path = "Cargo.toml"
 [[entry]]
 repo = "abbaa5b057eceb02af7a328a762aabd0ed60507dcb9d5049cced185cab0e8b41"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "abbaa5b057eceb02af7a328a762aabd0ed60507dcb9d5049cced185cab0e8b41"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -377,6 +1447,66 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "ac703d22ffea43351d568be4cfcade90b2bf963f19a757cea11053fc6013fbc3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "acbd3023b40b7af01b7b993893e2f4491cbc0f4559a6b40afd9800c6d0f1e61a"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ad9d35089a5c51d9e6604a9f76093e560fbf08fdd06bf48142c5a84fb9b3f398"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ae6c68824fef251377cfa7dc91f311bcbb6872ce7bb5d60a7422e9d07376c3de"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ae889076b153ef7e8f20fa2e6555713d09ffd1a7d3a3a5c5f206ac1dfd4908e4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b009517d3490fe0e10c766615db64b3f4ef95e28328b5724c39eba5483675115"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b1990d4e389d54a867dfe6c9685b49bc3bc9c8384d70bef67fca463b36da7950"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b1e15a40000f3e99ede94197b98e5c3b2f7e46beaad405cc42169ccf6822b049"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b209258d8300abb1949c50b613a0166127ac243ab4a8ec1661c40d16ea8dfcb4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b224cdf6487fbf3b9324911fdca80426cb095973236b6e049a4226af450ba9ad"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b4346f733b4ba20b7f4ddba1925c90be5f23f939004fdfa14245870e539a96a2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b461d4e35fb72fa5a2f858d142ced4d676bb144844fe8a310ab68ccd181a1fd8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "b4836d6f58132d63dea52a28ddfcbf71f604fccc51689c0cd35829176ff4e97f"
 kind = "authors"
 path = "Cargo.toml"
@@ -384,6 +1514,11 @@ path = "Cargo.toml"
 [[entry]]
 repo = "b4836d6f58132d63dea52a28ddfcbf71f604fccc51689c0cd35829176ff4e97f"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b4836d6f58132d63dea52a28ddfcbf71f604fccc51689c0cd35829176ff4e97f"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -392,6 +1527,11 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "b5099a078d615727314d712e1c179e4365bf0114735e9a5ba96b90df7e3b5b03"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "b68f98d9a0b050eaefd08a7ca85f4e97cccfcbde3dd00daf8f91929cf309c4b0"
 kind = "authors"
 path = "Cargo.toml"
@@ -402,9 +1542,64 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "b68f98d9a0b050eaefd08a7ca85f4e97cccfcbde3dd00daf8f91929cf309c4b0"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b6aebbdc70ec95bb46b5b50304afdefaccd17e2e20261a29f059e865d2f33ef7"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b6d3335f4de2c07db076dea08ebd6e1bba4bff0fb06dd028abe35bcba5ab8f41"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b797fdde507c7c2b9c99b1c19fc0ecf11d9a2a5ba4e4ec59d3b4ff28dde8b22c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "b7ca32cddf09220b0eb1d6ce6defb3f1eca65b60ccb724f42d9b5c06aa7043a5"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ba9a448995741baff3e5b4a61c6902e1f7baeacb70d1b589cf577c2edf78f3da"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "bb84ef653b9571eaec0fea344534fcf0f36cf2c336d3a50530326aca87e4ce85"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "bb84ef653b9571eaec0fea344534fcf0f36cf2c336d3a50530326aca87e4ce85"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "bc173519c5c1f504a7c031ce95cfc26581c2dfd30f7657d951800b7f9028d1a2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "bd4d9de4b59220c55f991b2c626727dc323b8233aad30f934d73dcd704423e1f"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "bd9ec50745ea6fd414704ad46762f1cb1d54099b35af31905bd2f81ec2f71812"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "be3e5e48cd20bb8ff4e93a678daa944a1f9a09ec9338bc3aae45cc51ebce139d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "bedb6b9e9954b6dbac2a285af1caa8b6679c12f752d23d987037c492aba5b0c0"
@@ -412,9 +1607,34 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "bedd42b7c2fed56454c88d9461289b4d36962212385d0071ac98058c4525d019"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "bf3b500109a526efde99d0009b9db3a19050767bed1a47a62cf42ce58ec9e45d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "bf3c0d7427bd7565679270563d2986d5a9cb36ced72d32dffe163395e5cfe572"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "bf3c0d7427bd7565679270563d2986d5a9cb36ced72d32dffe163395e5cfe572"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "bf5f34f7121228e1900931dd4b6224b53901add48c192f4ed62c2974caa35201"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "bf8fe8ab5bd2f7d763f3fa614061aaaf8e91b724e6bbb4f292cf6ff008002f7f"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "c01520440b902374118ce6d88b22d615501b0995966ca5170f1b238dd479e3e2"
@@ -432,9 +1652,44 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "c01520440b902374118ce6d88b22d615501b0995966ca5170f1b238dd479e3e2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "c03691bbabe8735c38c7060203021abe40067b27654794725918953950f592c3"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "c03691bbabe8735c38c7060203021abe40067b27654794725918953950f592c3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c166827fc32ba728a2932d306a034375230c10f1af6995d4428af0adb6dd8074"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c1849c36231d40301a49e90f5e86d9d36c68c08e7553d63df13ba98efc48b330"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c44108731db83418a59966a31a6b6ddd9afc4928d79533f9a0b2da90448a1b2d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c46a2fdf783c3552219a228e0cf8e9fad7fc61d07ebe45dfce1d334c2d87e07c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c4e2bfb24109537bde89db2a18c6b8d6b6f48fb839b92b5abb7de01253f26ea8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "c60802e1244cbff8656a167ead19a99b191a28ae23e23a6f3ae08a1fb504acf5"
@@ -442,9 +1697,79 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "c60802e1244cbff8656a167ead19a99b191a28ae23e23a6f3ae08a1fb504acf5"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c644925089ce78751a634907166222d684d2008dfd3f128b82d3496c82f298f6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c6ee9b2d29c459891318a597719d2e88758d71d5880951fae79e103fc3f123ab"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c70654e2c5291f0611d5ddbc6f61dc22efbf9c894fb7e226c8bf8ba61b98dd59"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "c828809c2ddbc1d0c8e25dacf0f7d4e28d437855529439d933e84844db977936"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ca0e6a3fca32e16c10cdc29d32ab8d73c04dad2fc1f2b05be384e9ea914923cd"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cab27dc571cf323a562ee17b30437a74ddde5c16e7f06904a4619d65099840a0"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cac6a659091577d12f50724e56ad06944eb7507d99334d49f90bcf5210ede6dd"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cbe0b4e8082e51be2eeb55017c686f315a54d2e9faae38c7fe74424dcc016aec"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cc0ee77cc61ac209fb180944a31de131338e97b1ca6a1043ec2d05b514898e60"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "cc56be2998112dda4d0d76b95afcf4e8f68f1c043714e5586f51587b4af9bdce"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "cc56be2998112dda4d0d76b95afcf4e8f68f1c043714e5586f51587b4af9bdce"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cc9396f9f489b445854e89148ea90deb95bb08643ab1510d24a6ead832bd0e6d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cc942f3f6ee55ac69a0deb2c6d4ceb84975c5577ca59ffdaf5a0432be501f596"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cd4828827c946d350a86d361ba189528de39d6bfc34c1c22eeeaa8ad6970a273"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "ce01a93be43237e2bc510416e9aa8ac1c059e36c2819bbf30f562645473f1cb8"
@@ -452,9 +1777,59 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "ce01a93be43237e2bc510416e9aa8ac1c059e36c2819bbf30f562645473f1cb8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ce740932f961c5f02d24995aeb324cc49239731d65c5ba3da364d1d9cb08172c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cefb58529aa05b846c34bd7cbfe1bee5f270e3037248916f30227a15928bde81"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "cf9c2ba96e18d5703f8e18449883fbf580ee51aba9598a9af8cf8525e6321e2d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d03f23bf9cad6ec6bacc3a81e58ed3d3789682426b6fb10b6fc9d03b350e3e4c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d0f520a1504ab6f84fdf759f0d7c21931d1130df199f6ff76df46c8f8cab2dd4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d1094317c6b382b7e9378b4e18d2eb877f6ae8a6a986f0c1a62595755cb4e445"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d13a01ef62c1f9c0f0b273f30f9570ec2190dd1077f4201d7aede42553219481"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "d2061a3f593eb506233333fd45d4cca5a9ed02ac1f7f19185d57e196d0764ddd"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "d2061a3f593eb506233333fd45d4cca5a9ed02ac1f7f19185d57e196d0764ddd"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d26f9261a640b52713305f03b3b458021e06975c7f7decab0ba4ea4abb3d30d1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "d3e8853a0db7ddbe0bb50f5f1492fe1e786a6df432f69b9bde9096f74bc2e510"
@@ -467,9 +1842,24 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "d3e8853a0db7ddbe0bb50f5f1492fe1e786a6df432f69b9bde9096f74bc2e510"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d41a094392fa55894f2feb921e4d6dd8399234bf8e64d022feb48521e6929588"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "d49581f6bffb48fa47af921ad0654cfc0926d029c7e36d3c9f6447b6a26a3f76"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "d49581f6bffb48fa47af921ad0654cfc0926d029c7e36d3c9f6447b6a26a3f76"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "d544146aac6f53d27825f76f914d20033a438a76806c14eb06663e1c711b0e11"
@@ -477,9 +1867,34 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "d544146aac6f53d27825f76f914d20033a438a76806c14eb06663e1c711b0e11"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "d572850796fa57b4e7f4880b9da80d3ff933d69b6712c843716929cebee4fd80"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "d572850796fa57b4e7f4880b9da80d3ff933d69b6712c843716929cebee4fd80"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d69fabbab4f6aa4c04fd7cc83f67e2da8d70837009f387de91f9c91ec6030dfe"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d6aa4809da1c31768b4a09cfe6ef41efcfd6ced352fcf5eecb83668141a264be"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "d78ddcd4d476687a74fe43ef723531a6b52a66f1852eeb7393263053948dbb44"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "d8d855545eadba30f6aa844916a29edb1abafdcdeca987dc60299cd692114384"
@@ -487,9 +1902,59 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "d8d855545eadba30f6aa844916a29edb1abafdcdeca987dc60299cd692114384"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "dd3ee61dc82c830f38372eaa936f30e905fa47bae7fd0a9ae40787bf60a3400e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "dd7feb716a22815714edccc8c854ddfc2de08fbe9f37484661632e50229ddace"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ddab5de2b469083fb5442814c03136db5d83f6e88c49db78ad3c978b10dfeea9"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ddd80c43f5314929cd0db03f1980ad679c4b433fced8f0b87b08b23df73c05b3"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "dec8b45fc1d95bef5052718002725f481f381df8a002edec33324d0b8f0a41db"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "dedcd4366f486fea40367e694f978c6018116401ba8e88691212ae57fe216624"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "dfbae673a264c3d91dae0b634b3912757cea24deae2d4dc1dffc6dd05dcbb0c2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "dfcc48e6350ce3f13f7f2a906e6ded01795097039d8d4a7bb8004635802989d6"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "e14da12cd76987da67eca6bc073cef88b131fc73bc5d7b48c3190d6e950dbe06"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "e14da12cd76987da67eca6bc073cef88b131fc73bc5d7b48c3190d6e950dbe06"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "e23e84a6186aea987ec72ec25934926cc7a0fc4847aae2892f7bccfb65f29e51"
@@ -497,9 +1962,79 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "e23e84a6186aea987ec72ec25934926cc7a0fc4847aae2892f7bccfb65f29e51"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e2685405f5dfff699b9ff0e0db80f7cfd21c935b0e2e30746845fb90d3fe72cc"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e3b05b25bee351ea5bfa91430f05a38069432e19634fcc476703f046c80076a8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e43a28385c87bda8f16488ed5c784ad7f0acaf428718a148cf6cfff58ecf0bc2"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e4835c97110e4593e9d57e31b9bba7ed5f7033bc390be274595e5d08e5c8c0e8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e57a9d8460b70fd848700c02ee6bccfe1f0d263f0badda4f39813c6a85344efd"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e6dfec75d82119a4c38a434e4972304b8899706f550c2d0c318a4dd7f2d7c3cb"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "e70eaa2a06f6d7a43970daa6f223b82c1c5c972628e3acc303a36911d9e0d390"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "e70eaa2a06f6d7a43970daa6f223b82c1c5c972628e3acc303a36911d9e0d390"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e7200632a2945b69be997c5a3bf25bdd9879323a2f7571acb58bf4679242e190"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e7fef3f4e2adf987cc268ddefdf2659c2fc1aa10f72bfd00c9dca1ac435e5f78"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e942884ba7f21556c646d445ab5df62339a38d818d686558ca558df7523dba58"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "e9b43c210dd2553ee768bcb21c8db38584d5a80fcdd2d5f657c21849c4ab5b96"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ea191a5e48e05f57b2de76f90f79601cce277be57fd864bc84399d4b8e7c75b8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "eb36c60a6c967ebf96e99b686f0a998b98e7b06945b40e7195f684d7965478df"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "eb3c7d3bafcbc8bedbc73df865104788adaa33d929a5807def4038b1b8f3e4f9"
@@ -512,14 +2047,114 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "ec37e45b194ea3ecafb53bcd9219a3e20c84f24b04705fbc60c3f5d743d6396d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "ec6b462b45e4aa123e2dac876e8a7aef0c5fed2dc997c7dd1b31b3282ae5a447"
 kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
+repo = "ec6b462b45e4aa123e2dac876e8a7aef0c5fed2dc997c7dd1b31b3282ae5a447"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ee9e3e13cd51150f6583b5e6962c7078c3e8d51c157fc5569b080c48011281e8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "eeadb8b3253414bcba48162862694ca5c47fcbc208d19302ed3017f9d1d1d92d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "eede0f9c16827e7e49dc6de6cb44054dba5667fa4e781dc9909e4884bd1a1e07"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "ef2637e2b37ab450c46796a8b57569f421b4acc569e39f58bbb871073d33df1b"
 kind = "authors"
 path = "Cargo.toml"
+
+[[entry]]
+repo = "ef2637e2b37ab450c46796a8b57569f421b4acc569e39f58bbb871073d33df1b"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ef287b720a070011ebcb147f310a3950de971b3eaf1168b9e7effe8fc51e1b5e"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f09b9e4cf79c79071ea0e6567f8f68e6a08117434daf42bea39c021f70daaf26"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f0cdc2604f121709f35a9dd09d3ff3084c09c9b1dfd970332c55a0fdd06e0da9"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f0fe8e3d65b5d2da17e862ee0d20f45aa5fabea67719f0cae3df226fa4c027e0"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f12049480668569549dca6ddfe7f5fdb4b3a62c25d54b15adf93c79aeb6b1ece"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f1bccac8f49d8cd9b4ff285732dd2a79e4cc799f1fb2c8b61c22d7d9d7780244"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f1f175ca249bb27a578427d71e81b271675ca0b560f8c87c8de23264bc4cc9c0"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f333347ce460eb261e715f7b29c282ef3e99acf72155c349639d225d282e9760"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f6ad24c112cb4e1ca55c44cf35cb5c6640641d25197fdd0d2c6e7bcd85bf70e1"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f84df4b31d4353359dd4046719bf902010981fbb46b24cce8bd265af58ceaeea"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "f91b22842b5852841aea01d53942827e4e7ec3daf5b26273f036b5729f3cc3b4"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "fa5935fc04d80bc42403b4ce0e0016536100ab4f5de3f5b826928cb3b919eb69"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "fb0a59929b38e3799a21edaf859034148191c9ffc716172b5ca3e92d40cb55bb"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "fc4a9ade7feb88519a67dbbd62d3b249810b1e7d688429ca71c8559aea212fe0"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
 
 [[entry]]
 repo = "fc71052a2f100219b2c5c56c1994fee66e48d897e022dbf542a80c7ec0d8cde8"
@@ -532,6 +2167,16 @@ kind = "holder"
 path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
+repo = "fc71052a2f100219b2c5c56c1994fee66e48d897e022dbf542a80c7ec0d8cde8"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "fc9afa97e709adef3e409dbc228c8756695eb0b1fd64961df81a3cba12110b4d"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "fe3785962421904a55014fbb7b36997e160f3804c0c4f88a0885e9a0d6f02316"
 kind = "authors"
 path = "Cargo.toml"
@@ -542,6 +2187,11 @@ kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
+repo = "fe3785962421904a55014fbb7b36997e160f3804c0c4f88a0885e9a0d6f02316"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
 repo = "ff015f2cef8ec1b3a49d7b3064e4ea4679e0ad42b6b0abed1600d22b1ae21a1c"
 kind = "authors"
 path = "Cargo.toml"
@@ -549,4 +2199,14 @@ path = "Cargo.toml"
 [[entry]]
 repo = "ff015f2cef8ec1b3a49d7b3064e4ea4679e0ad42b6b0abed1600d22b1ae21a1c"
 kind = "holder"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ff015f2cef8ec1b3a49d7b3064e4ea4679e0ad42b6b0abed1600d22b1ae21a1c"
+kind = "trademark"
+path = "TRADEMARK_NOTICE"
+
+[[entry]]
+repo = "ff5b4a4695c2b071f1a2eca07c261380787c69d0d84983b547c29adac58bb59e"
+kind = "trademark"
 path = "TRADEMARK_NOTICE"

@@ -20,6 +20,9 @@ A full text is recognised by the SHA-256 of its words (whitespace collapsed), so
 the text published at apache.org / gnu.org, nothing shorter (a notice that points at the licence is not it).
 TRADEMARK_NOTICE, when present, must not name a licence file the repository does not have
 ("(see <files> and the `license` field …)"; "the LICENSE-* files" needs at least one LICENSE-* file).
+A repository with a root LICENSE-Proprietary must have a root TRADEMARK_NOTICE that is the canonical text byte for
+byte (TRADEMARK_NOTICE_TEXT, git blob TRADEMARK_NOTICE_BLOB): one missing or different is a "trademark" occurrence,
+listed and ratcheted like the holder rule below (holder_live.py reads every public repository with it).
 
 --agpl-report-only prints the AGPL findings but does not fail on them.
 
@@ -69,10 +72,33 @@ PACKAGE_JSON_EXEMPT: dict[tuple[str, str], str] = {}
 AUTHOR = "Moroya Sakamoto"
 HOLDER_RE = re.compile(r"(?i)extoria|エクストーリア")
 # the contact line of the canonical notices (a whole line, exactly): the site, not a rights holder
-ENQUIRY_RE = re.compile(r"^Enquiries: https://extoria\.co\.jp/[ \t]*$", re.M)
+ENQUIRY_RE = re.compile(r"^Enquiries: https://extoria\.co\.jp/[ \t\r]*$", re.M)  # a CRLF file's line too
 RIGHTS_FILE_RE = re.compile(r"^(?:LICEN[CS]E|NOTICE|TRADEMARK_NOTICE)(?:[-._][^/]*)?$")  # by convention in capitals
 NOT_READ = ("vendor/", "third_party/", "node_modules/", "target/")
-KINDS = ("holder", "authors")
+KINDS = ("holder", "authors", "trademark")
+# The one TRADEMARK_NOTICE text of a repository whose licence file is a root LICENSE-Proprietary, compared byte for
+# byte (its git blob, so a CRLF or a missing final newline is another text). It is held here because a repository's
+# check fetches this file alone; the test pins the text to the blob.
+TRADEMARK_NOTICE_BLOB = "f25c211f9d400308b73fca4394cd5f9b46c07a23"
+TRADEMARK_NOTICE_TEXT = (
+    'TRADEMARK NOTICE\n'
+    '\n'
+    '"ALICE", "Project A.L.I.C.E.", and the "ALICE-*" naming pattern are\n'
+    'trademarks of Moroya Sakamoto. Nothing in the licence under which this\n'
+    'software is distributed (see LICENSE-Proprietary) grants permission to use\n'
+    'these trademarks, except as required for reasonable and customary use in\n'
+    'describing the origin of the software.\n'
+    '\n'
+    'If you fork this project, you must remove or replace the "ALICE" prefix\n'
+    'in your fork\'s name and clearly indicate that your fork is not an\n'
+    'official ALICE product.\n'
+    '\n'
+    'Enquiries: https://extoria.co.jp/\n'
+)
+
+
+def git_blob(data: bytes) -> str:
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 HOLDER_BASELINE = Path(__file__).resolve().parent.parent / "conformance" / "holder-baseline.toml"
 
 
@@ -105,6 +131,9 @@ def holder_occurrences(paths: list[str], read) -> set[tuple[str, str]]:
     """(kind, path) of each rights statement naming another holder and each manifest with other authors;
     read(path) returns the file's bytes"""
     occ: set[tuple[str, str]] = set()
+    if "LICENSE-Proprietary" in paths and ("TRADEMARK_NOTICE" not in paths
+                                           or git_blob(read("TRADEMARK_NOTICE")) != TRADEMARK_NOTICE_BLOB):
+        occ.add(("trademark", "TRADEMARK_NOTICE"))
     for path in paths:
         if not read_paths(path):
             continue
@@ -318,8 +347,10 @@ def main(argv: list[str] | None = None) -> int:
         print("error: no tracked file was read for the holder rule", file=sys.stderr)
         return 2
     for kind, path in sorted(new):
-        findings.append(f"{path}: " + ("names another rights holder" if kind == "holder" else
-                                       f'authors other than exactly "{AUTHOR}" (no e-mail)'))
+        findings.append(f"{path}: " + {"holder": "names another rights holder",
+                                       "authors": f'authors other than exactly "{AUTHOR}" (no e-mail)',
+                                       "trademark": "missing, or not the canonical text (the repository has a "
+                                                    f"LICENSE-Proprietary; blob {TRADEMARK_NOTICE_BLOB[:8]})"}[kind])
     for kind, path in sorted(stale):
         (findings if a.stale_fails else reports).append(f"stale baseline entry: {kind} {path} (fixed: remove the entry)")
     for r, kind, path in grown:

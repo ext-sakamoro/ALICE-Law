@@ -8,7 +8,10 @@ Usage: python3 scripts/test_licence_files_check.py
 """
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import importlib.util
+import io
 import atexit
 import shutil
 import subprocess
@@ -377,6 +380,8 @@ class Holder(unittest.TestCase):
         # the contact line of the canonical notices names the company's site, not a rights holder
         line = "Enquiries: https://" + OTHER.lower() + ".co.jp/\n"
         self.assertEqual(self.occ({"TRADEMARK_NOTICE": "trademarks of " + ME + ".\n\n" + line}), set())
+        self.assertEqual(self.occ({"TRADEMARK_NOTICE": "trademarks of " + ME + ".\r\n\r\n" + line.replace("\n", "\r\n")}),
+                         set(), "a CRLF file's enquiry line is the enquiry line too")
         self.assertEqual(self.occ({"TRADEMARK_NOTICE": line + f"Copyright {OTHER}\n"}), {("holder", "TRADEMARK_NOTICE")})
         self.assertEqual(self.occ({"LICENSE": "Enquiries: https://" + OTHER.lower() + ".co.jp/ and " + OTHER + "\n"}),
                          {("holder", "LICENSE")})
@@ -441,6 +446,61 @@ class HolderBaseline(unittest.TestCase):
         self.assertEqual(lfc.baseline_growth(old, grown), [(lfc.repo_key("r"), "holder", "NOTICE")])
         self.assertEqual(lfc.baseline_growth(old, shrunk), [])
         self.assertEqual(lfc.baseline_growth(old, old), [])
+
+
+def git_blob_sha(data: bytes) -> str:
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+class TrademarkNotice(unittest.TestCase):
+    """a repository with a root LICENSE-Proprietary carries the one canonical TRADEMARK_NOTICE, byte for byte"""
+
+    def occ(self, files):
+        return lfc.holder_occurrences(list(files), lambda p: files[p])
+
+    def canonical(self) -> bytes:
+        return lfc.TRADEMARK_NOTICE_TEXT.encode("utf-8")
+
+    def test_the_embedded_text_is_the_canonical_blob(self):
+        self.assertEqual(git_blob_sha(self.canonical()), lfc.TRADEMARK_NOTICE_BLOB)
+        self.assertEqual(lfc.TRADEMARK_NOTICE_BLOB, "f25c211f9d400308b73fca4394cd5f9b46c07a23")
+
+    def test_the_canonical_notice_beside_the_licence_passes(self):
+        files = {"LICENSE-Proprietary": b"x\n", "TRADEMARK_NOTICE": self.canonical()}
+        self.assertEqual(self.occ(files), set())
+
+    def test_a_missing_or_other_notice_is_an_occurrence(self):
+        old = self.canonical().replace(b"(see LICENSE-Proprietary)", b"(see LICENSE-Proprietary and the `license` field)")
+        for why, files in (("missing", {"LICENSE-Proprietary": b"x\n"}),
+                           ("older text", {"LICENSE-Proprietary": b"x\n", "TRADEMARK_NOTICE": old}),
+                           ("CRLF", {"LICENSE-Proprietary": b"x\n",
+                                     "TRADEMARK_NOTICE": self.canonical().replace(b"\n", b"\r\n")}),
+                           ("no final newline", {"LICENSE-Proprietary": b"x\n",
+                                                 "TRADEMARK_NOTICE": self.canonical().rstrip(b"\n")})):
+            self.assertEqual(self.occ(files), {("trademark", "TRADEMARK_NOTICE")}, why)
+
+    def test_without_a_root_licence_proprietary_nothing_is_required(self):
+        # the licence file moves first (the licence change); a nested licence file is a package's own
+        self.assertEqual(self.occ({"LICENSE": b"x\n"}), set())
+        self.assertEqual(self.occ({"LICENSE": b"x\n", "TRADEMARK_NOTICE": b"TRADEMARK NOTICE\n"}), set())
+        self.assertEqual(self.occ({"crates/a/LICENSE-Proprietary": b"x\n"}), set())
+
+    def test_the_kind_is_read_from_the_baseline(self):
+        b = {lfc.repo_key("r"): {("trademark", "TRADEMARK_NOTICE")}}
+        self.assertEqual(lfc.load_baseline(lfc.dump_baseline(b)), b)
+
+    def test_the_check_reports_it_and_the_baseline_lets_it_pass(self):
+        d = repo({"Cargo.toml": cargo("LicenseRef-Proprietary"), "LICENSE-Proprietary": "x\n"})
+        base = scratch() / "b.toml"
+        base.write_text("", encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            rc = lfc.main(["--repo", d, "--repo-name", "r", "--holder-baseline", str(base)])
+        self.assertEqual(rc, 1, out.getvalue())
+        self.assertIn("TRADEMARK_NOTICE: missing, or not the canonical text", out.getvalue())
+        base.write_text(lfc.dump_baseline({lfc.repo_key("r"): {("trademark", "TRADEMARK_NOTICE")}}), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(lfc.main(["--repo", d, "--repo-name", "r", "--holder-baseline", str(base)]), 0)
 
 
 class HolderRepoMode(unittest.TestCase):
