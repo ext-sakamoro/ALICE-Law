@@ -130,8 +130,7 @@ exempt = { "ALICE-Analytics" = "this repository's own clippy canary rows, genera
 
 [[file]]
 path = "scripts/clippy_external_coverage.py"
-sha256 = "5c8a6ba952906f6403e131a7e5dbae8b601f20c829fd32c8fb8eaa74cfa0829b"
-source = { repo = "ALICE-Crypto", rev = "1fd3e17c71981f987a7215ed81354f49c9e66784" }
+pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "bac6b084c938ecb0691a02062f0180a33a2af99ed2b2bc9149656cc9819d620e", owner = "ALICE-Crypto", planned = "ddfa1a49caffb886a68fe4ff53eef4ff4808c172", moved_from = { planned = "01e6128761f603876a88789aae8cbba8d604ef0f", target = "5c8a6ba952906f6403e131a7e5dbae8b601f20c829fd32c8fb8eaa74cfa0829b" }, first_move = true, variants = { "5c8a6ba952906f6403e131a7e5dbae8b601f20c829fd32c8fb8eaa74cfa0829b" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-Identity"] } }
 repos = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-Identity"]
 
 [[file]]
@@ -325,8 +324,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 
 [[file]]
 path = "scripts/test_clippy_external_coverage.py"
-sha256 = "bd93bfca6a2a6788a87f26b289db05911200f8343a956735c0dcb81191ce7351"
-source = { repo = "ALICE-Crypto", rev = "1fd3e17c71981f987a7215ed81354f49c9e66784" }
+pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "fb9b82be0d6255a333e281bfc0abf65bee6e5c56d0364953bd54a0130e810d83", owner = "ALICE-Crypto", planned = "e0ac58360b65b10d6a01bf2511a58e9a89bbc8ff", moved_from = { planned = "e6fcb8a40dd2cea935d486225a30ec2d7f4a6a8d", target = "bd93bfca6a2a6788a87f26b289db05911200f8343a956735c0dcb81191ce7351" }, first_move = true, variants = { "bd93bfca6a2a6788a87f26b289db05911200f8343a956735c0dcb81191ce7351" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-Identity"] } }
 repos = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-Identity"]
 
 [[file]]
