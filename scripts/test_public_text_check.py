@@ -593,9 +593,9 @@ class Shapes(unittest.TestCase):
 
     def test_hashed_note_file_names_are_found_in_prose_and_in_comments(self):
         self.with_note("sample-private-note")
-        for line, path in (("see sample-private-note.md", "README.md"), ("the Sample-Private-Note page", "docs/a.md"),
-                           ("// from sample-private-note", "src/a.rs"), ("# sample-private-note", "a.py"),
-                           ('let s = "sample-private-note";', "src/a.rs")):
+        for line, path in (("see sample-private-note.md", "README.md"), ("the [[Sample-Private-Note]] page", "docs/a.md"),
+                           ("// from memory/sample-private-note", "src/a.rs"), ("# sample-private-note.md", "a.py"),
+                           ('let s = "sample-private-note.md";', "src/a.rs")):
             self.assertIn("internal note", ptc.kinds(line, path), line)
         for line, path in (("see x-sample-private-note.md", "README.md"), ("sample-private-note-2", "docs/a.md"),
                            ("let sample_private = 1;", "src/a.rs")):
@@ -604,6 +604,38 @@ class Shapes(unittest.TestCase):
         for line, path in (("let sample_private_note = 1;", "src/a.rs"), ("x = sample_private_note + 1", "a.py")):
             # a code identifier is code, not a note (only comments and strings are read in a code file)
             self.assertNotIn("internal note", ptc.kinds(line, path), line)
+
+    def test_a_note_name_that_is_also_an_ordinary_word_is_found_only_as_a_reference(self):
+        # a note whose name is also an environment variable or a field: the bare word in code, in a
+        # comment, in a string or in prose is that word, and only the reference forms ([[name]],
+        # name.md, memory/name) name the note
+        self.with_note("sample_api_token")
+        bare = (('token = os.environ["SAMPLE_API_TOKEN"]', "scripts/a.py"),
+                ('    f"login --token {SAMPLE_API_TOKEN}"', "scripts/a.py"),
+                ("# reads SAMPLE_API_TOKEN from the environment", "scripts/a.py"),
+                ('let t = std::env::var("SAMPLE_API_TOKEN");', "src/a.rs"),
+                ("export SAMPLE_API_TOKEN=...", "scripts/a.sh"),
+                ("Set `SAMPLE_API_TOKEN` before running.", "README.md"))
+        for line, path in bare:
+            self.assertNotIn("internal note", ptc.kinds(line, path), (line, path))
+        compared = 0
+        for line, path in (("see [[sample_api_token]]", "docs/a.md"), ("see sample_api_token.md", "README.md"),
+                           ("details in memory/sample_api_token", "docs/a.md"),
+                           ("# kept in [[sample_api_token]]", "scripts/a.py"),
+                           ('let p = "memory/sample_api_token.md";', "src/a.rs")):
+            self.assertIn("internal note", ptc.kinds(line, path), (line, path))
+            compared += 1
+        self.assertEqual(compared, 5)
+        # each reference form on its own
+        self.assertTrue(ptc.note_tokens("[[sample_api_token]]"))
+        self.assertTrue(ptc.note_tokens("sample_api_token.md"))
+        self.assertTrue(ptc.note_tokens("memory/sample_api_token"))
+        self.assertTrue(ptc.note_tokens("memory/sub/sample_api_token"))
+        self.assertTrue(ptc.note_tokens("memory\\sample_api_token"))
+        self.assertTrue(ptc.note_tokens("[[ sample_api_token ]]"))
+        self.assertFalse(ptc.note_tokens("other/sample_api_token"))
+        self.assertFalse(ptc.note_tokens("sample_api_token"))
+        self.assertFalse(ptc.note_tokens("SAMPLE_API_TOKEN"))
 
     def test_the_hashed_note_names_are_held_and_the_published_names_are_not(self):
         self.assertGreaterEqual(len(ptc.NOTE_BASENAME_HASHES), 100)
