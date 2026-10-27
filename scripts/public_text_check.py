@@ -1288,13 +1288,22 @@ NOTE_BASENAME_HASHES: frozenset[str] = frozenset({
 NOTE_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]*[A-Za-z0-9](?![A-Za-z0-9_\-])")
 
 
+def note_reference(line: str, m: re.Match) -> bool:
+    """whether a token is written as a reference to a note: `[[name]]`, `name.md` or a path segment
+    after `memory/` A bare word is not: many note names are ordinary identifiers too (an environment
+    variable, a field), so a bare match would find them in any code that uses the same word"""
+    return (m.group(0).lower().endswith(".md") or line[:m.start()].endswith("[[")
+            or line[:m.start()].lower().endswith("memory/"))
+
+
 def note_tokens(line: str) -> list[re.Match]:
-    """the tokens of a line that are a hashed note's file name (`name` or `name.md`)"""
+    """the tokens of a line that refer to a hashed note's file name (see note_reference)"""
     out = []
     for m in NOTE_TOKEN_RE.finditer(line):
         t = m.group(0).lower()
         t = t[:-3] if t.endswith(".md") else t
-        if ("-" in t or "_" in t) and hashlib.sha256(t.encode("utf-8")).hexdigest() in NOTE_BASENAME_HASHES:
+        if (("-" in t or "_" in t) and note_reference(line, m)
+                and hashlib.sha256(t.encode("utf-8")).hexdigest() in NOTE_BASENAME_HASHES):
             out.append(m)
     return out
 # code files whose comments and strings are read apart from their code tokens, by comment style
