@@ -17,19 +17,19 @@ repos = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Identity"]
 
 [[file]]
 path = ".github/workflows/eol.yml"
-pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "1acdeab1e6c9b88d7283b5cf42c3c8822e058857b0a5c2e2a3f55badbe64fa33", owner = "ALICE-Analytics", planned = "22be12bbf5792b05aa3c27e73a0b8195d0b10281", moved_from = { planned = "96e8a84f1c6d4e1222c2e2bbcf65ec5d5e072dd4", target = "6a565ebd9285657f96e639ae5c4ac18d8ebaad9930a14eb087d742cb93d5badd" }, first_move = true, variants = { "6a565ebd9285657f96e639ae5c4ac18d8ebaad9930a14eb087d742cb93d5badd" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"] } }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
+pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "1acdeab1e6c9b88d7283b5cf42c3c8822e058857b0a5c2e2a3f55badbe64fa33", owner = "ALICE-Analytics", planned = "22be12bbf5792b05aa3c27e73a0b8195d0b10281", moved_from = { planned = "96e8a84f1c6d4e1222c2e2bbcf65ec5d5e072dd4", target = "6a565ebd9285657f96e639ae5c4ac18d8ebaad9930a14eb087d742cb93d5badd" }, variants = { "1acdeab1e6c9b88d7283b5cf42c3c8822e058857b0a5c2e2a3f55badbe64fa33" = ["ALICE-Analytics", "ALICE-OS-Keystore"], "6a565ebd9285657f96e639ae5c4ac18d8ebaad9930a14eb087d742cb93d5badd" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"] } }
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = ".github/workflows/public-text.yml"
-pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "9b24f9a9b70b91bfcc246abcfe2812b1a6077416495b8e2417cda97aece64998", owner = "ALICE-Analytics", planned = "0fca416e59f58e1d0c79dc92af7d6420dd8c26e0", moved_from = { planned = "91e281b192aea2fda41a9db0b01c0124b6d57176", target = "80778cf64013bd0719a4d1ae8d76598ac858b92bceb81dbe16ca88c76d1ef682" }, first_move = true, variants = { "80778cf64013bd0719a4d1ae8d76598ac858b92bceb81dbe16ca88c76d1ef682" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"] } }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "9b24f9a9b70b91bfcc246abcfe2812b1a6077416495b8e2417cda97aece64998", owner = "ALICE-Analytics", planned = "0fca416e59f58e1d0c79dc92af7d6420dd8c26e0", moved_from = { planned = "91e281b192aea2fda41a9db0b01c0124b6d57176", target = "80778cf64013bd0719a4d1ae8d76598ac858b92bceb81dbe16ca88c76d1ef682" }, variants = { "80778cf64013bd0719a4d1ae8d76598ac858b92bceb81dbe16ca88c76d1ef682" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"], "9b24f9a9b70b91bfcc246abcfe2812b1a6077416495b8e2417cda97aece64998" = ["ALICE-Analytics", "ALICE-OS-Keystore"] } }
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
 exempt = { "ALICE-Law" = "runs its own scripts/public_text_check.py in place; the crates' workflow fetches that file from here" }
 
 [[file]]
 path = "scripts/advisory_hold_guard.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e76f84d08796a2665af470bff3492060063fdd8190c95bc30dc01a407a6f1329", owner = "ALICE-Kinematics", planned = "cf2b08a94f242c857a7c2b38cd1b1545c8345cdb", variants = { "e5f2844a399fe58d2d3d3ce601694bec584137491f784bbc98ac946124a89814" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Queue", "text-to-print"], "e76f84d08796a2665af470bff3492060063fdd8190c95bc30dc01a407a6f1329" = ["ALICE-Kinematics"] } }
-repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue", "text-to-print"]
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e76f84d08796a2665af470bff3492060063fdd8190c95bc30dc01a407a6f1329", owner = "ALICE-Kinematics", planned = "cf2b08a94f242c857a7c2b38cd1b1545c8345cdb", variants = { "e5f2844a399fe58d2d3d3ce601694bec584137491f784bbc98ac946124a89814" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-OS-Keystore", "ALICE-Queue", "text-to-print"], "e76f84d08796a2665af470bff3492060063fdd8190c95bc30dc01a407a6f1329" = ["ALICE-Kinematics"] } }
+repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-OS-Keystore", "ALICE-Queue", "text-to-print"]
 
 [[file]]
 path = "scripts/alice_dup_check.py"
@@ -57,7 +57,7 @@ repos = ["ALICE-Edge", "ALICE-Sync"]
 [[file]]
 path = "scripts/build_config_allowlist.toml"
 repos = []
-exempt = { "ALICE-Analytics" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Channel" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Crypto" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-DB" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-DetMath" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Edge" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Font" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Identity" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Kinematics" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-LLM" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-LOL" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-ML" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Physics" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-SDF" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Sign" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Sync" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Zip" = "this repository's own allowlist of the files that quote build flags on purpose" }
+exempt = { "ALICE-Analytics" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Channel" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Crypto" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-DB" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-DetMath" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Edge" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Font" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Identity" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Kinematics" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-LLM" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-LOL" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-ML" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-OS-Keystore" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Physics" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-SDF" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Sign" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Sync" = "this repository's own allowlist of the files that quote build flags on purpose", "ALICE-Zip" = "this repository's own allowlist of the files that quote build flags on purpose" }
 
 [[file]]
 path = "scripts/build_config_guard.py"
@@ -81,7 +81,7 @@ repos = ["ALICE-LOL", "ALICE-TRT"]
 path = "scripts/changed_paths.py"
 sha256 = "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7"
 source = { repo = "ALICE-API", rev = "b6675c55a35c0798826eefa2449e10e8c2cf73a5" }
-repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Eco-System", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-TRT", "ALICE-Text", "ALICE-View", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Eco-System", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-TRT", "ALICE-Text", "ALICE-View", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/changed_paths_yaml_oracle.py"
@@ -93,7 +93,7 @@ repos = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Identity"]
 path = "scripts/check_eol.py"
 sha256 = "757ffc3027d39a469780741b93fec2a5bd114dd156df19f76d1735d3d05e5ff3"
 source = { repo = "ALICE-Analytics", rev = "63d2179b39c508b5d5c938364ba95149f858ad91" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/check_pipe_grep_q.py"
@@ -126,7 +126,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 [[file]]
 path = "scripts/clippy_canary_calls.tsv"
 repos = []
-exempt = { "ALICE-Analytics" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Channel" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Crypto" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-DB" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-DetMath" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Edge" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Identity" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Kinematics" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-LLM" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-ML" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Sign" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Sync" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Zip" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py" }
+exempt = { "ALICE-Analytics" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Channel" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Crypto" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-DB" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-DetMath" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Edge" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Identity" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Kinematics" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-LLM" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-ML" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-OS-Keystore" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Sign" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Sync" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Zip" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py" }
 
 [[file]]
 path = "scripts/clippy_external_coverage.py"
@@ -220,7 +220,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 path = "scripts/public_text.sh"
 sha256 = "49f1f971bcf2d9c704f11feff6ba40c26c28f2a47af2f156056c58e712ce1bfe"
 source = { repo = "ALICE-DB", rev = "f1847df0aea24694ebd27b26d877f853bc304f80" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/readme_parity_check.py"
@@ -237,7 +237,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = "scripts/run_tests.sh"
 sha256 = "30f6c55ec1ac9ae8a958fcbd687cdb0cac6ae1057120978ca5348650c5188a7e"
 source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/semver_gate.py"
@@ -263,8 +263,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Text"]
 
 [[file]]
 path = "scripts/test_advisory_hold_guard.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e7a6fd22e92ed6cacbd02f829934ebae6d0d7cc02fe72fec1240802cdd90d1be", owner = "ALICE-Kinematics", planned = "f7d0d1ac0c74bdd05d20b4cfaedec6b579ea9a99", variants = { "d0d2bdd1db7d75498ae8dc50618ef33d38ad581607547555d903298c4de526cb" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Queue", "text-to-print"], "e7a6fd22e92ed6cacbd02f829934ebae6d0d7cc02fe72fec1240802cdd90d1be" = ["ALICE-Kinematics"] } }
-repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-Queue", "text-to-print"]
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e7a6fd22e92ed6cacbd02f829934ebae6d0d7cc02fe72fec1240802cdd90d1be", owner = "ALICE-Kinematics", planned = "f7d0d1ac0c74bdd05d20b4cfaedec6b579ea9a99", variants = { "d0d2bdd1db7d75498ae8dc50618ef33d38ad581607547555d903298c4de526cb" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-OS-Keystore", "ALICE-Queue", "text-to-print"], "e7a6fd22e92ed6cacbd02f829934ebae6d0d7cc02fe72fec1240802cdd90d1be" = ["ALICE-Kinematics"] } }
+repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-OS-Keystore", "ALICE-Queue", "text-to-print"]
 
 [[file]]
 path = "scripts/test_alice_siblings_check.py"
@@ -304,8 +304,8 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 
 [[file]]
 path = "scripts/test_check_eol.py"
-pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "3a76189056ffffc879ab14598ad923524373fa4a836bca9ee7fe48703b4a94c3", owner = "ALICE-Analytics", planned = "fe9b220a1bc3e56c4ec012c40cd6da5ad3775c70", moved_from = { planned = "e602dd3e5ed29782ba87b276d2347d52d68a5dd9", target = "5422a9d4198c6f41f4c2a626639a987fd379928b37e2ecf1333c73dc94f8522b" }, variants = { "3a76189056ffffc879ab14598ad923524373fa4a836bca9ee7fe48703b4a94c3" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"], "5422a9d4198c6f41f4c2a626639a987fd379928b37e2ecf1333c73dc94f8522b" = ["ALICE-Markup"] } }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
+pending = { since = "2026-10-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "3a76189056ffffc879ab14598ad923524373fa4a836bca9ee7fe48703b4a94c3", owner = "ALICE-Analytics", planned = "fe9b220a1bc3e56c4ec012c40cd6da5ad3775c70", moved_from = { planned = "e602dd3e5ed29782ba87b276d2347d52d68a5dd9", target = "5422a9d4198c6f41f4c2a626639a987fd379928b37e2ecf1333c73dc94f8522b" }, variants = { "3a76189056ffffc879ab14598ad923524373fa4a836bca9ee7fe48703b4a94c3" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"], "5422a9d4198c6f41f4c2a626639a987fd379928b37e2ecf1333c73dc94f8522b" = ["ALICE-Markup", "ALICE-OS-Keystore"] } }
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_check_pipe_grep_q.py"
@@ -421,7 +421,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 path = "scripts/test_public_text.py"
 sha256 = "7ed40dbcb935dd91cf7482177a90c491bf8021d51258995c759e5c39ffa6722e"
 source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/test_readme_parity_check.py"
@@ -438,7 +438,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = "scripts/test_run_tests.py"
 sha256 = "2653a094c4393add2b665204ae0c0acfee9e5793ece9ca85f9e71ea5ceed72c0"
 source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_semver_gate.py"
