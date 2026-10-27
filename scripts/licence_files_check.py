@@ -20,6 +20,9 @@ A full text is recognised by the SHA-256 of its words (whitespace collapsed), so
 the text published at apache.org / gnu.org, nothing shorter (a notice that points at the licence is not it).
 TRADEMARK_NOTICE, when present, must not name a licence file the repository does not have
 ("(see <files> and the `license` field …)"; "the LICENSE-* files" needs at least one LICENSE-* file).
+A repository with a root LICENSE-Proprietary must have a root TRADEMARK_NOTICE that is the canonical text byte for
+byte (TRADEMARK_NOTICE_TEXT, git blob TRADEMARK_NOTICE_BLOB): one missing or different is a "trademark" occurrence,
+listed and ratcheted like the holder rule below (holder_live.py reads every public repository with it).
 
 --agpl-report-only prints the AGPL findings but does not fail on them.
 
@@ -30,7 +33,10 @@ Cargo.toml ([package] and [workspace.package]) and pyproject.toml ([project] and
 rights statement, nor is a line that is exactly "Enquiries: https://extoria.co.jp/". Occurrences known today are listed in --holder-baseline (default conformance/holder-baseline.toml
 of this repository), each repository by the SHA-256 of its name: an occurrence not listed is a finding, a listed one
 that is gone is reported as stale (a finding with --stale-fails). --base-holder-baseline FILE (or --holder-base-ref
-REF, the baseline at that commit) refuses entries the base does not have: the list only goes down. holder_live.py
+REF, the baseline at that commit) refuses entries the base does not have: the list only goes down. With
+--holder-base-ref, the entries of a kind that the checker at REF does not list in KINDS are an introduction (the
+occurrences that kind finds today), noted and not refused, as long as every kind the base lists is still listed here
+(a removed or renamed kind is a finding and introduces nothing); once landed, that kind only goes down. holder_live.py
 applies the rule to every public repository of the account.
 Exit 0 when every declared licence has its file, 1 on a finding, 2 when nothing was compared (no Cargo.toml or
 package.json declaration) or git failed.
@@ -69,10 +75,33 @@ PACKAGE_JSON_EXEMPT: dict[tuple[str, str], str] = {}
 AUTHOR = "Moroya Sakamoto"
 HOLDER_RE = re.compile(r"(?i)extoria|エクストーリア")
 # the contact line of the canonical notices (a whole line, exactly): the site, not a rights holder
-ENQUIRY_RE = re.compile(r"^Enquiries: https://extoria\.co\.jp/[ \t]*$", re.M)
+ENQUIRY_RE = re.compile(r"^Enquiries: https://extoria\.co\.jp/[ \t\r]*$", re.M)  # a CRLF file's line too
 RIGHTS_FILE_RE = re.compile(r"^(?:LICEN[CS]E|NOTICE|TRADEMARK_NOTICE)(?:[-._][^/]*)?$")  # by convention in capitals
 NOT_READ = ("vendor/", "third_party/", "node_modules/", "target/")
-KINDS = ("holder", "authors")
+KINDS = ("holder", "authors", "trademark")
+# The one TRADEMARK_NOTICE text of a repository whose licence file is a root LICENSE-Proprietary, compared byte for
+# byte (its git blob, so a CRLF or a missing final newline is another text). It is held here because a repository's
+# check fetches this file alone; the test pins the text to the blob.
+TRADEMARK_NOTICE_BLOB = "f25c211f9d400308b73fca4394cd5f9b46c07a23"
+TRADEMARK_NOTICE_TEXT = (
+    'TRADEMARK NOTICE\n'
+    '\n'
+    '"ALICE", "Project A.L.I.C.E.", and the "ALICE-*" naming pattern are\n'
+    'trademarks of Moroya Sakamoto. Nothing in the licence under which this\n'
+    'software is distributed (see LICENSE-Proprietary) grants permission to use\n'
+    'these trademarks, except as required for reasonable and customary use in\n'
+    'describing the origin of the software.\n'
+    '\n'
+    'If you fork this project, you must remove or replace the "ALICE" prefix\n'
+    'in your fork\'s name and clearly indicate that your fork is not an\n'
+    'official ALICE product.\n'
+    '\n'
+    'Enquiries: https://extoria.co.jp/\n'
+)
+
+
+def git_blob(data: bytes) -> str:
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 HOLDER_BASELINE = Path(__file__).resolve().parent.parent / "conformance" / "holder-baseline.toml"
 
 
@@ -105,6 +134,9 @@ def holder_occurrences(paths: list[str], read) -> set[tuple[str, str]]:
     """(kind, path) of each rights statement naming another holder and each manifest with other authors;
     read(path) returns the file's bytes"""
     occ: set[tuple[str, str]] = set()
+    if "LICENSE-Proprietary" in paths and ("TRADEMARK_NOTICE" not in paths
+                                           or git_blob(read("TRADEMARK_NOTICE")) != TRADEMARK_NOTICE_BLOB):
+        occ.add(("trademark", "TRADEMARK_NOTICE"))
     for path in paths:
         if not read_paths(path):
             continue
@@ -151,6 +183,21 @@ def compare_baseline(name: str, occ: set[tuple[str, str]],
 def baseline_growth(old: dict[str, set[tuple[str, str]]],
                     new: dict[str, set[tuple[str, str]]]) -> list[tuple[str, str, str]]:
     return sorted((r, k, p) for r, entries in new.items() for k, p in entries - old.get(r, set()))
+
+
+def checker_kinds(text: str) -> tuple[str, ...] | None:
+    """the KINDS a version of this checker lists, None when the text has none"""
+    m = re.search(r"^KINDS = \(([^)]*)\)", text, re.M)
+    return tuple(re.findall(r'"([^"]+)"', m.group(1))) if m else None
+
+
+def introduced_kinds(base_kinds: tuple[str, ...] | None) -> tuple[set[str], list[str]]:
+    """(kinds whose entries are an introduction, the base's kinds this checker no longer lists): a kind is introduced
+    only when the base checker is known and every kind it lists is still here (a renamed kind is not new)"""
+    if base_kinds is None:
+        return set(), []
+    dropped = [k for k in base_kinds if k not in KINDS]
+    return (set() if dropped else set(KINDS) - set(base_kinds)), dropped
 
 
 def repo_name_of(repo: str) -> str:
@@ -309,7 +356,13 @@ def main(argv: list[str] | None = None) -> int:
                 base_text = r.stdout
             else:
                 print(f"note: no holder baseline at {a.holder_base_ref} (it is being introduced)")
+            c = subprocess.run(["git", "-C", a.repo, "show", f"{ref}:scripts/licence_files_check.py"],
+                               capture_output=True, text=True, encoding="utf-8")
+            base_kinds = checker_kinds(c.stdout) if c.returncode == 0 else None
+        else:
+            base_kinds = None
         grown = baseline_growth(load_baseline(base_text), baseline) if base_text is not None else []
+        introduced, dropped = introduced_kinds(base_kinds)
     except (OSError, subprocess.CalledProcessError, tomllib.TOMLDecodeError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -318,12 +371,22 @@ def main(argv: list[str] | None = None) -> int:
         print("error: no tracked file was read for the holder rule", file=sys.stderr)
         return 2
     for kind, path in sorted(new):
-        findings.append(f"{path}: " + ("names another rights holder" if kind == "holder" else
-                                       f'authors other than exactly "{AUTHOR}" (no e-mail)'))
+        findings.append(f"{path}: " + {"holder": "names another rights holder",
+                                       "authors": f'authors other than exactly "{AUTHOR}" (no e-mail)',
+                                       "trademark": "missing, or not the canonical text (the repository has a "
+                                                    f"LICENSE-Proprietary; blob {TRADEMARK_NOTICE_BLOB[:8]})"}[kind])
     for kind, path in sorted(stale):
         (findings if a.stale_fails else reports).append(f"stale baseline entry: {kind} {path} (fixed: remove the entry)")
+    if dropped:
+        findings.append(f"the base checker lists kinds this one does not ({', '.join(dropped)}): no kind is introduced "
+                        "(a kind removed or renamed in the same change would pass its entries off as new)")
+    for kind in sorted(introduced):
+        n = sum(1 for _, k, _ in grown if k == kind)
+        if n:
+            print(f"note: introduced: {n} {kind} entries (a kind the base checker does not list)")
     for r, kind, path in grown:
-        findings.append(f"the holder baseline grew: {kind} {path} for repository {r[:12]} (the list only goes down)")
+        if kind not in introduced:
+            findings.append(f"the holder baseline grew: {kind} {path} for repository {r[:12]} (the list only goes down)")
     for r in reports:
         print(f"report (not failing): {r}")
     for f in findings:
