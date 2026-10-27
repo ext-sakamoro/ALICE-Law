@@ -835,8 +835,8 @@ class Shapes(unittest.TestCase):
 
     # the set as committed: its size and the SHA-256 of its sorted lines (a change of the set is a
     # change of these two numbers)
-    PRIVATE_REPO_COUNT = 309
-    PRIVATE_REPO_DIGEST = "7a9cd0fba91b99ad95369451cc6b64e1406c15e640c7615723ce6d0981193167"
+    PRIVATE_REPO_COUNT = 323
+    PRIVATE_REPO_DIGEST = "c58e8b5f94beaee20562be1c823b2058feb8ab0c741bed27db2af54a583d00c8"
 
     def standalone(self, source: str | None = None) -> Path:
         """this checker copied alone into an empty directory (as a repository's CI fetches it)"""
@@ -917,9 +917,9 @@ class Binary(Base):
         self.assertIn("agent process", out)
 
     def test_short_tokens_in_a_binary_run_are_dropped(self):
-        saved = ptc.PRIVATE_NAME_HASHES
-        self.addCleanup(lambda: setattr(ptc, "PRIVATE_NAME_HASHES", saved))
-        ptc.PRIVATE_NAME_HASHES = saved | {hashlib.sha256(b"zqx").hexdigest(), hashlib.sha256(b"zqxw").hexdigest()}
+        # Base.tearDown restores the set (a cleanup would run after it and put back setUp's set)
+        ptc.PRIVATE_NAME_HASHES = ptc.PRIVATE_NAME_HASHES | {hashlib.sha256(b"zqx").hexdigest(),
+                                                             hashlib.sha256(b"zqxw").hexdigest()}
         (self.repo / "noise.bin").write_bytes(b"\x89\0\x01ab.zqx!\0\xff")  # a 6-byte run, a 3-letter name
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-q", "-m", "x")
@@ -1592,6 +1592,179 @@ class TrackerPathInIdentifier(Base):
         for line in ("see memory/feedback_x.md", " memory/feedback_x.md", "`memory/text-to-print.md`",
                      "(memory/project_y.md)"):
             self.assertIn("internal tracker", ptc.kinds(line), line)
+
+
+class PrivateRepoNames(unittest.TestCase):
+    """the name of a private ALICE-* repository, as a whole token in any text of a public repository"""
+
+    def setUp(self):
+        # a made-up repository name; the committed set is generated from the account's repositories
+        self.h = hashlib.sha256(b"alice-zorblat").hexdigest()
+        saved = ptc.PRIVATE_ALICE_REPO_HASHES
+        self.addCleanup(lambda: setattr(ptc, "PRIVATE_ALICE_REPO_HASHES", saved))
+        ptc.PRIVATE_ALICE_REPO_HASHES = frozenset({self.h})
+        saved_repo = ptc.ALLOW_STATE.get("repo")
+        self.addCleanup(lambda: ptc.ALLOW_STATE.__setitem__("repo", saved_repo))
+        ptc.ALLOW_STATE["repo"] = "ALICE-Public"
+
+    def test_a_private_name_as_a_whole_token_is_found(self):
+        for line in ("depends on ALICE-Zorblat for the voice", "see ../ALICE-Zorblat/crates/x",
+                     "alice-zorblat = { path = \"../alice-zorblat\" }", "`ALICE-ZORBLAT`", "ALICE-Zorblatの設計"):
+            self.assertIn("private repository name", ptc.kinds(line), line)
+
+    def test_other_tokens_do_not_hit(self):
+        # a longer name that starts with it, a part of it, another name, and the scanned repository itself
+        for line in ("alice-zorblat-core is a crate", "ALICE-Zorblatx", "Zorblat alone", "ALICE-LOL",
+                     "alice_zorblat"):
+            self.assertNotIn("private repository name", ptc.kinds(line), line)
+        ptc.ALLOW_STATE["repo"] = "ALICE-Zorblat"
+        self.assertNotIn("private repository name", ptc.kinds("this is ALICE-Zorblat"))
+
+    def test_the_committed_set_is_generated_and_not_empty(self):
+        self.assertGreater(len(ptc.PRIVATE_ALICE_REPO_HASHES_COMMITTED), 0)
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in ptc.PRIVATE_ALICE_REPO_HASHES_COMMITTED))
+        self.assertLessEqual(ptc.PRIVATE_ALICE_REPO_HASHES_COMMITTED, ptc.PRIVATE_REPO_HASHES,
+                             "every private ALICE-* repository is a private repository")
+        text = Path(ptc.__file__).read_text(encoding="utf-8")
+        self.assertEqual(text.count(ptc.GENERATED_BEGIN), 1)
+        self.assertEqual(text.count(ptc.GENERATED_END), 1)
+
+    def test_an_empty_alice_set_is_refused(self):
+        ptc.PRIVATE_ALICE_REPO_HASHES = frozenset()
+        self.assertIn("private-ALICE-repository", ptc.private_sets_problem() or "")
+
+    def test_found_by_the_checker_copied_alone(self):
+        # red first: the committed set with the made-up name's hash added, a public text naming it
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, True)
+        src = Path(ptc.__file__).read_text(encoding="utf-8")
+        marker = "PRIVATE_ALICE_REPO_HASHES: frozenset[str] = frozenset({\n"
+        self.assertEqual(src.count(marker), 1)
+        (d / "public_text_check.py").write_text(src.replace(marker, marker + f'    "{self.h}",\n', 1), encoding="utf-8")
+        r = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, r, True)
+        (r / "README.md").write_text("This builds on ALICE-Zorblat.\n", encoding="utf-8")
+        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+               "GIT_COMMITTER_EMAIL": "t@t"}
+        for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "fixture"]):
+            subprocess.run(["git", "-C", str(r), *cmd], check=True, env=env, capture_output=True)
+        run_ = subprocess.run([sys.executable, str(d / "public_text_check.py"), "--repo", str(r),
+                               "--repo-name", "ALICE-Public", "--tree", "HEAD"], capture_output=True, text=True,
+                              encoding="utf-8")
+        self.assertEqual(run_.returncode, 1, run_.stdout + run_.stderr)
+        self.assertIn("README.md: private repository name (1 lines, the baseline allows 0)", run_.stdout)
+        self.assertNotIn("zorblat", (run_.stdout + run_.stderr).lower(), "a finding never prints the name")
+
+    def test_a_manifest_key_value_line_is_structure(self):
+        # a dependency, a chart or an image named in a TOML / YAML manifest is structure; its comment is prose
+        hit = "private repository name"
+        cases = {
+            "Cargo.toml": ['alice-zorblat = { path = "../alice-zorblat" }', 'name = "alice-zorblat"',
+                           'git = "https://github.com/o/ALICE-Zorblat"', '    "crates/alice-zorblat",',
+                           '"alice-zorblat", "x",'],
+            "Cargo.lock": ['name = "alice-zorblat"', ' "alice-zorblat 0.1.0",',
+                           'source = "git+https://github.com/o/ALICE-Zorblat#abc"',
+                           '"checksum alice-zorblat 0.1.0 (git+https://github.com/o/ALICE-Zorblat)" = "abc"'],
+            "k8s/Chart.yaml": ["name: alice-zorblat", "  image: alice-zorblat/api:latest",
+                               "  domain: alice-zorblat.example.org", "  - alice-zorblat", '- "alice-zorblat"'],
+            ".github/workflows/ci.yml": ["      repository: o/ALICE-Zorblat"],
+        }
+        for path, lines in cases.items():
+            for line in lines:
+                self.assertNotIn(hit, ptc.kinds(line, path), (path, line))
+            for line in ('x = "1"  # waits on ALICE-Zorblat', "# ALICE-Zorblat is not published"):
+                if not path.endswith((".yaml", ".yml")):
+                    self.assertIn(hit, ptc.kinds(line, path), (path, line))
+            for line in ("x: 1  # waits on ALICE-Zorblat", "# ALICE-Zorblat is not published"):
+                if path.endswith((".yaml", ".yml")):
+                    self.assertIn(hit, ptc.kinds(line, path), (path, line))
+        # a '#' inside a quoted value is not a comment
+        self.assertNotIn(hit, ptc.kinds('url: "https://h/#ALICE-Zorblat"', "a.yaml"))
+        self.assertNotIn(hit, ptc.kinds("url: https://h/#ALICE-Zorblat", "a.yaml"), "YAML: `#` after a space only")
+        self.assertNotIn(hit, ptc.kinds('note: "see #ALICE-Zorblat"', "a.yaml"), "YAML: quoted `#`")
+        self.assertIn(hit, ptc.kinds('note: "x" # ALICE-Zorblat', "a.yaml"), "YAML: the comment after a closed quote")
+        self.assertNotIn(hit, ptc.kinds('url = "https://h/#ALICE-Zorblat"', "Cargo.toml"))
+        # the same line in a file that is not a manifest is read whole
+        self.assertIn(hit, ptc.kinds('alice-zorblat = { path = "../alice-zorblat" }', "notes.md"))
+
+    def test_a_prose_key_of_a_manifest_is_read(self):
+        hit = "private repository name"
+        for path, line in (("Cargo.toml", 'description = "A front end for ALICE-Zorblat"'),
+                           ("crates/x/Cargo.toml", 'package.description = "built on ALICE-Zorblat"'),
+                           ("pyproject.toml", 'summary = "ALICE-Zorblat bindings"'),
+                           ("k8s/Chart.yaml", "description: Helm chart for ALICE-Zorblat"),
+                           (".github/workflows/ci.yml", "    help: see ALICE-Zorblat"),
+                           ("docs/a.yml", "- title: ALICE-Zorblat notes"),
+                           ("Cargo.toml", 'keywords = ["alice-zorblat"]'),
+                           ("x.yaml", "about: ALICE-Zorblat")):
+            self.assertIn(hit, ptc.kinds(line, path), (path, line))
+        # a key that only ends in a prose word is structure
+        self.assertNotIn(hit, ptc.kinds('nodescription = "ALICE-Zorblat"', "Cargo.toml"))
+
+    def test_in_code_only_comments_and_strings_are_read(self):
+        self.assertIn("private repository name", ptc.kinds("// see ALICE-Zorblat for the voice", "src/lib.rs"))
+        self.assertIn("private repository name", ptc.kinds('let p = "../ALICE-Zorblat/x";', "src/lib.rs"))
+        self.assertIn("private repository name", ptc.kinds("# needs ALICE-Zorblat", "scripts/x.sh"),
+                      "a file without a code style is read whole")
+
+    def test_the_conformance_roster_of_alice_law_is_data(self):
+        ptc.ALLOW_STATE["repo"] = "ALICE-Law"
+        line = 'repo = "ALICE-Zorblat"  # a member'
+        self.assertNotIn("private repository name", ptc.kinds(line, "conformance/members.toml"))
+        self.assertNotIn("private repository name", ptc.kinds("ALICE-Zorblat: pass", "conformance/status.md"))
+        self.assertIn("private repository name", ptc.kinds("ALICE-Zorblat: pass", "README.md"),
+                      "outside conformance/ the name is a finding")
+        ptc.ALLOW_STATE["repo"] = "ALICE-Public"
+        self.assertIn("private repository name", ptc.kinds("ALICE-Zorblat: pass", "conformance/status.md"),
+                      "the exemption is ALICE-Law's own")
+
+    def baseline_against(self, counts: dict, base: dict) -> list[str]:
+        saved_c, saved_b = ptc.REPO_NAME_COUNTS, ptc.PRIVATE_REPO_NAME_BASELINE
+        self.addCleanup(lambda: (setattr(ptc, "REPO_NAME_COUNTS", saved_c),
+                                 setattr(ptc, "PRIVATE_REPO_NAME_BASELINE", saved_b)))
+        ptc.REPO_NAME_COUNTS = dict(counts)
+        repo_h = hashlib.sha256(b"alice-public").hexdigest()
+        ptc.PRIVATE_REPO_NAME_BASELINE = {repo_h: {ptc.repo_name_key("ALICE-Public", path, name): n
+                                                   for (path, name), n in base.items()}}
+        return ptc.baseline_findings("ALICE-Public")
+
+    def test_the_baseline_is_a_ratchet(self):
+        k = ("README.md", "alice-zorblat")
+        self.assertEqual(self.baseline_against({k: 2}, {k: 2}), [], "as many lines as the baseline: no finding")
+        above = self.baseline_against({k: 3}, {k: 2})
+        self.assertEqual(above, ["README.md: private repository name (3 lines, the baseline allows 2)"])
+        below = self.baseline_against({k: 1}, {k: 2})
+        self.assertEqual(len(below), 1)
+        self.assertIn("stale", below[0])
+        self.assertIn("lower it", below[0])
+        gone = self.baseline_against({}, {k: 2})
+        self.assertEqual(len(gone), 1)
+        self.assertIn("1 entries", gone[0])
+        other = self.baseline_against({("docs/a.md", "alice-zorblat"): 1}, {k: 1})
+        self.assertEqual(len(other), 2, "the entry is per path: another file is a new mention, and the old one is gone")
+        for f in above + below + gone + other:
+            self.assertNotIn("zorblat", f.lower(), "a finding never prints the name")
+
+    def test_the_counts_are_keyed_as_the_baseline(self):
+        saved = ptc.REPO_NAME_COUNTS
+        self.addCleanup(lambda: setattr(ptc, "REPO_NAME_COUNTS", saved))
+        ptc.REPO_NAME_COUNTS = {}
+        self.assertEqual(ptc.kinds("see ALICE-Zorblat", "README.md"), [], "while counting, a line is not a finding")
+        ptc.kinds("and ALICE-Zorblat again", "README.md")
+        self.assertEqual(ptc.repo_name_counts("ALICE-Public"),
+                         {ptc.repo_name_key("ALICE-Public", "README.md", "alice-zorblat"): 2})
+
+    def test_the_committed_baseline_is_in_the_generators_form(self):
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", r) for r in ptc.PRIVATE_REPO_NAME_BASELINE))
+        for entries in ptc.PRIVATE_REPO_NAME_BASELINE.values():
+            self.assertTrue(entries, "a repository without names has no entry")
+            for k, n in entries.items():
+                self.assertRegex(k, r"^[0-9a-f]{64}$")
+                self.assertGreater(n, 0)
+        text = Path(ptc.__file__).read_text(encoding="utf-8")
+        self.assertEqual(text.count(ptc.BASELINE_BEGIN), 1)
+        self.assertEqual(text.count(ptc.BASELINE_END), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
