@@ -1292,8 +1292,11 @@ def note_reference(line: str, m: re.Match) -> bool:
     """whether a token is written as a reference to a note: `[[name]]`, `name.md` or a path segment
     after `memory/` A bare word is not: many note names are ordinary identifiers too (an environment
     variable, a field), so a bare match would find them in any code that uses the same word"""
-    return (m.group(0).lower().endswith(".md") or line[:m.start()].endswith("[[")
-            or line[:m.start()].lower().endswith("memory/"))
+    before = line[:m.start()]
+    # the path the token ends: the run of non-space characters before it (`memory/sub/name`, `memory\\name`)
+    path = re.split(r"[\s\"'`(\[]", before)[-1].lower()
+    return (m.group(0).lower().endswith(".md") or before.rstrip().endswith("[[")
+            or "memory/" in path or "memory\\" in path)
 
 
 def note_tokens(line: str) -> list[re.Match]:

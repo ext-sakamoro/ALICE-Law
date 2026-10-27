@@ -630,6 +630,10 @@ class Shapes(unittest.TestCase):
         self.assertTrue(ptc.note_tokens("[[sample_api_token]]"))
         self.assertTrue(ptc.note_tokens("sample_api_token.md"))
         self.assertTrue(ptc.note_tokens("memory/sample_api_token"))
+        self.assertTrue(ptc.note_tokens("memory/sub/sample_api_token"))
+        self.assertTrue(ptc.note_tokens("memory\\sample_api_token"))
+        self.assertTrue(ptc.note_tokens("[[ sample_api_token ]]"))
+        self.assertFalse(ptc.note_tokens("other/sample_api_token"))
         self.assertFalse(ptc.note_tokens("sample_api_token"))
         self.assertFalse(ptc.note_tokens("SAMPLE_API_TOKEN"))
 
