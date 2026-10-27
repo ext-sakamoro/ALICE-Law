@@ -123,12 +123,12 @@ exempt = { "ALICE-LOL" = "the lock of this repository's own canary crate, whose 
 path = "scripts/clippy_canary.py"
 sha256 = "827423d4ddc7c8c437a59d85bbc5f6fa9b172630acf65d27bf45c3dbfd07b185"
 source = { repo = "ALICE-Analytics", rev = "5e5dd86b6eea3b4cbb44c74cd28b6d444b63f82d" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-TTS", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/clippy_canary_calls.tsv"
 repos = []
-exempt = { "ALICE-Analytics" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Channel" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Crypto" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-DB" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-DetMath" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Edge" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Identity" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Kinematics" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-LLM" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-ML" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Sign" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Sync" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Zip" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py" }
+exempt = { "ALICE-Analytics" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Channel" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Crypto" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-DB" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-DetMath" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Edge" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Identity" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Kinematics" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-LLM" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-ML" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Sign" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Sync" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-TTS" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py", "ALICE-Zip" = "this repository's own clippy canary rows, generated from its clippy.toml by scripts/gen_clippy_canary_calls.py" }
 
 [[file]]
 path = "scripts/clippy_external_coverage.py"
@@ -164,7 +164,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = "scripts/gen_clippy_canary_calls.py"
 sha256 = "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c"
 source = { repo = "ALICE-Analytics", rev = "4ab8714cc3549dabc2865949138cf5727fabc7f4" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-TTS", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/id_move_check.py"
@@ -325,7 +325,7 @@ repos = ["ALICE-LLM", "ALICE-SDF"]
 path = "scripts/test_clippy_canary.py"
 sha256 = "60abf71084e38d271dd72e1bf9f13fd115c793049add81df6236a120de873fe8"
 source = { repo = "ALICE-Analytics", rev = "5e5dd86b6eea3b4cbb44c74cd28b6d444b63f82d" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-TTS", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_clippy_external_coverage.py"
@@ -361,7 +361,7 @@ repos = ["ALICE-Analytics", "ALICE-SDF"]
 path = "scripts/test_gen_clippy_canary_calls.py"
 sha256 = "413efdfdd5e75ce1771091d58346f972e2fbf3886f1931b0c93484c5232002f3"
 source = { repo = "ALICE-Analytics", rev = "4ab8714cc3549dabc2865949138cf5727fabc7f4" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-TTS", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_id_move_check.py"
