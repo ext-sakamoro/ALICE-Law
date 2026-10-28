@@ -26,8 +26,13 @@ CLEAN = 'print("demo: 3 files compared")\n'
 CRASHES_ON_TEXT = 'raise KeyError("demo: tests/a.rs: no such file")\n'
 CRASH_EXIT_0 = 'import sys\ntry:\n    {}["k"]\nexcept KeyError:\n    import traceback; traceback.print_exc()\nsys.exit(0)\n'
 EXITS_2 = 'import sys\nprint("demo: tests/a.rs: no such file")\nsys.exit(2)\n'
-BASH_BROKEN = 'set -u\necho "demo: tests/a.rs: no such file"\nnot_a_command_here\nexit 1\n'
+BASH_BROKEN = 'echo "demo: tests/a.rs: no such file"\nnot_a_command_here\nexit 1\n'
+BASH_SYNTAX = 'echo "demo: tests/a.rs: no such file"\nif then\nfi\nexit 1\n'
+BASH_UNBOUND = 'set -u\necho "demo: tests/a.rs: no such file"\necho "$NOT_SET_ANYWHERE"\nexit 1\n'
 BASH_REPORTS = 'echo "demo: tests/a.rs: no such file" >&2\nexit 1\n'
+# a checker that legitimately reports a syntax error (or a missing command) in its input
+BASH_REPORTS_SYNTAX = 'echo "demo: config.toml: line 3: syntax error in the value" >&2\nexit 1\n'
+BASH_REPORTS_MISSING = 'echo "demo: line 2: tool rustfmt: command not found on PATH" >&2\nexit 1\n'
 
 
 class RunCheck(unittest.TestCase):
@@ -37,6 +42,15 @@ class RunCheck(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def assertRefused(self, why, text):
+        # a refusal is a reason (not None) that names what went wrong
+        self.assertIsNotNone(why, f"expected a refusal naming {text!r}")
+        self.assertIn(text, why)
+
+    def assertCrashed(self, why):
+        self.assertIsNotNone(why, "expected the run to be reported as a crash")
+        self.assertTrue(why.startswith("crashed"), why)
 
     def py(self, body: str) -> list[str]:
         p = self.dir / "checker.py"
@@ -57,38 +71,56 @@ class RunCheck(unittest.TestCase):
     def test_several_texts_must_all_appear(self):
         self.assertIsNone(cc.run_check(self.py(REPORTS), expect_exit=1, expect_text=["tests/a.rs", "no such file"]))
         why = cc.run_check(self.py(REPORTS), expect_exit=1, expect_text=["tests/a.rs", "is stale"])
-        self.assertIn("did not report 'is stale'", why)
+        self.assertRefused(why, "did not report 'is stale'")
 
     def test_a_crash_is_a_crash_even_with_the_expected_exit_and_text(self):
         why = cc.run_check(self.py(CRASHES_ON_TEXT), expect_exit=1, expect_text="tests/a.rs: no such file")
-        self.assertIsNotNone(why)
-        self.assertTrue(why.startswith("crashed"), why)
+        self.assertCrashed(why)
 
     def test_a_crash_with_exit_0_is_a_crash(self):
         why = cc.run_check(self.py(CRASH_EXIT_0), expect_exit=0)
-        self.assertTrue(why and why.startswith("crashed"), why)
+        self.assertCrashed(why)
 
     def test_a_crash_is_named_a_crash_before_its_exit_code(self):
         # the crash exits 1 where 0 was expected: the reason is the crash, not the exit code
         why = cc.run_check(self.py(CRASHES_ON_TEXT), expect_exit=0)
-        self.assertTrue(why and why.startswith("crashed"), why)
+        self.assertCrashed(why)
 
     def test_a_wrong_exit_code_is_refused(self):
         why = cc.run_check(self.py(EXITS_2), expect_exit=1, expect_text="tests/a.rs: no such file")
-        self.assertIn("exit 2, expected 1", why)
+        self.assertRefused(why, "exit 2, expected 1")
         why = cc.run_check(self.py(REPORTS), expect_exit=0)
-        self.assertIn("exit 1, expected 0", why)
+        self.assertRefused(why, "exit 1, expected 0")
 
     def test_a_missing_text_is_refused(self):
         why = cc.run_check(self.py(REPORTS), expect_exit=1, expect_text="is stale")
-        self.assertIn("did not report 'is stale'", why)
+        self.assertRefused(why, "did not report 'is stale'")
 
-    def test_a_bash_error_is_a_crash_with_the_bash_markers(self):
-        why = cc.run_check(self.sh(BASH_BROKEN), expect_exit=1, expect_text="tests/a.rs: no such file",
-                           crash_markers=cc.BASH_CRASH)
-        self.assertTrue(why and why.startswith("crashed"), why)
-        self.assertIsNone(cc.run_check(self.sh(BASH_REPORTS), expect_exit=1, expect_text="tests/a.rs: no such file",
-                                       crash_markers=cc.BASH_CRASH))
+    def test_bash_errors_of_the_script_are_crashes(self):
+        for body in (BASH_BROKEN, BASH_SYNTAX, BASH_UNBOUND):
+            with self.subTest(body=body):
+                why = cc.run_check(self.sh(body), expect_exit=1, expect_text="tests/a.rs: no such file", shell="bash")
+                self.assertCrashed(why)
+
+    def test_a_bash_error_is_not_a_crash_without_shell_bash(self):
+        # a Python checker's output is not read for bash's forms
+        why = cc.run_check(self.sh(BASH_BROKEN), expect_exit=1, expect_text="tests/a.rs: no such file")
+        self.assertIsNone(why)
+
+    def test_a_bash_checker_that_reports_passes(self):
+        self.assertIsNone(cc.run_check(self.sh(BASH_REPORTS), expect_exit=1,
+                                       expect_text="tests/a.rs: no such file", shell="bash"))
+
+    def test_a_reported_syntax_error_or_missing_command_is_not_a_crash(self):
+        # the checker reports them about its input; bash did not raise them about the script
+        self.assertIsNone(cc.run_check(self.sh(BASH_REPORTS_SYNTAX), expect_exit=1,
+                                       expect_text="config.toml: line 3: syntax error in the value", shell="bash"))
+        self.assertIsNone(cc.run_check(self.sh(BASH_REPORTS_MISSING), expect_exit=1,
+                                       expect_text="tool rustfmt: command not found on PATH", shell="bash"))
+
+    def test_an_unknown_shell_is_refused(self):
+        with self.assertRaises(ValueError):
+            cc.run_check(self.sh(BASH_REPORTS), expect_exit=1, expect_text="tests/a.rs: no such file", shell="zsh")
 
     def test_a_failing_case_needs_a_text(self):
         with self.assertRaises(ValueError):

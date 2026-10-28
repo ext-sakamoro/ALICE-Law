@@ -16,11 +16,14 @@ a crash (for example the check removed, or a KeyError on the input) as the check
         ])
 
 run_check(argv, *, expect_exit, expect_text=None, cwd=None, env=None, input=None,
-          crash_markers=PYTHON_CRASH) -> None | str
+          shell=None) -> None | str
     Runs argv and returns None when it behaved as expected, else the reason. In order:
-      - a crash marker in its output (stdout and stderr) is "crashed", whatever the exit code
-        and the text: the default marker is Python's traceback header; a bash checker passes
-        BASH_CRASH (also `command not found`, `syntax error`, `unbound variable`);
+      - a crash in its output (stdout and stderr) is "crashed", whatever the exit code and the
+        text: Python's traceback header, and with shell="bash" bash's own error lines, which
+        bash prefixes with the script it runs (a file in argv) or `bash`, then `line N:`
+        (`<script>: line 3: x: command not found`, `... syntax error ...`, `... unbound
+        variable`, `... bad substitution`) A checker that reports `config.toml: line 3: syntax
+        error` is not a crash: the prefix is not the script;
       - an exit code other than expect_exit;
       - an expected text (a string or a list, each must appear) missing from the output.
     A case expecting a failure (expect_exit != 0) must name the text of the problem: without one
@@ -46,11 +49,20 @@ Standard library only, Python 3.9 or later.
 from __future__ import annotations
 
 import builtins
+import os
+import re
 import subprocess
-from typing import Callable, Iterable, Optional, Sequence, Union
+from typing import Callable, Optional, Sequence, Union
 
-PYTHON_CRASH = ("Traceback (most recent call last)",)
-BASH_CRASH = PYTHON_CRASH + ("command not found", "syntax error", "unbound variable")
+PYTHON_CRASH = "Traceback (most recent call last)"
+BASH_ERRORS = r"(?:syntax error|.*: command not found|.*: unbound variable|.*: bad substitution)"
+
+
+def bash_crash(argv: Sequence[str]) -> "re.Pattern[str]":
+    """bash's own error lines for a run of argv: `<script or bash>: line N: <error>`"""
+    scripts = [a for a in argv[1:] if os.path.isfile(a)] + ["bash"]
+    prefix = "|".join(re.escape(s) for s in scripts)
+    return re.compile(rf"^(?:{prefix}): line \d+: {BASH_ERRORS}", re.M)
 
 
 def crash_corpus() -> list[str]:
@@ -86,7 +98,7 @@ def run_check(
     cwd=None,
     env=None,
     input: Optional[str] = None,
-    crash_markers: Iterable[str] = PYTHON_CRASH,
+    shell: Optional[str] = None,
 ) -> Optional[str]:
     texts = [expect_text] if isinstance(expect_text, str) else list(expect_text or [])
     if expect_exit != 0 and not texts:
@@ -99,9 +111,14 @@ def run_check(
         list(argv), cwd=cwd, env=env, input=input, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     out = r.stdout + r.stderr
-    for marker in crash_markers:
-        if marker in out:
-            return f"crashed ({marker!r} in the output)\n{out}"
+    if PYTHON_CRASH in out:
+        return f"crashed (a Python traceback in the output)\n{out}"
+    if shell == "bash":
+        m = bash_crash(argv).search(out)
+        if m:
+            return f"crashed (bash: {m.group(0)!r})\n{out}"
+    elif shell is not None:
+        raise ValueError(f"shell {shell!r}: only \"bash\" is known")
     if r.returncode != expect_exit:
         return f"exit {r.returncode}, expected {expect_exit}\n{out}"
     for t in texts:
