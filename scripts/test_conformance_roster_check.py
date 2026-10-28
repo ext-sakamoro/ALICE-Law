@@ -1057,6 +1057,20 @@ class PhaseIn(unittest.TestCase):
         self.assertTrue(any("needs `since` and `until`" in f for f in crc.adoption_findings(gates, self.LOG)))
         self.assertEqual(crc.adoption_findings(crc.tomllib.loads(self.WINDOW), self.LOG), [])
 
+    def test_gate_phase_in_itself_grants_nothing_past_the_cap(self):
+        crc.TODAY = __import__("datetime").date.fromisoformat("2026-11-01")
+        at_cap = self.WINDOW.replace('until = "2026-12-12"', 'until = "2026-12-12"')  # 45 days
+        over = self.WINDOW.replace('until = "2026-12-12"', 'until = "2026-12-13"')  # 46 days
+        self.assertEqual(crc.gate_phase_in(crc.tomllib.loads(at_cap)), {"G4": "2026-12-12"})
+        self.assertEqual(crc.gate_phase_in(crc.tomllib.loads(over)), {})
+        # and the absent entry is then a finding, not a note
+        gates = crc.tomllib.loads(over)
+        notes: list[str] = []
+        findings, counts, _ = crc.check_manifest("Alpha", manifest(), crc.gate_vocabulary(gates), PATHS, notes,
+                                                 phase_in=crc.gate_phase_in(gates))
+        self.assertIn("Alpha: alice-law-conformance.toml: gate G4 has no entry", findings)
+        self.assertEqual(counts["unverified"], 1)  # G3 only
+
     def test_moving_the_window_needs_a_changelog_line_with_both_dates(self):
         moved = crc.tomllib.loads(self.WINDOW.replace("2026-12-12", "2026-12-11"))
         self.assertTrue(any("CHANGELOG.md: no line names G4" in f for f in crc.adoption_findings(moved, self.LOG)))
