@@ -178,7 +178,9 @@ class NothingCompared(unittest.TestCase):
         self.assertIn("no crate declares", out)
 
     def test_no_crate_manifest_exits_2(self):
-        self.assertEqual(run(["--repo", str(repo({"README.md": "x"}))])[0], 2)
+        code, out = run(["--repo", str(repo({"README.md": "x", "src/lib.rs": "pub fn f() {}\n"}))])
+        self.assertEqual(code, 2, out)
+        self.assertIn("no crate manifest", out)
 
     def test_no_rust_source_exits_2(self):
         self.assertEqual(run(["--repo", str(repo({"Cargo.toml": CARGO.format(surfaces='["rust"]')}))])[0], 2)
