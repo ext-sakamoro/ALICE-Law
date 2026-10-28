@@ -20,10 +20,11 @@ run_check(argv, *, expect_exit, expect_text=None, cwd=None, env=None, input=None
     Runs argv and returns None when it behaved as expected, else the reason. In order:
       - a crash in its output (stdout and stderr) is "crashed", whatever the exit code and the
         text: Python's traceback header, and with shell="bash" bash's own error lines, which
-        bash prefixes with the script it runs (a file in argv) or `bash`, then `line N:`
-        (`<script>: line 3: x: command not found`, `... syntax error ...`, `... unbound
-        variable`, `... bad substitution`) A checker that reports `config.toml: line 3: syntax
-        error` is not a crash: the prefix is not the script;
+        bash prefixes with the file it was reading (the script in argv, a `*.sh` it sources, or
+        `bash`), then `line N:` (`<file>: line 3: x: command not found`, `... syntax error ...`,
+        `... unbound variable`, `... bad substitution`) A checker that reports `config.toml:
+        line 3: syntax error` is not a crash: the prefix is not a shell file (a checker that
+        reports such a line about another `*.sh` would be read as a crash: a limit);
       - an exit code other than expect_exit;
       - an expected text (a string or a list, each must appear) missing from the output.
     A case expecting a failure (expect_exit != 0) must name the text of the problem: without one
@@ -60,8 +61,8 @@ BASH_ERRORS = r"(?:syntax error|.*: command not found|.*: unbound variable|.*: b
 
 def bash_crash(argv: Sequence[str]) -> "re.Pattern[str]":
     """bash's own error lines for a run of argv: `<script or bash>: line N: <error>`"""
-    scripts = [a for a in argv[1:] if os.path.isfile(a)] + ["bash"]
-    prefix = "|".join(re.escape(s) for s in scripts)
+    scripts = [re.escape(a) for a in argv[1:] if os.path.isfile(a)] + ["bash", r"\S+\.sh"]
+    prefix = "|".join(scripts)
     return re.compile(rf"^(?:{prefix}): line \d+: {BASH_ERRORS}", re.M)
 
 
@@ -100,6 +101,8 @@ def run_check(
     input: Optional[str] = None,
     shell: Optional[str] = None,
 ) -> Optional[str]:
+    if shell not in (None, "bash"):
+        raise ValueError(f"shell {shell!r}: only \"bash\" is known")
     texts = [expect_text] if isinstance(expect_text, str) else list(expect_text or [])
     if expect_exit != 0 and not texts:
         raise ValueError("a case expecting a failure must name the text of the problem it reports")
@@ -117,8 +120,6 @@ def run_check(
         m = bash_crash(argv).search(out)
         if m:
             return f"crashed (bash: {m.group(0)!r})\n{out}"
-    elif shell is not None:
-        raise ValueError(f"shell {shell!r}: only \"bash\" is known")
     if r.returncode != expect_exit:
         return f"exit {r.returncode}, expected {expect_exit}\n{out}"
     for t in texts:

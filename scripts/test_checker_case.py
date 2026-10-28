@@ -118,9 +118,19 @@ class RunCheck(unittest.TestCase):
         self.assertIsNone(cc.run_check(self.sh(BASH_REPORTS_MISSING), expect_exit=1,
                                        expect_text="tool rustfmt: command not found on PATH", shell="bash"))
 
-    def test_an_unknown_shell_is_refused(self):
+    def test_an_error_in_a_sourced_file_is_a_crash(self):
+        lib = self.dir / "lib.sh"
+        lib.write_text("helper() {\n  not_a_command_in_lib\n}\n", encoding="utf-8")
+        body = f'. "{lib}"\necho "demo: tests/a.rs: no such file"\nhelper\nexit 1\n'
+        why = cc.run_check(self.sh(body), expect_exit=1, expect_text="tests/a.rs: no such file", shell="bash")
+        self.assertCrashed(why)
+
+    def test_an_unknown_shell_is_refused_before_the_command_runs(self):
+        ran = self.dir / "ran"
         with self.assertRaises(ValueError):
-            cc.run_check(self.sh(BASH_REPORTS), expect_exit=1, expect_text="tests/a.rs: no such file", shell="zsh")
+            cc.run_check(self.sh(f'touch "{ran}"\n' + BASH_REPORTS), expect_exit=1,
+                         expect_text="tests/a.rs: no such file", shell="zsh")
+        self.assertFalse(ran.exists(), "the command ran before the shell was refused")
 
     def test_a_failing_case_needs_a_text(self):
         with self.assertRaises(ValueError):
