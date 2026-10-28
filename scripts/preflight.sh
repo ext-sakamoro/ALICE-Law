@@ -13,6 +13,7 @@ python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 'python 3
 python3 scripts/test_dep_consistency.py
 python3 scripts/test_release_train.py
 python3 scripts/test_semver_gate.py
+python3 scripts/test_release_baseline.py
 python3 scripts/test_expected_failure.py
 python3 scripts/expected_failure.py --check
 python3 scripts/test_public_text_check.py
@@ -37,6 +38,7 @@ python3 scripts/test_main_mode.py
 python3 scripts/test_gen_law_status.py
 python3 scripts/test_readme_parity_check.py
 python3 scripts/test_gen_law_readme_block.py
+python3 scripts/test_changed_paths.py
 python3 scripts/test_workflow_concurrency.py
 python3 scripts/workflow_concurrency.py
 python3 scripts/test_locked_lockfile_check.py

@@ -139,6 +139,10 @@ jobs:
       - name: Test the README integration block generator
         run: python3 scripts/test_gen_law_readme_block.py
 
+      # the strict workflow reader that workflow_concurrency.py reads the workflows with
+      - name: Test the strict workflow reader (scripts/changed_paths.py, shared with the crates' CI)
+        run: python3 scripts/test_changed_paths.py
+
       - name: Every branch-triggered workflow has a concurrency group per commit on main
         run: |
           python3 scripts/test_workflow_concurrency.py
@@ -179,6 +183,11 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: "1.98.1"
         run: python3 scripts/test_semver_gate.py
+
+      - name: Test the release baseline (scripts/release_baseline.py, the semver gate's base under a freeze)
+        env:
+          RUSTUP_TOOLCHAIN: "1.98.1"
+        run: python3 scripts/test_release_baseline.py
 
       - name: Test the expected-failure wrapper
         run: python3 scripts/test_expected_failure.py
