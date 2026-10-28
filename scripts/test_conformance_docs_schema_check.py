@@ -115,12 +115,12 @@ class Main(unittest.TestCase):
 
 
 class RealFiles(unittest.TestCase):
-    def test_this_repositorys_docs_and_schema_match_at_14_each(self):
+    def test_this_repositorys_docs_and_schema_match_at_15_each(self):
         root = HERE.parent
         self.assertEqual(cdsc.gates_from_docs((root / "docs" / "CONFORMANCE.md").read_text(encoding="utf-8")),
                          cdsc.gates_from_schema((root / "conformance" / "gates.toml").read_text(encoding="utf-8")))
         docs_gates = cdsc.gates_from_docs((root / "docs" / "CONFORMANCE.md").read_text(encoding="utf-8"))
-        self.assertEqual(len(docs_gates), 14)
+        self.assertEqual(len(docs_gates), 15)
         self.assertEqual(cdsc.main(["--docs", str(root / "docs" / "CONFORMANCE.md"),
                                      "--schema", str(root / "conformance" / "gates.toml")]), 0)
 
