@@ -29,6 +29,7 @@ on:
       - "release-train.toml"
       - "scripts/release_train.py"
       - "scripts/semver_gate.py"
+      - "scripts/release_baseline.py"
       - ".github/workflows/e2e-main.yml"
 
 permissions:
@@ -51,8 +52,7 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-      - &clone
-        name: Check out the main branches side by side
+      - name: Check out the main branches side by side
         run: |
           mkdir -p "$RUNNER_TEMP/core"
           echo "| repository | main |" >> "$GITHUB_STEP_SUMMARY"
@@ -67,8 +67,7 @@ jobs:
         run: python3 scripts/release_train.py feature-coverage --repos-root "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
       # a failure the roster lists under [expected-failure.*] (named, explained, until a
       # release) is reported as expected and skips the steps that need it; any other is red
-      - &patch
-        name: Patch the core crates with the checkouts
+      - name: Patch the core crates with the checkouts
         id: patch
         run: |
           python3 scripts/main_mode.py patch "$RUNNER_TEMP/core"
@@ -103,8 +102,21 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-      - *clone
-      - *patch
+      - name: Check out the main branches side by side
+        run: |
+          mkdir -p "$RUNNER_TEMP/core"
+          echo "| repository | main |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for r in $REPOSITORIES; do
+            git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
+            echo "| $r | $(git -C "$RUNNER_TEMP/core/$r" rev-parse --short HEAD) |" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Patch the core crates with the checkouts
+        id: patch
+        run: |
+          python3 scripts/main_mode.py patch "$RUNNER_TEMP/core"
+          cd e2e && cargo --version
+          python3 ../scripts/expected_failure.py e2e-main-patch -- cargo generate-lockfile
       - name: Mutations
         if: steps.patch.outputs.expected != 'true'
         run: python3 scripts/e2e_teeth.py "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -129,8 +141,21 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-      - *clone
-      - *patch
+      - name: Check out the main branches side by side
+        run: |
+          mkdir -p "$RUNNER_TEMP/core"
+          echo "| repository | main |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for r in $REPOSITORIES; do
+            git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
+            echo "| $r | $(git -C "$RUNNER_TEMP/core/$r" rev-parse --short HEAD) |" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Patch the core crates with the checkouts
+        id: patch
+        run: |
+          python3 scripts/main_mode.py patch "$RUNNER_TEMP/core"
+          cd e2e && cargo --version
+          python3 ../scripts/expected_failure.py e2e-main-patch -- cargo generate-lockfile
       - name: Test and record the digest
         if: steps.patch.outputs.expected != 'true'
         working-directory: e2e
