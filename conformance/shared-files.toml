@@ -119,8 +119,7 @@ exempt = { "ALICE-LOL" = "the lock of this repository's own canary crate, whose 
 
 [[file]]
 path = "scripts/clippy_canary.py"
-sha256 = "827423d4ddc7c8c437a59d85bbc5f6fa9b172630acf65d27bf45c3dbfd07b185"
-source = { repo = "ALICE-Analytics", rev = "5e5dd86b6eea3b4cbb44c74cd28b6d444b63f82d" }
+pending = { since = "2026-10-28", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "d0b78184e90a5713b7175f0318f436a52b05a866dc9cbca2587d283f78141705", owner = "ALICE-Analytics", planned = "2608ff9d075fc6518ba201d4c983d95614974565", moved_from = { planned = "cd5c4a7477eb02570a73789e693ca77cb5970bdf", target = "827423d4ddc7c8c437a59d85bbc5f6fa9b172630acf65d27bf45c3dbfd07b185" }, first_move = true, variants = { "827423d4ddc7c8c437a59d85bbc5f6fa9b172630acf65d27bf45c3dbfd07b185" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -159,7 +158,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 
 [[file]]
 path = "scripts/gen_clippy_canary_calls.py"
-pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "02a8a5bbcefbee2b56b8a491cdc5de6c2e67b9ea0078158dfcd4a013b7ed20cf", owner = "ALICE-Analytics", planned = "b17166907f77094640a12cccd855e00f17d121e6", moved_from = { planned = "e75995503949225642ba845e6a9302e002d28f5c", target = "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c" }, variants = { "02a8a5bbcefbee2b56b8a491cdc5de6c2e67b9ea0078158dfcd4a013b7ed20cf" = ["ALICE-Analytics"], "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"] } }
+pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "118e2a172c4eb12a996664a50c5a00dbe3eefe3eef861fc679e96db298bc2d31", owner = "ALICE-Analytics", planned = "cc0ad22502cfdd745cce4c2b8373c96b854aac5a", moved_from = { planned = "b17166907f77094640a12cccd855e00f17d121e6", target = "02a8a5bbcefbee2b56b8a491cdc5de6c2e67b9ea0078158dfcd4a013b7ed20cf" }, variants = { "02a8a5bbcefbee2b56b8a491cdc5de6c2e67b9ea0078158dfcd4a013b7ed20cf" = ["ALICE-Analytics"], "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -318,8 +317,7 @@ repos = ["ALICE-LLM", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/test_clippy_canary.py"
-sha256 = "60abf71084e38d271dd72e1bf9f13fd115c793049add81df6236a120de873fe8"
-source = { repo = "ALICE-Analytics", rev = "5e5dd86b6eea3b4cbb44c74cd28b6d444b63f82d" }
+pending = { since = "2026-10-28", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "df838f4b613eb714aaa848f0b647c30e6b1fbf4917ee20bce10ae6aa0573a0c0", owner = "ALICE-Analytics", planned = "b1a39ed0327dceaac6eaefcba6ad75751426ea9d", moved_from = { planned = "060cd387fcc56080ab9d0869330b56ee09715f24", target = "60abf71084e38d271dd72e1bf9f13fd115c793049add81df6236a120de873fe8" }, first_move = true, variants = { "60abf71084e38d271dd72e1bf9f13fd115c793049add81df6236a120de873fe8" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -353,7 +351,7 @@ repos = ["ALICE-Analytics", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/test_gen_clippy_canary_calls.py"
-pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "f8d0043854ead339b5022b650bc0f1c86e8362fc58046805bc7fe24b995886c7", owner = "ALICE-Analytics", planned = "a39c3f1147884cac6a631c36f2ef98c7a14f3ea5", moved_from = { planned = "43b02bf05816047156282a008f6b73544d05dadb", target = "413efdfdd5e75ce1771091d58346f972e2fbf3886f1931b0c93484c5232002f3" }, variants = { "413efdfdd5e75ce1771091d58346f972e2fbf3886f1931b0c93484c5232002f3" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"], "f8d0043854ead339b5022b650bc0f1c86e8362fc58046805bc7fe24b995886c7" = ["ALICE-Analytics"] } }
+pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "15c0afc25b6cc072693d9e29f47799e137bdb17ff10356a2fe215a6756b0f68f", owner = "ALICE-Analytics", planned = "fc452bdb565ebd1e22de8803e1251c1e91e3b72b", moved_from = { planned = "a39c3f1147884cac6a631c36f2ef98c7a14f3ea5", target = "f8d0043854ead339b5022b650bc0f1c86e8362fc58046805bc7fe24b995886c7" }, variants = { "413efdfdd5e75ce1771091d58346f972e2fbf3886f1931b0c93484c5232002f3" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"], "f8d0043854ead339b5022b650bc0f1c86e8362fc58046805bc7fe24b995886c7" = ["ALICE-Analytics"] } }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
