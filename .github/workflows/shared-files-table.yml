@@ -1,0 +1,48 @@
+# G11 (c) on a ci/ branch that changes the shared-file table or its tools
+#
+# Conformance (live) checks the table on main only, so a ci/ change that touches only conformance/ reached main
+# before any check read the mains. This job runs the same table checks on such a ci/ branch: the generator's
+# --check (the table is the one the mains give; derived fields are reported) and the live check of every copy,
+# count-locked with the number conformance-live.yml holds (read from it, not copied). Nothing compared is a
+# failure in both.
+
+name: Shared-file table (ci)
+
+on:
+  push:
+    branches: ["ci/**"]
+    paths:
+      - "conformance/**"
+      - "scripts/gen_shared_files.py"
+      - "scripts/shared_files_check.py"
+      - "scripts/test_gen_shared_files.py"
+      - "scripts/test_shared_files_check.py"
+      - ".github/workflows/shared-files-table.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shared-files-table-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  table:
+    name: The table is the generated one and every main carries its copies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Test the shared-file checker and its generator
+        run: |
+          python3 scripts/test_shared_files_check.py
+          python3 scripts/test_gen_shared_files.py
+
+      - name: The table is the generated one
+        run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
+
+      - name: Every listed repository's main carries each copy
+        run: |
+          n=$(python3 -c "import sys; sys.path.insert(0, 'scripts'); import shared_files_check as s; print(s.lock_in(open('.github/workflows/conformance-live.yml', encoding='utf-8').read(), 'conformance-live.yml'))")
+          python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies "$n"

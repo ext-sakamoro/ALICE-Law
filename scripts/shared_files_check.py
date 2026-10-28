@@ -153,6 +153,15 @@ LOCK = re.compile(r"--expect-copies[ =]+(\d+)")
 DISCOVERED = ("scripts/", "tools/", ".github/workflows/", ".github/actions/")
 UNIFORM_KEYS = {"path", "sha256", "source", "repos", "paths", "exempt"}
 PENDING_KEYS = {"path", "pending", "repos", "paths", "exempt"}
+PENDING_REQUIRED = {"since", "exit", "target", "owner", "variants"}
+PENDING_OPTIONAL = {"planned", "moved_from", "first_move"}
+# Every field is either normative (what a table commit decides: a difference from the regenerated table is a change
+# to review) or derived from the mains (an observation the regeneration recomputes: reported, never a difference).
+# test_shared_files_check.FieldClasses fails on a schema field in neither set.
+ROW_NORMATIVE = {"path", "sha256", "source", "repos", "paths", "exempt"}
+ROW_DERIVED: set[str] = set()
+PENDING_NORMATIVE = {"since", "exit", "target", "owner", "planned", "moved_from"}
+PENDING_DERIVED = {"variants", "first_move"}  # first_move: the owner has not landed the target (owner_landed)
 
 
 class Unreadable(Exception):
@@ -202,12 +211,12 @@ def planned_proof_problems(entries: list[dict], proofs: dict[str, bytes]) -> lis
 
 
 def row_but_variants(e: dict) -> dict:
-    """the row as a change can edit it: everything but a pending row's variants (which move with the mains), with
-    absent paths / exempt read as empty"""
-    out = {k: v for k, v in e.items() if k not in ("paths", "exempt", "pending")}
+    """the row as a change can edit it: its normative fields only (a pending row's variants and first_move move with
+    the mains), with absent paths / exempt read as empty"""
+    out = {k: v for k, v in e.items() if k not in ("paths", "exempt", "pending") and k not in ROW_DERIVED}
     out["paths"], out["exempt"] = e.get("paths", {}) or {}, e.get("exempt", {}) or {}
     if "pending" in e:
-        out["pending"] = {k: v for k, v in e["pending"].items() if k != "variants"}
+        out["pending"] = {k: v for k, v in e["pending"].items() if k not in PENDING_DERIVED}
     return out
 
 
@@ -329,8 +338,7 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
             pass
         elif "pending" in f:
             p = f["pending"]
-            if (not isinstance(p, dict) or set(p) - {"planned", "moved_from", "first_move"}
-                    != {"since", "exit", "target", "owner", "variants"}):
+            if not isinstance(p, dict) or set(p) - PENDING_OPTIONAL != PENDING_REQUIRED:
                 raise Unreadable(f"{where}: pending must be {{ since, exit, target, owner, variants[, planned"
                                  "[, moved_from[, first_move]]] }")
             if "first_move" in p and (p["first_move"] is not True or "moved_from" not in p):
@@ -821,7 +829,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                     else:
                         problems.append(f"{e['path']}: planned row whose every copy has the target: it has converged "
                                         "(regenerate the table)")
-                if p.get("first_move"):
+                if p.get("first_move") and not owner_landed(p, found):  # the stored flag is derived: recompute it
                     problems += first_move_problems(e, found, remote, age, (proofs or {}).get(p["planned"]))
                 if age > PLANNED_MAX_DAYS:
                     problems.append(f"{e['path']}: planned since {p['since']}, more than {PLANNED_MAX_DAYS} days "

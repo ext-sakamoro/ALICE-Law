@@ -1139,6 +1139,15 @@ class FirstMove(Base):
         b.write_text(self.w.table(*entries), encoding="utf-8")
         return b
 
+    def test_a_stored_flag_whose_owner_landed_is_not_read_as_a_first_move(self):
+        # the flag is derived from the mains ("the owner has not landed"): once the owner holds the target the row is
+        # an ordinary planned row, whatever the table still says, so a third value on another main is not a
+        # first-move finding (the live check recomputes owner_landed instead of trusting the stored flag)
+        self.w.commit("ALICE-A", {"scripts/s.sh": V3})
+        self.w.commit("ALICE-B", {"scripts/s.sh": SHARED + b"# third\n"})
+        code, out = self.live(self.first())
+        self.assertNotIn("first move:", out)
+
     def test_the_flag_is_only_for_a_planned_row_with_moved_from(self):
         e = self.w.planned()
         e["pending"]["first_move"] = True
@@ -1426,6 +1435,41 @@ class FirstMove(Base):
         code, out = self.check("--base-table", str(self.base(self.w.uniform(), self.new_file(v))))
         self.assertEqual(code, 1, out)
         self.assertIn("scripts/n.sh: planned to", out)
+
+
+class FieldClasses(unittest.TestCase):
+    """every field the table schema accepts is declared once: normative (a difference in --check) or derived from the
+    mains (reported); a new field in neither set fails here instead of being compared exactly or ignored silently"""
+
+    def test_the_row_fields_are_classified_once(self):
+        row = (sfc.UNIFORM_KEYS | sfc.PENDING_KEYS) - {"pending"}
+        self.assertEqual(row, sfc.ROW_NORMATIVE | sfc.ROW_DERIVED)
+        self.assertFalse(sfc.ROW_NORMATIVE & sfc.ROW_DERIVED)
+
+    def test_the_pending_fields_are_classified_once(self):
+        self.assertEqual(sfc.PENDING_REQUIRED | sfc.PENDING_OPTIONAL, sfc.PENDING_NORMATIVE | sfc.PENDING_DERIVED)
+        self.assertFalse(sfc.PENDING_NORMATIVE & sfc.PENDING_DERIVED)
+        self.assertFalse(sfc.PENDING_REQUIRED & sfc.PENDING_OPTIONAL)
+
+    def test_every_field_of_the_repository_table_is_classified(self):
+        entries = sfc.load((HERE.parent / "conformance" / "shared-files.toml").read_text(encoding="utf-8"))
+        rows = pend = 0
+        for e in entries:
+            rows += 1
+            self.assertLessEqual(set(e) - {"pending"}, sfc.ROW_NORMATIVE | sfc.ROW_DERIVED, e["path"])
+            if "pending" in e:
+                pend += 1
+                self.assertLessEqual(set(e["pending"]), sfc.PENDING_NORMATIVE | sfc.PENDING_DERIVED, e["path"])
+        self.assertGreater(rows, 0)
+        self.assertGreater(pend, 0)
+
+    def test_an_unclassified_pending_field_is_refused_by_the_schema(self):
+        # the schema reads its accepted pending fields from the classification: a field outside it never loads
+        text = (HERE.parent / "conformance" / "shared-files.toml").read_text(encoding="utf-8")
+        i = text.index("pending = { since = ")
+        bad = text[:i] + 'pending = { note = "x", ' + text[i + len("pending = { "):]
+        with self.assertRaises(sfc.Unreadable):
+            sfc.load(bad)
 
 
 class TheTable(unittest.TestCase):

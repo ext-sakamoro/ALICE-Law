@@ -45,9 +45,11 @@ bytes; it is not re-rolled before its owner lands (an error).
 of uniform rows): --write sets N from the table it writes, and --check is red when N is not
 the regenerated table's (so is shared_files_check.py --lock-file, offline, against the table).
 
---check regenerates in memory and exits 1 when the table differs, except for the variants
-of a pending row, which are reported (the copies of a pending file are moving by
-definition), and for a row that only gained holders carrying the row's own bytes (a
+--check regenerates in memory and exits 1 when the table differs in a normative field
+(shared_files_check's ROW_NORMATIVE / PENDING_NORMATIVE). The fields derived from the mains
+(PENDING_DERIVED: a pending row's variants, and first_move, which stands until the owner lands
+the target) are reported, not a difference (the copies of a pending file are moving by
+definition, and an owner landing ends a first move), and so is a row that only gained holders carrying the row's own bytes (a
 rollout that landed before the table was regenerated), which is reported as an unlisted
 holder; with --strict an unlisted holder is a difference too (a pending row's variants are
 expected to move during its rollout, so they stay reported in every mode). The repositories' main is fetched from GitHub (blob-less), or read from
@@ -461,14 +463,21 @@ def converged_since_base(old: list[dict], new: list[dict],
 
 
 def without_variants(text: str) -> tuple[str, dict[str, dict]]:
+    """the table rendered with the fields derived from the mains (sfc.ROW_DERIVED / sfc.PENDING_DERIVED) taken out,
+    and those fields per path: --check compares the first and reports the second"""
     entries = sfc.load(text)
     stripped = copy.deepcopy(entries)
-    variants = {}
+    derived: dict[str, dict] = {}
     for e in stripped:
+        d = {k: e.pop(k) for k in sorted(sfc.ROW_DERIVED & set(e))}
         if "pending" in e:
-            variants[e["path"]] = e["pending"]["variants"]
-            e["pending"]["variants"] = {"absent": e["repos"]}
-    return render(stripped), variants
+            p = e["pending"]
+            d.update({k: p.pop(k) for k in sorted(sfc.PENDING_DERIVED & set(p)) if k != "variants"})
+            d["variants"] = p["variants"]
+            p["variants"] = {"absent": e["repos"]}  # render needs the field; its value is not compared
+        if d:
+            derived[e["path"]] = d
+    return render(stripped), derived
 
 
 def main(argv: list[str]) -> int:
@@ -561,8 +570,13 @@ def main(argv: list[str]) -> int:
             text = render(entries)
         new_plain, new_var = without_variants(text)
         for path in sorted(set(cur_var) & set(new_var)):
-            if cur_var[path] != new_var[path]:
+            if cur_var[path].get("variants") != new_var[path].get("variants"):
                 print(f"gen_shared_files: pending {path}: the variants on the mains have moved since the table")
+            moved = sorted(k for k in set(cur_var[path]) | set(new_var[path])
+                           if k != "variants" and cur_var[path].get(k) != new_var[path].get(k))
+            if moved:
+                print(f"gen_shared_files: pending {path}: derived from the mains, moved since the table: "
+                      + ", ".join(moved))
         if cur_plain != new_plain:
             print(f"gen_shared_files: {a.table} is out of date (regenerate with --write)", file=sys.stderr)
             return 1

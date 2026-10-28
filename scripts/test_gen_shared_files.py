@@ -618,6 +618,49 @@ class Generate(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("the variants on the mains have moved", out)
 
+    def first_move_landed(self) -> bytes:
+        """s.sh planned to v2 as a first move by ALICE-A, then ALICE-A lands v2; the table is not regenerated"""
+        v2 = SHARED + b"# v2\n"
+        self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v2)}\n")
+        self.assertEqual(self.gen("--write", "--next-from", str(reg), "--target", f"scripts/s.sh={h(v2)}@ALICE-A")[0], 0)
+        self.assertTrue(self.entries()["scripts/s.sh"]["pending"]["first_move"])
+        self.w.commit("ALICE-A", {"scripts/s.sh": v2})
+        return v2
+
+    def test_check_reports_but_passes_a_first_move_whose_owner_landed(self):
+        # first_move says "the owner has not landed yet": it is derived from the mains like the variants, so the
+        # owner landing makes it reported, not a difference (until 2026-10-28 every Law candidate went red here)
+        self.first_move_landed()
+        code, out = self.gen("--check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("pending scripts/s.sh: derived from the mains, moved since the table: first_move", out)
+
+    def test_check_is_still_red_when_a_normative_field_of_the_row_changes(self):
+        # teeth: only the derived fields are reported; the target, the owner and a uniform sha256 stay exact
+        self.first_move_landed()
+        current = self.t.read_text(encoding="utf-8")
+        p = self.entries()["scripts/s.sh"]["pending"]
+        for old, new in ((f'target = "{p["target"]}"', f'target = "{"0" * 64}"'),
+                         ('owner = "ALICE-A"', 'owner = "ALICE-B"')):
+            self.assertIn(old, current)
+            self.t.write_text(current.replace(old, new, 1), encoding="utf-8")
+            code, out = self.gen("--check")
+            self.assertEqual(code, 1, (old, out))
+            self.assertIn("is out of date", out)
+        self.t.write_text(current, encoding="utf-8")
+
+    def test_check_is_still_red_when_a_uniform_sha256_changes(self):
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")
+        self.gen("--write", "--registry", str(reg))
+        current = self.t.read_text(encoding="utf-8")
+        old = f'sha256 = "{h(SHARED)}"'
+        self.assertIn(old, current)
+        self.t.write_text(current.replace(old, f'sha256 = "{"0" * 64}"', 1), encoding="utf-8")
+        code, out = self.gen("--check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("is out of date", out)
+
     def gained_holder(self, data: bytes):
         """the table lists s.sh on A and B; then ALICE-C, a table repository through c.sh, gains s.sh"""
         reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\nscripts/c.sh\tALICE-A,ALICE-C\n")
