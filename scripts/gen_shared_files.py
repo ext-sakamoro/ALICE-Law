@@ -259,7 +259,7 @@ def build(rows: list[dict], repo_of, old: dict[str, dict], today: str,
             fresh = "moved_from" not in prev and set(found) == set(prev.get("variants", {})) == {"absent"}
             # a first move whose owner already holds its target has landed (the table was not regenerated since):
             # its re-roll moves from those landed bytes like any planned row, below
-            unlanded_first = prev.get("first_move") and prev["owner"] not in found.get(prev["target"], [])
+            unlanded_first = prev.get("first_move") and not sfc.owner_landed(prev, found)
             if unlanded_first or fresh:
                 # the owner has not landed the plan: it is re-rolled in place, on the date it became planned (closing
                 # it by hand and planning it again later would restart its clock, and the table refuses that)

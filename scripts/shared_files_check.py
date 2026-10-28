@@ -215,6 +215,13 @@ def is_planned(e: dict) -> bool:
     return "planned" in e.get("pending", {})
 
 
+def owner_landed(pending: dict, holders: dict) -> bool:
+    """whether the owner of a planned move holds its target: `holders` maps sha256 to the repositories whose main has
+    those bytes (a table row's `variants`, or what the generator found). The one definition of a landed move, used by
+    this check and by gen_shared_files.py (a first move's flag stands exactly until this is true)"""
+    return pending["owner"] in holders.get(pending["target"], [])
+
+
 def moving_bytes(e: dict) -> set[str]:
     """the SHA-256 a pending row is moving between: its target, and for a planned row moved to new bytes the
     bytes it moves from"""
@@ -688,7 +695,7 @@ def first_move_problems(e: dict, found: dict[str, list[str]], remote: Remote, ag
         problems.append(f"{e['path']}: first move: {', '.join(found[k])} "
                         + ("has no copy" if k == "absent" else f"main has sha256 {k[:12]}")
                         + f", not the uniform bytes {m['target'][:12]} it moves from or the target {p['target'][:12]}")
-    if p["owner"] in found.get(p["target"], []):
+    if owner_landed(p, found):
         return problems  # the owner has landed the bytes: they are real
     if age > FIRST_MOVE_MAX_DAYS:
         problems.append(f"{e['path']}: first move planned since {p['since']} and the owner {p['owner']} has not landed "
@@ -773,7 +780,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                 pairs = [(p["target"], p["planned"])] + ([(m["target"], m["planned"])] if m else [])
                 # the table's claim that the owner holds the target is read against the owner's main: a recorded
                 # landing that has not happened would take a first move's flag off (--base-table reads the variants)
-                if p["owner"] in p["variants"].get(p["target"], []) and (owner_blob or ("",))[0] != p["target"]:
+                if owner_landed(p, p["variants"]) and (owner_blob or ("",))[0] != p["target"]:
                     problems.append(f"{e['path']}: the table records the owner {p['owner']} at the target "
                                     f"{p['target'][:12]}, but its main has "
                                     + (f"sha256 {owner_blob[0][:12]}" if owner_blob else "no copy"))
@@ -985,11 +992,14 @@ def main(argv: list[str]) -> int:
                     problems.append(f"{e['path']}: a moving row records variant(s) {', '.join(k[:12] for k in added)} "
                                     "the base table does not have (a variant counts only when recorded before the "
                                     "move)")
-            if (b is not None and b.get("first_move") and not p.get("first_move")
-                    and p["owner"] not in p["variants"].get(p["target"], [])):
+            # the base's first move has landed when its owner holds its target now (this table's variants, which the
+            # live check reads against the owner's main): from then on it is an ordinary planned row
+            base_landed = b is not None and owner_landed(b, p["variants"])
+            if (b is not None and b.get("first_move") and not p.get("first_move") and not base_landed
+                    and not owner_landed(p, p["variants"])):
                 problems.append(f"{e['path']}: first_move dropped while the owner {p['owner']} does not hold the target "
                                 f"{p['target'][:12]} (gen_shared_files.py drops the flag once the owner's main has it)")
-            if b is not None and b.get("first_move") and b["planned"] != p["planned"]:
+            if b is not None and b.get("first_move") and not base_landed and b["planned"] != p["planned"]:
                 # re-rolled before the owner landed it: still the one move, from the bytes the base moves from
                 if m == b.get("moved_from"):
                     continue

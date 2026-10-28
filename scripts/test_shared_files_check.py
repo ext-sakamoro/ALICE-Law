@@ -1281,6 +1281,41 @@ class FirstMove(Base):
         code, out = self.check("--base-table", str(self.base(self.first())))
         self.assertEqual(code, 0, out)
 
+    def reroll_after(self, variants: dict) -> dict:
+        """the base's first move (SHARED to V3) re-rolled to V4, moving from the base's planned pair, without the flag"""
+        v4 = SHARED + b"# v4\n"
+        return self.w.moved(since=self.TODAY, target=h(v4), planned=sfc.git_blob(v4),
+                            moved_from={"planned": sfc.git_blob(V3), "target": h(V3)}, variants=variants)
+
+    def test_a_first_move_whose_owner_landed_is_re_rolled_as_an_ordinary_planned_row(self):
+        # the owner (ALICE-A) holds the base's target V3: the base's first move has landed, so the next re-roll moves
+        # from V3 and carries no first_move
+        self.t.write_text(self.w.table(self.reroll_after({h(V3): ["ALICE-A"], h(SHARED): ["ALICE-B"]})), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 0, out)
+
+    def test_a_first_move_whose_owner_has_not_landed_keeps_its_flag_on_a_re_roll(self):
+        # the owner still has SHARED: re-rolling the first move to V4 from the same SHARED bytes is allowed only as
+        # the same first move (flag kept); dropping the flag reads it as landed, which it is not
+        v4 = SHARED + b"# v4\n"
+        rerolled = self.first(target=h(v4), planned=sfc.git_blob(v4))
+        self.t.write_text(self.w.table(rerolled), encoding="utf-8")
+        self.assertEqual(self.check("--base-table", str(self.base(self.first())))[0], 0)
+        del rerolled["pending"]["first_move"]
+        self.t.write_text(self.w.table(rerolled), encoding="utf-8")
+        code, out = self.check("--base-table", str(self.base(self.first())))
+        self.assertEqual(code, 1, out)
+        self.assertIn("first_move dropped while the owner ALICE-A does not hold the target", out)
+
+    def test_owner_landed_is_the_owner_holding_the_target(self):
+        # the one definition the generator and this check share
+        p = {"owner": "ALICE-A", "target": h(V3)}
+        self.assertTrue(sfc.owner_landed(p, {h(V3): ["ALICE-A"]}))
+        self.assertFalse(sfc.owner_landed(p, {h(V3): ["ALICE-B"]}))
+        self.assertFalse(sfc.owner_landed(p, {h(SHARED): ["ALICE-A"]}))
+        self.assertFalse(sfc.owner_landed(p, {}))
+        self.assertIs(gen.sfc.owner_landed, sfc.owner_landed)
+
     def test_a_recorded_landing_is_read_against_the_owner_s_main(self):
         # the table claims the owner landed (and drops the flag) while its main still has SHARED and V3 is nowhere
         forged = self.first(variants={h(SHARED): ["ALICE-B"], h(V3): ["ALICE-A"]})
