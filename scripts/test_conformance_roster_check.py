@@ -1008,5 +1008,61 @@ class Pending(unittest.TestCase):
         self.assertEqual(written, recorded)
 
 
+class PhaseIn(unittest.TestCase):
+    """a gate with an adoption window: an absent entry reads as unverified until `until`, never as pass"""
+
+    WINDOW = 'status_vocabulary = ["pass", "fail-known", "unverified", "n/a"]\n' + \
+        "\n".join(f'[[gate]]\nid = "G{i}"\nname = "g{i}"\n' for i in (1, 2, 3)) + \
+        '\n[[gate]]\nid = "G4"\nname = "g4"\nadoption = {since = "2026-10-28", until = "2026-12-12"}\n'
+    LOG = "- G4 surface-claims phased in from 2026-10-28 until 2026-12-12\n"
+
+    def setUp(self):
+        self.saved = crc.TODAY
+
+    def tearDown(self):
+        crc.TODAY = self.saved
+
+    def entry(self, day: str, text: str):
+        crc.TODAY = __import__("datetime").date.fromisoformat(day)
+        gates = crc.tomllib.loads(self.WINDOW)
+        notes: list[str] = []
+        findings, counts, compared = crc.check_manifest("Alpha", text, crc.gate_vocabulary(gates), PATHS, notes,
+                                                        phase_in=crc.gate_phase_in(gates))
+        return findings, counts, notes
+
+    def test_an_absent_entry_in_the_window_is_unverified_with_a_note_never_pass(self):
+        findings, counts, notes = self.entry("2026-11-01", manifest())
+        self.assertEqual(findings, [])
+        self.assertEqual((counts["pass"], counts["unverified"]), (1, 2))  # G1 pass, G3 + the absent G4
+        self.assertTrue(any("G4 has no entry, read as unverified" in n and "2026-12-12" in n for n in notes), notes)
+
+    def test_an_absent_entry_after_the_window_is_a_finding(self):
+        findings, _, _ = self.entry("2026-12-13", manifest())
+        self.assertIn("Alpha: alice-law-conformance.toml: gate G4 has no entry", findings)
+
+    def test_an_unknown_gate_is_still_a_finding_in_the_window(self):
+        findings, _, _ = self.entry("2026-11-01", manifest(G5='status = "unverified"'))
+        self.assertIn("Alpha: alice-law-conformance.toml: G5 is not a gate of conformance/gates.toml", findings)
+
+    def test_an_entry_for_the_new_gate_is_read_as_any_other(self):
+        findings, counts, _ = self.entry("2026-11-01", manifest(G4='status = "fail-known"\nevidence = []\nnote = "no CI build at src/lib.rs"'))
+        self.assertEqual(findings, [])
+        self.assertEqual(counts["fail-known"], 2)
+
+    def test_the_window_needs_until_and_is_capped(self):
+        gates = crc.tomllib.loads(self.WINDOW.replace('until = "2026-12-12"', 'until = "2026-12-31"'))
+        self.assertTrue(any("at most 45" in f for f in crc.adoption_findings(gates, self.LOG.replace("12-12", "12-31"))))
+        self.assertEqual(crc.gate_phase_in(gates), {})  # an over-long window phases nothing in
+        gates = crc.tomllib.loads(self.WINDOW.replace(', until = "2026-12-12"', ""))
+        self.assertTrue(any("needs `since` and `until`" in f for f in crc.adoption_findings(gates, self.LOG)))
+        self.assertEqual(crc.adoption_findings(crc.tomllib.loads(self.WINDOW), self.LOG), [])
+
+    def test_moving_the_window_needs_a_changelog_line_with_both_dates(self):
+        moved = crc.tomllib.loads(self.WINDOW.replace("2026-12-12", "2026-12-11"))
+        self.assertTrue(any("CHANGELOG.md: no line names G4" in f for f in crc.adoption_findings(moved, self.LOG)))
+        self.assertTrue(crc.adoption_findings(moved, None))
+        self.assertEqual(crc.adoption_findings(moved, self.LOG + "- G4 window moved: 2026-10-28 to 2026-12-11\n"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

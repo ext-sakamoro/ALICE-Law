@@ -6,117 +6,117 @@
 crates = ["alice-analytics"]
 "pass" = 12
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 2
 
 [manifest."ALICE-Channel"]
 crates = ["alice-channel"]
 "pass" = 11
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 3
 
 [manifest."ALICE-Crypto"]
 crates = ["alice-crypto"]
 "pass" = 11
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 3
 
 [manifest."ALICE-DB"]
 crates = ["alice-db"]
 "pass" = 14
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-DetMath"]
 crates = ["alice-det-math"]
 "pass" = 12
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 2
 
 [manifest."ALICE-Edge"]
 crates = ["alice-edge"]
 "pass" = 14
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-Font"]
 crates = ["alice-font"]
 "pass" = 12
 "fail-known" = 2
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-Identity"]
 crates = ["alice-identity"]
 "pass" = 11
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 3
 
 [manifest."ALICE-Kinematics"]
 crates = ["alice-kinematics"]
 "pass" = 13
 "fail-known" = 1
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-LLM"]
 crates = ["alice-llm"]
 "pass" = 14
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-LOL"]
 crates = ["alice-lol", "alice-lol-macro"]
 "pass" = 14
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-ML"]
 crates = ["alice-ml"]
 "pass" = 14
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-Physics"]
 crates = ["alice-physics"]
 "pass" = 13
 "fail-known" = 1
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-SDF"]
 crates = ["alice-sdf"]
 "pass" = 12
 "fail-known" = 2
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-Sign"]
 crates = ["alice-sign"]
 "pass" = 13
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 1
 
 [manifest."ALICE-Sync"]
 crates = ["alice-sync"]
 "pass" = 14
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0
 
 [manifest."ALICE-Zip"]
 crates = ["alice-zip", "alice-zip-cli"]
 "pass" = 14
 "fail-known" = 0
-"unverified" = 0
+"unverified" = 1
 "n/a" = 0

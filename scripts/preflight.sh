@@ -44,6 +44,7 @@ python3 scripts/workflow_concurrency.py
 python3 scripts/test_locked_lockfile_check.py
 python3 scripts/locked_lockfile_check.py
 python3 scripts/test_measure_conformance.py
+python3 scripts/test_surface_claims_check.py
 python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py
 python3 scripts/test_shared_files_strict.py

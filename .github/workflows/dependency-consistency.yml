@@ -156,6 +156,10 @@ jobs:
       - name: Test the conformance measurement
         run: python3 scripts/test_measure_conformance.py
 
+      # G15: the checker the crates run (fetched at a named revision), its baseline (generated, shrink-only)
+      - name: Test the surface-claims check (G15) and its baseline
+        run: python3 scripts/test_surface_claims_check.py
+
       # the publish gate runs cargo semver-checks; its tests run the real tool on two
       # small crates (a breaking change under a minor version must be refused). The
       # release binary is pinned by version and SHA-256, and the toolchain is the one

@@ -180,29 +180,29 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 | 0.5.0 | `966a78784bb4e3341ac6627d519db896f398176b71c2402b188294db6c8e3728` |
 | 0.5.1 | `9f7cf676708a272e3817ebbf0727c610f391e1547747af4307ee44d5523267c2` |
 
-### Conformance manifest (各 repository の main の manifest における 14 gate の状態の件数)
+### Conformance manifest (各 repository の main の manifest における 15 gate の状態の件数)
 
-repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 17 の manifest × 14 の gate = 238 の gate の entry
+repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する (「読む crate」の列) ので、各 manifest は 1 回だけ数える; 17 の manifest × 15 の gate = 255 の gate の entry
 
 | repository | 読む crate | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
-| ALICE-Analytics | alice-analytics | 12 | 0 | 0 | 2 |
-| ALICE-Channel | alice-channel | 11 | 0 | 0 | 3 |
-| ALICE-Crypto | alice-crypto | 11 | 0 | 0 | 3 |
-| ALICE-DB | alice-db | 14 | 0 | 0 | 0 |
-| ALICE-DetMath | alice-det-math | 12 | 0 | 0 | 2 |
-| ALICE-Edge | alice-edge | 14 | 0 | 0 | 0 |
-| ALICE-Font | alice-font | 12 | 2 | 0 | 0 |
-| ALICE-Identity | alice-identity | 11 | 0 | 0 | 3 |
-| ALICE-Kinematics | alice-kinematics | 13 | 1 | 0 | 0 |
-| ALICE-LLM | alice-llm | 14 | 0 | 0 | 0 |
-| ALICE-LOL | alice-lol, alice-lol-macro | 14 | 0 | 0 | 0 |
-| ALICE-ML | alice-ml | 14 | 0 | 0 | 0 |
-| ALICE-Physics | alice-physics | 13 | 1 | 0 | 0 |
-| ALICE-SDF | alice-sdf | 12 | 2 | 0 | 0 |
-| ALICE-Sign | alice-sign | 13 | 0 | 0 | 1 |
-| ALICE-Sync | alice-sync | 14 | 0 | 0 | 0 |
-| ALICE-Zip | alice-zip, alice-zip-cli | 14 | 0 | 0 | 0 |
+| ALICE-Analytics | alice-analytics | 12 | 0 | 1 | 2 |
+| ALICE-Channel | alice-channel | 11 | 0 | 1 | 3 |
+| ALICE-Crypto | alice-crypto | 11 | 0 | 1 | 3 |
+| ALICE-DB | alice-db | 14 | 0 | 1 | 0 |
+| ALICE-DetMath | alice-det-math | 12 | 0 | 1 | 2 |
+| ALICE-Edge | alice-edge | 14 | 0 | 1 | 0 |
+| ALICE-Font | alice-font | 12 | 2 | 1 | 0 |
+| ALICE-Identity | alice-identity | 11 | 0 | 1 | 3 |
+| ALICE-Kinematics | alice-kinematics | 13 | 1 | 1 | 0 |
+| ALICE-LLM | alice-llm | 14 | 0 | 1 | 0 |
+| ALICE-LOL | alice-lol, alice-lol-macro | 14 | 0 | 1 | 0 |
+| ALICE-ML | alice-ml | 14 | 0 | 1 | 0 |
+| ALICE-Physics | alice-physics | 13 | 1 | 1 | 0 |
+| ALICE-SDF | alice-sdf | 12 | 2 | 1 | 0 |
+| ALICE-Sign | alice-sign | 13 | 0 | 1 | 1 |
+| ALICE-Sync | alice-sync | 14 | 0 | 1 | 0 |
+| ALICE-Zip | alice-zip, alice-zip-cli | 14 | 0 | 1 | 0 |
 
 ### manifest がまだ無い crate
 

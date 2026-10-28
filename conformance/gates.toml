@@ -161,3 +161,12 @@ checked_by = "machine"
 name = "float-environment-invariants"
 definition = "Shipped Law-bearing artifacts are not built with fast-math-style flags or target-cpu=native; round-to-nearest-even and no-flush-to-zero are asserted by test, not assumed."
 evidence_kinds = ["build-flags-check", "rne-no-ftz-assertion-test"]
+
+[[gate]]
+id = "G15"
+checked_by = "machine"
+name = "surface-claims"
+definition = "A crate declares the surfaces it can be used from in [package.metadata.alice] surfaces (rust, browser, wasi, c, python, unity, unreal); the declaration equals the surfaces found in its source and its engine bindings, the README surface table lists exactly the declared surfaces, and every declared binding surface is built (browser and python also run) by a push-triggered CI step; the crate's CI runs ALICE-Law's scripts/surface_claims_check.py, failing when it compared nothing."
+evidence_kinds = ["surface-claims-check-ci-job"]
+# phased in: until this date a manifest without a G15 entry reads as unverified (scripts/conformance_roster_check.py)
+adoption = { since = "2026-10-28", until = "2026-12-12" }
