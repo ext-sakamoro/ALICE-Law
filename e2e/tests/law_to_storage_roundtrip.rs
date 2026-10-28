@@ -55,6 +55,8 @@ const KNOWN_SEMANTICS: &[(&str, &str)] = &[
     ("0.5.1", "85e0884623b154a3b2b264374907b6cbac09307ca3f9a08339e48c567d3cb315"),
     // 0.6.0 names the identifier 0.5.2 carried at its last revision (0.5.2 was never published and had two)
     ("0.6.0", "a2a11b9b826227fa7a9ed8ab2c1ce63dbb07ad4c39aa2c46a363ddea6b47dbe9"),
+    // 0.6.1 adds tanh64 / hypot64: the identifier covers the new pins, the bits of the others are unchanged
+    ("0.6.1", "6fc214e924c53557f33775df51f1f8dfe2f246d67a9e493d6fb5837d999022f2"),
 ];
 /// `major.minor.patch` of a release (a pre-release or a malformed version is refused).
 fn release(version: &str) -> (u64, u64, u64) {
