@@ -256,6 +256,30 @@ class Generate(Base):
         self.assertIn("which not every listed main holds any more", out)
         self.assertEqual(self.t.read_text(encoding="utf-8"), before)
 
+    def build_directly(self, planned_ids: dict[str, str]):
+        """build() as a library call, without main()'s registry check in front of it: build refuses on its own"""
+        import tempfile as _tf
+        entries = sfc.load(self.t.read_text(encoding="utf-8"))
+        old = {e["path"]: e for e in entries}
+        with _tf.TemporaryDirectory() as d:
+            return gen.build(gen.rows_from_table(entries), sfc.Remote(Path(d)), old, TODAY, {}, planned_ids)
+
+    def test_build_refuses_a_planned_row_moved_without_its_bytes(self):
+        # main() stops this earlier (the registry drift check); build() keeps its own refusal for any caller
+        self.landed_v2()
+        with self.assertRaises(sfc.Unreadable) as cm:
+            self.build_directly({"scripts/s.sh": "3" * 40})
+        self.assertIn("moves the planned row to bytes no listed main holds yet", str(cm.exception))
+
+    def test_build_refuses_an_unlanded_first_move_re_rolled_without_its_bytes(self):
+        v2 = SHARED + b"# v2\n"
+        self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v2)}\n")
+        self.assertEqual(self.gen("--write", "--next-from", str(reg), "--target", f"scripts/s.sh={h(v2)}@ALICE-A")[0], 0)
+        with self.assertRaises(sfc.Unreadable) as cm:
+            self.build_directly({"scripts/s.sh": "4" * 40})
+        self.assertIn("re-rolls the plan to", str(cm.exception))
+
     def test_a_registry_next_left_behind_after_its_move_converged_is_refused(self):
         # every main holds the next= bytes and the table is uniform at them: the registry kept a finished move
         v2 = SHARED + b"# v2\n"

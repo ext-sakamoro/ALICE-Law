@@ -53,6 +53,8 @@ const EDGE_LAW_NAME: &str = "edge-window";
 const KNOWN_SEMANTICS: &[(&str, &str)] = &[
     ("0.5.0", "135c407d4249c1c200e4d1be79a12e848ce5c355fc3a918da965849e697ef000"),
     ("0.5.1", "85e0884623b154a3b2b264374907b6cbac09307ca3f9a08339e48c567d3cb315"),
+    // 0.6.0 names the identifier 0.5.2 carried at its last revision (0.5.2 was never published and had two)
+    ("0.6.0", "a2a11b9b826227fa7a9ed8ab2c1ce63dbb07ad4c39aa2c46a363ddea6b47dbe9"),
 ];
 /// `major.minor.patch` of a release (a pre-release or a malformed version is refused).
 fn release(version: &str) -> (u64, u64, u64) {
