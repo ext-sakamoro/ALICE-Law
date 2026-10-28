@@ -149,6 +149,22 @@ def next_ids(text: str) -> dict[str, str]:
     return {r["path"]: r["next"] for r in rows_from_registry(text) if r.get("next")}
 
 
+def registry_drift(planned_ids: dict[str, str], old: dict[str, dict], targets: dict[str, tuple[str, str]]) -> list[str]:
+    """the registry's next= ids the table does not plan: plan-first, a next= is either the table's planned id for that
+    row or a move this run plans (--target); anything else is a registry that drifted from the table (a converged move
+    whose next= stayed, an older generation, an intent no table commit planned) and is refused, not applied silently"""
+    out = []
+    for path, nid in sorted(planned_ids.items()):
+        if path in targets:
+            continue
+        planned = old.get(path, {}).get("pending", {}).get("planned")
+        if planned != nid:
+            out.append(f"{path}: the registry's next= {nid[:12]} is "
+                       + (f"not the table's planned {planned[:12]}" if planned else "a row the table does not plan")
+                       + " (plan it with --target, or set the registry's next= to the table)")
+    return out
+
+
 def rows_from_table(entries: list[dict]) -> list[dict]:
     rows = []
     for e in entries:
@@ -480,6 +496,9 @@ def main(argv: list[str]) -> int:
                 rows += discover(rows, repo_of)
             widen(rows, repo_of)
             planned_ids = next_ids(a.next_from.read_text(encoding="utf-8")) if a.next_from else None
+            drift = registry_drift(planned_ids, old, targets) if planned_ids is not None else []
+            if drift:
+                raise sfc.Unreadable("the registry and the table disagree on what is planned:\n  " + "\n  ".join(drift))
             entries = build(rows, repo_of, old, today, targets, planned_ids)
         if not entries:
             print("gen_shared_files: no entry to write (compared nothing)", file=sys.stderr)
