@@ -157,6 +157,11 @@ source = { repo = "ALICE-Analytics", rev = "321d90cc9e72618dfb477d199d6660f98c27
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
+path = "scripts/gated_tests.py"
+pending = { since = "2026-10-28", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "c5b3eb1034f71485a0fa08a8c486a6e47cdb274a0ec2f92911bdccdd7b6d02ea", owner = "ALICE-GameEngine", planned = "e346c628d9552a98be11127f47797aa825024a63", variants = { "absent" = ["ALICE-DB"], "c5b3eb1034f71485a0fa08a8c486a6e47cdb274a0ec2f92911bdccdd7b6d02ea" = ["ALICE-GameEngine"] } }
+repos = ["ALICE-DB", "ALICE-GameEngine"]
+
+[[file]]
 path = "scripts/gen_clippy_canary_calls.py"
 pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "118e2a172c4eb12a996664a50c5a00dbe3eefe3eef861fc679e96db298bc2d31", owner = "ALICE-Analytics", planned = "cc0ad22502cfdd745cce4c2b8373c96b854aac5a", moved_from = { planned = "b17166907f77094640a12cccd855e00f17d121e6", target = "02a8a5bbcefbee2b56b8a491cdc5de6c2e67b9ea0078158dfcd4a013b7ed20cf" }, variants = { "02a8a5bbcefbee2b56b8a491cdc5de6c2e67b9ea0078158dfcd4a013b7ed20cf" = ["ALICE-Analytics", "ALICE-Crypto", "ALICE-DetMath", "ALICE-Sync"], "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c" = ["ALICE-Channel", "ALICE-DB", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
@@ -350,6 +355,11 @@ path = "scripts/test_g11_table.py"
 sha256 = "df4d3f45e90a18389192219aa15e88fa558598df17bc60080265fefc352a4843"
 source = { repo = "ALICE-Analytics", rev = "43597383e31a881923f6d4ef120b0a41f6022d7d" }
 repos = ["ALICE-Analytics", "ALICE-SDF"]
+
+[[file]]
+path = "scripts/test_gated_tests.py"
+pending = { since = "2026-10-28", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "9f1658bb07957408a52996b4bb8c3efbe3e735cf7a2327836d098b3110fdfde1", owner = "ALICE-GameEngine", planned = "5dee4c9cf892c974fca5d02e3a46542c8ae8e0fd", variants = { "9f1658bb07957408a52996b4bb8c3efbe3e735cf7a2327836d098b3110fdfde1" = ["ALICE-GameEngine"], "absent" = ["ALICE-DB"] } }
+repos = ["ALICE-DB", "ALICE-GameEngine"]
 
 [[file]]
 path = "scripts/test_gen_clippy_canary_calls.py"

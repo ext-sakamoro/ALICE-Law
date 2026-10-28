@@ -156,6 +156,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- `conformance/shared-files.toml`: `scripts/gated_tests.py` と `scripts/test_gated_tests.py` (owner ALICE-GameEngine) の行を計画として足した (holders は ALICE-GameEngine と最初の採用者 ALICE-DB、bytes は GameEngine の main ad81b541) 各 repo の `scripts/gated_tests.toml` は共有しない 他の採用者は自分の commit で加わる
 - e2e (`law_to_storage_roundtrip`): `KNOWN_SEMANTICS` に alice-det-math 0.6.0 の行 (`a2a11b9b…`) を足した 0.6.0 は 0.5.2 が最後の rev で持っていた識別子を名指す (0.5.2 は未公開で 2 つの識別子を持っていた) main mode の e2e は e2e の sibling が 0.6.0 を受けるまで red のまま (その失敗はこの mode の目的どおり) 0.6.0 の digest の golden の行は、0.6.0 を link した build で測ってから足す
 - `conformance/shared-files.toml`: 表を今の main から作り直す `scripts/semver_gate.py` / `scripts/workflow_concurrency.py` / `scripts/release_baseline.py` と各試験の 6 行は、ALICE-Law も他の holder と同じ bytes を持ったので計画の行から uniform の行になり、その計画の bytes を `conformance/planned/` から外した count lock は 1184 から 1262
 - `scripts/gen_shared_files.py` (**Breaking**: 配布の順): `--next-from` の台帳の next= が、表の planned でも `--target` で今回計画する行でもない時は exit 2 で止める (今までは計画の無い next= を黙って受け、収束済みや別の世代の next= が台帳に残っても表と食い違ったままだった) 配布は plan-first: 表の計画 commit を先に置き (`--target`)、台帳はそれに合わせる
