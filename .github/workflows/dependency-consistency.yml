@@ -259,3 +259,11 @@ jobs:
           py=$(command -v python3 || command -v python)
           "$py" scripts/test_subprocess_encoding_check.py
           "$py" scripts/subprocess_encoding_check.py
+
+      # the shared harness the crates' checker tests judge their cases with: a crash is reported
+      # as a crash (also with the expected exit code and text), a failing case names its text
+      - name: Test the checker case harness
+        shell: bash
+        run: |
+          py=$(command -v python3 || command -v python)
+          "$py" scripts/test_checker_case.py

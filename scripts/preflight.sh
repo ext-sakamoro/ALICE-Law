@@ -34,6 +34,7 @@ python3 scripts/test_g11_table_gen.py
 python3 scripts/test_g11_self_check.py
 python3 scripts/test_subprocess_encoding_check.py
 python3 scripts/subprocess_encoding_check.py
+python3 scripts/test_checker_case.py
 python3 scripts/test_main_mode.py
 python3 scripts/test_gen_law_status.py
 python3 scripts/test_readme_parity_check.py
