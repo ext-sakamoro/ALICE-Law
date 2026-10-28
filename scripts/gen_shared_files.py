@@ -36,7 +36,8 @@ bytes and their owner) is planned too, marked `first_move` with `moved_from` = t
 bytes; it is not re-rolled before its owner lands (an error).
 
   gen_shared_files.py --table conformance/shared-files.toml (--write | --check)
-                      [--registry FILE] [--discover] [--checkouts DIR] [--today YYYY-MM-DD]
+                      [--registry FILE] [--add-row 'PATH<TAB>REPO,REPO' ...] [--discover] [--checkouts DIR]
+                      [--today YYYY-MM-DD]
                       [--target PATH=SHA256@ALICE-X ...] [--next-from REGISTRY]
                       [--lock-file .github/workflows/conformance-live.yml]
 
@@ -203,6 +204,29 @@ class Checkouts:
         if not (g / ".git").exists():
             raise sfc.Unreadable(f"{g}: no checkout of {repo}")
         return g
+
+
+def add_rows(rows: list[dict], specs: list[str]) -> None:
+    """--add-row PATH<TAB>REPO,REPO: one new row next to the table's rows (a new shared file is planned without
+    rewriting every row from a registry). Refused: a path that already has a row, fewer than two repositories (a
+    shared row compares copies), or a repository the table does not have (a typo would make a row nobody checks)."""
+    universe = {r for row in rows for r in row["order"]} | {r for row in rows for r in row["exempt"]}
+    have = {row["path"] for row in rows} | {p for row in rows for p in row["paths"].values()}
+    for spec in specs:
+        path, tab, listed = spec.partition("\t")
+        path = path.strip()
+        repos = [r.strip() for r in listed.split(",") if r.strip()]
+        if not tab or not path:
+            raise sfc.Unreadable(f"--add-row: needs PATH<TAB>REPO,REPO (got {spec!r})")
+        if path in have:
+            raise sfc.Unreadable(f"--add-row {path}: the table already has a row for it")
+        if len(set(repos)) < 2:
+            raise sfc.Unreadable(f"--add-row {path}: a shared row needs two repositories or more (got {len(set(repos))})")
+        for r in repos:
+            if r not in universe:
+                raise sfc.Unreadable(f"--add-row {path}: {r} is not a repository of the table")
+        rows.append({"path": path, "order": list(dict.fromkeys(repos)), "paths": {}, "exempt": {}, "hold": ""})
+        have.add(path)
 
 
 def widen(rows: list[dict], repo_of) -> None:
@@ -454,6 +478,8 @@ def main(argv: list[str]) -> int:
     act.add_argument("--write", action="store_true")
     act.add_argument("--check", action="store_true")
     ap.add_argument("--registry", type=Path)
+    ap.add_argument("--add-row", action="append", default=[],
+                    help="PATH<TAB>REPO,REPO: a new row added to the table's rows (repeatable)")
     ap.add_argument("--discover", action="store_true")
     ap.add_argument("--checkouts", type=Path)
     ap.add_argument("--today", help="the date a new pending row records (default: today, UTC)")
@@ -490,6 +516,7 @@ def main(argv: list[str]) -> int:
             if not old_entries:
                 raise sfc.Unreadable(f"{a.table}: no entry to regenerate from (give --registry)")
             rows = rows_from_table(old_entries)
+        add_rows(rows, a.add_row)
         with tempfile.TemporaryDirectory() as d:
             repo_of = Checkouts(a.checkouts) if a.checkouts else sfc.Remote(Path(d))
             if a.discover:

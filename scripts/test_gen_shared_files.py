@@ -303,6 +303,46 @@ class Generate(Base):
         self.assertEqual(gen.registry_drift(gen.next_ids(reg.read_text(encoding="utf-8")), {},
                                             {"scripts/s.sh": (h(v2), "ALICE-A"), "scripts/t.sh": ("0" * 64, "ALICE-A")}), [])
 
+    def test_add_row_plans_a_new_path_without_a_full_registry(self):
+        # the table's rows stay, one row is added: a new file only its owner holds is born planned (plan-first)
+        v = b"#!/bin/sh\n# new shared file\n"
+        self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
+        self.w.commit("ALICE-A", {"scripts/n.sh": v})
+        reg = self.registry(f"scripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
+        code, out = self.gen("--write", "--add-row", "scripts/n.sh\tALICE-A,ALICE-B", "--next-from", str(reg),
+                             "--target", f"scripts/n.sh={h(v)}@ALICE-A")
+        self.assertEqual(code, 0, out)
+        e = self.entries()
+        self.assertEqual(sorted(e), ["scripts/n.sh", "scripts/s.sh"])
+        self.assertEqual(e["scripts/s.sh"]["sha256"], h(SHARED))
+        p = e["scripts/n.sh"]["pending"]
+        self.assertEqual((p["planned"], p["target"], p["owner"]), (sfc.git_blob(v), h(v), "ALICE-A"))
+        self.assertEqual(p["variants"], {h(v): ["ALICE-A"], "absent": ["ALICE-B"]})
+
+    def add_row_refused(self, row: str) -> str:
+        self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
+        before = self.t.read_text(encoding="utf-8")
+        code, out = self.gen("--write", "--add-row", row)
+        self.assertEqual(code, 2, out)
+        self.assertEqual(self.t.read_text(encoding="utf-8"), before, "the table is not rewritten")
+        return out
+
+    def test_add_row_refuses_a_path_the_table_has(self):
+        out = self.add_row_refused("scripts/s.sh\tALICE-A,ALICE-B")
+        self.assertIn("--add-row scripts/s.sh: the table already has a row for it", out)
+
+    def test_add_row_refuses_a_row_with_fewer_than_two_repositories(self):
+        out = self.add_row_refused("scripts/n.sh\tALICE-A")
+        self.assertIn("--add-row scripts/n.sh: a shared row needs two repositories or more", out)
+
+    def test_add_row_refuses_a_repository_outside_the_table(self):
+        out = self.add_row_refused("scripts/n.sh\tALICE-A,ALICE-ZZ")
+        self.assertIn("--add-row scripts/n.sh: ALICE-ZZ is not a repository of the table", out)
+
+    def test_add_row_refuses_a_malformed_row(self):
+        out = self.add_row_refused("scripts/n.sh ALICE-A,ALICE-B")
+        self.assertIn("--add-row: needs PATH<TAB>REPO,REPO", out)
+
     def test_a_new_path_is_re_rolled_before_it_lands_on_its_first_date(self):
         v, v2 = b"#!/bin/sh\n# new shared file\n", b"#!/bin/sh\n# new shared file, v2\n"
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
