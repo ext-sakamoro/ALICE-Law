@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -61,6 +62,17 @@ class RunCheck(unittest.TestCase):
         p = self.dir / "checker.sh"
         p.write_text(body, encoding="utf-8")
         return ["bash", str(p)]
+
+    def test_a_program_not_on_path_is_refused_before_it_runs(self):
+        with self.assertRaises(ValueError) as e:
+            cc.run_check(["no-such-checker-9f3c", "x"], expect_exit=0, env={"PATH": str(self.dir)})
+        self.assertIn("'no-such-checker-9f3c' is not on PATH", str(e.exception))
+
+    def test_a_bare_name_is_found_on_the_given_path(self):
+        exe = Path(sys.executable)
+        self.assertEqual(cc.program(exe.stem, {"PATH": str(exe.parent)}).lower(),
+                         str(Path(shutil.which(exe.stem, path=str(exe.parent)))).lower())
+        self.assertEqual(cc.program(str(exe)), str(exe))
 
     def test_a_reported_problem_passes(self):
         self.assertIsNone(cc.run_check(self.py(REPORTS), expect_exit=1, expect_text="tests/a.rs: no such file"))

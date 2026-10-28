@@ -52,6 +52,7 @@ from __future__ import annotations
 import builtins
 import os
 import re
+import shutil
 import subprocess
 from typing import Callable, Optional, Sequence, Union
 
@@ -91,6 +92,18 @@ def weak_text(text: str) -> Optional[str]:
     return None
 
 
+def program(argv0: str, env=None) -> str:
+    """argv[0] as a shell finds it: a bare name is looked up on PATH (the env's when given). On Windows
+    CreateProcess searches its own and the system directories before PATH, so a bare `bash` would start
+    the WSL launcher rather than the bash on PATH (Git Bash in CI); a name with a directory is used as is"""
+    if os.path.dirname(argv0):
+        return argv0
+    found = shutil.which(argv0, path=(env if env is not None else os.environ).get("PATH"))
+    if found is None:
+        raise ValueError(f"{argv0!r} is not on PATH")
+    return found
+
+
 def run_check(
     argv: Sequence[str],
     *,
@@ -111,7 +124,7 @@ def run_check(
         if why:
             raise ValueError(f"expected text {t!r} {why}: it does not tell which problem was reported")
     r = subprocess.run(
-        list(argv), cwd=cwd, env=env, input=input, capture_output=True, text=True, encoding="utf-8", errors="replace"
+        [program(argv[0], env), *argv[1:]], cwd=cwd, env=env, input=input, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     out = r.stdout + r.stderr
     if PYTHON_CRASH in out:
