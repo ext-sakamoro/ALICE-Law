@@ -180,29 +180,29 @@ None.
 | 0.5.0 | `966a78784bb4e3341ac6627d519db896f398176b71c2402b188294db6c8e3728` |
 | 0.5.1 | `9f7cf676708a272e3817ebbf0727c610f391e1547747af4307ee44d5523267c2` |
 
-### Conformance manifests (status counts of the 14 gates in each repository's manifest at main)
+### Conformance manifests (status counts of the 15 gates in each repository's manifest at main)
 
-One row per repository: crates that share a repository share its one manifest at the root (the "read for" column), so each manifest is counted once; 17 manifests × 14 gates = 238 gate entries.
+One row per repository: crates that share a repository share its one manifest at the root (the "read for" column), so each manifest is counted once; 17 manifests × 15 gates = 255 gate entries.
 
 | repository | read for | pass | fail-known | unverified | n/a |
 |---|---|---|---|---|---|
-| ALICE-Analytics | alice-analytics | 12 | 0 | 0 | 2 |
-| ALICE-Channel | alice-channel | 11 | 0 | 0 | 3 |
-| ALICE-Crypto | alice-crypto | 11 | 0 | 0 | 3 |
-| ALICE-DB | alice-db | 14 | 0 | 0 | 0 |
-| ALICE-DetMath | alice-det-math | 12 | 0 | 0 | 2 |
-| ALICE-Edge | alice-edge | 14 | 0 | 0 | 0 |
-| ALICE-Font | alice-font | 12 | 2 | 0 | 0 |
-| ALICE-Identity | alice-identity | 11 | 0 | 0 | 3 |
-| ALICE-Kinematics | alice-kinematics | 13 | 1 | 0 | 0 |
-| ALICE-LLM | alice-llm | 14 | 0 | 0 | 0 |
-| ALICE-LOL | alice-lol, alice-lol-macro | 14 | 0 | 0 | 0 |
-| ALICE-ML | alice-ml | 14 | 0 | 0 | 0 |
-| ALICE-Physics | alice-physics | 13 | 1 | 0 | 0 |
-| ALICE-SDF | alice-sdf | 12 | 2 | 0 | 0 |
-| ALICE-Sign | alice-sign | 13 | 0 | 0 | 1 |
-| ALICE-Sync | alice-sync | 14 | 0 | 0 | 0 |
-| ALICE-Zip | alice-zip, alice-zip-cli | 14 | 0 | 0 | 0 |
+| ALICE-Analytics | alice-analytics | 12 | 0 | 1 | 2 |
+| ALICE-Channel | alice-channel | 11 | 0 | 1 | 3 |
+| ALICE-Crypto | alice-crypto | 11 | 0 | 1 | 3 |
+| ALICE-DB | alice-db | 14 | 0 | 1 | 0 |
+| ALICE-DetMath | alice-det-math | 12 | 0 | 1 | 2 |
+| ALICE-Edge | alice-edge | 14 | 0 | 1 | 0 |
+| ALICE-Font | alice-font | 12 | 2 | 1 | 0 |
+| ALICE-Identity | alice-identity | 11 | 0 | 1 | 3 |
+| ALICE-Kinematics | alice-kinematics | 13 | 1 | 1 | 0 |
+| ALICE-LLM | alice-llm | 14 | 0 | 1 | 0 |
+| ALICE-LOL | alice-lol, alice-lol-macro | 14 | 0 | 1 | 0 |
+| ALICE-ML | alice-ml | 14 | 0 | 1 | 0 |
+| ALICE-Physics | alice-physics | 13 | 1 | 1 | 0 |
+| ALICE-SDF | alice-sdf | 12 | 2 | 1 | 0 |
+| ALICE-Sign | alice-sign | 13 | 0 | 1 | 1 |
+| ALICE-Sync | alice-sync | 14 | 0 | 1 | 0 |
+| ALICE-Zip | alice-zip, alice-zip-cli | 14 | 0 | 1 | 0 |
 
 ### Crates whose manifest is not written yet
 

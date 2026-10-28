@@ -186,6 +186,62 @@ def roster_crates(roster: dict) -> dict[str, str]:
     return out
 
 
+# A new gate is phased in: its row carries `adoption = { since = <date>, until = <date> }`, and until the
+# end of that window a manifest without an entry for it reads as `unverified` (a note, counted in the
+# state), never as `pass`; after `until` the absent entry is a finding again, as for every other gate.
+# The window is at most ADOPTION_MAX_DAYS days, and CHANGELOG.md has a line naming the gate with both
+# dates, so moving either date (an extension) needs a new line naming the new dates.
+ADOPTION_MAX_DAYS = 45
+TODAY: datetime.date | None = None  # set by main from --today; None: today, UTC
+
+
+def today() -> datetime.date:
+    return TODAY or datetime.datetime.now(datetime.timezone.utc).date()
+
+
+def adoption_window(g: dict) -> tuple[datetime.date, datetime.date] | None:
+    a = g.get("adoption")
+    if a is None:
+        return None
+    try:
+        return datetime.date.fromisoformat(str(a["since"])), datetime.date.fromisoformat(str(a["until"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def adoption_findings(gates: dict, changelog: str | None) -> list[str]:
+    """what is wrong with the adoption windows of conformance/gates.toml"""
+    out = []
+    for g in gates.get("gate", []):
+        if "adoption" not in g:
+            continue
+        gid = g.get("id")
+        w = adoption_window(g)
+        if not isinstance(g["adoption"], dict) or w is None:
+            out.append(f"conformance/gates.toml: {gid} adoption needs `since` and `until` (ISO dates)")
+            continue
+        since, until = w
+        if until < since or (until - since).days > ADOPTION_MAX_DAYS:
+            out.append(f"conformance/gates.toml: {gid} adoption window {since}..{until} is "
+                       f"{(until - since).days} days (at most {ADOPTION_MAX_DAYS})")
+        if changelog is None:
+            out.append(f"{gid} adoption: CHANGELOG.md cannot be read to find the line naming its dates")
+        elif not any(gid in line and str(since) in line and str(until) in line for line in changelog.splitlines()):
+            out.append(f"CHANGELOG.md: no line names {gid} with its adoption dates {since} and {until} "
+                       f"(a new or moved window is recorded there)")
+    return out
+
+
+def gate_phase_in(gates: dict) -> dict[str, str]:
+    """the gates whose adoption window holds today: gate id -> the last day"""
+    out = {}
+    for g in gates.get("gate", []):
+        w = adoption_window(g)
+        if w and w[0] <= today() <= w[1] and (w[1] - w[0]).days <= ADOPTION_MAX_DAYS:
+            out[g["id"]] = str(w[1])
+    return out
+
+
 def gate_vocabulary(gates: dict) -> dict[str, tuple[str, ...]]:
     default = tuple(gates.get("status_vocabulary", STATUSES))
     out = {}
@@ -464,7 +520,8 @@ def strings_in(value, field: str):
 
 
 def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], paths: set[str],
-                   warnings: list[str], at: str = "main", read=None) -> tuple[list[str], dict[str, int], int]:
+                   warnings: list[str], at: str = "main", read=None,
+                   phase_in: dict[str, str] | None = None) -> tuple[list[str], dict[str, int], int]:
     """(findings, status counts, gates compared) for one crate's manifest text; `paths` are the files at `at`,
     `read(path)` their text (None: a G2 / G8 pass cannot be shown and reads as unverified)"""
     where = f"{crate}: {MANIFEST}"
@@ -476,11 +533,16 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
     ids = {k for k in manifest if GATE_ID_RE.match(k)}
     for k in sorted(k for k in manifest if GATE_LIKE_RE.match(k) and not GATE_ID_RE.match(k)):
         findings.append(f"{where}: {k!r} is not spelled as a gate id (G<n>, upper case, no leading zero)")
+    counts = dict.fromkeys(STATUSES, 0)
     for gid in sorted(set(vocab) - ids, key=lambda g: int(g[1:])):
-        findings.append(f"{where}: gate {gid} has no entry")
+        if gid in (phase_in or {}):
+            warnings.append(f"{where}: gate {gid} has no entry, read as unverified while it is phased in "
+                            f"(until {phase_in[gid]})")
+            counts["unverified"] += 1
+        else:
+            findings.append(f"{where}: gate {gid} has no entry")
     for gid in sorted(ids - set(vocab), key=lambda g: int(g[1:])):
         findings.append(f"{where}: {gid} is not a gate of conformance/gates.toml")
-    counts = dict.fromkeys(STATUSES, 0)
     compared = 0
     na_checked = na_downgraded = 0
     anchors: dict[str, int] = {}
@@ -647,7 +709,8 @@ def check_one(repo_dir: Path, ref: str, gates: dict, fetch=None) -> tuple[list[s
     if text is None:
         raise InputError(f"{repo_dir} at {ref}: no {MANIFEST}")
     notes: list[str] = []
-    findings, counts, compared = check_manifest(repo_name(repo_dir), text, vocab, paths, notes, at=ref, read=read)
+    findings, counts, compared = check_manifest(repo_name(repo_dir), text, vocab, paths, notes, at=ref, read=read,
+                                                phase_in=gate_phase_in(gates))
     return findings, notes, counts, compared, len(paths)
 
 
@@ -883,7 +946,8 @@ def apply_pending(states: dict[str, dict], table: dict[str, dict], pending: dict
         if text is None:
             findings.append(f"{repo}: pending entry {sha[:12]} has no {MANIFEST}")
             continue
-        f, counts, n = check_manifest(repo, text, vocab, paths, notes, read=rest[0] if rest else None)
+        f, counts, n = check_manifest(repo, text, vocab, paths, notes, read=rest[0] if rest else None,
+                                      phase_in=gate_phase_in(gates))
         if f or n == 0:
             findings += f or [f"{repo}: pending entry {sha[:12]}: no gate compared"]
             continue
@@ -950,7 +1014,7 @@ def check(roster: dict, gates: dict, missing: dict, fetch, texts: dict | None = 
                             f"(remove it)")
         read += 1
         if repo not in checked:  # one manifest per repository, checked once for every crate it is read for
-            f, counts, n = check_manifest(repo, text, vocab, paths, notes, read=reader)
+            f, counts, n = check_manifest(repo, text, vocab, paths, notes, read=reader, phase_in=gate_phase_in(gates))
             findings += f
             compared += n
             checked[repo] = not f
@@ -1040,6 +1104,19 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
                       help="check the manifest of the local clone DIR at --ref, before it lands")
     ap.add_argument("--ref", default="HEAD", help="the git ref --check-manifest reads (default HEAD)")
     a = ap.parse_args(argv)
+    global TODAY
+    TODAY = datetime.date.fromisoformat(a.today) if a.today else None
+    try:
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    except OSError:
+        changelog = None
+    try:
+        adoption = adoption_findings(load_toml(Path(a.gates)), changelog)
+    except (InputError, OSError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    for f in adoption:
+        print(f"found: {f}")
     if a.check_manifest:
         try:
             gates = load_toml(Path(a.gates))
@@ -1057,7 +1134,7 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
         shown = ", ".join(f"{s} {counts[s]}" for s in STATUSES) if not findings else "not counted"
         print(f"manifest check: {repo_name(Path(a.check_manifest))}@{a.ref}: {compared} gates compared against "
               f"{nfiles} files, {len(findings)} findings ({shown})")
-        return 1 if findings else 0
+        return 1 if findings or adoption else 0
     if a.internal:
         try:
             roster = load_toml(Path(a.roster))
@@ -1074,7 +1151,7 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
             print("error: the state file has no manifest entry (compared nothing)", file=sys.stderr)
             return 2
         print(f"conformance state (internal): {n} repositories, {len(findings)} findings")
-        return 1 if findings else 0
+        return 1 if findings or adoption else 0
     try:
         roster = load_toml(Path(a.roster))
         gates = load_toml(Path(a.gates))
@@ -1152,7 +1229,7 @@ def main(argv: list[str] | None = None, fetch=None, at=None, history=None) -> in
                         print(f"found: {findings[-1]}")
     print(f"conformance roster: {files} manifests read for {read} crates (crates that share a repository share "
           f"its manifest), {compared} gates compared, {len(findings)} findings")
-    return 1 if findings else 0
+    return 1 if findings or adoption else 0
 
 
 if __name__ == "__main__":

@@ -486,13 +486,20 @@ def measure(repo: Repo, banned: set[str], default_banned: set[str] = frozenset()
                    (f"; {len(uses)} uses in library sources ({scan}, cfg(test) included, audit; first {uses[0]})"
                     if uses else f"; none of the forms in library sources ({scan})")
 
-    # G12: CI runs ALICE-Law's public_text_check, named in a workflow or in a repository script a workflow
+    # G12 / G15: CI runs ALICE-Law's check, named in a workflow or in a repository script a workflow
     # step runs (one level: a script that calls another script is not followed)
-    if "public_text_check" in wf_text:
-        cells["G12"] = "public_text_check in CI"
-    else:
-        via = sorted(s for s in invoked_scripts(wf) if s in repo.files and "public_text_check" in repo.show(s))
-        cells["G12"] = f"public_text_check in CI, found via {', '.join(via)}" if via else "not found"
+    def law_check_in_ci(name: str) -> str:
+        if name in wf_text:
+            return f"{name} in CI"
+        via = sorted(s for s in invoked_scripts(wf) if s in repo.files and name in repo.show(s))
+        return f"{name} in CI, found via {', '.join(via)}" if via else "not found"
+
+    cells["G12"] = law_check_in_ci("public_text_check")
+    # G15: the check in CI, and how many crate manifests declare [package.metadata.alice] surfaces
+    manifests = [f for f in repo.files if f == "Cargo.toml" or f.endswith("/Cargo.toml")]
+    declared = [f for f in manifests
+                if re.search(r"^\[package\.metadata\.alice\][^\[]*?^surfaces\s*=", repo.show(f), re.M | re.S)]
+    cells["G15"] = law_check_in_ci("surface_claims_check") + f"; surfaces declared in {len(declared)} of {len(manifests)} manifests"
 
     # G14: flags that change float semantics, and the tests that assert the environment
     flag_re = re.compile(r"target-cpu=native|fast-math")

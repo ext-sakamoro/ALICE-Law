@@ -530,10 +530,33 @@ to zero — rather than relying on nobody having set the flag.
 
 **Checked by.** machine
 
+### G15 — surface-claims
+
+A crate says which surfaces it can be used from: Rust, a web page
+(wasm-bindgen), a wasm32-wasip1 runtime (not a browser), the C ABI, Python,
+Unity, Unreal. What it says is checked against what it has and what CI builds:
+a binding nobody builds, a README that names a surface the crate does not
+have, and a surface the crate has but does not say are each a finding. Prose
+that mentions a surface is not read (measured 2026-10-28: about two thirds of
+such sentences were not claims), only the declaration and the README's
+surface table.
+
+**Claim.** The crate's Cargo.toml declares `[package.metadata.alice] surfaces` from the vocabulary `rust`, `browser`, `wasi`, `c`, `python`, `unity`, `unreal`; the declaration equals the surfaces found (`src/lib.rs`; `#[wasm_bindgen]`; `extern "C"` with `no_mangle`; PyO3 attributes; a C# `DllImport` of the crate's library; an Unreal `Build.cs` naming it or a C++ header under a `ue4` / `ue5` / `unreal` directory declaring `extern "C"`; a `wasm32-wasip1` build in a workflow that runs on push), comments and `#[cfg(test)]` items excepted; the table between `<!-- surfaces -->` and `<!-- /surfaces -->` in README.md (and README_JP.md) lists exactly the declared surfaces; every declared `browser`, `wasi`, `c` and `python` surface is built by a step of a workflow that runs on push (`continue-on-error` steps do not count), and `browser` and `python` also run what was built; `unity` and `unreal`, which no CI runner can build, need a `c` surface in the repository, built. The crate's CI runs ALICE-Law's `scripts/surface_claims_check.py` (fetched at a named revision, or a byte-identical copy), which exits 2 when it compared nothing.
+
+**Evidence for `pass`.** the CI step that runs the script and the Law revision or hash; a run's output with the number of comparisons.
+
+**Mutant** (turns the evidence red). add a row to the README surface table; add a `#[wasm_bindgen]` item without declaring `browser`; delete the workflow step that builds a declared surface.
+
+**Look at.** the script's hash against ALICE-Law's at the named revision; the declaration against the README table.
+
+**Checked by.** machine
+
+While a repository adopts the gate, `scripts/surface_claims_check.py --baseline conformance/surface-claims-baseline.toml --name <repository>` compares its finding counts by kind with the generated baseline (`--write-baseline`): a count above its row is a finding, below its row a stale row; the baseline only goes down. The baseline was written from the release-train repositories' main on 2026-10-28.
+
 ## Manifest
 
 Each crate's own manifest (`alice-law-conformance.toml` at its repository
-root) has one entry per gate, with these fields:
+root) has one entry per gate, with these fields (a gate being phased in, below, may be absent until its window ends):
 
 | field | meaning |
 |---|---|
@@ -756,6 +779,18 @@ G8 required a value read back later to be compared against the identifier record
 written; for a file read back by another release the two disagreed. G7 now covers boundaries within
 one exchange, and a durable form read back later is G8's, whose reader accepts its own identifier or a
 verified earlier one (`check_semantics`).
+
+
+### A gate being phased in
+
+A new gate's row in `conformance/gates.toml` may carry `adoption = { since = <date>, until = <date> }`.
+From `since` to `until` a manifest without an entry for that gate reads as `unverified` (a note, and
+counted as `unverified` in `conformance/manifest-state.toml` and the tables generated from it), never as
+`pass`; a manifest may carry the entry as soon as the row exists; after `until` an absent entry is a
+finding, as for every other gate. The window is at most 45 days, and `CHANGELOG.md` has a line naming the
+gate with both dates, so moving either date (an extension) needs a new line naming the new dates;
+`scripts/conformance_roster_check.py` fails on a window without `until`, a window over 45 days, and a
+window with no such line.
 
 ## Definition changes (2026-10-17)
 

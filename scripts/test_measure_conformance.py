@@ -242,6 +242,16 @@ class Measure(unittest.TestCase):
                                   "scripts/public_text.sh": script, "src/lib.rs": ""})
         self.assertEqual("not found", only_a_path["G12"])
 
+    def test_g15_finds_the_surface_check_and_counts_the_declarations(self):
+        cargo = '[package]\nname = "x"\n\n[package.metadata.alice]\nsurfaces = ["rust"]\n'
+        c = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n"
+                        "      - run: python3 law/scripts/surface_claims_check.py --repo .\n",
+                        "Cargo.toml": cargo, "sub/Cargo.toml": '[package]\nname = "y"\n', "src/lib.rs": ""})
+        self.assertEqual("surface_claims_check in CI; surfaces declared in 1 of 2 manifests", c["G15"])
+        none = self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n      - run: cargo test\n",
+                           "Cargo.toml": '[package]\nname = "x"\n[package.metadata.other]\nsurfaces = 1\n', "src/lib.rs": ""})
+        self.assertEqual("not found; surfaces declared in 0 of 1 manifests", none["G15"])
+
     def test_g5_needs_the_release_flag_on_a_test_command(self):
         def g5(run):
             return self.cells({".github/workflows/ci.yml": "jobs:\n  t:\n    runs-on: macos-latest\n"
