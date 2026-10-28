@@ -930,7 +930,14 @@ fn a_release_is_built_with_the_row_it_started_at() {
     assert_eq!(at("0.5.1"), Some("0.5.1"));
     assert_eq!(at("0.5.2"), Some("0.5.1"));
     assert_eq!(at("0.5.10"), Some("0.5.1"));
-    assert_eq!(at("0.6.0"), Some(KNOWN_SEMANTICS.last().unwrap().0));
+    // every row's release is built with its own row, and a release past the last row with the last one
+    // (independent of how many rows follow: appending a row keeps every line true)
+    for (version, _) in KNOWN_SEMANTICS {
+        assert_eq!(at(version), Some(*version), "{version} is built with its own row");
+    }
+    let (last, _) = KNOWN_SEMANTICS.last().unwrap();
+    let (major, minor, patch) = release(last);
+    assert_eq!(at(&format!("{major}.{minor}.{}", patch + 1)), Some(*last));
     assert_eq!(at("0.4.9"), None);
     for pair in KNOWN_SEMANTICS.windows(2) {
         assert!(release(pair[0].0) < release(pair[1].0), "{} before {}", pair[0].0, pair[1].0);
