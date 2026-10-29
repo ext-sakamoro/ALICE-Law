@@ -160,6 +160,14 @@ jobs:
       - name: Test the surface-claims check (G15) and its baseline
         run: python3 scripts/test_surface_claims_check.py
 
+      # every file under conformance/ is read by a checker that runs on a ci/ branch (a conformance file whose
+      # readers run on main only is red); the crates' reader is tested here, it runs in crates-conformance-ci.yml
+      - name: Every conformance file has a reader on ci/** (tests, then the check)
+        run: |
+          python3 scripts/test_conformance_reader_map.py
+          python3 scripts/conformance_reader_map.py
+          python3 scripts/test_crates_conformance_ci.py
+
       # the publish gate runs cargo semver-checks; its tests run the real tool on two
       # small crates (a breaking change under a minor version must be refused). The
       # release binary is pinned by version and SHA-256, and the toolchain is the one

@@ -1,0 +1,50 @@
+# The crates' G11 tables and G15 counts on a ci/ branch that changes the catalog or the baseline
+#
+# Conformance (live) reads the crates on main only; a ci/ change to conformance/g11-shared-rows.toml or to
+# conformance/surface-claims-baseline.toml (or to their readers) would otherwise reach main before anything read
+# the crates with it. scripts/crates_conformance_ci.py reads each crate at its default branch (a shallow clone of
+# its public repository) and runs the generator and the G15 check with this branch's files; each step fails when it
+# checked no repository.
+
+name: Crates conformance (ci)
+
+on:
+  push:
+    branches: ["ci/**"]
+    paths:
+      - "conformance/g11-shared-rows.toml"
+      - "conformance/surface-claims-baseline.toml"
+      - "scripts/g11_table_gen.py"
+      - "scripts/g11_table_check.py"
+      - "scripts/surface_claims_check.py"
+      - "scripts/crates_conformance_ci.py"
+      - "scripts/test_crates_conformance_ci.py"
+      - ".github/workflows/crates-conformance-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-conformance-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  crates:
+    name: Every crate's G11 table and G15 counts with this branch's catalog and baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Test the reader
+        run: python3 scripts/test_crates_conformance_ci.py
+
+      - name: Every crate's G11 table with this branch's catalog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/crates_conformance_ci.py g11
+
+      - name: Every listed repository against the G15 baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/crates_conformance_ci.py g15
