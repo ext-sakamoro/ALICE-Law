@@ -8,6 +8,11 @@
 #
 # Weekly and on demand, and on a push that changes the check itself. It does not run
 # on pushes to the core crates; a new release is picked up by the next weekly run.
+#
+# The ratchets below compare this tree's conformance/ files with the same files at the base
+# scripts/ci_base.py names: on a push to main the commit main stood at before the push (every
+# commit of the push is judged), on a ci/ branch the merge-base with main. A weekly or dispatched
+# run on main compares main with its parent commit only (HEAD~1).
 
 name: Dependency consistency
 
@@ -46,6 +51,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0  # the ratchets' base (scripts/ci_base.py) is read from the history
 
       - name: Test the checker
         run: python3 scripts/test_dep_consistency.py
@@ -88,29 +95,46 @@ jobs:
 
       # the line-number reference baseline only goes down (each manifest holds exactly its count; the roster's
       # comparison with every main is conformance-live.yml)
-      - name: The line-number reference baseline does not rise (tests, then check against main)
+      - name: The ratchets' base (scripts/ci_base.py, shared; tests, then every read of conformance/ uses it)
+        run: |
+          python3 scripts/test_ci_base.py
+          python3 scripts/test_ratchet_base_check.py
+          python3 scripts/ratchet_base_check.py
+
+      - name: The line-number reference baseline does not rise (tests, then check against the base)
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
         run: |
           python3 scripts/test_line_refs_ratchet.py
           python3 scripts/test_line_refs_propose.py
-          git fetch -q --depth 1 origin main
-          base="$RUNNER_TEMP/base-line-refs-baseline.toml"
-          if git cat-file -e FETCH_HEAD:conformance/line-refs-baseline.toml 2>/dev/null; then
-            git show FETCH_HEAD:conformance/line-refs-baseline.toml > "$base"
+          git fetch -q origin main
+          base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$REF" --before "$BEFORE")
+          line_base="$RUNNER_TEMP/base-line-refs-baseline.toml"
+          if git cat-file -e "$base":conformance/line-refs-baseline.toml 2>/dev/null; then
+            git show "$base":conformance/line-refs-baseline.toml > "$line_base"
           else
-            rm -f "$base"
+            echo "the base $base has no conformance/line-refs-baseline.toml: no ratchet base"
+            rm -f "$line_base"
           fi
-          python3 scripts/line_refs_ratchet.py --baseline conformance/line-refs-baseline.toml --base "$base"
+          python3 scripts/line_refs_ratchet.py --baseline conformance/line-refs-baseline.toml --base "$line_base"
 
-      # pending rows only go down: a change may not add one against the table on main
+      # pending rows only go down: a change may not add one against the table at the base
       - name: The shared-file table reads, this repository's copies equal it, pending does not rise
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
         run: |
-          git fetch -q --depth 1 origin main
-          if git cat-file -e FETCH_HEAD:conformance/shared-files.toml 2>/dev/null; then
-            git show FETCH_HEAD:conformance/shared-files.toml > "$RUNNER_TEMP/base-shared-files.toml"
+          git fetch -q origin main
+          base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$REF" --before "$BEFORE")
+          if git cat-file -e "$base":conformance/shared-files.toml 2>/dev/null; then
+            git show "$base":conformance/shared-files.toml > "$RUNNER_TEMP/base-shared-files.toml"
             python3 scripts/shared_files_check.py --table conformance/shared-files.toml \
               --base-table "$RUNNER_TEMP/base-shared-files.toml" --lock-file .github/workflows/conformance-live.yml
           else
-            echo "main has no conformance/shared-files.toml yet: no ratchet base"
+            echo "the base $base has no conformance/shared-files.toml: no ratchet base"
             python3 scripts/shared_files_check.py --table conformance/shared-files.toml --lock-file .github/workflows/conformance-live.yml
           fi
           python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law

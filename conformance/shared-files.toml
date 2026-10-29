@@ -108,8 +108,8 @@ repos = ["ALICE-DB", "ALICE-Edge"]
 
 [[file]]
 path = "scripts/ci_base.py"
-pending = { since = "2026-10-29", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "79245d26227b2a4aee9492bd0cfa1f27b4c8433f9a54edacaff526c9a927df69", owner = "ALICE-DetMath", planned = "dc261b85e684256b290953bccc4a903d2b54ff92", moved_from = { planned = "b42e4359060742b2dff112b893e54409b76dfb2f", target = "edb7558fe4924057dcb6210b904ba329e03735fb23b83bd91f6da33e766aa6c7" }, first_move = true, variants = { "edb7558fe4924057dcb6210b904ba329e03735fb23b83bd91f6da33e766aa6c7" = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"] } }
-repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"]
+pending = { since = "2026-10-29", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "79245d26227b2a4aee9492bd0cfa1f27b4c8433f9a54edacaff526c9a927df69", owner = "ALICE-DetMath", planned = "dc261b85e684256b290953bccc4a903d2b54ff92", moved_from = { planned = "b42e4359060742b2dff112b893e54409b76dfb2f", target = "edb7558fe4924057dcb6210b904ba329e03735fb23b83bd91f6da33e766aa6c7" }, first_move = true, variants = { "79245d26227b2a4aee9492bd0cfa1f27b4c8433f9a54edacaff526c9a927df69" = ["ALICE-Law"], "edb7558fe4924057dcb6210b904ba329e03735fb23b83bd91f6da33e766aa6c7" = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"] } }
+repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/ci_test_coverage_check.py"
@@ -323,8 +323,8 @@ repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Ph
 
 [[file]]
 path = "scripts/test_ci_base.py"
-pending = { since = "2026-10-29", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "1f64d968b3914b25fa2a05a833fc2a2ed9dd090e153852ffe6e357747f13252b", owner = "ALICE-DetMath", planned = "69bc05aac67fe64906e215cbe68cd331fbe3d630", moved_from = { planned = "cf7e4cb746771df3e2c1efe4b9bd4892aae004f5", target = "17445fda1735ac22e3c0685b9ac0ff670987c78288fdd3aca3ca97f7b0ca0cf5" }, first_move = true, variants = { "17445fda1735ac22e3c0685b9ac0ff670987c78288fdd3aca3ca97f7b0ca0cf5" = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"] } }
-repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"]
+pending = { since = "2026-10-29", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "1f64d968b3914b25fa2a05a833fc2a2ed9dd090e153852ffe6e357747f13252b", owner = "ALICE-DetMath", planned = "69bc05aac67fe64906e215cbe68cd331fbe3d630", moved_from = { planned = "cf7e4cb746771df3e2c1efe4b9bd4892aae004f5", target = "17445fda1735ac22e3c0685b9ac0ff670987c78288fdd3aca3ca97f7b0ca0cf5" }, first_move = true, variants = { "1f64d968b3914b25fa2a05a833fc2a2ed9dd090e153852ffe6e357747f13252b" = ["ALICE-Law"], "17445fda1735ac22e3c0685b9ac0ff670987c78288fdd3aca3ca97f7b0ca0cf5" = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"] } }
+repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/test_ci_test_coverage_check.py"
