@@ -108,7 +108,8 @@ repos = ["ALICE-DB", "ALICE-Edge"]
 
 [[file]]
 path = "scripts/ci_base.py"
-pending = { since = "2026-10-28", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "edb7558fe4924057dcb6210b904ba329e03735fb23b83bd91f6da33e766aa6c7", owner = "ALICE-DetMath", planned = "b42e4359060742b2dff112b893e54409b76dfb2f", variants = { "absent" = ["ALICE-DB"], "edb7558fe4924057dcb6210b904ba329e03735fb23b83bd91f6da33e766aa6c7" = ["ALICE-DetMath", "ALICE-Physics"] } }
+sha256 = "edb7558fe4924057dcb6210b904ba329e03735fb23b83bd91f6da33e766aa6c7"
+source = { repo = "ALICE-DB", rev = "8e315102014111c364435cd3b1ab8ac6cc9cb70a" }
 repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"]
 
 [[file]]
@@ -323,7 +324,8 @@ repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Ph
 
 [[file]]
 path = "scripts/test_ci_base.py"
-pending = { since = "2026-10-28", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "17445fda1735ac22e3c0685b9ac0ff670987c78288fdd3aca3ca97f7b0ca0cf5", owner = "ALICE-DetMath", planned = "cf7e4cb746771df3e2c1efe4b9bd4892aae004f5", variants = { "17445fda1735ac22e3c0685b9ac0ff670987c78288fdd3aca3ca97f7b0ca0cf5" = ["ALICE-DetMath", "ALICE-Physics"], "absent" = ["ALICE-DB"] } }
+sha256 = "17445fda1735ac22e3c0685b9ac0ff670987c78288fdd3aca3ca97f7b0ca0cf5"
+source = { repo = "ALICE-DB", rev = "8e315102014111c364435cd3b1ab8ac6cc9cb70a" }
 repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"]
 
 [[file]]
