@@ -17,6 +17,8 @@ on:
       - "scripts/shared_files_check.py"
       - "scripts/test_gen_shared_files.py"
       - "scripts/test_shared_files_check.py"
+      - "scripts/holder_mode_check.py"
+      - "scripts/test_holder_mode_check.py"
       - ".github/workflows/shared-files-table.yml"
 
 permissions:
@@ -38,6 +40,7 @@ jobs:
         run: |
           python3 scripts/test_shared_files_check.py
           python3 scripts/test_gen_shared_files.py
+          python3 scripts/test_holder_mode_check.py
 
       - name: The table is the generated one
         run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
@@ -46,3 +49,9 @@ jobs:
         run: |
           n=$(python3 -c "import sys; sys.path.insert(0, 'scripts'); import shared_files_check as s; print(s.lock_in(open('.github/workflows/conformance-live.yml', encoding='utf-8').read(), 'conformance-live.yml'))")
           python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies "$n"
+
+      # a holder runs the checker from a temporary directory holding only the table and the checker, in crate mode:
+      # its own scripts/shared_files.sh, pinned to this commit (2026-10-30: a rule that needed planned/ was green here
+      # and red in every crate)
+      - name: A holder's own check passes against this commit
+        run: python3 scripts/holder_mode_check.py --holder ALICE-Analytics

@@ -49,6 +49,7 @@ python3 scripts/test_surface_claims_check.py
 python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py
 python3 scripts/test_shared_files_strict.py
+python3 scripts/test_holder_mode_check.py
 python3 scripts/test_conformance_live_workflow.py
 python3 scripts/test_conformance_reader_map.py
 python3 scripts/conformance_reader_map.py
@@ -86,6 +87,9 @@ echo "== the shared-file table against every listed main (other bytes, a missing
 # conformance-live.yml on every push to main)"
 python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live
 python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
+
+echo "== a holder's own shared-file check (its scripts/shared_files.sh, the table and checker of this commit)"
+python3 scripts/holder_mode_check.py --holder ALICE-Analytics
 
 echo "== README names every release-train repository"
 python3 scripts/readme_roster_check.py

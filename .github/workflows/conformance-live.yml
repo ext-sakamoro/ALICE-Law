@@ -153,6 +153,9 @@ jobs:
       - name: The table is the generated one
         run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
 
+      - name: A holder's own check passes against this commit
+        run: python3 scripts/holder_mode_check.py --holder ALICE-Analytics
+
       # the landing gate on every push to main (it also runs right before the push, and this is the backstop for a
       # push made without it): a rollout or a crate's gate landing elsewhere meanwhile is a note there
       - name: Strict on a push to main (scripts/shared_files_strict.sh)

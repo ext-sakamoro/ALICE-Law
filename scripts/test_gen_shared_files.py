@@ -83,6 +83,7 @@ class Generate(Base):
         # a file no main holds yet, moving into every listed repository: planned from the start (the registry's
         # next= and --target name its bytes and owner), so the rollout is explicit and the ratchet allows it
         v = b"#!/bin/sh\n# new shared file\n"
+        self.known = self.known + (v,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         base = Path(self.tmp.name) / "base.toml"
         base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
@@ -100,12 +101,14 @@ class Generate(Base):
         # regenerating before the owner lands keeps the plan (from the table, as CI does)
         self.assertEqual(self.gen("--check", "--next-from", str(reg))[0], 0)
         self.assertEqual(self.gen("--check")[0], 0)
-        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 0, out)
-        # live: the bytes must be real, on the owner's ci/ branch until its main holds them
-        self.assertEqual(run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])[0], 1)
+        # live: the bytes must be real, carried next to the table (the owner's ci/ branch does not count)
+        self.carry = False
         self.w.ci("ALICE-A", "n-v1", {"scripts/n.sh": v})
-        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])
+        self.assertEqual(self.check("--live", "--today", TODAY)[0], 1)
+        self.carry = True
+        code, out = self.check("--live", "--today", TODAY)
         self.assertEqual(code, 0, out)
         # the owner lands: still planned; every main has the file: uniform
         self.w.commit("ALICE-A", {"scripts/n.sh": v})
@@ -156,10 +159,31 @@ class Generate(Base):
         self.gen("--write")
         self.assertEqual(self.entries()["scripts/s.sh"]["sha256"], h(new))
 
+    def test_a_converged_row_s_planned_copy_is_removed_and_a_file_no_row_planned_is_kept(self):
+        # every planned row carries planned/<blob>; when --write regenerates the row to uniform its copy goes too, but a
+        # file the table never planned is not the generator's to remove (the check reports it as a stray file)
+        new = SHARED + b"# v2\n"
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(new)}\n")
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        self.w.commit("ALICE-B", {"scripts/s.sh": new})
+        self.assertEqual(self.gen("--write", "--next-from", str(reg), "--target", f"scripts/s.sh={h(new)}@ALICE-B")[0], 0)
+        d = self.t.parent / sfc.PLANNED_DIR
+        d.mkdir(exist_ok=True)
+        (d / sfc.git_blob(new)).write_bytes(new)
+        (d / ("0" * 40)).write_bytes(b"planted\n")
+        self.w.commit("ALICE-A", {"scripts/s.sh": new})
+        code, out = self.gen("--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.entries()["scripts/s.sh"]["sha256"], h(new))
+        self.assertFalse((d / sfc.git_blob(new)).exists(), "the converged row's copy is removed")
+        self.assertIn(f"removed {sfc.PLANNED_DIR}/{sfc.git_blob(new)}", out)
+        self.assertTrue((d / ("0" * 40)).exists(), "a file no row planned is kept")
+
     def test_a_uniform_row_is_planned_to_bytes_no_main_holds_with_their_sha256(self):
         # without a planned row no copy could take the new bytes (each repository's own check refuses a copy the
         # table does not record), so the first move of a uniform row is planned from the table, with --target
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         base = Path(self.tmp.name) / "base.toml"
         base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
@@ -171,16 +195,19 @@ class Generate(Base):
                          (sfc.git_blob(v2), h(v2), "ALICE-A", TODAY, gen.EXIT_NEXT))
         self.assertEqual(p["moved_from"], {"planned": sfc.git_blob(SHARED), "target": h(SHARED)})
         # a planned row, explained by the base's uniform bytes: the ratchet holds, live passes, the table is current
-        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 0, out)
         self.assertIn("pending 1 (planned 1, unplanned 0), the base table 0 (planned 0, unplanned 0)", out)
-        # the planned bytes must exist: on no branch of the owner yet, live is red
-        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])
-        self.assertEqual(code, 1, out)
-        self.assertIn("on the tip of neither its main nor a ci/ branch", out)
-        # the owner's ci/ branch holds them: live passes
+        # the planned bytes must exist next to the table: without planned/<blob> live is red, even when the owner's ci/
+        # branch holds them (a ref that may move)
+        self.carry = False
         self.w.ci("ALICE-A", "s-v2", {"scripts/s.sh": v2})
-        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])
+        code, out = self.check("--live", "--today", TODAY)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"there is no {sfc.PLANNED_DIR}/{sfc.git_blob(v2)} with the planned bytes", out)
+        # the table carries them: live passes
+        self.carry = True
+        code, out = self.check("--live", "--today", TODAY)
         self.assertEqual(code, 0, out)
         self.assertIn("moving to", out)
         self.assertEqual(self.gen("--check", "--strict", "--next-from", str(reg))[0], 0)
@@ -194,6 +221,7 @@ class Generate(Base):
 
     def test_a_first_move_needs_its_target_and_a_listed_owner(self):
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v2)}\n")
         # plan-first: a next= the table does not plan, without --target, is a registry that drifted from the table:
@@ -225,7 +253,7 @@ class Generate(Base):
         p = self.entries()["scripts/s.sh"]["pending"]
         self.assertEqual((p["planned"], p["target"], p["since"], p["first_move"], p["moved_from"]),
                          (sfc.git_blob(v3), h(v3), TODAY, True, first["moved_from"]))
-        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 0, out)
         # without --target the bytes of the new plan are not known: refused, the table unchanged
         before = self.t.read_text(encoding="utf-8")
@@ -290,6 +318,7 @@ class Generate(Base):
 
     def test_build_refuses_an_unlanded_first_move_re_rolled_without_its_bytes(self):
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v2)}\n")
         self.assertEqual(self.gen("--write", "--next-from", str(reg), "--target", f"scripts/s.sh={h(v2)}@ALICE-A")[0], 0)
@@ -300,6 +329,7 @@ class Generate(Base):
     def test_a_registry_next_left_behind_after_its_move_converged_is_refused(self):
         # every main holds the next= bytes and the table is uniform at them: the registry kept a finished move
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.w.commit("ALICE-A", {"scripts/s.sh": v2})
         self.w.commit("ALICE-B", {"scripts/s.sh": v2})
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
@@ -311,6 +341,7 @@ class Generate(Base):
 
     def test_the_drift_check_names_every_drifted_row_at_once(self):
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v2)}\n"
                             f"scripts/t.sh\tALICE-A,ALICE-B\tpending\tnext={'4' * 40}\n")
@@ -323,6 +354,7 @@ class Generate(Base):
     def test_add_row_plans_a_new_path_without_a_full_registry(self):
         # the table's rows stay, one row is added: a new file only its owner holds is born planned (plan-first)
         v = b"#!/bin/sh\n# new shared file\n"
+        self.known = self.known + (v,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         self.w.commit("ALICE-A", {"scripts/n.sh": v})
         reg = self.registry(f"scripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
@@ -362,6 +394,7 @@ class Generate(Base):
 
     def test_a_new_path_is_re_rolled_before_it_lands_on_its_first_date(self):
         v, v2 = b"#!/bin/sh\n# new shared file\n", b"#!/bin/sh\n# new shared file, v2\n"
+        self.known = self.known + (v, v2)  # check() carries their planned/<blob>
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
         code, out = self.gen("--write", "--registry", str(reg), "--next-from", str(reg),
                              "--target", f"scripts/n.sh={h(v)}@ALICE-A")
@@ -376,13 +409,14 @@ class Generate(Base):
         self.assertEqual((p["planned"], p["target"], p["since"], p["variants"]),
                          (sfc.git_blob(v2), h(v2), TODAY, {"absent": ["ALICE-A", "ALICE-B"]}))
         self.assertNotIn("moved_from", p)
-        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 0, out)
 
     def test_an_owner_reverting_its_main_does_not_restart_the_clock(self):
         # the owner lands the planned bytes, then goes back to the bytes every main had: the copies agree again, but
         # the row stays planned on its first date (it leaves the table only at its target), so it ages out
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v2)}\n")
         self.gen("--write", "--next-from", str(reg), "--target", f"scripts/s.sh={h(v2)}@ALICE-A")
@@ -395,18 +429,19 @@ class Generate(Base):
         self.assertEqual(code, 0, out)
         p = self.entries()["scripts/s.sh"]["pending"]
         self.assertEqual((p["planned"], p["since"]), (sfc.git_blob(v2), TODAY))
-        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", "2026-11-01"])
+        code, out = self.check("--live", "--today", "2026-11-01")
         self.assertEqual(code, 1, out)
         # closing the row by hand (uniform at the bytes the mains hold again) is refused against the base
         self.t.write_text(gen.render([{"path": "scripts/s.sh", "sha256": h(SHARED),
                                        "source": {"repo": "ALICE-A", "rev": self.w.revs["ALICE-A"]},
                                        "repos": ["ALICE-A", "ALICE-B"], "paths": {}, "exempt": {}}]), encoding="utf-8")
-        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 1, out)
         self.assertIn("leaves the table only at its target", out)
 
     def test_a_moved_from_that_is_not_the_base_s_uniform_bytes_is_refused(self):
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         base = Path(self.tmp.name) / "base.toml"
         base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
@@ -414,7 +449,7 @@ class Generate(Base):
         self.gen("--write", "--next-from", str(reg), "--target", f"scripts/s.sh={h(v2)}@ALICE-A")
         text = self.t.read_text(encoding="utf-8").replace(h(SHARED), "e" * 64)
         self.t.write_text(text, encoding="utf-8")
-        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 1, out)
         self.assertIn("moved_from names", out)
 
@@ -433,13 +468,14 @@ class Generate(Base):
         p = self.entries()["scripts/s.sh"]["pending"]
         self.assertEqual((p["planned"], p["since"]), (sfc.git_blob(v3), TODAY))
         # and so it ages out on the original clock (15 days after it became planned)
-        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", "2026-11-01"])
+        code, out = self.check("--live", "--today", "2026-11-01")
         self.assertEqual(code, 1, out)
         self.assertIn("more than 14 days", out)
 
     def landed_v2(self):
         """A and B have landed v2 of a planned row, ALICE-C does not carry the file yet"""
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.w.commit("ALICE-C", {"scripts/s.sh": None})
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\tpending\tnext={sfc.git_blob(v2)}\n")
         self.w.commit("ALICE-A", {"scripts/s.sh": v2})
@@ -462,11 +498,11 @@ class Generate(Base):
         self.assertEqual((p["planned"], p["target"], p["owner"], p["since"]), (sfc.git_blob(v3), h(v3), "ALICE-A", TODAY))
         self.assertEqual(p["moved_from"], {"planned": sfc.git_blob(v2), "target": h(v2)})
         # the move is a planned row: the ratchet is unchanged, and the base explains moved_from
-        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 0, out)
         self.assertIn("pending 1 (planned 1, unplanned 0), the base table 1 (planned 1, unplanned 0)", out)
         # the mains still hold v2 (the owner too): live passes, and the table regenerates as it is
-        code, out = run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])
+        code, out = self.check("--live", "--today", TODAY)
         self.assertEqual(code, 0, out)
         self.assertEqual(self.gen("--check", "--strict")[0], 0)
         # the owner lands v3: still moving (B has v2), then every holder has v3 and it is uniform
@@ -474,7 +510,7 @@ class Generate(Base):
         self.assertEqual(self.gen("--write")[0], 0)
         p = self.entries()["scripts/s.sh"]["pending"]
         self.assertEqual((p["planned"], p["moved_from"]["target"]), (sfc.git_blob(v3), h(v2)))
-        self.assertEqual(run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])[0], 0)
+        self.assertEqual(self.check("--live", "--today", TODAY)[0], 0)
         self.w.commit("ALICE-B", {"scripts/s.sh": v3})
         self.assertEqual(self.gen("--write")[0], 0)
         p = self.entries()["scripts/s.sh"]["pending"]
@@ -500,9 +536,9 @@ class Generate(Base):
         self.assertEqual((p["planned"], p["moved_from"]), (sfc.git_blob(v4), {"planned": sfc.git_blob(v2),
                                                                              "target": h(v2)}))
         # and the branch check against the v3 table accepts it (the base was itself moving from v2)
-        code, out = run(sfc.main, ["--table", str(self.t), "--base-table", str(base)])
+        code, out = self.check("--base-table", str(base))
         self.assertEqual(code, 0, out)
-        self.assertEqual(run(sfc.main, ["--table", str(self.t), "--live", "--today", TODAY])[0], 0)
+        self.assertEqual(self.check("--live", "--today", TODAY)[0], 0)
 
     def test_a_re_roll_to_an_owner_outside_the_row_is_refused(self):
         self.landed_v2()
@@ -560,6 +596,7 @@ class Generate(Base):
         # a new file recorded all absent, then a non-owner lands other bytes: the rows built would not load under the
         # schema (the owner holds neither the target nor "absent"), and that is a refusal with a message, not a crash
         v = b"#!/bin/sh\n# new shared file\n"
+        self.known = self.known + (v,)  # check() carries their planned/<blob>
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
         code, out = self.gen("--write", "--registry", str(reg), "--next-from", str(reg),
                              "--target", f"scripts/n.sh={h(v)}@ALICE-A")
@@ -574,6 +611,7 @@ class Generate(Base):
 
     def test_a_new_path_s_owner_must_be_listed(self):
         v = b"#!/bin/sh\n# new shared file\n"
+        self.known = self.known + (v,)  # check() carries their planned/<blob>
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\nscripts/n.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v)}\n")
         code, out = self.gen("--write", "--registry", str(reg), "--next-from", str(reg),
                              "--target", f"scripts/n.sh={h(v)}@ALICE-C")
@@ -638,6 +676,7 @@ class Generate(Base):
     def first_move_landed(self) -> bytes:
         """s.sh planned to v2 as a first move by ALICE-A, then ALICE-A lands v2; the table is not regenerated"""
         v2 = SHARED + b"# v2\n"
+        self.known = self.known + (v2,)  # check() carries their planned/<blob>
         self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
         reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v2)}\n")
         self.assertEqual(self.gen("--write", "--next-from", str(reg), "--target", f"scripts/s.sh={h(v2)}@ALICE-A")[0], 0)
@@ -784,7 +823,7 @@ class Generate(Base):
         self.assertEqual(self.gen("--check", "--strict", "--lock-file", str(lock))[0], 1)
         self.assertEqual(self.gen("--write")[0], 0)
         self.assertEqual(self.gen("--check", "--strict", "--lock-file", str(lock))[0], 1)
-        self.assertEqual(run(sfc.main, ["--table", str(self.t), "--lock-file", str(lock)])[0], 1)
+        self.assertEqual(self.check("--lock-file", str(lock))[0], 1)
         self.assertEqual(self.gen("--write", "--lock-file", str(lock))[0], 0)
         self.assertIn("--expect-copies 5", lock.read_text(encoding="utf-8"))
         self.assertEqual(self.gen("--check", "--strict", "--lock-file", str(lock))[0], 0)
