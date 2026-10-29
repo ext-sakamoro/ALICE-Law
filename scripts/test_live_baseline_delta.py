@@ -69,6 +69,14 @@ class Delta(unittest.TestCase):
             os.chdir(cwd)
         return code, buf.getvalue()
 
+    def test_the_base_is_named_by_the_caller(self):
+        # no default ref: main's tip is not the base of a change that forked from an earlier main
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+            d.main(["--checker", str(self.d / "fake.py"), "--baseline", "baseline.toml"])
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("--base-ref", err.getvalue())
+
     def test_another_repositorys_growth_is_reported_not_red(self):
         self.baselines("", "")
         code, out = self.go(FAKE_ALWAYS="ALICE-X: a.yml: private repository name")

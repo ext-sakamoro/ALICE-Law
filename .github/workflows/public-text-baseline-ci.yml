@@ -34,6 +34,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0  # the base (scripts/ci_base.py) is read from the history
 
       # 3.14, as the daily job: the checker reads zstd streams with the standard library
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -51,6 +53,9 @@ jobs:
       - name: The public repositories' text against the baseline, as far as this change goes
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
         run: |
-          git fetch -q --depth 1 origin main:refs/remotes/origin/main
-          python3 scripts/live_baseline_delta.py --checker scripts/public_text_live.py --baseline conformance/public-text-baseline.toml --self "${GITHUB_REPOSITORY#*/}"
+          git fetch -q origin main
+          base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
+          python3 scripts/live_baseline_delta.py --base-ref "$base" --checker scripts/public_text_live.py --baseline conformance/public-text-baseline.toml --self "${GITHUB_REPOSITORY#*/}"

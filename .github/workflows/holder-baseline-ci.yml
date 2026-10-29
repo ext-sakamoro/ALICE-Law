@@ -34,6 +34,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0  # the base (scripts/ci_base.py) is read from the history
 
       - name: Test the reader
         run: python3 scripts/test_holder_live.py
@@ -46,6 +48,9 @@ jobs:
       - name: The public repositories against the baseline, as far as this change goes
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
         run: |
-          git fetch -q --depth 1 origin main:refs/remotes/origin/main
-          python3 scripts/live_baseline_delta.py --checker scripts/holder_live.py --baseline conformance/holder-baseline.toml --self "${GITHUB_REPOSITORY#*/}"
+          git fetch -q origin main
+          base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
+          python3 scripts/live_baseline_delta.py --base-ref "$base" --checker scripts/holder_live.py --baseline conformance/holder-baseline.toml --self "${GITHUB_REPOSITORY#*/}"

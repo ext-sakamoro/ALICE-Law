@@ -53,8 +53,39 @@ class RatchetBaseCheck(unittest.TestCase):
     def test_a_base_not_from_ci_base_is_a_finding(self):
         text = GOOD.replace('base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$REF" --before "$BEFORE")', "base=$(git rev-parse FETCH_HEAD)")
         findings, _ = rbc.check(self.tree({"a.yml": text}))
+        self.assertEqual(len(findings), 2, findings)
+        self.assertIn("base is assigned from something other than scripts/ci_base.py", findings[0])
+        self.assertIn("never sets base=$(python3 scripts/ci_base.py", findings[1])
+
+    def test_a_base_handed_to_the_strict_check_must_be_the_ci_base_base(self):
+        bad = GOOD + "          LAW_BASE_REF=FETCH_HEAD scripts/shared_files_strict.sh\n"
+        findings, _ = rbc.check(self.tree({"a.yml": bad}))
         self.assertEqual(len(findings), 1, findings)
-        self.assertIn("never sets base=$(python3 scripts/ci_base.py", findings[0])
+        self.assertIn("LAW_BASE_REF=FETCH_HEAD is not the ci_base.py base", findings[0])
+        good = GOOD + '          LAW_BASE_REF="$base" scripts/shared_files_strict.sh\n'
+        self.assertEqual(rbc.check(self.tree({"a.yml": good}))[0], [])
+
+    def test_a_fallback_ref_in_a_script_is_a_finding(self):
+        pre = 'base=$(python3 scripts/ci_base.py)\ngit show "${LAW_BASE_REF:-origin/main}:conformance/x" > "$t"\n'
+        findings, _ = rbc.check(self.tree({"a.yml": GOOD}, pre))
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("${LAW_BASE_REF:-origin/main} falls back to another ref", findings[0])
+
+    def test_a_base_ref_argument_must_be_the_ci_base_base(self):
+        for bad, why in (
+            ('python scripts/licence_files_check.py --repo . --holder-base-ref "$(git merge-base origin/main HEAD)"\n',
+             "names the base (on main it is HEAD)"),
+            ("python3 scripts/x.py --base-ref origin/main\n", "a base ref argument origin/main is not"),
+            ('python3 scripts/live_baseline_delta.py --checker scripts/holder_live.py --baseline b.toml\n',
+             "live_baseline_delta.py without --base-ref"),
+            ('base="$BEFORE"\n', "assigned from something other than scripts/ci_base.py"),
+            ("base=$(git rev-parse --verify -q origin/main || true)\n", "assigned from something other than"),
+        ):
+            findings, _ = rbc.check(self.tree({"a.yml": GOOD + "          " + bad}))
+            self.assertTrue(any(why in f for f in findings), (bad, findings))
+        good = GOOD + ('          python scripts/licence_files_check.py --repo . --holder-base-ref "$base"\n'
+                       '          python3 scripts/live_baseline_delta.py --base-ref "$base" --checker c.py --baseline b\n')
+        self.assertEqual(rbc.check(self.tree({"a.yml": good}))[0], [])
 
     def test_a_comment_line_is_not_a_read(self):
         text = "# git show FETCH_HEAD:conformance/x.toml\n" + GOOD

@@ -54,7 +54,8 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("--checker", required=True, type=Path)
     ap.add_argument("--baseline", required=True, help="the baseline file, repository-relative")
-    ap.add_argument("--base-ref", default="origin/main")
+    # named by the caller (scripts/ci_base.py in CI): main's tip is not the base of a change that forked earlier
+    ap.add_argument("--base-ref", required=True, help="the commit whose baseline the change is compared with")
     ap.add_argument("--self", dest="self_name", metavar="NAME")
     ap.add_argument("args", nargs=argparse.REMAINDER)
     a = ap.parse_args(argv)

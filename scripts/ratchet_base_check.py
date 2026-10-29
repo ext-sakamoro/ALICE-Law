@@ -8,10 +8,16 @@ merge-base with origin/main. Reading `FETCH_HEAD` after `git fetch origin main`,
 compares a push to main with itself (the ratchet then passes whatever the push did) and a branch with
 a main it may not be based on.
 
-Each `git show REV:conformance/...` and `git cat-file -e REV:conformance/...` in the workflows and
-scripts/preflight.sh must read REV from the shell variable `base`, and a file that has one must assign
-`base=$(python3 scripts/ci_base.py ...)`. A finding is printed per line; no such read in any file is
-a failure too (exit 1 either way).
+Each `git show REV:conformance/...` and `git cat-file -e REV:conformance/...` in the workflows and the
+scripts/*.sh files must read REV from the shell variable `base`, and a file that has one must assign
+`base=$(python3 scripts/ci_base.py ...)`. The base handed to scripts/shared_files_strict.sh is the same:
+`LAW_BASE_REF=` takes `"$base"` only, and `${LAW_BASE_REF:-<default>}` (a fallback ref) is a finding. So
+is a base handed to a script any other way: a `--holder-base-ref` / `--base-ref` argument that is not
+`"$base"`, a call of scripts/live_baseline_delta.py without `--base-ref "$base"`, `$(git merge-base …)`
+(on a push to main it is HEAD itself), and a `base=` assignment that is not
+`base=$(python3 scripts/ci_base.py ...)` (`$BEFORE`, `origin/main`, `git rev-parse`; an empty start `base=""`
+and `base=$LAW_BASE_REF`, the checked handoff, are allowed). A finding is printed
+per line; no such read in any file is a failure too (exit 1 either way).
 
 usage: ratchet_base_check.py [repository root]
 """
@@ -24,10 +30,17 @@ from pathlib import Path
 READ = re.compile(r"git\s+(?:show|cat-file\s+-e)\s+(\"?)([^\s:\"]+)\1:conformance/")
 ASSIGN = re.compile(r"""\bbase=\$\(python3?\s+scripts/ci_base\.py\b""")
 BASE = {"$base", "${base}"}
+HANDOFF = re.compile(r"\bLAW_BASE_REF=(\"?)([^\s\"]*)\1")
+FALLBACK = re.compile(r"\$\{LAW_BASE_REF:-[^}]+\}")
+REF_FLAG = re.compile(r"--(?:holder-base-ref|base-ref)[ =](\"?)([^\s\"]+(?:\s[^\s\"]+)*?)\1(?=\s|$)")
+MERGE_BASE = re.compile(r"\$\(\s*git\s+merge-base\b")
+# allowed: the ci_base.py call, an empty start, and the LAW_BASE_REF handoff (itself checked to be "$base")
+OTHER_ASSIGN = re.compile(r"\bbase=(?!\$\(python3?\s+scripts/ci_base\.py\b|\"\"(?:\s|$)|\$LAW_BASE_REF(?:\s|$))(?=\S)")
+LIVE_DELTA = re.compile(r"scripts/live_baseline_delta\.py\b")
 
 
 def files(root: Path) -> list[Path]:
-    return sorted((root / ".github" / "workflows").glob("*.yml")) + [root / "scripts" / "preflight.sh"]
+    return sorted((root / ".github" / "workflows").glob("*.yml")) + sorted((root / "scripts").glob("*.sh"))
 
 
 def check(root: Path) -> tuple[list[str], int]:
@@ -46,6 +59,26 @@ def check(root: Path) -> tuple[list[str], int]:
                 hits += 1
                 if m.group(2) not in BASE:
                     findings.append(f"{rel}:{n}: reads conformance/ at {m.group(2)}, not at the ci_base.py base ($base)")
+            for m in HANDOFF.finditer(line):
+                hits += 1
+                if m.group(2) not in BASE:
+                    findings.append(f"{rel}:{n}: LAW_BASE_REF={m.group(2)} is not the ci_base.py base ($base)")
+            for m in FALLBACK.finditer(line):
+                hits += 1
+                findings.append(f"{rel}:{n}: {m.group(0)} falls back to another ref instead of the ci_base.py base")
+            for m in REF_FLAG.finditer(line):
+                hits += 1
+                if m.group(2) not in BASE:
+                    findings.append(f"{rel}:{n}: a base ref argument {m.group(2)} is not the ci_base.py base ($base)")
+            for m in MERGE_BASE.finditer(line):
+                hits += 1
+                findings.append(f"{rel}:{n}: $(git merge-base ...) names the base (on main it is HEAD); use ci_base.py")
+            for m in OTHER_ASSIGN.finditer(line):
+                hits += 1
+                findings.append(f"{rel}:{n}: base is assigned from something other than scripts/ci_base.py")
+            if LIVE_DELTA.search(line) and "python" in line and not re.search(r'--base-ref (\"?)\$\{?base\}?\1', line):
+                hits += 1
+                findings.append(f"{rel}:{n}: scripts/live_baseline_delta.py without --base-ref \"$base\"")
         if hits and not ASSIGN.search(text):
             findings.append(f"{rel}: compares with conformance/ at $base but never sets base=$(python3 scripts/ci_base.py ...)")
         reads += hits

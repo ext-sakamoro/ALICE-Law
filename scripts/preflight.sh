@@ -20,7 +20,9 @@ python3 scripts/test_public_text_check.py
 python3 scripts/test_licence_files_check.py
 python3 scripts/test_holder_live.py
 python3 scripts/test_public_text_live.py
-python3 scripts/licence_files_check.py --repo . --holder-base-ref "$(git merge-base origin/main HEAD)"
+# the base every comparison with an earlier commit uses (scripts/ci_base.py: the merge-base with origin/main)
+base=$(python3 scripts/ci_base.py)
+python3 scripts/licence_files_check.py --repo . --holder-base-ref "$base"
 python3 scripts/test_readme_roster_check.py
 python3 scripts/test_conformance_docs_schema_check.py
 python3 scripts/test_conformance_roster_check.py
@@ -61,7 +63,6 @@ echo "== the ratchets' base (scripts/ci_base.py: the merge-base with origin/main
 python3 scripts/test_ci_base.py
 python3 scripts/test_ratchet_base_check.py
 python3 scripts/ratchet_base_check.py
-base=$(python3 scripts/ci_base.py)
 
 echo "== the line-number reference baseline does not rise against the base"
 python3 scripts/test_line_refs_ratchet.py
@@ -118,9 +119,8 @@ python3 scripts/readme_parity_check.py
 echo "== public text: the tree"
 python3 scripts/public_text_check.py --tree HEAD
 
-echo "== public text: the commits not on origin/main"
-base=$(git rev-parse --verify -q origin/main || true)
-if [ -n "$base" ] && [ "$(git rev-list --count "$base..HEAD")" -gt 0 ]; then
+echo "== public text: the commits since the base"
+if [ "$(git rev-list --count "$base..HEAD")" -gt 0 ]; then
   python3 scripts/public_text_check.py --range "$base..HEAD"
 else
   echo "no commit outside origin/main"

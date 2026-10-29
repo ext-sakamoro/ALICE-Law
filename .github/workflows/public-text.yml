@@ -42,23 +42,25 @@ jobs:
         run: python scripts/test_public_text_live.py
 
       # the declared licences have their full texts in this repository; the rights-holder rule against
-      # conformance/holder-baseline.toml, which may not grow against the merge base with main
+      # conformance/holder-baseline.toml, which may not grow against the base scripts/ci_base.py names (main
+      # before the push on a push to main, the merge-base with main elsewhere)
       - name: The licence files
-        run: python scripts/licence_files_check.py --repo . --holder-base-ref "$(git merge-base origin/main HEAD)"
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          base=$(python scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
+          python scripts/licence_files_check.py --repo . --holder-base-ref "$base"
 
       - name: The tree
         run: python scripts/public_text_check.py --tree HEAD
 
       - name: The pushed commits
         env:
+          EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
         run: |
-          if [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
-             && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            base="$BEFORE"
-          else
-            base=$(git merge-base origin/main HEAD)
-          fi
+          base=$(python scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
           if [ "$(git rev-list --count "$base..HEAD")" -gt 0 ]; then
             python scripts/public_text_check.py --range "$base..HEAD"
           else
