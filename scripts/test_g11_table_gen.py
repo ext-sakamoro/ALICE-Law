@@ -30,6 +30,7 @@ CRATE = {
                                   '[G9]\nstatus = "fail-known"\nevidence = ["scripts/ban.py"]\n\n'
                                   '[G11]\nstatus = "fail-known"\nevidence = ["scripts/ban.py"]\n',
     ".github/shared-files-pin": f"name {NAME}\nrev {REV}\n",
+    ".github/g11-table-pin": f"name {NAME}\nrev {REV}\nchecker-sha256 {'0' * 64}\n",
     ".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n      - run: scripts/run_tests.sh golden -- cargo test --test golden\n"
                                 "      - run: |\n          python3 scripts/test_ban.py\n          python3 scripts/test_run_tests.py\n",
     "scripts/ban.py": "print()\n",
@@ -63,6 +64,9 @@ canary = "scripts/test_other.py::Other.test_flags"
 zero = "scripts/test_other.py::Other.test_zero"
 shared = ["scripts/other.py"]
 """
+
+
+LAW["conformance/g11-shared-rows.toml"] = CATALOG  # (the checker regenerates the table with ALICE-Law's catalog)
 
 
 def write(root: Path, files: dict):
@@ -113,6 +117,84 @@ class Gen(unittest.TestCase):
         with redirect_stdout(out), redirect_stderr(err):
             rc = gen.chk.main(["--repo", str(self.crate), "--name", NAME, "--law", f"{REV}={self.law}"])
         self.assertEqual(rc, 0, out.getvalue() + err.getvalue())
+
+    def check(self) -> tuple[int, str]:
+        out, err = io.StringIO(), io.StringIO()
+        try:
+            with redirect_stdout(out), redirect_stderr(err):
+                rc = gen.chk.main(["--repo", str(self.crate), "--name", NAME, "--law", f"{REV}={self.law}"])
+        except Exception as e:  # noqa: BLE001 - a crash is a failed assertion, not a pass
+            self.fail(f"the check raised {e!r}")
+        return rc, out.getvalue() + err.getvalue()
+
+    def test_the_check_regenerates_the_table_and_refuses_one_that_differs(self):
+        # F8: an edit of g11-own.toml without regenerating, and a hand edit of g11.toml, are both found
+        self.assertEqual(self.run_main()[0], 0)
+        self.assertEqual(self.check()[0], 0)
+        self.edit(self.crate / "conformance/g11-own.toml", 'shared = "n/a: 黄金律の試験はこの crate のもの"',
+                  'shared = "n/a: 黄金律の試験はこの crate だけのもの"')
+        rc, out = self.check()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("F8 conformance/g11.toml is not the table conformance/g11-own.toml and the shared rows give", out)
+        self.assertEqual(self.run_main()[0], 0)
+        self.assertEqual(self.check()[0], 0, "regenerating clears it")
+        self.edit(self.crate / "conformance/g11.toml", 'gate = "G4"', 'gate = "G4" ')
+        rc, out = self.check()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("F8 conformance/g11.toml is not the table", out)
+
+    def test_the_check_cannot_regenerate_without_the_pin_or_the_catalog(self):
+        self.assertEqual(self.run_main()[0], 0)
+        (self.crate / ".github/g11-table-pin").unlink()
+        rc, out = self.check()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("F8 conformance/g11.toml cannot be regenerated: .github/g11-table-pin is not in the tree", out)
+        write(self.crate, {".github/g11-table-pin": f"name {NAME}\nrev {REV}\n"})
+        (self.law / "conformance/g11-shared-rows.toml").unlink()
+        rc, out = self.check()
+        self.assertEqual(rc, 1, out)
+        self.assertIn(f"ALICE-Law {REV} has no conformance/g11-shared-rows.toml", out)
+
+    def test_a_table_that_differs_only_at_its_end_is_refused(self):
+        # F8 compares byte for byte: a missing final newline or an extra blank line is a difference
+        self.assertEqual(self.run_main()[0], 0)
+        table = self.table()
+        self.assertTrue(table.endswith("\n") and not table.endswith("\n\n"), repr(table[-20:]))
+        for text in (table[:-1], table + "\n"):
+            write(self.crate, {"conformance/g11.toml": text})
+            rc, out = self.check()
+            self.assertEqual(rc, 1, (repr(text[-20:]), out))
+            self.assertIn("F8 conformance/g11.toml is not the table", out)
+
+    def test_sources_that_do_not_parse_are_a_finding(self):
+        # F8 is the only reader of g11-own.toml: a file that does not parse is a finding, never 0 findings
+        self.assertEqual(self.run_main()[0], 0)
+        own = self.crate / "conformance/g11-own.toml"
+        good = own.read_bytes()
+        own.write_bytes(good + b"\n[[row\n")
+        rc, out = self.check()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("F8 conformance/g11.toml cannot be regenerated: ", out)
+        own.write_bytes(good)
+        self.assertEqual(self.check()[0], 0)
+        write(self.law, {"conformance/g11-shared-rows.toml": CATALOG + "\n[[row\n"})
+        rc, out = self.check()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("F8 conformance/g11.toml cannot be regenerated: ", out)
+
+    def test_a_regeneration_that_builds_no_row_fails(self):
+        self.assertEqual(self.run_main()[0], 0)
+        write(self.law, {"conformance/g11-shared-rows.toml": ""})
+        write(self.crate, {"conformance/g11-own.toml": "# no row\n",
+                           "alice-law-conformance.toml": '[G9]\nstatus = "fail-known"\n'})
+        rc, out = self.check()
+        self.assertIn("built no row (compared nothing)", out)
+
+    def test_a_crate_without_own_rows_is_not_regenerated(self):
+        self.assertEqual(self.run_main()[0], 0)
+        (self.crate / "conformance/g11-own.toml").unlink()
+        (self.crate / ".github/g11-table-pin").unlink()
+        self.assertNotIn("F8", self.check()[1])
 
     def test_a_shared_row_keeps_the_paths_the_table_lists_for_the_crate(self):
         self.run_main()
