@@ -102,11 +102,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "3b8f98eddf85ecec26b8f95ae9eb70154451813a4f74eb1a43825126aca90bcf"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
 repo = "3ef7c23054fecceba84393adf2be7da3e61c15adafac87399f90c9ffd92b43ee"
 kind = "authors"
 path = "Cargo.toml"
@@ -269,11 +264,6 @@ path = "Cargo.toml"
 [[entry]]
 repo = "85ef98a05feb4a14851fc78b8837205a7e1fabd0247eb558c8e48c387ce99490"
 kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
-
-[[entry]]
-repo = "85ef98a05feb4a14851fc78b8837205a7e1fabd0247eb558c8e48c387ce99490"
-kind = "holder"
 path = "TRADEMARK_NOTICE"
 
 [[entry]]
@@ -358,16 +348,6 @@ path = "examples/rerun-viz/Cargo.toml"
 
 [[entry]]
 repo = "aa878435373fbfa0bb3926d78f7d7ba79f6c20d2fe7ad72da011a595f2cd46f9"
-kind = "holder"
-path = "TRADEMARK_NOTICE"
-
-[[entry]]
-repo = "abbaa5b057eceb02af7a328a762aabd0ed60507dcb9d5049cced185cab0e8b41"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
-repo = "abbaa5b057eceb02af7a328a762aabd0ed60507dcb9d5049cced185cab0e8b41"
 kind = "holder"
 path = "TRADEMARK_NOTICE"
 
@@ -525,11 +505,6 @@ path = "Cargo.toml"
 repo = "fc71052a2f100219b2c5c56c1994fee66e48d897e022dbf542a80c7ec0d8cde8"
 kind = "authors"
 path = "Cargo.toml"
-
-[[entry]]
-repo = "fc71052a2f100219b2c5c56c1994fee66e48d897e022dbf542a80c7ec0d8cde8"
-kind = "holder"
-path = "LICENSE-COMMERCIAL.md"
 
 [[entry]]
 repo = "fe3785962421904a55014fbb7b36997e160f3804c0c4f88a0885e9a0d6f02316"
