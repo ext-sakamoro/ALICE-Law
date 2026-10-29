@@ -53,6 +53,7 @@ python3 scripts/test_conformance_live_workflow.py
 python3 scripts/test_conformance_reader_map.py
 python3 scripts/conformance_reader_map.py
 python3 scripts/test_crates_conformance_ci.py
+python3 scripts/test_live_baseline_delta.py
 
 echo "== the line-number reference baseline does not rise against origin/main"
 python3 scripts/test_line_refs_ratchet.py

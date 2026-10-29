@@ -2,8 +2,9 @@
 #
 # Conformance (live) reads conformance/holder-baseline.toml daily on main; a ci/ change to the baseline or to its
 # readers would otherwise reach main before anything read it. This runs the same check (scripts/holder_live.py
-# over every public repository of the account, this repository at the commit under test) as a dispatched
-# Conformance (live) run does: a new occurrence and a repository that could not be read are red.
+# over every public repository of the account, this repository at the commit under test) with main's baseline and
+# with this change's (scripts/live_baseline_delta.py): what the change makes worse, and a repository that could not
+# be read, are red; another repository's new occurrence is the daily run's.
 
 name: Holder baseline (ci)
 
@@ -15,6 +16,8 @@ on:
       - "scripts/holder_live.py"
       - "scripts/licence_files_check.py"
       - "scripts/test_holder_live.py"
+      - "scripts/live_baseline_delta.py"
+      - "scripts/test_live_baseline_delta.py"
       - ".github/workflows/holder-baseline-ci.yml"
 
 permissions:
@@ -35,9 +38,14 @@ jobs:
       - name: Test the reader
         run: python3 scripts/test_holder_live.py
 
-      # a change in flight fails only on growth, like a dispatched Conformance (live) run: a repository fixed
-      # meanwhile leaves a stale entry, which the daily run on main reports (shrink the baseline there)
-      - name: The public repositories against the baseline
+      - name: Test what a baseline change makes worse
+        run: python3 scripts/test_live_baseline_delta.py
+
+      # the check with main's baseline and with this change's: only a finding this change adds is red (another
+      # repository's growth or a stale entry the daily run on main reports is not this change's)
+      - name: The public repositories against the baseline, as far as this change goes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/holder_live.py --local "${GITHUB_REPOSITORY#*/}=." --growth-only
+        run: |
+          git fetch -q --depth 1 origin main:refs/remotes/origin/main
+          python3 scripts/live_baseline_delta.py --checker scripts/holder_live.py --baseline conformance/holder-baseline.toml --self "${GITHUB_REPOSITORY#*/}"

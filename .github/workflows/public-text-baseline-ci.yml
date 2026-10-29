@@ -3,7 +3,8 @@
 # Conformance (live) reads conformance/public-text-baseline.toml daily on main; a ci/ change to the baseline or to
 # its readers would otherwise reach main before anything read it. This runs the same check
 # (scripts/public_text_live.py over every public repository of the account, this repository at the commit under
-# test): more findings than the baseline has is red, fewer is red (stale), an unreadable repository is red.
+# test) with main's baseline and with this change's (scripts/live_baseline_delta.py): what the change makes worse,
+# and an unreadable repository, are red; another repository's new finding is the daily run's.
 
 name: Public text baseline (ci)
 
@@ -15,6 +16,8 @@ on:
       - "scripts/public_text_live.py"
       - "scripts/public_text_check.py"
       - "scripts/test_public_text_live.py"
+      - "scripts/live_baseline_delta.py"
+      - "scripts/test_live_baseline_delta.py"
       - ".github/workflows/public-text-baseline-ci.yml"
 
 permissions:
@@ -40,7 +43,14 @@ jobs:
       - name: Test the public text reader
         run: python3 scripts/test_public_text_live.py
 
-      - name: The public repositories' text against the baseline
+      - name: Test what a baseline change makes worse
+        run: python3 scripts/test_live_baseline_delta.py
+
+      # the check with main's baseline and with this change's: only a finding this change adds is red (another
+      # repository's new finding or a stale entry the daily run on main reports is not this change's)
+      - name: The public repositories' text against the baseline, as far as this change goes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/public_text_live.py --local "${GITHUB_REPOSITORY#*/}=."
+        run: |
+          git fetch -q --depth 1 origin main:refs/remotes/origin/main
+          python3 scripts/live_baseline_delta.py --checker scripts/public_text_live.py --baseline conformance/public-text-baseline.toml --self "${GITHUB_REPOSITORY#*/}"
