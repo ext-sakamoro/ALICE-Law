@@ -2,8 +2,8 @@
 #
 # Conformance (live) reads conformance/holder-baseline.toml daily on main; a ci/ change to the baseline or to its
 # readers would otherwise reach main before anything read it. This runs the same check (scripts/holder_live.py
-# over every public repository of the account, this repository at the commit under test) in full: a new
-# occurrence, a listed one that is gone, and a repository that could not be read are red.
+# over every public repository of the account, this repository at the commit under test) as a dispatched
+# Conformance (live) run does: a new occurrence and a repository that could not be read are red.
 
 name: Holder baseline (ci)
 
@@ -35,7 +35,9 @@ jobs:
       - name: Test the reader
         run: python3 scripts/test_holder_live.py
 
+      # a change in flight fails only on growth, like a dispatched Conformance (live) run: a repository fixed
+      # meanwhile leaves a stale entry, which the daily run on main reports (shrink the baseline there)
       - name: The public repositories against the baseline
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/holder_live.py --local "${GITHUB_REPOSITORY#*/}=."
+        run: python3 scripts/holder_live.py --local "${GITHUB_REPOSITORY#*/}=." --growth-only
