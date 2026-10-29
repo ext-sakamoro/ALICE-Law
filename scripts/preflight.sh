@@ -52,6 +52,7 @@ python3 scripts/test_shared_files_strict.py
 python3 scripts/test_holder_mode_check.py
 python3 scripts/test_shared_files_branch_live.py
 python3 scripts/test_conformance_live_workflow.py
+python3 scripts/test_reader_map_core.py
 python3 scripts/test_conformance_reader_map.py
 python3 scripts/conformance_reader_map.py
 python3 scripts/test_crates_conformance_ci.py
