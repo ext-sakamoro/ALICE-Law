@@ -50,26 +50,65 @@ def on_ci_branches(text: str) -> bool:
     return bool(push and re.search(r"""branches:.*["']ci/\*\*["']""", push.group(1)))
 
 
+RUN_KEY = re.compile(r"^(\s*)(?:- )?run:\s*(.*)$")
+
+
+def run_texts(text: str) -> list[str]:
+    """the text of every `run:` step of a workflow: a single-line value, or a block scalar (`|` / `>`) and the
+    lines indented under it (a script named elsewhere, as in `paths:`, is not run)"""
+    lines = text.splitlines()
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        m = RUN_KEY.match(lines[i])
+        i += 1
+        if not m:
+            continue
+        indent = len(m.group(1)) + (2 if lines[i - 1].lstrip().startswith("- ") else 0)
+        value = m.group(2).strip()
+        if value and value[0] not in "|>":
+            out.append(value)
+            continue
+        block = []
+        while i < len(lines) and (not lines[i].strip() or len(lines[i]) - len(lines[i].lstrip()) > indent):
+            block.append(lines[i])
+            i += 1
+        out.append("\n".join(block))
+    return out
+
+
 def ci_scripts(root: Path) -> tuple[set[str], int]:
-    """the scripts a ci/** workflow runs, and how many ci/** workflows there are"""
+    """the scripts a step of a ci/** workflow runs, and how many ci/** workflows there are"""
     scripts: set[str] = set()
     n = 0
     for wf in sorted((root / ".github" / "workflows").glob("*.yml")):
         text = wf.read_text(encoding="utf-8")
         if on_ci_branches(text):
             n += 1
-            scripts |= set(RUN_SCRIPT.findall(text))
+            for run in run_texts(text):
+                scripts |= set(RUN_SCRIPT.findall(run))
     return scripts, n
 
 
+def names(file: str) -> re.Pattern[str]:
+    """how a script names `file`: its whole repository-relative path as one token, or a path joined from its quoted
+    parts (`"conformance" / "sub" / "a.toml"`); for planned/, the directory the checker reads next to the table"""
+    if file == PLANNED:
+        return re.compile(r"""PLANNED_DIR\s*=\s*["']planned["']|(?<![\w./-])conformance/planned(?![\w.-])""")
+    parts = file.split("/")
+    whole = r"(?<![\w./-])" + re.escape(file) + r"(?![\w.-])"
+    joined = r"""["']""" + r"""["']\s*/\s*["']""".join(map(re.escape, parts)) + r"""["']"""
+    return re.compile(whole + "|" + joined)
+
+
 def readers(root: Path, file: str) -> list[str]:
-    """the non-test scripts that name `file` (its path under conformance/, or for planned/ the directory)"""
-    needle = "planned/" if file == PLANNED else Path(file).name
+    """the non-test scripts that name `file`"""
+    pattern = names(file)
     found = []
     for s in sorted((root / "scripts").iterdir()):
-        if s.suffix not in (".py", ".sh") or s.name.startswith("test_"):
-            continue
-        if needle in s.read_text(encoding="utf-8", errors="replace"):
+        if s.suffix not in (".py", ".sh") or s.name.startswith("test_") or s.name == Path(__file__).name:
+            continue  # the tests, and this check (it spells the paths it looks for), are not readers
+        if pattern.search(s.read_text(encoding="utf-8", errors="replace")):
             found.append(s.name)
     return found
 
