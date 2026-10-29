@@ -64,15 +64,35 @@ class RunCheck(unittest.TestCase):
         return ["bash", str(p)]
 
     def test_a_program_not_on_path_is_refused_before_it_runs(self):
-        with self.assertRaises(ValueError) as e:
+        # any exception is caught so that a refusal of the wrong kind (or none, which reaches subprocess
+        # and raises something else) fails an assertion rather than erroring
+        raised = None
+        try:
             cc.run_check(["no-such-checker-9f3c", "x"], expect_exit=0, env={"PATH": str(self.dir)})
-        self.assertIn("'no-such-checker-9f3c' is not on PATH", str(e.exception))
+        except Exception as e:  # noqa: BLE001
+            raised = e
+        self.assertIsInstance(raised, ValueError)
+        self.assertIn("'no-such-checker-9f3c' is not on PATH", str(raised))
 
     def test_a_bare_name_is_found_on_the_given_path(self):
         exe = Path(sys.executable)
         self.assertEqual(cc.program(exe.stem, {"PATH": str(exe.parent)}).lower(),
                          str(Path(shutil.which(exe.stem, path=str(exe.parent)))).lower())
         self.assertEqual(cc.program(str(exe)), str(exe))
+
+    def test_a_name_with_a_directory_is_used_as_given(self):
+        # a file that is not executable: a PATH lookup (shutil.which) would refuse it, so only the
+        # "a name with a directory is used as is" rule returns it unchanged
+        p = self.dir / "not-executable.txt"
+        p.write_text("x", encoding="utf-8")
+        p.chmod(0o644)
+        self.assertIsNone(shutil.which(str(p)))
+        got: object
+        try:
+            got = cc.program(str(p))
+        except Exception as e:  # noqa: BLE001
+            got = e
+        self.assertEqual(got, str(p))
 
     def test_a_reported_problem_passes(self):
         self.assertIsNone(cc.run_check(self.py(REPORTS), expect_exit=1, expect_text="tests/a.rs: no such file"))
