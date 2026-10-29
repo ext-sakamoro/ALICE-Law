@@ -195,6 +195,26 @@ class ReaderMap(unittest.TestCase):
         code, lines = m.check(d)
         self.assertEqual(code, 0, "\n".join(lines))
 
+    def test_a_path_built_from_a_path_call_is_read(self):
+        # Path("…") / "…" and pathlib.Path("…") / "…": the call's string argument starts the chain
+        for src in ('ZZ = Path("conformance") / "zz.toml"\n', 'import pathlib\nZZ = pathlib.Path("conformance") / "zz.toml"\n',
+                    'ZZ = str(Path("conformance") / "zz.toml")\n', 'ZZ = Path("conformance", "zz.toml")\n',
+                    'ZZ = ROOT / Path("conformance") / "zz.toml"\n'):
+            with self.subTest(src=src):
+                d = self.tree({"conformance/zz.toml": "", "scripts/reader.py": src,
+                               ".github/workflows/ci.yml": CI.format(s="reader.py")})
+                code, lines = m.check(d)
+                self.assertEqual(code, 0, "\n".join(lines))
+
+    def test_a_call_that_is_not_a_path_does_not_start_a_chain(self):
+        # only the path constructors fold: another call's string argument is not a directory of the result
+        for src in ('ZZ = lookup("conformance") / "zz.toml"\n', 'ZZ = Path(lookup("conformance")) / "zz.toml"\n'):
+            with self.subTest(src=src):
+                d = self.tree({"conformance/zz.toml": "", "scripts/reader.py": src,
+                               ".github/workflows/ci.yml": CI.format(s="reader.py")})
+                code, lines = m.check(d)
+                self.assertEqual(code, 1, "\n".join(lines))
+
     def test_a_shell_reader_names_the_path_outside_its_comments(self):
         d = self.tree({"conformance/a.toml": "", "conformance/b.toml": "",
                        "scripts/reader.sh": "# conformance/b.toml is read elsewhere\ncat conformance/a.toml\n",

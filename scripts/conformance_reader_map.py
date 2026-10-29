@@ -129,13 +129,27 @@ def token(file: str) -> re.Pattern[str]:
 
 def python_strings(source: str) -> list[str]:
     """the strings a Python script uses as values: its string constants (f-string parts included) except the
-    docstrings, and each `/` chain of them joined with `/` (`ROOT / "conformance" / "a.toml"` gives
-    "conformance/a.toml"); comments are not part of the syntax tree. A script that does not parse uses nothing."""
+    docstrings, and each `/` chain of them joined with `/` (`ROOT / "conformance" / "a.toml"` and
+    `Path("conformance") / "a.toml"` give "conformance/a.toml"); comments are not part of the syntax tree. A script
+    that does not parse uses nothing."""
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return []
     return strings_in(tree)
+
+
+PATH_CALLS = {"Path", "PurePath", "PurePosixPath"}
+
+
+def path_call(n: ast.AST) -> bool:
+    """a call that builds a path from its arguments (`Path("conformance", "a.toml")`, `pathlib.Path(…)`):
+    its string arguments are parts of a `/` chain; another call's are not"""
+    if not isinstance(n, ast.Call):
+        return False
+    f = n.func
+    name = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else None
+    return name in PATH_CALLS
 
 
 def strings_in(tree: ast.AST) -> list[str]:
@@ -152,9 +166,11 @@ def strings_in(tree: ast.AST) -> list[str]:
     def chain(n: ast.AST) -> list[ast.AST]:
         if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div):
             return chain(n.left) + chain(n.right)
+        if path_call(n):
+            return [p for a in n.args for p in chain(a)]
         return [n]
     for n in ast.walk(tree):
-        if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div):
+        if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div) or path_call(n):
             run: list[str] = []
             for part in chain(n) + [None]:
                 if isinstance(part, ast.Constant) and isinstance(part.value, str):
