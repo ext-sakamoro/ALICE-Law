@@ -3,10 +3,11 @@
 
 A live check (holder_live.py, public_text_live.py) reads every public repository at its default branch, so on a
 ci/ branch it fails on growth in any repository, which the change cannot fix. This runs the checker twice in one
-job, once with the baseline the base (origin/main) has and once with the change's, and fails only on a finding the
-change's run has and the base's does not (the change made it worse, e.g. an entry removed while its occurrence is
-still there, or an allowance lowered). A finding both runs have is another repository's and is reported, not red;
-the daily run on main is the full check.
+job: the base's checker (from a read-only checkout of the base, origin/main) with the base's baseline, and this
+checkout's checker with the change's, so a baseline kept in the checker's own text is compared too. It fails only on
+a finding the change's run has and the base's does not (the change made it worse, e.g. an entry removed while its
+occurrence is still there, or an allowance lowered). A finding both runs have is another repository's and is
+reported, not red; the daily run on main is the full check.
 
 usage: live_baseline_delta.py --checker SCRIPT --baseline FILE [--base-ref REF] [--self NAME] [--] [checker args ...]
 
@@ -15,7 +16,9 @@ that commit) and the change's run at the checkout (`--local NAME=<tree>` to the 
 to this repository is the change's, not another repository's.
 
 Red as well: either run reading a repository it could not read (its "N unread" is above 0), a run that ends with
-neither 0 nor 1 (the checker failed), and a run that prints no summary or reads no repository (compared nothing).
+neither 0 nor 1 (the checker failed), and a run that prints no summary or reads no repository (compared nothing). A
+checker the base does not have is new: the base has no findings, so every finding of the change's run is the change's.
+A base that has the checker but not the baseline compares nothing (exit 2).
 """
 from __future__ import annotations
 
@@ -56,25 +59,37 @@ def main(argv: list[str]) -> int:
     ap.add_argument("args", nargs=argparse.REMAINDER)
     a = ap.parse_args(argv)
     extra = a.args[1:] if a.args[:1] == ["--"] else a.args
+    top = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+                              encoding="utf-8").stdout.strip() or ".").resolve()
+    checker_rel = a.checker.resolve().relative_to(top) if a.checker.is_absolute() else a.checker
     with tempfile.TemporaryDirectory() as td:
-        base = base_baseline(a.baseline, a.base_ref, Path(td))
-        if base is None:
-            print(f"live_baseline_delta: {a.base_ref} has no {a.baseline} (nothing to compare with)")
-            return 2
-        base_extra, change_extra = list(extra), list(extra)
+        # the base run runs the base's checker (a baseline kept in the checker's own text, and the modules beside it,
+        # are the base's), from a read-only checkout of base-ref; the change's run runs this checkout's
         tree = Path(td) / "base-tree"
-        if a.self_name:
-            r = subprocess.run(["git", "worktree", "add", "-q", "--detach", str(tree), a.base_ref], capture_output=True)
-            if r.returncode != 0:
-                print(f"live_baseline_delta: cannot check out {a.base_ref} to read this repository at the base")
-                return 2
-            base_extra += ["--local", f"{a.self_name}={tree}"]
-            change_extra += ["--local", f"{a.self_name}=."]
+        r = subprocess.run(["git", "worktree", "add", "-q", "--detach", str(tree), a.base_ref], capture_output=True)
+        if r.returncode != 0:
+            print(f"live_baseline_delta: cannot check out {a.base_ref} to run its checker")
+            return 2
         try:
-            runs = {"base": run(a.checker, base, base_extra), "change": run(a.checker, Path(a.baseline), change_extra)}
-        finally:
+            # a checker the base does not have is new with this change: the base has no findings, so every finding
+            # the change's run has is the change's (zero, or baselined in the same change)
+            new_checker = not (tree / checker_rel).is_file()
+            base = None if new_checker else base_baseline(a.baseline, a.base_ref, Path(td))
+            if not new_checker and base is None:
+                print(f"live_baseline_delta: {a.base_ref} has no {a.baseline} (nothing to compare with)")
+                return 2
+            base_extra, change_extra = list(extra), list(extra)
             if a.self_name:
-                subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True)
+                base_extra += ["--local", f"{a.self_name}={tree}"]
+                change_extra += ["--local", f"{a.self_name}=."]
+            runs = {"change": run(a.checker, Path(a.baseline), change_extra)}
+            if new_checker:
+                print(f"live_baseline_delta: {a.base_ref} has no {checker_rel}: a new checker, every finding is this "
+                      "change's")
+            else:
+                runs["base"] = run(tree / checker_rel, base, base_extra)
+        finally:
+            subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True)
     red = False
     for name, (code, found, summary, out) in runs.items():
         if code not in (0, 1):
@@ -88,7 +103,7 @@ def main(argv: list[str]) -> int:
             red = True
     if red:
         return 1
-    base_found, change_found = set(runs["base"][1]), set(runs["change"][1])
+    base_found, change_found = set(runs["base"][1]) if "base" in runs else set(), set(runs["change"][1])
     worse = sorted(change_found - base_found)
     for ln in sorted(change_found & base_found):
         print(f"elsewhere (not this change's): {ln[len('found: '):]}")

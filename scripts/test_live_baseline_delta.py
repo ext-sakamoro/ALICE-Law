@@ -22,7 +22,9 @@ import live_baseline_delta as d  # noqa: E402
 FAKE = '''import argparse, os, sys
 ap = argparse.ArgumentParser(); ap.add_argument("--baseline"); ap.add_argument("--local"); ap.add_argument("rest", nargs="*")
 a = ap.parse_args()
+EMBEDDED = []  # findings the checker allows by itself (a baseline kept in the checker's own text)
 found = [ln[5:] for ln in open(a.baseline, encoding="utf-8").read().splitlines() if ln.startswith("find ")]
+found += EMBEDDED
 if a.local:
     name, tree = a.local.split("=", 1)
     probe = os.path.join(tree, "docs", "zz-probe.md")
@@ -106,6 +108,43 @@ class Delta(unittest.TestCase):
         code, out = self.go("--self", "ALICE-Law")
         self.assertEqual(code, 0, out)
         self.assertIn("elsewhere (not this change's): ALICE-Law: docs/zz-probe.md: private path", out)
+
+    def test_a_change_to_the_checker_s_own_baseline_is_this_changes(self):
+        # 2026-10-30: lowering the baseline kept inside public_text_check.py was reported "elsewhere", because both runs
+        # used the change's checker; the base run runs the base's checker, so what the change's checker adds is worse
+        self.baselines("", "")
+        fake = self.d / "fake.py"
+        fake.write_text(fake.read_text(encoding="utf-8").replace(
+            "EMBEDDED = []", 'EMBEDDED = ["ALICE-Y: c.py: allowance lowered"]'), encoding="utf-8")
+        code, out = self.go()
+        self.assertEqual(code, 1, out)
+        self.assertIn("worse with this change: ALICE-Y: c.py: allowance lowered", out)
+
+    def new_checker(self, embedded: str = "[]") -> tuple[int, str]:
+        # a change that adds a checker (and its baseline) the base does not have
+        self.baselines("", "")
+        (self.d / "new_checker.py").write_text((self.d / "fake.py").read_text(encoding="utf-8").replace(
+            "EMBEDDED = []", f"EMBEDDED = {embedded}"), encoding="utf-8")
+        buf = io.StringIO()
+        cwd = os.getcwd()
+        os.chdir(self.d)
+        try:
+            with contextlib.redirect_stdout(buf):
+                code = d.main(["--checker", "new_checker.py", "--baseline", "baseline.toml", "--base-ref", "HEAD"])
+        finally:
+            os.chdir(cwd)
+        return code, buf.getvalue()
+
+    def test_a_new_checker_with_no_findings_passes(self):
+        # the base has no findings of a checker it does not have: a new checker is not "nothing to compare"
+        code, out = self.new_checker()
+        self.assertEqual(code, 0, out)
+        self.assertIn("a new checker, every finding is this change's", out)
+
+    def test_a_new_checker_s_findings_are_all_this_changes(self):
+        code, out = self.new_checker('["ALICE-Z: d.py: a new finding"]')
+        self.assertEqual(code, 1, out)
+        self.assertIn("worse with this change: ALICE-Z: d.py: a new finding", out)
 
     def test_an_unread_repository_is_red(self):
         self.baselines("", "")
