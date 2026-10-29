@@ -610,6 +610,14 @@ def main(argv: list[str]) -> int:
             return 2
     a.table.write_text(text, encoding="utf-8")
     print(f"gen_shared_files: wrote {a.table} ({len(entries)} files, {n} copies, {p} pending)")
+    # every planned row carries planned/<blob>: a copy the table planned and no longer plans (the row converged to
+    # uniform, or was re-rolled to other bytes) goes with it; a file it never planned is left for the check to report
+    planned_now = {e["pending"]["planned"] for e in entries if sfc.is_planned(e)}
+    for old_id in sorted({e["pending"]["planned"] for e in old_entries if sfc.is_planned(e)} - planned_now):
+        f = a.table.parent / sfc.PLANNED_DIR / old_id
+        if f.is_file():
+            f.unlink()
+            print(f"gen_shared_files: removed {sfc.PLANNED_DIR}/{old_id} (its row no longer plans it)")
     if lock_text is not None:
         a.lock_file.write_text(lock_text, encoding="utf-8")
         print(f"gen_shared_files: wrote the count lock {sfc.uniform_copies(entries)} to {a.lock_file}")

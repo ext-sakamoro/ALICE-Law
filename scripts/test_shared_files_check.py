@@ -152,7 +152,32 @@ class Base(unittest.TestCase):
         sfc.GITHUB = self.saved
         self.tmp.cleanup()
 
+    # every planned row carries its bytes as planned/<blob> (shared_files_check.planned_proof_problems): check() writes
+    # that file for each planned row whose bytes are known, unless a test wrote it (a test of the copy itself) or
+    # turned this off (carry = False, a test of the missing copy), and removes the ones it wrote that no row names now
+    carry = True
+    known = (SHARED, OTHER, V3, SHARED + b"# v4\n")
+
+    def carry_planned(self) -> None:
+        d = Path(self.tmp.name) / sfc.PLANNED_DIR
+        carried = getattr(self, "_carried", set())
+        try:
+            want = {e["pending"]["planned"] for e in sfc.load(self.t.read_text(encoding="utf-8")) if sfc.is_planned(e)}
+        except (OSError, sfc.Unreadable, ValueError, KeyError, TypeError):
+            want = set()
+        for name in sorted(carried - (want if self.carry else set())):
+            (d / name).unlink(missing_ok=True)
+            carried.discard(name)
+        by_blob = {sfc.git_blob(b): b for b in self.known}
+        for name in sorted(want if self.carry else set()):
+            if name in by_blob and not (d / name).exists():
+                d.mkdir(exist_ok=True)
+                (d / name).write_bytes(by_blob[name])
+                carried.add(name)
+        self._carried = carried
+
     def check(self, *argv: str):
+        self.carry_planned()
         return run(sfc.main, ["--table", str(self.t), *argv])
 
 
@@ -1157,18 +1182,17 @@ class FirstMove(Base):
         self.assertIn("pending.first_move must be true, on a planned row with moved_from", out)
 
     def test_the_planned_bytes_must_exist_with_the_target_s_sha256(self):
+        self.carry = False
         code, out = self.live(self.first())
         self.assertEqual(code, 1, out)
-        self.assertIn("on the tip of neither its main nor a ci/ branch", out)
-        # a ci/ branch of another repository does not count, nor a branch of the owner outside main and ci/
-        self.w.ci("ALICE-B", "s-v3", {"scripts/s.sh": V3})
-        self.assertEqual(self.live(self.first())[0], 1)
-        self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3}, prefix="wip/")
-        self.assertEqual(self.live(self.first())[0], 1)
+        self.assertIn(f"there is no {sfc.PLANNED_DIR}/{sfc.git_blob(V3)} with the planned bytes", out)
+        # a ref of the owner holding the blob does not count (it may move): only the copy next to the table does
         self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3})
+        self.assertEqual(self.live(self.first())[0], 1)
+        self.proof(V3)
         code, out = self.live(self.first())
         self.assertEqual(code, 0, out)
-        # a typo'd target (the blob is there, its SHA-256 is not the table's)
+        # a typo'd target (the copy is there, its SHA-256 is not the table's)
         code, out = self.live(self.first(target="e" * 64))
         self.assertEqual(code, 1, out)
         self.assertIn("not the target eeeeeeeeeeee", out)
@@ -1229,6 +1253,38 @@ class FirstMove(Base):
         code, out = self.check()
         self.assertEqual(code, 1, out)
         self.assertIn("no planned row names it", out)
+
+    def test_a_planned_row_without_its_copy_is_refused_even_when_a_ci_tip_holds_the_blob(self):
+        self.carry = False
+        # a plan must not depend on a ref that moves: a ci/ branch moved on to other bytes broke the live check of
+        # main (2026-10-30), so every planned row carries its bytes as planned/<blob>, checked in every mode
+        self.w.ci("ALICE-A", "s-v3", {"scripts/s.sh": V3})
+        self.t.write_text(self.w.table(self.first()), encoding="utf-8")
+        for argv in ((), ("--live", "--today", self.TODAY)):
+            with self.subTest(argv=argv):
+                code, out = self.check(*argv)
+                self.assertEqual(code, 1, out)
+                self.assertIn(f"scripts/s.sh: planned row without {sfc.PLANNED_DIR}/{sfc.git_blob(V3)}", out)
+
+    def test_a_re_rolled_moving_row_without_its_copy_is_refused(self):
+        # (2026-10-30, found in review) a planned row re-rolled to bytes no main holds, not a first move: live
+        # checked the planned bytes only for first moves and new files, so with planned/<blob> removed it passed
+        # though no ref anywhere held them
+        self.carry = False
+        code, out = self.live(self.w.moved())
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"scripts/s.sh: planned row without {sfc.PLANNED_DIR}/{sfc.git_blob(V3)}", out)
+        self.carry = True
+        code, out = self.live(self.w.moved())
+        self.assertEqual(code, 0, out)
+
+    def test_a_planned_row_without_its_copy_is_refused_even_when_the_owner_main_holds_the_target(self):
+        self.carry = False
+        # one rule: a main moves too (its owner re-rolls), so the owner's main is no exemption
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        code, out = self.check()
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"scripts/s.sh: planned row without {sfc.PLANNED_DIR}/{sfc.git_blob(SHARED)}", out)
 
     def test_the_planned_directory_holds_files_only(self):
         (Path(self.tmp.name) / sfc.PLANNED_DIR / "sub").mkdir(parents=True)
@@ -1413,6 +1469,7 @@ class FirstMove(Base):
 
     def test_a_new_file_is_re_rolled_before_it_lands_on_the_same_date(self):
         v, v2 = b"#!/bin/sh\n# new\n", b"#!/bin/sh\n# new v2\n"
+        self.known = self.known + (v, v2)
         self.t.write_text(self.w.table(self.w.uniform(), self.new_file(v2)), encoding="utf-8")
         code, out = self.check("--base-table", str(self.base(self.w.uniform(), self.new_file(v))))
         self.assertEqual(code, 0, out)
