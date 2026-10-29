@@ -62,6 +62,23 @@ class Generate(Base):
         self.assertEqual((e["repos"], sorted(e["exempt"])), ([], ["ALICE-A", "ALICE-B"]))
         self.assertEqual(self.gen("--check")[0], 0)
 
+    def test_a_registry_without_a_row_the_table_has_is_refused(self):
+        # a registry run rewrites every row from the registry; a row of the table the registry lacks would vanish
+        # (2026-10-29: the cross-repository registry, 65 rows, turned a 144-file table into 65 files with exit 0), so
+        # it is refused and the missing paths are named, the table unchanged
+        self.assertEqual(self.gen("--write", "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))[0], 0)
+        self.t.write_text(self.t.read_text(encoding="utf-8") + (
+            '\n[[file]]\npath = "scripts/zz_own.toml"\nrepos = []\nexempt = { "ALICE-A" = "this repository\'s own list '
+            'of its own files", "ALICE-B" = "this repository\'s own list of its own files" }\n'), encoding="utf-8")
+        before = self.t.read_text(encoding="utf-8")
+        for mode in ("--write", "--check"):
+            with self.subTest(mode=mode):
+                code, out = self.gen(mode, "--registry", str(self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")))
+                self.assertEqual(code, 2, out)
+                self.assertIn("scripts/zz_own.toml", out)
+                self.assertIn("the registry has no row for 1 path(s) the table has", out)
+                self.assertEqual(self.t.read_text(encoding="utf-8"), before, "the table is not rewritten")
+
     def test_a_new_path_is_born_as_a_planned_row(self):
         # a file no main holds yet, moving into every listed repository: planned from the start (the registry's
         # next= and --target name its bytes and owner), so the rollout is explicit and the ratchet allows it

@@ -4,7 +4,8 @@
 The rows (path, repositories, alternative paths, exemptions) come from the existing table,
 or with --registry from a registry of shared files: lines `path<TAB>repo,repo[:alt-path]
 [<TAB>state[<TAB>next=<blob>]]` (`-` for the repositories of a row every copy of which is exempted, the
-exemptions kept from the table), `#` comments. With --discover, every file under
+exemptions kept from the table), `#` comments; a registry without a row the table has is refused (exit 2, the
+paths named: the row would be dropped). With --discover, every file under
 shared_files_check.DISCOVERED that is byte-identical in two or more of the rows'
 repositories and has no row becomes a row too. Every row lists each of the rows'
 repositories that has the path on main (a different file there shows as a variant until it
@@ -519,6 +520,12 @@ def main(argv: list[str]) -> int:
         old = {e["path"]: e for e in old_entries}
         if a.registry is not None:
             rows = rows_from_registry(a.registry.read_text(encoding="utf-8"))
+            missing = sorted(set(old) - {r["path"] for r in rows})
+            if missing:
+                # a registry run rewrites every row from the registry, so a row of the table it lacks would vanish
+                raise sfc.Unreadable(f"the registry has no row for {len(missing)} path(s) the table has (they would be "
+                                     "dropped; regenerate without --registry, or add them to the registry):\n  "
+                                     + "\n  ".join(missing))
             for r in rows:
                 r["exempt"] = dict(old.get(r["path"], {}).get("exempt", {}))
         else:
