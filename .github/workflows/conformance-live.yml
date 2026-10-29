@@ -35,6 +35,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0  # the state-drift note's base (scripts/ci_base.py) is read from the history
 
       - name: Test the conformance roster checker
         run: python3 scripts/test_conformance_roster_check.py
@@ -49,17 +51,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
-        # the base the change is compared with: the previous main on a push, main on a dispatched run
+        # the base the change is compared with (scripts/ci_base.py): the commit main stood at before a push,
+        # main's parent on a dispatched run
         run: |
           if [ "$EVENT" = schedule ]; then
             python3 scripts/conformance_roster_check.py
           else
-            if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
-              git fetch -q --depth 1 origin "$BEFORE"
-            else
-              git fetch -q --depth 1 origin main
-            fi
-            git show FETCH_HEAD:conformance/manifest-state.toml > "$RUNNER_TEMP/base-state.toml"
+            git fetch -q origin main
+            base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
+            git show "$base":conformance/manifest-state.toml > "$RUNNER_TEMP/base-state.toml"
             python3 scripts/conformance_roster_check.py --state-drift-note "$RUNNER_TEMP/base-state.toml"
           fi
 
