@@ -188,6 +188,7 @@ jobs:
       # readers run on main only is red); the crates' reader is tested here, it runs in crates-conformance-ci.yml
       - name: Every conformance file has a reader on ci/** (tests, then the check)
         run: |
+          python3 scripts/test_reader_map_core.py
           python3 scripts/test_conformance_reader_map.py
           python3 scripts/conformance_reader_map.py
           python3 scripts/test_crates_conformance_ci.py
