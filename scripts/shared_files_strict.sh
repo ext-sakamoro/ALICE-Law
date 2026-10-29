@@ -38,17 +38,29 @@ esac
 if [ "$mode" = daily ]; then
   table_args="--strict"; gen_args="--strict"; state_args="--strict"
 else
-  # the landing mode compares with the base (LAW_BASE_REF, default origin/main; LAW_BASE_TABLE / LAW_BASE_STATE
+  # the landing mode compares with the base (LAW_BASE_REF, by default the one scripts/ci_base.py names: the
+  # merge-base with origin/main, or main's parent on main; LAW_BASE_TABLE / LAW_BASE_STATE
   # name the files directly): what this change itself edited must equal what the mains give, and only what it
   # left as the base has it may lag behind a landing elsewhere
+  base=""
   base_dir=$(mktemp -d)
   trap 'rm -rf "$base_dir"' EXIT
   base_table=${LAW_BASE_TABLE:-$base_dir/shared-files.toml}
   base_state=${LAW_BASE_STATE:-$base_dir/manifest-state.toml}
   for pair in "conformance/shared-files.toml:$base_table" "conformance/manifest-state.toml:$base_state"; do
     rel=${pair%%:*}; out=${pair#*:}
-    if [ ! -f "$out" ] && ! git show "${LAW_BASE_REF:-origin/main}:$rel" > "$out" 2>/dev/null; then
-      echo "shared-files strict: infra: the base ${LAW_BASE_REF:-origin/main}:$rel could not be read: not a pass" >&2
+    [ -f "$out" ] && continue
+    # the base commit, named once and only when a base file has to be read from it
+    if [ -z "$base" ]; then
+      if [ -n "${LAW_BASE_REF:-}" ]; then
+        base=$LAW_BASE_REF
+      elif ! base=$(python3 scripts/ci_base.py); then
+        echo "shared-files strict: infra: the base commit could not be read (scripts/ci_base.py): not a pass" >&2
+        exit 2
+      fi
+    fi
+    if ! git show "$base:$rel" > "$out" 2>/dev/null; then
+      echo "shared-files strict: infra: the base $base:$rel could not be read: not a pass" >&2
       exit 2
     fi
   done

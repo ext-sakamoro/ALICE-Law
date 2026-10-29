@@ -8,10 +8,11 @@ merge-base with origin/main. Reading `FETCH_HEAD` after `git fetch origin main`,
 compares a push to main with itself (the ratchet then passes whatever the push did) and a branch with
 a main it may not be based on.
 
-Each `git show REV:conformance/...` and `git cat-file -e REV:conformance/...` in the workflows and
-scripts/preflight.sh must read REV from the shell variable `base`, and a file that has one must assign
-`base=$(python3 scripts/ci_base.py ...)`. A finding is printed per line; no such read in any file is
-a failure too (exit 1 either way).
+Each `git show REV:conformance/...` and `git cat-file -e REV:conformance/...` in the workflows and the
+scripts/*.sh files must read REV from the shell variable `base`, and a file that has one must assign
+`base=$(python3 scripts/ci_base.py ...)`. The base handed to scripts/shared_files_strict.sh is the same:
+`LAW_BASE_REF=` takes `"$base"` only, and `${LAW_BASE_REF:-<default>}` (a fallback ref) is a finding. A
+finding is printed per line; no such read in any file is a failure too (exit 1 either way).
 
 usage: ratchet_base_check.py [repository root]
 """
@@ -24,10 +25,12 @@ from pathlib import Path
 READ = re.compile(r"git\s+(?:show|cat-file\s+-e)\s+(\"?)([^\s:\"]+)\1:conformance/")
 ASSIGN = re.compile(r"""\bbase=\$\(python3?\s+scripts/ci_base\.py\b""")
 BASE = {"$base", "${base}"}
+HANDOFF = re.compile(r"\bLAW_BASE_REF=(\"?)([^\s\"]*)\1")
+FALLBACK = re.compile(r"\$\{LAW_BASE_REF:-[^}]+\}")
 
 
 def files(root: Path) -> list[Path]:
-    return sorted((root / ".github" / "workflows").glob("*.yml")) + [root / "scripts" / "preflight.sh"]
+    return sorted((root / ".github" / "workflows").glob("*.yml")) + sorted((root / "scripts").glob("*.sh"))
 
 
 def check(root: Path) -> tuple[list[str], int]:
@@ -46,6 +49,13 @@ def check(root: Path) -> tuple[list[str], int]:
                 hits += 1
                 if m.group(2) not in BASE:
                     findings.append(f"{rel}:{n}: reads conformance/ at {m.group(2)}, not at the ci_base.py base ($base)")
+            for m in HANDOFF.finditer(line):
+                hits += 1
+                if m.group(2) not in BASE:
+                    findings.append(f"{rel}:{n}: LAW_BASE_REF={m.group(2)} is not the ci_base.py base ($base)")
+            for m in FALLBACK.finditer(line):
+                hits += 1
+                findings.append(f"{rel}:{n}: {m.group(0)} falls back to another ref instead of the ci_base.py base")
         if hits and not ASSIGN.search(text):
             findings.append(f"{rel}: compares with conformance/ at $base but never sets base=$(python3 scripts/ci_base.py ...)")
         reads += hits

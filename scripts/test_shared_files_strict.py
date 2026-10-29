@@ -26,6 +26,7 @@ class Strict(unittest.TestCase):
             root = Path(d)
             (root / "scripts").mkdir()
             shutil.copy(HERE / "shared_files_strict.sh", root / "scripts" / "shared_files_strict.sh")
+            shutil.copy(HERE / "ci_base.py", root / "scripts" / "ci_base.py")
             for name, (rc, err) in zip(self.CHECKS, (first, second, state, readme)):
                 (root / "scripts" / name).write_text(
                     f"import sys\nsys.stderr.write({err!r})\nprint('argv', {name!r}, *sys.argv[1:])\nsys.exit({rc})\n")
@@ -65,6 +66,98 @@ class Strict(unittest.TestCase):
         self.assertIn("--strict", a["gen_shared_files.py"])
         self.assertIn("--strict", a["conformance_roster_check.py"])
         self.assertNotIn("--state-drift-note", a["conformance_roster_check.py"])
+
+    def in_repo(self, build) -> subprocess.CompletedProcess:
+        """Run the landing mode (no base file given) in a git repository that `build(git, commit)` makes; the table
+        check prints the first line of the base table it was given"""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "scripts").mkdir()
+            (root / "conformance").mkdir()
+            shutil.copy(HERE / "shared_files_strict.sh", root / "scripts" / "shared_files_strict.sh")
+            shutil.copy(HERE / "ci_base.py", root / "scripts" / "ci_base.py")
+            (root / "scripts" / "shared_files_check.py").write_text(
+                "import sys\na = sys.argv\nprint('BASE', open(a[a.index('--base-table') + 1]).readline().strip())\n")
+            for name in self.CHECKS[1:]:
+                (root / "scripts" / name).write_text("import sys\nsys.exit(0)\n")
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("LAW_BASE_", "GIT_"))}
+            env.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t",
+                        "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+
+            def git(*a: str) -> str:
+                return subprocess.run(["git", *a], cwd=root, env=env, check=True, capture_output=True, text=True,
+                                      encoding="utf-8").stdout.strip()
+
+            def commit(mark: str, files=("shared-files.toml", "manifest-state.toml")) -> str:
+                for f in files:
+                    (root / "conformance" / f).write_text(f"# {mark}\n", encoding="utf-8")
+                git("add", "-A")
+                git("commit", "-q", "-m", mark)
+                return git("rev-parse", "HEAD")
+
+            git("init", "-q", "-b", "work")
+            build(git, commit)
+            return subprocess.run(["bash", str(root / "scripts" / "shared_files_strict.sh")], cwd=root, env=env,
+                                  capture_output=True, text=True, timeout=60, encoding="utf-8")
+
+    def test_no_base_commit_is_not_a_pass(self):
+        # no origin/main to take a merge-base with: ci_base.py cannot name the base, and nothing is compared with HEAD
+        p = self.in_repo(lambda git, commit: commit("head"))
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("the base commit could not be read (scripts/ci_base.py)", p.stderr)
+        self.assertNotIn("BASE", p.stdout)
+
+    def test_a_file_missing_at_the_base_commit_is_not_a_pass(self):
+        # the base commit is named, but it has no manifest-state.toml: not compared with an empty or a later file
+        def build(git, commit):
+            commit("main", files=("shared-files.toml",))
+            git("update-ref", "refs/remotes/origin/main", "HEAD")
+            commit("head")
+        p = self.in_repo(build)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn(":conformance/manifest-state.toml could not be read: not a pass", p.stderr)
+
+    def test_the_landing_base_is_the_commit_ci_base_names(self):
+        # no base file given: the landing mode reads the table and the state at the base scripts/ci_base.py names
+        # (the merge-base with origin/main), not at HEAD and not at a fallback ref
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "scripts").mkdir()
+            (root / "conformance").mkdir()
+            shutil.copy(HERE / "shared_files_strict.sh", root / "scripts" / "shared_files_strict.sh")
+            shutil.copy(HERE / "ci_base.py", root / "scripts" / "ci_base.py")
+            # the table check prints the first line of the base table it was given
+            (root / "scripts" / "shared_files_check.py").write_text(
+                "import sys\na = sys.argv\nprint('BASE', open(a[a.index('--base-table') + 1]).readline().strip())\n")
+            for name in self.CHECKS[1:]:
+                (root / "scripts" / name).write_text("import sys\nsys.exit(0)\n")
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("LAW_BASE_", "GIT_"))}
+            env.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t",
+                        "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+            git = lambda *a: subprocess.run(["git", *a], cwd=root, env=env, check=True, capture_output=True,
+                                            text=True, encoding="utf-8").stdout.strip()
+            git("init", "-q", "-b", "work")
+
+            def commit(mark: str) -> str:
+                for f in ("shared-files.toml", "manifest-state.toml"):
+                    (root / "conformance" / f).write_text(f"# {mark}\n", encoding="utf-8")
+                git("add", "-A")
+                git("commit", "-q", "-m", mark)
+                return git("rev-parse", "HEAD")
+
+            fork = commit("main")
+            # main moved on after this change forked from it: the base is the fork point, not main's tip
+            git("checkout", "-q", "-b", "later")
+            git("update-ref", "refs/remotes/origin/main", commit("later main"))
+            git("checkout", "-q", "work")
+            git("reset", "-q", "--hard", fork)
+            commit("head")
+            p = subprocess.run(["bash", str(root / "scripts" / "shared_files_strict.sh")], cwd=root, env=env,
+                               capture_output=True, text=True, timeout=60, encoding="utf-8")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("BASE # main\n", p.stdout)
+        self.assertNotIn("BASE # head", p.stdout)
+        self.assertNotIn("BASE # later main", p.stdout)
 
     def test_an_unreadable_base_is_not_a_pass(self):
         # no base file and no git repository to read origin/main from: the landing mode cannot compare

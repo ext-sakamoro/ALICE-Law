@@ -108,8 +108,9 @@ class Workflow(unittest.TestCase):
         self.assertIn("scripts/shared_files_strict.sh", push["run"])
         self.assertNotIn("--daily", push["run"])
         # the base ref is the fetched previous main, not the commit under check (HEAD) nor the working tree
-        self.assertIn('git fetch -q --depth 1 origin "$BEFORE"', push["run"])
-        self.assertRegex(push["run"], r"LAW_BASE_REF=FETCH_HEAD scripts/shared_files_strict\.sh")
+        self.assertRegex(push["run"], r'base=\$\(python3 scripts/ci_base\.py --event "\$EVENT" --ref "\$GITHUB_REF" --before "\$BEFORE"\)')
+        self.assertRegex(push["run"], r'LAW_BASE_REF="\$base" scripts/shared_files_strict\.sh')
+        self.assertNotIn("FETCH_HEAD", push["run"])
         self.assertNotRegex(push["run"], r"LAW_BASE_(TABLE|STATE)=")
 
     def test_the_parser_reads_a_branch_and_refuses_a_step_without_one(self):

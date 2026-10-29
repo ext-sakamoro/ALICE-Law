@@ -56,6 +56,20 @@ class RatchetBaseCheck(unittest.TestCase):
         self.assertEqual(len(findings), 1, findings)
         self.assertIn("never sets base=$(python3 scripts/ci_base.py", findings[0])
 
+    def test_a_base_handed_to_the_strict_check_must_be_the_ci_base_base(self):
+        bad = GOOD + "          LAW_BASE_REF=FETCH_HEAD scripts/shared_files_strict.sh\n"
+        findings, _ = rbc.check(self.tree({"a.yml": bad}))
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("LAW_BASE_REF=FETCH_HEAD is not the ci_base.py base", findings[0])
+        good = GOOD + '          LAW_BASE_REF="$base" scripts/shared_files_strict.sh\n'
+        self.assertEqual(rbc.check(self.tree({"a.yml": good}))[0], [])
+
+    def test_a_fallback_ref_in_a_script_is_a_finding(self):
+        pre = 'base=$(python3 scripts/ci_base.py)\ngit show "${LAW_BASE_REF:-origin/main}:conformance/x" > "$t"\n'
+        findings, _ = rbc.check(self.tree({"a.yml": GOOD}, pre))
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("${LAW_BASE_REF:-origin/main} falls back to another ref", findings[0])
+
     def test_a_comment_line_is_not_a_read(self):
         text = "# git show FETCH_HEAD:conformance/x.toml\n" + GOOD
         findings, reads = rbc.check(self.tree({"a.yml": text}))
