@@ -50,6 +50,7 @@ python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py
 python3 scripts/test_shared_files_strict.py
 python3 scripts/test_holder_mode_check.py
+python3 scripts/test_shared_files_branch_live.py
 python3 scripts/test_conformance_live_workflow.py
 python3 scripts/test_conformance_reader_map.py
 python3 scripts/conformance_reader_map.py
@@ -85,8 +86,9 @@ echo "== the shared-file table against every listed main (other bytes, a missing
 # another repository during this run must not make the run fail. The strict pair, where that holder is a finding
 # too, is scripts/shared_files_strict.sh: it runs on the tree to be pushed right before a push to main, and
 # conformance-live.yml on every push to main)"
-python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live
-python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
+# in the landing mode (base: origin/main's table): a row that converged on the mains while this change is checked, and
+# that the change left as the base has it, is a note (conformance-live.yml on main asks for the regeneration)
+python3 scripts/shared_files_branch_live.py --base-ref origin/main --lock-file .github/workflows/conformance-live.yml
 
 echo "== a holder's own shared-file check (its scripts/shared_files.sh, the table and checker of this commit)"
 python3 scripts/holder_mode_check.py --holder ALICE-Analytics
