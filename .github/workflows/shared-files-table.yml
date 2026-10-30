@@ -17,6 +17,8 @@ on:
       - "scripts/shared_files_check.py"
       - "scripts/test_gen_shared_files.py"
       - "scripts/test_shared_files_check.py"
+      - "scripts/shared_files_branch_live.py"
+      - "scripts/test_shared_files_branch_live.py"
       - ".github/workflows/shared-files-table.yml"
 
 permissions:
@@ -38,11 +40,12 @@ jobs:
         run: |
           python3 scripts/test_shared_files_check.py
           python3 scripts/test_gen_shared_files.py
+          python3 scripts/test_shared_files_branch_live.py
 
-      - name: The table is the generated one
-        run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml
-
-      - name: Every listed repository's main carries each copy
+      # the landing mode (base: main's table): a row that converged on the mains while this branch is checked, and that
+      # the branch left as main has it, is a note; conformance-live.yml on main asks for the regeneration
+      - name: The table is the generated one and every main carries each copy (against main's table)
         run: |
+          git fetch -q --depth 1 origin main:refs/remotes/origin/main
           n=$(python3 -c "import sys; sys.path.insert(0, 'scripts'); import shared_files_check as s; print(s.lock_in(open('.github/workflows/conformance-live.yml', encoding='utf-8').read(), 'conformance-live.yml'))")
-          python3 scripts/shared_files_check.py --table conformance/shared-files.toml --live --expect-copies "$n"
+          python3 scripts/shared_files_branch_live.py --base-ref origin/main --lock-file .github/workflows/conformance-live.yml --expect-copies "$n"
