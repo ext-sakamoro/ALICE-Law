@@ -717,6 +717,74 @@ class Generate(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("is out of date", out)
 
+    def rerolled_and_landed(self) -> tuple[Path, Path]:
+        """s.sh first moved to v2 by ALICE-A (landed), the table regenerated, then re-rolled to v3 (moved_from = v2);
+        ALICE-A and ALICE-B both move on from v2, so no main holds it any more; the table is not regenerated. Returns
+        the registry and the base: main's table, the same as the table under check"""
+        v2, v3 = SHARED + b"# v2\n", SHARED + b"# v3\n"
+        self.known = self.known + (v3,)
+        self.first_move_landed()
+        self.w.commit("ALICE-B", {"scripts/s.sh": v2})
+        reg = self.registry(f"scripts/s.sh\tALICE-A,ALICE-B\tpending\tnext={sfc.git_blob(v3)}\n")
+        self.assertEqual(self.gen("--write", "--next-from", str(reg), "--target", f"scripts/s.sh={h(v3)}@ALICE-A")[0], 0)
+        self.assertEqual(self.entries()["scripts/s.sh"]["pending"]["moved_from"]["target"], h(v2))
+        self.w.commit("ALICE-A", {"scripts/s.sh": v3})
+        self.w.commit("ALICE-B", {"scripts/s.sh": v3 + b"# not yet\n"})
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.t.read_text(encoding="utf-8"), encoding="utf-8")
+        return reg, base
+
+    def test_a_moved_from_no_main_holds_any_more_is_a_note_against_the_base(self):
+        # the rollout moved every main on from the bytes the row moved from while a change was checked: the change
+        # left the row as main has it, so the drop is the mains', reported, not a difference
+        reg, base = self.rerolled_and_landed()
+        code, out = self.gen("--check", "--next-from", str(reg), "--base-table", str(base))
+        self.assertEqual(code, 0, out)
+        self.assertIn("pending scripts/s.sh: moved_from gone since the base (no main holds", out)
+
+    def test_without_a_base_the_drop_is_still_a_difference(self):
+        # on main (conformance-live.yml, no base) the table must be regenerated
+        reg, _ = self.rerolled_and_landed()
+        code, out = self.gen("--check", "--next-from", str(reg))
+        self.assertEqual(code, 1, out)
+        self.assertIn("is out of date", out)
+
+    def test_a_moved_from_the_change_added_is_a_difference(self):
+        # main's row has no moved_from; the change writes one naming bytes no main holds: not the mains moving on
+        reg, base = self.rerolled_and_landed()
+        rows = sfc.load(base.read_text(encoding="utf-8"))
+        p = next(e for e in rows if e["path"] == "scripts/s.sh")["pending"]
+        del p["moved_from"]
+        p.pop("first_move", None)
+        # main's row: an ordinary planned row, its owner at the target and the other copy still at the earlier bytes
+        p["variants"] = {p["target"]: ["ALICE-A"], h(SHARED): ["ALICE-B"]}
+        base.write_text(gen.render(rows), encoding="utf-8")
+        self.assertNotIn("moved_from", base.read_text(encoding="utf-8"))
+        code, out = self.gen("--check", "--next-from", str(reg), "--base-table", str(base))
+        self.assertNotEqual(code, 0, out)
+        self.assertNotIn("moved_from gone since the base", out)
+
+    def edit_moved_from(self) -> tuple[Path, Path]:
+        reg, base = self.rerolled_and_landed()
+        current = self.t.read_text(encoding="utf-8")
+        old = self.entries()["scripts/s.sh"]["pending"]["moved_from"]["target"]
+        self.t.write_text(current.replace(f'target = "{old}" }}', f'target = "{"1" * 64}" }}', 1), encoding="utf-8")
+        self.assertNotEqual(self.t.read_text(encoding="utf-8"), current)
+        return reg, base
+
+    def test_a_moved_from_the_change_edited_is_a_difference(self):
+        reg, base = self.edit_moved_from()
+        code, out = self.gen("--check", "--next-from", str(reg), "--base-table", str(base))
+        self.assertNotEqual(code, 0, out)  # out of date (1), or refused by the regeneration (2): never current
+        self.assertNotIn("is current", out)
+
+    def test_a_moved_from_edited_while_a_main_still_holds_the_bytes_is_a_difference(self):
+        reg, base = self.edit_moved_from()
+        self.w.commit("ALICE-B", {"scripts/s.sh": SHARED + b"# v2\n"})  # ALICE-B is back at the bytes moved from
+        code, out = self.gen("--check", "--next-from", str(reg), "--base-table", str(base))
+        self.assertNotEqual(code, 0, out)
+        self.assertNotIn("is current", out)
+
     def gained_holder(self, data: bytes):
         """the table lists s.sh on A and B; then ALICE-C, a table repository through c.sh, gains s.sh"""
         reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\nscripts/c.sh\tALICE-A,ALICE-C\n")

@@ -463,6 +463,25 @@ def converged_since_base(old: list[dict], new: list[dict],
     return out, done
 
 
+def moved_from_gone_since_base(old: list[dict], new: list[dict], base: list[dict]) -> tuple[list[dict], list[str]]:
+    """new entries with the moved_from the regeneration dropped put back, where the drop is the mains moving on: the
+    table under check has it, main's table (the base) has the same row (all but the variants), and no main holds the
+    bytes it moved from any more (the regeneration drops it only then). A moved_from the change added or edited is not
+    the base's, so its drop stays a difference; so is one on main (no base), which the regeneration must remove"""
+    cur = {e["path"]: e for e in old}
+    base_rows = {e["path"]: sfc.row_but_variants(e) for e in base}
+    out, gone = [], []
+    for e in new:
+        c = cur.get(e["path"])
+        p, cp = e.get("pending"), (c or {}).get("pending")
+        if (isinstance(p, dict) and isinstance(cp, dict) and "moved_from" in cp and "moved_from" not in p
+                and base_rows.get(e["path"]) == sfc.row_but_variants(c)):
+            e = {**e, "pending": {**p, "moved_from": cp["moved_from"]}}
+            gone.append(e["path"])
+        out.append(e)
+    return out, gone
+
+
 def without_variants(text: str) -> tuple[str, dict[str, dict]]:
     """the table rendered with the fields derived from the mains (sfc.ROW_DERIVED / sfc.PENDING_DERIVED) taken out,
     and those fields per path: --check compares the first and reports the second"""
@@ -569,6 +588,10 @@ def main(argv: list[str]) -> int:
                 print(f"gen_shared_files: unlisted holder, same bytes: {path} on {', '.join(repos)}"
                       " (regenerate the table before the next publish)")
             if base is not None:
+                entries, gone = moved_from_gone_since_base(sfc.load(current), entries, base)
+                for path in gone:
+                    print(f"gen_shared_files: pending {path}: moved_from gone since the base (no main holds the bytes it "
+                          "moved from any more; the next table drops it)")
                 entries, done = converged_since_base(sfc.load(current), entries, base)
                 for path, added in done:
                     print(f"gen_shared_files: converged since the base: {path} (every copy has the target"
