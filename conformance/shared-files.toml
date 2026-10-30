@@ -168,6 +168,11 @@ pending = { since = "2026-10-28", exit = "every listed repository's main has the
 repos = ["ALICE-DB", "ALICE-GameEngine", "ALICE-ML", "ALICE-Sync"]
 
 [[file]]
+path = "scripts/gated_tests.toml"
+repos = []
+exempt = { "ALICE-DB" = "this repository's own configuration of scripts/gated_tests.py (which test files are gated and where they must run); the script is shared, this file is not", "ALICE-GameEngine" = "this repository's own configuration of scripts/gated_tests.py (which test files are gated and where they must run); the script is shared, this file is not", "ALICE-ML" = "this repository's own configuration of scripts/gated_tests.py (which test files are gated and where they must run); the script is shared, this file is not", "ALICE-Sync" = "this repository's own configuration of scripts/gated_tests.py (which test files are gated and where they must run); the script is shared, this file is not" }
+
+[[file]]
 path = "scripts/gen_clippy_canary_calls.py"
 pending = { since = "2026-10-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "118e2a172c4eb12a996664a50c5a00dbe3eefe3eef861fc679e96db298bc2d31", owner = "ALICE-Analytics", planned = "cc0ad22502cfdd745cce4c2b8373c96b854aac5a", moved_from = { planned = "b17166907f77094640a12cccd855e00f17d121e6", target = "02a8a5bbcefbee2b56b8a491cdc5de6c2e67b9ea0078158dfcd4a013b7ed20cf" }, variants = { "02a8a5bbcefbee2b56b8a491cdc5de6c2e67b9ea0078158dfcd4a013b7ed20cf" = ["ALICE-Crypto", "ALICE-Sync"], "118e2a172c4eb12a996664a50c5a00dbe3eefe3eef861fc679e96db298bc2d31" = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LLM", "ALICE-Zip"], "3e125ac13d7716035b0176e665c0ae8fac9ad4e09c806bdf766c8bbec57b806c" = ["ALICE-Channel", "ALICE-DB", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-ML", "ALICE-Sign"] } }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
