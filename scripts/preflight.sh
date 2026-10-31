@@ -57,12 +57,18 @@ python3 scripts/conformance_reader_map.py
 python3 scripts/test_crates_conformance_ci.py
 python3 scripts/test_live_baseline_delta.py
 
-echo "== the line-number reference baseline does not rise against origin/main"
+echo "== the ratchets' base (scripts/ci_base.py: the merge-base with origin/main for a local run)"
+python3 scripts/test_ci_base.py
+python3 scripts/test_ratchet_base_check.py
+python3 scripts/ratchet_base_check.py
+base=$(python3 scripts/ci_base.py)
+
+echo "== the line-number reference baseline does not rise against the base"
 python3 scripts/test_line_refs_ratchet.py
 python3 scripts/test_line_refs_propose.py
 line_base=$(mktemp)
-if git cat-file -e origin/main:conformance/line-refs-baseline.toml 2>/dev/null; then
-  git show origin/main:conformance/line-refs-baseline.toml > "$line_base"
+if git cat-file -e "$base":conformance/line-refs-baseline.toml 2>/dev/null; then
+  git show "$base":conformance/line-refs-baseline.toml > "$line_base"
 else
   rm -f "$line_base"
 fi
@@ -71,9 +77,9 @@ rm -f "$line_base"
 
 echo "== the shared-file table reads, and this repository's copies equal it (the comparison with
 # every listed repository's main runs on every push to main and daily, conformance-live.yml)"
-if git cat-file -e origin/main:conformance/shared-files.toml 2>/dev/null; then
+if git cat-file -e "$base":conformance/shared-files.toml 2>/dev/null; then
   base_table=$(mktemp)
-  git show origin/main:conformance/shared-files.toml > "$base_table"
+  git show "$base":conformance/shared-files.toml > "$base_table"
   python3 scripts/shared_files_check.py --table conformance/shared-files.toml --base-table "$base_table" --lock-file .github/workflows/conformance-live.yml
   rm -f "$base_table"
 else

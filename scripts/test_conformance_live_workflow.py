@@ -92,11 +92,12 @@ class Workflow(unittest.TestCase):
         m = re.search(r"conformance_roster_check\.py --state-drift-note (\S+)", other)
         self.assertIsNotNone(m, other)
         # the base is the base commit's file (git show <ref>:path into that file), never the tree under check: with
-        # the committed state as its own base every section reads as untouched and every drift as a note
+        # the committed state as its own base every section reads as untouched and every drift as a note. The commit
+        # is the one scripts/ci_base.py names from the event (main before the push), never FETCH_HEAD of main
         base = m.group(1)
-        self.assertIn(f"git show FETCH_HEAD:conformance/manifest-state.toml > {base}", other)
-        self.assertNotRegex(other, r"\bcp\b|\bln\b")
-        self.assertRegex(other, r'git fetch -q --depth 1 origin "\$BEFORE"')
+        self.assertIn(f'git show "$base":conformance/manifest-state.toml > {base}', other)
+        self.assertNotRegex(other, r"\bcp\b|\bln\b|FETCH_HEAD")
+        self.assertRegex(other, r'base=\$\(python3 scripts/ci_base\.py --event "\$EVENT" --ref "\$GITHUB_REF" --before "\$BEFORE"\)')
 
     def test_the_strict_shared_file_check_runs_daily_and_the_landing_gate_on_a_push(self):
         daily = self.step("Strict every day (scripts/shared_files_strict.sh --daily)")
