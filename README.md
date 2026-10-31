@@ -103,7 +103,7 @@ CI (`.github/workflows/public-text.yml`) runs the tests and both scans on every 
 
 `docs/CONFORMANCE.md` is the human-readable specification of what a Law-bearing crate's arithmetic must guarantee — 15 gates, from banning a direct call to a platform transcendental function (G1) through banning a build flag that changes floating-point semantics (G14) and checking the surfaces a crate says it can be used from against what it has and what CI builds (G15, phased in until 2026-12-12). `conformance/gates.toml` is the same 15 gates in the form a generator reads: id, name, one-line definition, and the kinds of evidence a passing crate must cite.
 
-Each crate in the release train carries its own `alice-law-conformance.toml` at its repository root, one entry per gate (`status`: `pass` / `fail-known` / `unverified` / `n/a`, `evidence`, `mutant`, `since`, `note`, `reference_repo`); this repository does not hold those manifests itself, only the gates they answer against. `scripts/conformance_roster_check.py` reads every release-train crate's manifest at its main (through `gh api`: the file tree and the manifest) and fails on a crate with no manifest, a gate with no entry, an unknown gate or a key spelled like one in another form (`g15`, `G01`), a status outside the gate's vocabulary (case-sensitive), an evidence entry whose first word is a path that is not at main (after backticks, a `label:` prefix, a leading `./` and a `:<line>` / `::<name>` suffix are removed; a bare file name must match exactly one file), a mutant that is not a string, or a `fail-known` entry that does not locate its site: its note or evidence must name a file at main by its path (not a directory, and not a root file describing the crate such as `Cargo.toml` or `README.md`), or by a bare name that matches exactly one file and has a line number after it, or that names one workflow (where a step or a leg is absent); a path written as another repository's (`ALICE-Law's scripts/...`) does not count, and a line number is not checked against the file's length. A `pass` / `n/a` entry is counted as `unverified` unless an evidence entry names a path at main and its mutant is a non-empty string. A crate whose manifest is not written yet is listed by name in `conformance/missing-manifests.toml` (with the repository whose change adds it), and an entry whose manifest has landed fails as stale. The status counts of each repository's manifest, with the crates it is read for (crates that share a repository share its one manifest), are in `conformance/manifest-state.toml`, regenerated with `--write`; the check fails when it differs from main. Nothing compared exits 2.
+Each crate in the release train carries its own `alice-law-conformance.toml` at its repository root, one entry per gate (`status`: `pass` / `fail-known` / `unverified` / `n/a`, `evidence`, `mutant`, `since`, `note`, `reference_repo`); this repository does not hold those manifests itself, only the gates they answer against. `scripts/conformance_roster_check.py` reads every release-train crate's manifest at its main (through `gh api`: the file tree and the manifest) and fails on a crate with no manifest, a gate with no entry, an unknown gate or a key spelled like one in another form (`g15`, `G01`), a status outside the gate's vocabulary (case-sensitive), an evidence entry whose first word is a path that is not at main (after backticks, a `label:` prefix, a leading `./` and a `:<line>` / `::<name>` suffix are removed; a bare file name must match exactly one file), a mutant that is not a string, or a `fail-known` entry that does not locate its site: its note or evidence must name a file at main by its path (not a directory, and not a root file describing the crate such as `Cargo.toml` or `README.md`), or by a bare name that matches exactly one file and has a line number after it, or that names one workflow (where a step or a leg is absent); a path written as another repository's (`ALICE-Law's scripts/...`) does not count, and a line number is not checked against the file's length. A `pass` / `n/a` entry is counted as `unverified` unless an evidence entry names a path at main and its mutant is a non-empty string. A crate whose manifest is not written yet is listed by name in `conformance/missing-manifests.toml` (with the repository whose change adds it), and an entry whose manifest has landed fails as stale. The status counts of each repository's manifest, with the crates it is read for (crates that share a repository share its one manifest), are computed from the mains on each run and published in the Conformance (live) job summary (`--summary`); this repository records none of them, so a crate's landing needs no change here. Nothing compared exits 2.
 
 ## End to end
 
@@ -180,29 +180,9 @@ None.
 | 0.5.0 | `966a78784bb4e3341ac6627d519db896f398176b71c2402b188294db6c8e3728` |
 | 0.5.1 | `9f7cf676708a272e3817ebbf0727c610f391e1547747af4307ee44d5523267c2` |
 
-### Conformance manifests (status counts of the 15 gates in each repository's manifest at main)
+### Conformance manifests (15 gates)
 
-One row per repository: crates that share a repository share its one manifest at the root (the "read for" column), so each manifest is counted once; 17 manifests × 15 gates = 255 gate entries.
-
-| repository | read for | pass | fail-known | unverified | n/a |
-|---|---|---|---|---|---|
-| ALICE-Analytics | alice-analytics | 12 | 0 | 1 | 2 |
-| ALICE-Channel | alice-channel | 11 | 0 | 1 | 3 |
-| ALICE-Crypto | alice-crypto | 11 | 0 | 1 | 3 |
-| ALICE-DB | alice-db | 14 | 0 | 1 | 0 |
-| ALICE-DetMath | alice-det-math | 12 | 0 | 1 | 2 |
-| ALICE-Edge | alice-edge | 14 | 0 | 1 | 0 |
-| ALICE-Font | alice-font | 12 | 2 | 1 | 0 |
-| ALICE-Identity | alice-identity | 11 | 0 | 1 | 3 |
-| ALICE-Kinematics | alice-kinematics | 13 | 1 | 1 | 0 |
-| ALICE-LLM | alice-llm | 14 | 0 | 1 | 0 |
-| ALICE-LOL | alice-lol, alice-lol-macro | 14 | 0 | 1 | 0 |
-| ALICE-ML | alice-ml | 14 | 0 | 1 | 0 |
-| ALICE-Physics | alice-physics | 13 | 1 | 1 | 0 |
-| ALICE-SDF | alice-sdf | 12 | 2 | 1 | 0 |
-| ALICE-Sign | alice-sign | 13 | 0 | 1 | 1 |
-| ALICE-Sync | alice-sync | 14 | 0 | 1 | 0 |
-| ALICE-Zip | alice-zip, alice-zip-cli | 14 | 0 | 1 | 0 |
+The status counts of each repository's manifest at main are computed from the mains by the Conformance (live) workflow and shown in its job summary (they are not committed here).
 
 ### Crates whose manifest is not written yet
 

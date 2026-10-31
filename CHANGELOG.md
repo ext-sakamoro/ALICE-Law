@@ -163,6 +163,11 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- conformance の状態は観測だけにする: 他の repository の manifest の status の件数をこの repository に記録しない `scripts/conformance_roster_check.py` は実行のたびに各 main から件数を計算し、`--summary FILE` で Markdown の表を FILE に足す (Conformance (live) は job summary に出す) crate の main の manifest に finding があれば live は red のまま (この repository の CI の警報で、crate の着地は止めない) state の差は finding にしない (記録した state が無い) `--internal` はこの repository 自身の conformance の入力 (roster・gates・missing-manifests・line-reference の baseline) だけを見る
+- `scripts/land_law_state.py` は報告だけにする: candidate を着地させた状態と各 main の状態を比べて変わる件数と `state moves: no` / `state moves: yes` を出し、着地後の状態に出る finding を表示する 何も書かない 計算できれば exit 0 (動いても finding があっても)、計算できなければ 2
+- `scripts/shared_files_strict.sh` (この repository の main への push の前の receipt) は roster の検査を `--internal` で走らせる 他の repository の manifest でこの repository の push は止まらない
+- line-number reference が baseline より少ない manifest は note (baseline は下げてよいが、古い baseline は何も止めない) 多い方は従来どおり finding
+- README の Status は crate ごとの件数の表をやめ、Conformance (live) の job summary を指す 1 行にする (`scripts/gen_law_status.py`、`scripts/readme_headings.toml` の見出しの対も合わせる)
 - `conformance/shared-files.toml`: `scripts/gated_tests.py` と `scripts/test_gated_tests.py` (owner ALICE-GameEngine) の行を計画として足した (holders は ALICE-GameEngine と最初の採用者 ALICE-DB、bytes は GameEngine の main ad81b541) 各 repo の `scripts/gated_tests.toml` は共有しない 他の採用者は自分の commit で加わる
 - e2e (`law_to_storage_roundtrip`): `KNOWN_SEMANTICS` に alice-det-math 0.6.0 の行 (`a2a11b9b…`) を足した 0.6.0 は 0.5.2 が最後の rev で持っていた識別子を名指す (0.5.2 は未公開で 2 つの識別子を持っていた) main mode の e2e は e2e の sibling が 0.6.0 を受けるまで red のまま (その失敗はこの mode の目的どおり) 0.6.0 の digest の golden の行は、0.6.0 を link した build で測ってから足す
 - `conformance/shared-files.toml`: 表を今の main から作り直す `scripts/semver_gate.py` / `scripts/workflow_concurrency.py` / `scripts/release_baseline.py` と各試験の 6 行は、ALICE-Law も他の holder と同じ bytes を持ったので計画の行から uniform の行になり、その計画の bytes を `conformance/planned/` から外した count lock は 1184 から 1262
@@ -268,6 +273,9 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/shared-files.toml`: 表を今の main から作り直す ALICE-Analytics が `scripts/gen_clippy_canary_calls.py` と試験の計画の目標の bytes に移ったので、2 つの pending の行の variants に合わせ、owner の main が目標を持ったので最初の移動 (`first_move`) ではなくなる (目標と owner は変わらない) 表の写しの数の lock は 1210 のまま
 - `conformance/shared-files.toml`: `scripts/clippy_canary.py` / `scripts/test_clippy_canary.py` / `scripts/gen_clippy_canary_calls.py` / `scripts/test_gen_clippy_canary_calls.py` を ALICE-Analytics の新しい bytes への計画にする (owner ALICE-Analytics、canary の依存の source を registry → git → path の順に読む版、clippy_canary planned 2608ff9d / target d0b78184、試験 planned b1a39ed0 / target df838f4b、生成器 planned cc0ad225 / target 118e2a17、試験 planned fc452bdb / target 15c0afc2) 生成器の 2 行は前の計画 (b1716690 / a39c3f11、Analytics の main が持つ) からの移動として記録する 計画した bytes を `conformance/planned/` に置き、前の計画の bytes を外す 表の写しの数の lock は 1210 から 1184
 - `conformance/shared-files.toml`: `scripts/test_shared_files.py` (owner ALICE-DetMath) の計画を、DetMath が着地した e2c85c9e / 88dd1d9a から、表の行から試験を組み非公開の repository でも走る新しい bytes (planned 39455376 / target ffb398a3) に re-roll する (moved_from は着地した組) 表を今の main から作り直したので、owner が着地した first move の flag (`scripts/shared_files.sh` / `scripts/clippy_external_coverage.py` と各試験) が外れ、pending の行の variants が今の main の持ち方になる
+
+### Removed
+- `conformance/manifest-state.toml` と `conformance/pending-state.toml`、`conformance_roster_check.py` の `--write` / `--state` / `--pending` / `--strict` / `--state-drift-note` と pending の 3 日の規則、`land_law_state.py` の `--write` / `--today` crate の着地のたびに要った追いかけの commit と、着地済の entry が他の repository の着地を止める経路がなくなる
 
 ### Fixed
 - `scripts/shared_files_check.py`: 基の表の first move が着地した後 (owner が目標を持つ、この表の variants で見る) の re-roll を「first move が未着地」「first_move を落とした」と読んで止めていた 着地を判定する述語 `owner_landed` を 1 つにし、`gen_shared_files.py` もそれを使う (生成器と検査が別々の判定を持たない)

@@ -52,8 +52,7 @@ def manifest(**over) -> str:
 
 
 # A test that leaves out a path reads conformance_roster_check's default, which is this repository's own
-# conformance/ directory: its real pending-state.toml, baseline and missing list would then decide the result
-# (a pending entry on Law's main once broke the land_law_state fixture runs that way). The suite points the
+# conformance/ directory: its real baseline and missing list would then decide the result. The suite points the
 # defaults at a directory whose files name a repository no fixture has, so such a leak is a finding, never a
 # silent read.
 LEAK_REPO = "ALICE-Leak"
@@ -65,8 +64,6 @@ def poison_root() -> Path:
     root = Path(tempfile.mkdtemp(prefix="crc-leak-"))
     __import__("atexit").register(__import__("shutil").rmtree, root, True)
     (root / "conformance").mkdir()
-    (root / "conformance" / "pending-state.toml").write_text(
-        f'[pending."{LEAK_REPO}"]\nsha = "{"0" * 40}"\nsince = "2026-10-19"\n', encoding="utf-8")
     (root / "conformance" / "line-refs-baseline.toml").write_text(f'[baseline]\n"{LEAK_REPO}" = 0\n', encoding="utf-8")
     (root / "conformance" / "missing-manifests.toml").write_text(
         f'[missing.leak]\nfixed-in = "{LEAK_REPO}"\nwhy = "a leaked read of the repository file"\n', encoding="utf-8")
@@ -92,23 +89,18 @@ def exact_line_baseline(d: Path, texts: dict) -> str:
 class LeakDetector(unittest.TestCase):
     def test_a_default_path_reads_the_poisoned_root_not_the_repository(self):
         self.assertNotEqual(crc.ROOT, _real_root)
-        self.assertEqual(crc.load_pending(crc.ROOT / "conformance" / "pending-state.toml"),
-                         {LEAK_REPO: {"sha": "0" * 40, "since": "2026-10-19"}})
         self.assertEqual(crc.load_line_baseline(crc.ROOT / "conformance" / "line-refs-baseline.toml"), {LEAK_REPO: 0})
 
 
 class Check(unittest.TestCase):
-    def run_check(self, repos: dict, missing: str = "", state: str | None = None, write=True, roster=ROSTER,
-                  gates=GATES, extra=()):
-        """repos: {repo: manifest text or None}; returns (code, output, state text)"""
+    def run_check(self, repos: dict, missing: str = "", roster=ROSTER, gates=GATES, extra=()):
+        """repos: {repo: manifest text or None}; returns (code, output, the job summary the run appended)"""
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             (d / "r.toml").write_text(roster, encoding="utf-8")
             (d / "g.toml").write_text(gates, encoding="utf-8")
             (d / "m.toml").write_text(missing, encoding="utf-8")
-            st = d / "s.toml"
-            if state is not None:
-                st.write_text(state, encoding="utf-8")
+            summary = d / "summary.md"
             calls = []
 
             def fetch(repo):
@@ -116,101 +108,73 @@ class Check(unittest.TestCase):
                 return repos.get(repo), set(PATHS)
             out = io.StringIO()
             args = ["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing", str(d / "m.toml"),
-                    "--state", str(st), "--pending", str(d / "p.toml"),
-                    "--line-baseline", exact_line_baseline(d, repos)] + (["--write"] if write else []) + list(extra)
+                    "--line-baseline", exact_line_baseline(d, repos), "--summary", str(summary)] + list(extra)
+            before = sorted(x.name for x in d.iterdir())
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(args, fetch=fetch)
             self.assertNotIn("Law", calls)  # an exempt crate is not read
-            return code, out.getvalue(), st.read_text(encoding="utf-8") if st.exists() else None
+            # the run writes its summary and nothing else (no state file is recorded)
+            self.assertEqual(sorted(x.name for x in d.iterdir()), sorted(set(before) | ({"summary.md"} if summary.exists() else set())))
+            return code, out.getvalue(), summary.read_text(encoding="utf-8") if summary.exists() else ""
 
     def green_state(self, repos):
-        code, out, state = self.run_check(repos, write=True)
+        code, out, state = self.run_check(repos)
         self.assertEqual(code, 0, out)
         return state
 
-    def test_every_manifest_complete_passes_and_the_state_is_pinned(self):
+    def test_every_manifest_complete_passes_and_the_counts_are_published(self):
         repos = {"Alpha": manifest(), "Beta": manifest()}
-        state = self.green_state(repos)
-        self.assertIn('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 1\n"fail-known" = 1\n"unverified" = 1\n"n/a" = 0', state)
-        code, out, _ = self.run_check(repos, state=state, write=False)
+        code, out, summary = self.run_check(repos)
         self.assertEqual(code, 0, out)
+        self.assertIn("| repository | read for | pass | fail-known | unverified | n/a |", summary)
+        self.assertIn("| Alpha | alpha | 1 | 1 | 1 | 0 |", summary)
+        self.assertIn("state: Alpha (alpha): pass 1, fail-known 1, unverified 1, n/a 0", out)
         self.assertIn("2 manifests read for 2 crates (crates that share a repository share its manifest), 6 gates compared, 0 findings", out)
+
+    def test_without_summary_the_counts_are_only_printed(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "r.toml").write_text(ROSTER, encoding="utf-8")
+            (d / "g.toml").write_text(GATES, encoding="utf-8")
+            (d / "m.toml").write_text("", encoding="utf-8")
+            repos = {"Alpha": manifest(), "Beta": manifest()}
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = crc.main(["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"),
+                                 "--missing", str(d / "m.toml"), "--line-baseline", exact_line_baseline(d, repos)],
+                                fetch=lambda r: (repos.get(r), set(PATHS)))
+            self.assertEqual(code, 0, out.getvalue())
+            self.assertEqual(sorted(x.name for x in d.iterdir()), ["g.toml", "lb.toml", "m.toml", "r.toml"])
+            self.assertIn("state: Beta (beta): pass 1", out.getvalue())
+
+    def test_a_crate_whose_manifest_moved_needs_no_change_here(self):
+        # the counts follow the mains on the next run: no recorded state can be stale
+        before = {"Alpha": manifest(), "Beta": manifest()}
+        after = {"Alpha": manifest(G3='status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs:12, no helper"'),
+                 "Beta": manifest()}
+        self.assertIn("| Alpha | alpha | 1 | 1 | 1 | 0 |", self.green_state(before))
+        self.assertIn("| Alpha | alpha | 1 | 2 | 0 | 0 |", self.green_state(after))
+
+    def test_a_count_below_the_line_reference_baseline_is_a_note(self):
+        texts = {"ALICE-A": '[G1]\nnote = "see src/x.rs:3"\n'}
+        findings, notes = crc.line_ref_findings(texts, {"ALICE-A": 5})
+        self.assertEqual(findings, [])
+        self.assertIn("slack: ALICE-A: baseline 5, count 1 (conformance/line-refs-baseline.toml may be lowered to 1)", notes)
+        findings, _ = crc.line_ref_findings(texts, {"ALICE-A": 0})
+        self.assertEqual(len(findings), 1)
+        self.assertIn("the baseline allows 0", findings[0])
 
     def test_crates_that_share_a_repository_share_one_manifest_checked_once(self):
         roster = ROSTER + '\n[crate.gamma]\nversion = "1.0.0"\nstate = "published"\norder = 4\nrepo = "Alpha"\n'
         code, out, state = self.run_check({"Alpha": manifest(), "Beta": manifest()}, roster=roster)
         self.assertEqual(code, 0, out)
-        self.assertIn('[manifest."Alpha"]\ncrates = ["alpha", "gamma"]\n"pass" = 1', state)
-        self.assertEqual(state.count("[manifest."), 2)
+        self.assertIn("| Alpha | alpha, gamma | 1 |", state)
+        self.assertEqual(len([x for x in state.splitlines() if x.startswith("| ") and not x.startswith("| repository")]), 2)
         self.assertIn("2 manifests read for 3 crates", out)
         self.assertIn("6 gates compared", out)  # Alpha's 3 gates once, not once per crate
         code, out, state = self.run_check({"Alpha": manifest(G3=None), "Beta": manifest()}, roster=roster)
         self.assertEqual(code, 1, out)
         self.assertEqual(out.count("gate G3 has no entry"), 1)
-
-    def test_a_state_file_that_differs_from_main_is_a_finding(self):
-        repos = {"Alpha": manifest(), "Beta": manifest()}
-        state = self.green_state(repos)
-        code, out, _ = self.run_check(repos, state=state.replace('"pass" = 1', '"pass" = 2', 1), write=False)
-        self.assertEqual(code, 1, out)
-        self.assertIn("s.toml differs from the manifests at main", out)
-        code, out, _ = self.run_check(repos, state=None, write=False)
-        self.assertEqual(code, 1, out)
-
-    def drift_run(self, repos, state, base):
-        with tempfile.TemporaryDirectory() as d:
-            b = Path(d) / "base-state.toml"
-            b.write_text(base, encoding="utf-8")
-            return self.run_check(repos, state=state, write=False, extra=["--state-drift-note", str(b)])
-
-    def test_a_section_this_change_did_not_touch_is_a_note_when_the_mains_moved(self):
-        # the fleet moved: Alpha's gate flipped on its main after the state commit; the change leaves Alpha's section
-        # as the base has it, so the drift is a note there (the daily run, without the flag, fails on it)
-        before = {"Alpha": manifest(), "Beta": manifest()}
-        state = self.green_state(before)
-        after = {"Alpha": manifest(G3='status = "fail-known"\nevidence = []\nnote = "raw max at src/lib.rs:12, no helper"'), "Beta": manifest()}
-        code, out, _ = self.drift_run(after, state, base=state)
-        self.assertEqual(code, 0, out)
-        self.assertIn('note: s.toml: [manifest."Alpha"] differs from the manifests at main', out)
-        self.assertNotIn("found:", out)
-        self.assertEqual(self.run_check(after, state=state, write=False)[0], 1)  # the daily run
-
-    def test_a_section_this_change_edited_must_equal_the_regenerated_one(self):
-        # a hand edit (pass 1 -> 2) with nothing moved upstream: the change touched Alpha's section, so it is a finding
-        repos = {"Alpha": manifest(), "Beta": manifest()}
-        base = self.green_state(repos)
-        edited = base.replace('"pass" = 1', '"pass" = 2', 1)
-        code, out, _ = self.drift_run(repos, edited, base=base)
-        self.assertEqual(code, 1, out)
-        self.assertIn('found: s.toml: [manifest."Alpha"] was changed by this change and differs from the manifests at main', out)
-        # an edit that regenerates the section correctly passes
-        self.assertEqual(self.drift_run(repos, base, base=edited)[0], 0)
-
-    def test_a_section_the_change_adds_or_removes_is_touched(self):
-        repos = {"Alpha": manifest(), "Beta": manifest()}
-        state = self.green_state(repos)
-        without_beta = state[:state.index('[manifest."Beta"]')]
-        code, out, _ = self.drift_run(repos, without_beta, base=state)
-        self.assertEqual(code, 1, out)
-        self.assertIn('[manifest."Beta"]', out)
-
-    def test_a_section_the_change_adds_must_equal_the_regenerated_one(self):
-        # the base has no Beta section; the change adds one that is not what the mains give: a finding, not drift
-        repos = {"Alpha": manifest(), "Beta": manifest()}
-        state = self.green_state(repos)
-        base = state[:state.index('[manifest."Beta"]')]
-        beta = state.index('[manifest."Beta"]')
-        added_wrong = state[:beta] + state[beta:].replace('"pass" = 1', '"pass" = 3', 1)
-        code, out, _ = self.drift_run(repos, added_wrong, base=base)
-        self.assertEqual(code, 1, out)
-        self.assertIn('[manifest."Beta"] was changed by this change', out)
-        self.assertEqual(self.drift_run(repos, state, base=base)[0], 0)  # added as the mains give it
-
-    def test_an_unreadable_base_state_is_no_result(self):
-        repos = {"Alpha": manifest(), "Beta": manifest()}
-        state = self.green_state(repos)
-        code, out, _ = self.drift_run(repos, state, base="not [toml")
-        self.assertEqual(code, 2, out)
 
     def test_a_missing_manifest_fails_with_the_crate_name(self):
         code, out, _ = self.run_check({"Alpha": manifest(), "Beta": None})
@@ -220,11 +184,10 @@ class Check(unittest.TestCase):
     def test_a_listed_missing_manifest_is_expected_and_a_landed_one_is_stale(self):
         listed = '[missing."beta"]\nfixed-in = "Beta"\nwhy = "not written yet"\n'
         repos = {"Alpha": manifest(), "Beta": None}
-        code, out, state = self.run_check(repos, missing=listed, write=True)
+        code, out, state = self.run_check(repos, missing=listed)
         self.assertEqual(code, 0, out)
         self.assertIn("note: beta: no alice-law-conformance.toml at main, as missing-manifests.toml expects", out)
-        self.assertNotIn('"beta"', state)
-        self.assertNotIn('"Beta"', state)
+        self.assertNotIn("| Beta |", state)
         code, out, _ = self.run_check({"Alpha": manifest(), "Beta": manifest()}, missing=listed)
         self.assertEqual(code, 1, out)
         self.assertIn("beta: alice-law-conformance.toml is at main, so its missing-manifests.toml entry is stale", out)
@@ -251,7 +214,7 @@ class Check(unittest.TestCase):
 
     def test_the_legacy_status_is_read_as_unverified_with_a_note(self):
         repos = {"Alpha": manifest(G3='status = "missing"'), "Beta": manifest()}
-        code, out, state = self.run_check(repos, write=True)
+        code, out, state = self.run_check(repos)
         self.assertEqual(code, 0, out)
         self.assertIn("G3 status 'missing' is the earlier vocabulary, read as 'unverified'", out)
 
@@ -262,7 +225,7 @@ class Check(unittest.TestCase):
                        ('status = "fail-known"\nnote = "the helper is missing somewhere"', False),
                        ('status = "fail-known"\nnote = "raw max at src/other.rs:12"', False),
                        ('status = "fail-known"', False)):
-            code, out, _ = self.run_check({"Alpha": manifest(G2=g2), "Beta": manifest()}, write=True)
+            code, out, _ = self.run_check({"Alpha": manifest(G2=g2), "Beta": manifest()})
             self.assertEqual(code, 0 if ok else 1, (g2, out))
 
     def test_evidence_naming_a_path_not_at_main_fails(self):
@@ -273,10 +236,10 @@ class Check(unittest.TestCase):
 
     def test_pass_without_evidence_or_mutant_counts_as_unverified(self):
         repos = {"Alpha": manifest(G1='status = "pass"\nevidence = ["src/lib.rs"]'), "Beta": manifest()}
-        code, out, state = self.run_check(repos, write=True)
+        code, out, state = self.run_check(repos)
         self.assertEqual(code, 0, out)
         self.assertIn("G1 pass without a mutant, read as unverified", out)
-        self.assertIn('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 0\n"fail-known" = 1\n"unverified" = 2', state)
+        self.assertIn("| Alpha | alpha | 0 | 1 | 2 |", state)
 
     def test_an_evidence_path_in_any_written_form_must_be_at_main(self):
         # the first word of an entry, after backticks, a `label:`, `:<line>`, `::<name>` and `./`
@@ -289,18 +252,18 @@ class Check(unittest.TestCase):
         for entry in ("tests/golden.rs:10", "tests/golden.rs::checker", "`tests/golden.rs`", "test: tests/golden.rs",
                       "./src/lib.rs", "src/", "ci.yml clippy job", "src/lib.rs (see ALICE-Law's scripts/x.py)"):
             g1 = f'status = "pass"\nevidence = ["{entry}"]\nmutant = "m"'
-            code, out, state = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()}, write=True)
+            code, out, state = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()})
             self.assertEqual(code, 0, (entry, out))
-            self.assertIn('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 1', state)
+            self.assertIn("| Alpha | alpha | 1 |", state)
 
     def test_pass_with_meaningless_evidence_or_mutant_is_not_counted_as_pass(self):
         for g1 in ('status = "pass"\nevidence = [""]\nmutant = "m"',
                    'status = "pass"\nevidence = ["trust me"]\nmutant = "m"',
                    'status = "pass"\nevidence = ["src/lib.rs"]\nmutant = "  "',
                    'status = "n/a"\nevidence = ["it does not apply"]\nmutant = "m"\nnote = "none here"'):
-            code, out, state = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()}, write=True)
+            code, out, state = self.run_check({"Alpha": manifest(G1=g1), "Beta": manifest()})
             self.assertEqual(code, 0, (g1, out))
-            self.assertIn('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 0', state, g1)
+            self.assertIn("| Alpha | alpha | 0 |", state, g1)
             self.assertIn("read as unverified", out)
         code, out, _ = self.run_check({"Alpha": manifest(G1='status = "pass"\nevidence = ["src/lib.rs"]\nmutant = 0'),
                                        "Beta": manifest()})
@@ -312,13 +275,13 @@ class Check(unittest.TestCase):
                      "no step in ALICE-Law's .github/workflows/ci.yml", "see notes.md for the plan", "lib.rs:4",
                      "see alice-law-conformance.toml", "alice-law-conformance.toml:3"):
             code, out, _ = self.run_check({"Alpha": manifest(G2=f'status = "fail-known"\nnote = "{note}"'),
-                                           "Beta": manifest()}, write=True)
+                                           "Beta": manifest()})
             self.assertEqual(code, 1, (note, out))
             self.assertIn("G2 is fail-known without a located site", out)
         for note in ("raw max at src/geom/mod.rs", "src/lib.rs:12", "no release leg in ci.yml",
                      "mod.rs line 3 has the raw max"):
             code, out, _ = self.run_check({"Alpha": manifest(G2=f'status = "fail-known"\nnote = "{note}"'),
-                                           "Beta": manifest()}, write=True)
+                                           "Beta": manifest()})
             self.assertEqual(code, 0, (note, out))
 
     def test_a_gate_id_in_another_case_or_with_a_leading_zero_fails(self):
@@ -331,7 +294,7 @@ class Check(unittest.TestCase):
 
     def test_statuses_are_case_sensitive(self):
         for g3 in ('status = "Pass"', 'status = "PASS"', 'status = "Unverified"'):
-            code, out, _ = self.run_check({"Alpha": manifest(G3=g3), "Beta": manifest()}, write=True)
+            code, out, _ = self.run_check({"Alpha": manifest(G3=g3), "Beta": manifest()})
             self.assertEqual(code, 1, (g3, out))
             self.assertIn("G3 status", out)
             self.assertIn("is not one of", out)
@@ -709,73 +672,47 @@ class LawEvidence(unittest.TestCase):
         self.assertIsNotNone(crc.symbol_defined("src/c.rs::in_string", paths, read))
 
 class Internal(unittest.TestCase):
-    """--internal: the committed state file alone, no other repository read"""
-    GOOD = ('[manifest."Alpha"]\ncrates = ["alpha"]\n"pass" = 1\n"fail-known" = 1\n"unverified" = 1\n"n/a" = 0\n\n'
-            '[manifest."Beta"]\ncrates = ["beta"]\n"pass" = 0\n"fail-known" = 0\n"unverified" = 3\n"n/a" = 0\n')
-
-    def run_internal(self, state: str, missing: str = "", roster=ROSTER):
+    """--internal: this repository's own conformance inputs alone, no other repository read"""
+    def run_internal(self, missing: str = "", roster=ROSTER, baseline: str | None = "[baseline]\n", gates=GATES):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             (d / "r.toml").write_text(roster, encoding="utf-8")
-            (d / "g.toml").write_text(GATES, encoding="utf-8")
+            (d / "g.toml").write_text(gates, encoding="utf-8")
             (d / "m.toml").write_text(missing, encoding="utf-8")
-            (d / "s.toml").write_text(state, encoding="utf-8")
+            if baseline is not None:
+                (d / "lb.toml").write_text(baseline, encoding="utf-8")
 
             def fetch(repo):
                 raise AssertionError(f"--internal read {repo}")
             out = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-                code = crc.main(["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
-                                 str(d / "m.toml"), "--state", str(d / "s.toml"), "--internal"], fetch=fetch)
+                code = crc.main(["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"),
+                                 "--missing", str(d / "m.toml"), "--line-baseline", str(d / "lb.toml"), "--internal"],
+                                fetch=fetch)
             return code, out.getvalue()
 
-    def test_a_consistent_state_passes_without_reading_any_repository(self):
-        code, out = self.run_internal(self.GOOD)
+    def test_consistent_inputs_pass_without_reading_any_repository(self):
+        code, out = self.run_internal(baseline='[baseline]\n"Alpha" = 0\n')
         self.assertEqual(code, 0, out)
-        self.assertIn("2 repositories, 0 findings", out)
+        self.assertIn("conformance inputs (internal): 2 release-train crates, 0 findings", out)
 
-    def test_a_state_that_omits_a_crate_fails(self):
-        state = self.GOOD.split('\n\n[manifest."Beta"]')[0] + "\n"
-        code, out = self.run_internal(state)
+    def test_a_baseline_for_a_repository_outside_the_train_fails(self):
+        code, out = self.run_internal(baseline='[baseline]\n"Gamma" = 0\n')
         self.assertEqual(code, 1, out)
-        self.assertIn("beta (Beta) has no entry", out)
+        self.assertIn("found: Gamma: in conformance/line-refs-baseline.toml but not a release-train repository", out)
 
-    def test_an_omitted_crate_listed_as_missing_is_expected(self):
-        state = self.GOOD.split('\n\n[manifest."Beta"]')[0] + "\n"
-        code, out = self.run_internal(state, missing='[missing.beta]\nfixed-in = "Beta"\nwhy = "not yet"\n')
+    def test_a_bad_missing_entry_or_an_empty_roster_or_gate_list_is_no_result(self):
+        for kw in ({"missing": '[missing."gamma"]\nfixed-in = "G"\nwhy = "x"\n'},
+                   {"missing": '[missing."beta"]\nwhy = "x"\n'},
+                   {"roster": '[train]\ngithub = "owner"\n'},
+                   {"gates": 'status_vocabulary = ["pass"]\n'},
+                   {"baseline": "[baseline]\n\"Alpha\" = -1\n"}):
+            with self.subTest(kw=kw):
+                self.assertEqual(self.run_internal(**kw)[0], 2)
+
+    def test_no_baseline_file_is_read_as_none_and_passes(self):
+        code, out = self.run_internal(baseline=None)
         self.assertEqual(code, 0, out)
-
-    def test_counts_that_do_not_sum_to_the_gates_fail(self):
-        code, out = self.run_internal(self.GOOD.replace('"n/a" = 0\n\n[manifest."Beta"]', '"n/a" = 1\n\n[manifest."Beta"]'))
-        self.assertEqual(code, 1, out)
-        self.assertIn("sum to 4, not to the 3 gates", out)
-
-    def test_a_negative_or_non_integer_count_fails(self):
-        for bad in ('"pass" = -1', '"pass" = "1"', '"pass" = true'):
-            code, out = self.run_internal(self.GOOD.replace('"pass" = 1', bad, 1))
-            self.assertEqual(code, 1, (bad, out))
-
-    def test_a_crate_under_the_wrong_repository_or_twice_or_unknown_fails(self):
-        for state, want in ((self.GOOD.replace('crates = ["beta"]', 'crates = ["alpha"]'), "listed under both"),
-                            (self.GOOD.replace('crates = ["beta"]', 'crates = ["beta", "gamma"]'), "gamma is not"),
-                            (self.GOOD.replace('[manifest."Beta"]', '[manifest."Other"]'), "belongs to Beta"),
-                            (self.GOOD.replace('crates = ["beta"]', 'crates = ["law"]'), "law is not")):
-            code, out = self.run_internal(state)
-            self.assertEqual(code, 1, (want, out))
-            self.assertIn(want, out)
-
-    def test_an_unparseable_or_empty_state_fails(self):
-        code, out = self.run_internal("[manifest.\n")
-        self.assertEqual(code, 1, out)
-        self.assertIn("does not parse", out)
-        code, out = self.run_internal("")
-        self.assertNotEqual(code, 0, out)
-
-    def test_the_stale_message_names_the_regeneration_command(self):
-        check = Check()
-        code, out, _ = check.run_check({"Alpha": manifest(), "Beta": manifest()}, state="# stale\n", write=False)
-        self.assertEqual(code, 1, out)
-        self.assertIn("regenerate manifest-state: run python3 scripts/conformance_roster_check.py --write", out)
 
 
 class NaEvidence(unittest.TestCase):
@@ -808,11 +745,13 @@ class NaEvidence(unittest.TestCase):
             out = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = crc.main(["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
-                                 str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
-                                 "--write", "--line-baseline", exact_line_baseline(d, {"Alpha": text, "Beta": manifest()})],
+                                 str(d / "m.toml"), "--line-baseline", exact_line_baseline(d, {"Alpha": text, "Beta": manifest()})],
                                 fetch=fetch)
-            state = (d / "s.toml").read_text(encoding="utf-8") if (d / "s.toml").exists() else ""
-            return code, out.getvalue(), state.split('[manifest."Beta"]')[0]
+            # Alpha's counts as `"<status>" = N` lines, read from the run's `state:` line (empty when not counted)
+            line = next((x for x in out.getvalue().splitlines() if x.startswith("state: Alpha ")), "")
+            counts = "\n".join(f'"{k}" = {v}' for k, v in (part.rsplit(" ", 1) for part in line.split(": ", 2)[-1].split(", "))
+                                if line) if line else ""
+            return code, out.getvalue(), counts
 
     def test_a_measured_scan_stays_n_a(self):
         code, out, state = self.counts_of(self.na(["scripts/scan.py: the scan finds 0 sites here"], self.GOOD))
@@ -866,146 +805,6 @@ class NaEvidence(unittest.TestCase):
         code, out, _ = self.counts_of(manifest())
         self.assertEqual(code, 0, out)
         self.assertNotIn("n/a cell(s) checked", out)
-
-
-class Pending(unittest.TestCase):
-    """the state recorded before a crate lands: conformance/pending-state.toml, matched on the counts"""
-    SHA = "a" * 40
-    PASSED = manifest(G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
-    OTHER = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"')
-
-    def go(self, mains: dict, pending: str | None, at: dict, state: str, *flags: str, today: str = "2026-10-19"):
-        """mains: {repo: manifest}; at: {(repo, sha): manifest}"""
-        with tempfile.TemporaryDirectory() as d:
-            d = Path(d)
-            (d / "r.toml").write_text(ROSTER, encoding="utf-8")
-            (d / "g.toml").write_text(GATES, encoding="utf-8")
-            (d / "s.toml").write_text(state, encoding="utf-8")
-            if pending is not None:
-                (d / "p.toml").write_text(pending, encoding="utf-8")
-            reads = []
-
-            def at_fetch(repo, sha):
-                reads.append((repo, sha))
-                return at[(repo, sha)], set(PATHS)
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-                code = crc.main(["--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
-                                 str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending", str(d / "p.toml"),
-                                 "--today", today, "--line-baseline", exact_line_baseline(d, mains), *flags],
-                                fetch=lambda repo: (mains.get(repo), set(PATHS)), at=at_fetch)
-            written = (d / "s.toml").read_text(encoding="utf-8")
-            pend = (d / "p.toml").read_text(encoding="utf-8") if (d / "p.toml").exists() else None
-            return code, out.getvalue(), written, pend, reads
-
-    def state_of(self, mains: dict) -> str:
-        """the state file the roster writes for these manifests"""
-        with tempfile.TemporaryDirectory() as d:
-            d = Path(d)
-            (d / "r.toml").write_text(ROSTER, encoding="utf-8")
-            (d / "g.toml").write_text(GATES, encoding="utf-8")
-            with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(crc.main(["--today", "2026-10-19", "--roster", str(d / "r.toml"), "--gates", str(d / "g.toml"), "--missing",
-                                           str(d / "m.toml"), "--state", str(d / "s.toml"), "--pending",
-                                           str(d / "p.toml"), "--write", "--line-baseline",
-                                           exact_line_baseline(d, mains)],
-                                          fetch=lambda repo: (mains.get(repo), set(PATHS))), 0)
-            return (d / "s.toml").read_text(encoding="utf-8")
-
-    def entry(self, sha: str = SHA, since: str = "2026-10-18", repo: str = "Alpha") -> str:
-        return f'[pending."{repo}"]\nsha = "{sha}"\nsince = "{since}"\n'
-
-    def setUp(self):
-        self.old = {"Alpha": manifest(), "Beta": manifest()}
-        self.new = {"Alpha": self.PASSED, "Beta": manifest()}
-        self.recorded = self.state_of(self.new)  # the state the regen commit records before Alpha lands
-        self.at = {("Alpha", self.SHA): self.PASSED}
-
-    def test_a_difference_a_pending_entry_explains_passes_and_the_counts_are_computed_at_its_commit(self):
-        code, out, _, _, reads = self.go(self.old, self.entry(), self.at, self.recorded)
-        self.assertEqual(code, 0, out)
-        self.assertIn(f"Alpha: pending: the state records {self.SHA[:12]}, not landed yet", out)
-        self.assertEqual(reads, [("Alpha", self.SHA)])
-
-    def test_without_an_entry_the_same_difference_is_a_finding(self):
-        code, out, *_ = self.go(self.old, None, {}, self.recorded)
-        self.assertEqual(code, 1, out)
-        self.assertIn("differs from the manifests at main", out)
-
-    def test_an_entry_whose_commit_has_other_counts_than_the_table_is_a_finding(self):
-        # the entry names a commit whose manifest flips G2 too: the table (G3 only) is not that commit's state
-        both = manifest(G2='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "m"',
-                        G3='status = "pass"\nevidence = ["tests/golden.rs"]\nmutant = "drop the check"')
-        code, out, *_ = self.go(self.old, self.entry(), {("Alpha", self.SHA): both}, self.recorded)
-        self.assertEqual(code, 1, out)
-        self.assertIn("neither main's nor those of pending entry", out)
-
-    def test_another_repository_with_a_stale_state_is_still_found_while_one_is_pending(self):
-        # Alpha's difference is explained; Beta's main moved too, with no entry: that is still a finding
-        code, out, *_ = self.go({"Alpha": manifest(), "Beta": self.OTHER}, self.entry(), self.at, self.recorded)
-        self.assertEqual(code, 1, out)
-        self.assertIn("differs from the manifests at main", out)
-
-    def test_a_landed_entry_is_a_note_in_live_and_a_finding_under_strict(self):
-        args = (self.new, self.entry(), {}, self.recorded)
-        code, out, _, _, reads = self.go(*args)
-        self.assertEqual(code, 0, out)
-        self.assertIn("so it has landed", out)
-        self.assertEqual(reads, [])  # landed is read from main's counts, the entry's commit is not needed
-        code, out, *_ = self.go(*args, "--strict")
-        self.assertEqual(code, 1, out)
-        self.assertIn("found: Alpha: pending entry", out)
-
-    def test_a_rebased_landing_with_another_sha_but_the_same_counts_reads_as_landed(self):
-        # the entry names the ci commit; the commit that reached main is a rebase of it (another sha): only the
-        # counts matter, so this is the landing, and live stays green
-        code, out, *_ = self.go(self.new, self.entry(sha="b" * 40), {}, self.recorded)
-        self.assertEqual(code, 0, out)
-        self.assertIn("so it has landed", out)
-
-    def test_an_unrelated_commit_on_the_crate_main_does_not_read_as_landed(self):
-        # Alpha's main moved by another commit (its counts are neither the old nor the recorded ones): still
-        # pending, the recorded state is still the entry's commit's
-        code, out, *_ = self.go({"Alpha": self.OTHER, "Beta": manifest()}, self.entry(), self.at, self.recorded)
-        self.assertEqual(code, 0, out)
-        self.assertIn("not landed yet", out)
-        self.assertNotIn("has landed", out)
-
-    def test_a_landed_entry_older_than_three_days_is_a_finding_in_live_too(self):
-        code, out, *_ = self.go(self.new, self.entry(since="2026-10-15"), {}, self.recorded, today="2026-10-19")
-        self.assertEqual(code, 1, out)
-        self.assertIn("(4 days old)", out)
-
-    def test_an_entry_that_has_not_landed_in_three_days_is_a_finding(self):
-        args = (self.old, self.entry(since="2026-10-15"), self.at, self.recorded)
-        code, out, *_ = self.go(*args, today="2026-10-19")
-        self.assertEqual(code, 1, out)
-        self.assertIn("more than 3 days without landing", out)
-        self.assertEqual(self.go(*args, today="2026-10-18")[0], 0)  # 3 days: still inside
-
-    def test_bad_entries_are_unreadable_or_findings(self):
-        for pending, why, code_want in (
-                (self.entry() + self.entry(), "Cannot declare", 2),  # two entries for one crate
-                (self.entry(sha="abc"), "full 40-hex", 2),
-                (self.entry(since="soon"), "YYYY-MM-DD", 2),
-                ('[pending."Alpha"]\nsha = "' + self.SHA + '"\n', "must be { sha, since }", 2),
-                ("[other]\n", "unknown top-level keys", 2),
-                (self.entry(repo="Gamma"), "names a repository the state does not record", 1),
-                (self.entry(since="2026-10-25"), "after today", 1)):
-            with self.subTest(why=why):
-                code, out, *_ = self.go(self.old, pending, self.at, self.recorded)
-                self.assertEqual(code, code_want, out)
-                self.assertIn(why, out)
-
-    def test_write_keeps_an_entry_that_has_not_landed_and_drops_one_that_has(self):
-        both = self.entry() + "\n" + self.entry(sha="b" * 40, repo="Beta")
-        recorded = self.state_of({"Alpha": self.PASSED, "Beta": self.OTHER})
-        code, out, written, pend, _ = self.go(
-            {"Alpha": self.PASSED, "Beta": manifest()}, both, {("Beta", "b" * 40): self.OTHER}, recorded, "--write")
-        self.assertEqual(code, 0, out)
-        self.assertNotIn('"Alpha"', pend)
-        self.assertIn(f'[pending."Beta"]\nsha = "{"b" * 40}"', pend)
-        self.assertEqual(written, recorded)
 
 
 class PhaseIn(unittest.TestCase):

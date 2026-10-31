@@ -85,18 +85,14 @@ class Workflow(unittest.TestCase):
         self.assertIn("holder_live.py", other)
         self.assertIn("--growth-only", other)
 
-    def test_the_state_is_strict_daily_and_a_drift_note_against_the_base_otherwise(self):
-        daily, other = branches(self.step("The committed state equals the members' mains")["run"])
-        self.assertIn("conformance_roster_check.py", daily)
-        self.assertNotIn("--state-drift-note", daily)
-        m = re.search(r"conformance_roster_check\.py --state-drift-note (\S+)", other)
-        self.assertIsNotNone(m, other)
-        # the base is the base commit's file (git show <ref>:path into that file), never the tree under check: with
-        # the committed state as its own base every section reads as untouched and every drift as a note
-        base = m.group(1)
-        self.assertIn(f"git show FETCH_HEAD:conformance/manifest-state.toml > {base}", other)
-        self.assertNotRegex(other, r"\bcp\b|\bln\b")
-        self.assertRegex(other, r'git fetch -q --depth 1 origin "\$BEFORE"')
+    def test_the_manifests_are_read_at_main_and_the_counts_go_to_the_job_summary(self):
+        run = self.step("Every release-train manifest at main (the status counts go to the job summary)")["run"]
+        self.assertEqual(run.strip(), 'python3 scripts/conformance_roster_check.py --summary "$GITHUB_STEP_SUMMARY"')
+        # no committed state is compared or written: neither the drift note nor a state file is named
+        whole = WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotIn("--state-drift-note", whole)
+        self.assertNotIn("manifest-state.toml", whole)
+        self.assertNotIn("pending-state.toml", whole)
 
     def test_the_strict_shared_file_check_runs_daily_and_the_landing_gate_on_a_push(self):
         daily = self.step("Strict every day (scripts/shared_files_strict.sh --daily)")

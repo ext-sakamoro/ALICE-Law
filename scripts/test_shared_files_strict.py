@@ -30,7 +30,7 @@ class Strict(unittest.TestCase):
                 (root / "scripts" / name).write_text(
                     f"import sys\nsys.stderr.write({err!r})\nprint('argv', {name!r}, *sys.argv[1:])\nsys.exit({rc})\n")
             env = dict(os.environ)
-            for name in ("LAW_BASE_TABLE", "LAW_BASE_STATE"):
+            for name in ("LAW_BASE_TABLE",):
                 f = root / f"{name.lower()}.toml"
                 f.write_text("# base\n", encoding="utf-8")
                 env.setdefault(name, str(f))
@@ -44,7 +44,8 @@ class Strict(unittest.TestCase):
         return {ln.split()[1]: ln.split()[2:] for ln in p.stdout.splitlines() if ln.startswith("argv ")}
 
     def test_the_landing_mode_leaves_drift_to_the_daily_run(self):
-        # a change landing on main: an adoption with the same bytes and a state behind the crates' mains are notes
+        # a change landing on main: an adoption with the same bytes is a note; the conformance inputs are this
+        # repository's own (--internal), never the crates' mains
         a = self.argv(self.run_with())
         self.assertEqual(len(a), 4, a)
         self.assertNotIn("--strict", a["shared_files_check.py"])
@@ -54,8 +55,7 @@ class Strict(unittest.TestCase):
         self.assertIn("--live", a["shared_files_check.py"])
         self.assertIn("--check", a["gen_shared_files.py"])
         self.assertIn("--lock-file", a["gen_shared_files.py"])
-        self.assertIn("--state-drift-note", a["conformance_roster_check.py"])
-        self.assertEqual(len(a["conformance_roster_check.py"]), 2, a)  # the flag and its base state file
+        self.assertEqual(a["conformance_roster_check.py"], ["--internal"])
         self.assertIn("--check", a["gen_law_status.py"])
 
     def test_the_daily_mode_is_strict(self):
@@ -63,13 +63,11 @@ class Strict(unittest.TestCase):
         self.assertEqual(len(a), 4, a)
         self.assertIn("--strict", a["shared_files_check.py"])
         self.assertIn("--strict", a["gen_shared_files.py"])
-        self.assertIn("--strict", a["conformance_roster_check.py"])
-        self.assertNotIn("--state-drift-note", a["conformance_roster_check.py"])
+        self.assertEqual(a["conformance_roster_check.py"], ["--internal"])  # the daily mode reads no crate either
 
     def test_an_unreadable_base_is_not_a_pass(self):
         # no base file and no git repository to read origin/main from: the landing mode cannot compare
-        self.env = {"LAW_BASE_TABLE": "/nonexistent/base.toml", "LAW_BASE_STATE": "/nonexistent/state.toml",
-                    "GIT_DIR": "/nonexistent"}
+        self.env = {"LAW_BASE_TABLE": "/nonexistent/base.toml", "GIT_DIR": "/nonexistent"}
         try:
             p = self.run_with()
         finally:
@@ -107,8 +105,8 @@ class Strict(unittest.TestCase):
         self.assertEqual(p.returncode, 2)
         self.assertIn("infra", p.stderr)
 
-    def test_a_stale_law_state_is_a_finding(self):
-        # the roster check finds manifest-state.toml behind the crates' mains: no receipt for a stale state
+    def test_a_conformance_input_or_readme_finding_is_a_finding(self):
+        # this repository's own conformance inputs or Status blocks are wrong: no receipt
         p = self.run_with(state=(1, ""))
         self.assertEqual(p.returncode, 1, p.stderr)
         self.assertIn("finding (conformance_roster_check.py", p.stderr)
