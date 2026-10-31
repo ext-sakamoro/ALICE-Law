@@ -37,6 +37,10 @@ class Core(unittest.TestCase):
         self.assertTrue(c.names_path(self.script("r.sh", "cat conformance/a.toml\n"), "conformance/a.toml"))
         self.assertTrue(c.names_path(self.script("r.sh", "echo '# conformance/a.toml'\n"), "conformance/a.toml"),
                         "a # inside quotes is text, not a comment")
+        self.assertTrue(c.names_path(self.script("r.sh", 'echo "a # b" conformance/a.toml\n'), "conformance/a.toml"),
+                        "a # after a blank inside quotes does not cut the rest of the line")
+        self.assertTrue(c.names_path(self.script("r.sh", "echo a#b conformance/a.toml\n"), "conformance/a.toml"),
+                        "a # inside a word does not start a comment")
 
     def test_a_script_named_in_a_comment_is_not_run(self):
         wf = ("on:\n  push:\n    branches: ['ci/**']\njobs:\n  a:\n    steps:\n"
@@ -71,9 +75,14 @@ class Core(unittest.TestCase):
         (d / "uses.py").write_text("import lib\nopen(lib.PATH)\n", encoding="utf-8")
         (d / "other.py").write_text("import lib\nprint(lib.OTHER)\n", encoding="utf-8")
         (d / "frm.py").write_text("from lib import PATH as P\nopen(P)\n", encoding="utf-8")
+        (d / "ann.py").write_text('from pathlib import Path\nROOT = Path(".")\nTABLE: Path = ROOT / "conformance" / "a.toml"\n',
+                                  encoding="utf-8")
+        (d / "uses_ann.py").write_text("import ann\nopen(ann.TABLE)\n", encoding="utf-8")
         self.assertTrue(c.names_path(d / "uses.py", "conformance/a.toml"))
         self.assertFalse(c.names_path(d / "other.py", "conformance/a.toml"), "importing for something else is not a use")
         self.assertTrue(c.names_path(d / "frm.py", "conformance/a.toml"))
+        self.assertEqual(c.path_names(d / "ann.py", "conformance/a.toml"), {"TABLE"}, "an annotated assignment binds a name")
+        self.assertTrue(c.names_path(d / "uses_ann.py", "conformance/a.toml"))
 
     def test_run_texts_reads_run_steps_only(self):
         wf = ("on:\n  push:\n    branches: ['ci/**']\n    paths:\n      - scripts/listed.py\njobs:\n  a:\n    steps:\n"
@@ -84,10 +93,18 @@ class Core(unittest.TestCase):
         named = set().union(*(set(c.RUN_SCRIPT.findall(r)) for r in runs))
         self.assertEqual(named, {"one.py", "two.py"}, "a paths: list does not run a script")
 
+    def test_a_block_under_a_dash_run_ends_at_the_next_key_of_the_step(self):
+        wf = ("jobs:\n  a:\n    steps:\n      - run: |\n          python3 scripts/one.py\n\n          echo done\n"
+              "        name: after\n        env:\n          X: scripts/not_run.py\n")
+        self.assertEqual(c.run_texts(wf), ["          python3 scripts/one.py\n\n          echo done"],
+                         "the block is the lines indented past the step's keys, which sit at the dash's column + 2")
+
     def test_on_ci_branches(self):
         self.assertTrue(c.on_ci_branches("on:\n  push:\n    branches: [main, 'ci/**']\njobs:\n"))
         self.assertFalse(c.on_ci_branches("on:\n  push:\n    branches: [main]\njobs:\n"))
         self.assertFalse(c.on_ci_branches("on:\n  workflow_dispatch:\njobs:\n"))
+        for text in ("name: x\n  push:\n    branches: ['ci/**']\njobs:\n", "on:\n  push:\n    branches: ['ci/**']\n", ""):
+            self.assertFalse(c.on_ci_branches(text), f"no on: ... jobs: block, no ci/** trigger: {text!r}")
 
     def test_a_script_that_does_not_parse_uses_nothing(self):
         self.assertEqual(c.python_strings("def (:\n"), [])
