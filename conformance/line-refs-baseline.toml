@@ -1,8 +1,8 @@
 # The line-number references each crate's alice-law-conformance.toml may still hold: exactly its current
 # count (docs/CONFORMANCE.md: a place is named by an anchor `path#token`). A count above its baseline is a
-# finding (a new line reference); a count below it is a finding until the baseline is lowered to it (a note in
-# the live check for 3 days; scripts/land_law_state.py --write lowers it with the next landing); a baseline is never
-# raised and this file is never removed (scripts/line_refs_ratchet.py).
+# finding (a new line reference); a count below it is a note naming the slack (the baseline may be lowered to the
+# count by hand; a stale baseline never refuses anything); a baseline is never raised and this file is never
+# removed (scripts/line_refs_ratchet.py).
 # With every baseline at 0 no manifest may hold a line reference (a crate this file does not list counts as 0).
 
 [baseline]

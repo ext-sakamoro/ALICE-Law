@@ -677,16 +677,11 @@ still hold are counted against `conformance/line-refs-baseline.toml`, which reco
 crate's current count. A reference is `(line 3)`, `lines 3 to 9`, a GitHub `#L42` /
 `#L3-L9` anchor, a path followed by `L42`, or any file extension followed by `:42`
 (a version, a date, a ratio or a URL's port is not one). The roster check (at every main)
-fails a count above its baseline (a new line reference). A count below it is slack that
-would let the crate add references back up to the baseline: in the live check it is a
-note naming the crate, the baseline and the count while the crate's main has been below
-for at most 3 days (dated by the manifest's commits on main), and a finding after that,
-when the date is not known, and always under `--strict` (the receipt before a push to
-main). `scripts/land_law_state.py` (the gate before a crate lands) refuses a candidate
-whose count is above its baseline (exit 2). A candidate below its baseline moves nothing
-(the Law commit comes before the landing, and a baseline lowered then would be below the
-crate's main until it lands); once it has landed, another repository's main below its
-baseline is a move for the next landing, whose `--write` lowers that baseline with the state. `scripts/line_refs_ratchet.py` (branch CI and the preflight)
+fails a count above its baseline (a new line reference). A count below it is a note naming
+the crate, the baseline and the count: the baseline may be lowered to the count, and a
+baseline above the count never refuses anything. `scripts/land_law_state.py` reports a
+candidate whose count is above its baseline as a finding the live check will show.
+`scripts/line_refs_ratchet.py` (branch CI and the preflight)
 fails a baseline that rises against main's, a new entry above 0, and the removal of the
 file. With every baseline at 0 no manifest may hold a line reference at all (a crate the
 file does not list counts as 0).
@@ -717,48 +712,32 @@ branch, from a clone of this repository:
 
 It applies the roster check's own rules (gate ids, status vocabulary, evidence
 paths at that ref, a located `fail-known`, `pass` / `n/a` without evidence or a
-mutant read as `unverified`) and prints the counts the state file would
-record. Exit 1 on a finding, 2 when nothing was compared.
+mutant read as `unverified`) and prints the status counts. Exit 1 on a finding,
+2 when nothing was compared.
 
-### Whether a landing moves this repository's state
+### What a landing shows in the observed state
 
-`conformance/manifest-state.toml` and the README Status blocks record the
-counts of every release-train manifest at its main, and the live check of this
-repository fails when they differ. A crate commit that changes its manifest's
-statuses therefore needs a state commit here. Before it lands, the lander runs,
-from a clone of this repository:
+This repository records no other repository's status counts. The Conformance
+(live) workflow computes the counts of every release-train manifest at its main
+on each run and publishes them in its job summary
+(`scripts/conformance_roster_check.py --summary`); a manifest with a finding at a
+crate's main turns that run red, as an alarm on this repository's CI, not as a
+gate on the crate. A crate's landing therefore needs no change here, and nothing
+here refuses it: each repository's own gates decide its landing. A lander that
+wants to know what its landing will show runs, from a clone of this repository:
 
     python3 scripts/land_law_state.py --candidate ALICE-X=<clone of the crate>@<commit> [--candidate ...]
 
-It reads each candidate's manifest at that commit and every other repository's
-at its main, with the roster check's rules, and prints `state moves: no` or
-`state moves: yes` with each changed count. Exit 0: no move; 1: the state
-moves, so a state commit here must follow the landing; 2: not computed (a
-manifest with findings, a candidate the roster does not name, nothing
-compared). With `--write` it writes the state file and the README blocks that
-the landing makes true. The strict shared-file receipt taken before a push to
-this repository's main (`scripts/shared_files_strict.sh`) also runs the state
-check and `scripts/gen_law_status.py --check`, so a push never carries a state
-the crates' mains no longer match.
-
-The state commit lands here first, before the crate: `--write` also records
-each moving candidate in `conformance/pending-state.toml` (its commit and the
-date). The rule is on the counts, not on the history, because a landing may
-rebase the commit and other commits may land on the crate's main first. For a
-repository a pending entry names: when main's counts are the recorded ones, the
-entry has landed; otherwise the state file must record the counts computed from
-the manifest at the entry's commit (read there, not trusted). The following are
-findings: a difference no entry explains, a recorded state that is neither
-main's nor the entry's commit's, and an entry older than 3 days. Once the crate
-lands, the entry is a counted note in the live check (this repository stays
-green across the landing). It is a finding under
-`--strict` (the receipt before a push here) and after 3 days, so the next
-change here drops it. `land_law_state.py --write` and
-`conformance_roster_check.py --write` drop landed entries. A re-rolled
-candidate keeps the date its entry was first recorded. For `land_law_state.py`,
-a move is a change of the recorded state or of which repositories are pending:
-a rebased candidate whose counts are already recorded (another sha or date in
-its entry) is not a move, so a landing that rebased needs no second Law change.
+It reads each candidate's manifest at that commit and every repository's at its
+main, with the roster check's rules, and prints each changed count with
+`state moves: no` or `state moves: yes`, and the findings the landed state would
+show. It writes nothing. Exit 0 when the state was computed, whether or not it
+moves; 2 when it was not (a candidate the roster does not name, an unreadable
+input, nothing compared). This repository's own pushes check its own
+conformance inputs (`conformance_roster_check.py --internal`: the roster, the
+gates, the missing-manifests list and the line-reference baseline) and the
+README Status blocks (`scripts/gen_law_status.py --check`), never the crates'
+mains.
 
 ### The README block
 
@@ -785,7 +764,7 @@ verified earlier one (`check_semantics`).
 
 A new gate's row in `conformance/gates.toml` may carry `adoption = { since = <date>, until = <date> }`.
 From `since` to `until` a manifest without an entry for that gate reads as `unverified` (a note, and
-counted as `unverified` in `conformance/manifest-state.toml` and the tables generated from it), never as
+counted as `unverified` in the published counts), never as
 `pass`; a manifest may carry the entry as soon as the row exists; after `until` an absent entry is a
 finding, as for every other gate. The window is at most 45 days, and `CHANGELOG.md` has a line naming the
 gate with both dates, so moving either date (an extension) needs a new line naming the new dates;

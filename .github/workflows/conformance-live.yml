@@ -2,15 +2,15 @@
 #
 # scripts/conformance_roster_check.py in its default mode: every crate that is not exempt
 # holds alice-law-conformance.toml at the main of its repository with every gate, valid
-# statuses, located fail-known entries, and the committed conformance/manifest-state.toml
-# equals what those mains show. A manifest that changed upstream turns the daily run red with
-# the command that regenerates the state (a push or a dispatched run reports it as a note: a
-# crate landing while a change here is checked does not fail that change); the regeneration
-# is a commit in this repository (CI does not commit). Nothing compared is a failure.
+# statuses and located fail-known entries. The status counts are computed from the mains on
+# every run and published in the job summary; nothing records them here, so a crate landing
+# needs no change in this repository and nothing here refuses it. A manifest with a finding at
+# a crate's main turns this run red (an alarm on this repository's CI), until each crate checks
+# its own manifest in its own CI. Nothing compared is a failure.
 #
 # On every push to main and daily, and on demand. It is not part of the branch / pull
-# request checks or the pre-push gate: those run the same script with --internal (the
-# committed state alone), so a landing in another repository does not fail a change here.
+# request checks or the pre-push gate: those run the same script with --internal (this
+# repository's own conformance inputs alone).
 
 name: Conformance (live)
 
@@ -35,8 +35,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-        with:
-          fetch-depth: 0  # the state-drift note's base (scripts/ci_base.py) is read from the history
 
       - name: Test the conformance roster checker
         run: python3 scripts/test_conformance_roster_check.py
@@ -44,24 +42,10 @@ jobs:
       - name: Test the landing check of the conformance state
         run: python3 scripts/test_land_law_state.py
 
-      # daily: a state behind the members' mains is a finding (regenerate it); a push or a dispatched run checks a
-      # change of this repository, where a crate landing meanwhile is a note
-      - name: The committed state equals the members' mains
+      - name: Every release-train manifest at main (the status counts go to the job summary)
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-        # the base the change is compared with (scripts/ci_base.py): the commit main stood at before a push,
-        # main's parent on a dispatched run
-        run: |
-          if [ "$EVENT" = schedule ]; then
-            python3 scripts/conformance_roster_check.py
-          else
-            git fetch -q origin main
-            base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
-            git show "$base":conformance/manifest-state.toml > "$RUNNER_TEMP/base-state.toml"
-            python3 scripts/conformance_roster_check.py --state-drift-note "$RUNNER_TEMP/base-state.toml"
-          fi
+        run: python3 scripts/conformance_roster_check.py --summary "$GITHUB_STEP_SUMMARY"
 
   # The only rights holder is the author: every public repository of the account, at its default
   # branch, against conformance/holder-baseline.toml (scripts/holder_live.py). A new occurrence or a
