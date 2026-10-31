@@ -22,8 +22,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SHIFT = datetime.timedelta(days=int(os.environ.get("CLOCK_SHIFT_DAYS", "10")))
-# the tests of the tools that age entries against today's date (land_law_state,
-# conformance_roster_check, gen_shared_files, shared_files_check) and of the tools that call
+# the tests of the tools that read today's date (conformance_roster_check for the gates' adoption windows, and
+# land_law_state through it; gen_shared_files and shared_files_check for the pending rows) and of the tools that call
 # them (release_train reads the clock only to refuse a date in the future, which a clock
 # moved ahead cannot turn red, so its tests are not run here)
 TESTS = ("test_land_law_state", "test_conformance_roster_check", "test_gen_shared_files",
