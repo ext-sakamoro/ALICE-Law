@@ -242,6 +242,11 @@ source = { repo = "ALICE-DB", rev = "f1847df0aea24694ebd27b26d877f853bc304f80" }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
 
 [[file]]
+path = "scripts/reader_map_core.py"
+pending = { since = "2026-10-31", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "95ceafa31ef2331ea9a814f542d9eaf1793e0f12aa5867ab97ee6580e3c07296", owner = "ALICE-Law", planned = "08cce8509d5f8dbcda37f33898e64997798c5ce8", variants = { "absent" = ["ALICE-Law", "ALICE-Physics"] } }
+repos = ["ALICE-Law", "ALICE-Physics"]
+
+[[file]]
 path = "scripts/readme_parity_check.py"
 sha256 = "b93e4b2c73949c36ac1dcbf3a4c5d505be2a4591c0d33a887fddf74c3c0e6d17"
 source = { repo = "ALICE-Law", rev = "aae4adfe5176fc086392255e7ceb6a35b6a74eb0" }
@@ -458,6 +463,11 @@ path = "scripts/test_public_text.py"
 sha256 = "7ed40dbcb935dd91cf7482177a90c491bf8021d51258995c759e5c39ffa6722e"
 source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+
+[[file]]
+path = "scripts/test_reader_map_core.py"
+pending = { since = "2026-10-31", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "92a4daa1089902e53761859aa31e3d333945c8bfcb02b000651824a5de83214a", owner = "ALICE-Law", planned = "d8e0195f63c792a3d7735ec8aced4de2a09143d5", variants = { "absent" = ["ALICE-Law", "ALICE-Physics"] } }
+repos = ["ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/test_readme_parity_check.py"
