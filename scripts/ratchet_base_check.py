@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Every comparison with a committed conformance/ file reads it at the base scripts/ci_base.py names.
 
-A ratchet (a baseline that only goes down, pending rows that do not rise, a state-drift note) compares
+A ratchet (a baseline that only goes down, pending rows that do not rise) compares
 this tree's conformance/ file with the same file at an earlier commit. That commit must be the one
 scripts/ci_base.py names: on a push to main the commit main stood at before the push, elsewhere the
 merge-base with origin/main. Reading `FETCH_HEAD` after `git fetch origin main`, or `origin/main`,

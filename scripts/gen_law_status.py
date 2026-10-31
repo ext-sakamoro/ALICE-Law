@@ -6,9 +6,12 @@ The section between `<!-- law-status:begin -->` and `<!-- law-status:end -->` is
 - `release-train.toml`: each crate's version, state, order, repository and tag, and the
   steps expected to fail until a release (`[expected-failure.*]`);
 - `e2e/golden/run.digest`: the end to end run digest recorded for each alice-det-math release;
-- `conformance/manifest-state.toml` and `conformance/missing-manifests.toml`: the status counts
-  of each crate's alice-law-conformance.toml at its main (written by
-  scripts/conformance_roster_check.py) and the crates whose manifest is not written yet.
+- `conformance/gates.toml` and `conformance/missing-manifests.toml`: the number of gates and the crates
+  whose manifest is not written yet.
+
+The status counts of each crate's alice-law-conformance.toml at its main are not committed: the
+Conformance (live) workflow computes them from the mains and publishes them in its job summary, which
+the section points to.
 
 Only committed files are read, so the output is the same on every machine: no date, no
 "measured" sentence, no CI conclusion (the workflows' runs are the CI results).
@@ -29,7 +32,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BEGIN = "<!-- law-status:begin -->"
 END = "<!-- law-status:end -->"
-STATUSES = ("pass", "fail-known", "unverified", "n/a")
 READMES = {"en": "README.md", "ja": "README_JP.md"}
 
 LABELS = {
@@ -44,11 +46,9 @@ LABELS = {
         "expected_none": "None.",
         "golden": "End to end run digest per alice-det-math release",
         "golden_h": "| alice-det-math | run digest |",
-        "conformance": "Conformance manifests (status counts of the {gates} gates in each repository's manifest at main)",
-        "conformance_note": "One row per repository: crates that share a repository share its one manifest at the root "
-                            "(the \"read for\" column), so each manifest is counted once; {repos} manifests × {gates} gates "
-                            "= {total} gate entries.",
-        "conformance_h": "| repository | read for | pass | fail-known | unverified | n/a |",
+        "conformance": "Conformance manifests ({gates} gates)",
+        "conformance_note": "The status counts of each repository's manifest at main are computed from the mains by the "
+                            "Conformance (live) workflow and shown in its job summary (they are not committed here).",
         "missing": "Crates whose manifest is not written yet",
         "missing_h": "| crate | added in | why |",
         "missing_none": "None.",
@@ -64,11 +64,9 @@ LABELS = {
         "expected_none": "なし",
         "golden": "alice-det-math の版ごとの end to end の run digest",
         "golden_h": "| alice-det-math | run digest |",
-        "conformance": "Conformance manifest (各 repository の main の manifest における {gates} gate の状態の件数)",
-        "conformance_note": "repository ごとに 1 行: repository を共有する crate は根にある 1 つの manifest を共有する "
-                            "(「読む crate」の列) ので、各 manifest は 1 回だけ数える; {repos} の manifest × {gates} の gate "
-                            "= {total} の gate の entry",
-        "conformance_h": "| repository | 読む crate | pass | fail-known | unverified | n/a |",
+        "conformance": "Conformance manifest ({gates} gate)",
+        "conformance_note": "各 repository の main の manifest の状態の件数は Conformance (live) の workflow が各 main から"
+                            "計算し、その job summary に出す (ここには commit しない)",
         "missing": "manifest がまだ無い crate",
         "missing_h": "| crate | 追加する repository | 理由 |",
         "missing_none": "なし",
@@ -103,9 +101,6 @@ def render(lang: str, root: Path | None = None) -> str:
               if ln.strip() and not ln.startswith("#")]
     if not golden or any(len(g) != 2 for g in golden):
         raise InputError("e2e/golden/run.digest: expected lines of `<alice-det-math version> <digest>`")
-    state = load(root / "conformance" / "manifest-state.toml").get("manifest", {})
-    if not state:
-        raise InputError("conformance/manifest-state.toml lists no manifest")
     missing_path = root / "conformance" / "missing-manifests.toml"
     missing = load(missing_path).get("missing", {}) if missing_path.exists() else {}
 
@@ -132,13 +127,7 @@ def render(lang: str, root: Path | None = None) -> str:
     gates = load(root / "conformance" / "gates.toml").get("gate", [])
     if not gates:
         raise InputError("conformance/gates.toml lists no gate")
-    out += ["", f"### {L['conformance'].format(gates=len(gates))}", "",
-            L["conformance_note"].format(repos=len(state), gates=len(gates), total=len(state) * len(gates)), "",
-            L["conformance_h"], "|---|---|---|---|---|---|"]
-    for name in sorted(state):
-        c = state[name]
-        out.append(f"| {cell(name)} | {cell(', '.join(c.get('crates', [])))} | "
-                   + " | ".join(cell(c.get(s, 0)) for s in STATUSES) + " |")
+    out += ["", f"### {L['conformance'].format(gates=len(gates))}", "", L["conformance_note"]]
     out += ["", f"### {L['missing']}", ""]
     if missing:
         out += [L["missing_h"], "|---|---|---|"]

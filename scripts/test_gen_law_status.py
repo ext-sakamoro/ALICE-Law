@@ -40,7 +40,6 @@ expect = ["e"]
 why = "beta is | not out"
 exit = 1
 '''
-STATE = '[manifest."Alpha"]\ncrates = ["alpha", "alpha-cli"]\n"pass" = 3\n"fail-known" = 1\n"unverified" = 10\n"n/a" = 0\n'
 MISSING = '[missing."beta"]\nfixed-in = "Beta"\nwhy = "not written"\n'
 GOLDEN = "0.5.0 aaaa\n0.5.1 bbbb\n"
 README = "# T\n\n## Status\n\n<!-- law-status:begin -->\nold text\n<!-- law-status:end -->\n\n## License\n"
@@ -53,7 +52,7 @@ class Gen(unittest.TestCase):
         self.addCleanup(__import__("shutil").rmtree, self.d, True)
         (self.d / "conformance").mkdir()
         (self.d / "e2e" / "golden").mkdir(parents=True)
-        self.files = {"conformance/gates.toml": '[[gate]]\nid = "G1"\n\n[[gate]]\nid = "G2"\n', "release-train.toml": ROSTER, "conformance/manifest-state.toml": STATE,
+        self.files = {"conformance/gates.toml": '[[gate]]\nid = "G1"\n\n[[gate]]\nid = "G2"\n', "release-train.toml": ROSTER,
                       "conformance/missing-manifests.toml": MISSING, "e2e/golden/run.digest": GOLDEN,
                       "README.md": README}
         for k, v in self.files.items():
@@ -80,11 +79,12 @@ class Gen(unittest.TestCase):
         self.assertIn("| law | 0.0.0 | exempt | 2 | Law | (none) |", text)
         self.assertIn("| some-step | beta 0.3.0 | beta is \\| not out |", text)
         self.assertIn("| 0.5.1 | `bbbb` |", text)
-        self.assertIn("| Alpha | alpha, alpha-cli | 3 | 1 | 10 | 0 |", text)
-        self.assertIn("so each manifest is counted once; 1 manifests × 2 gates = 2 gate entries.", text)
+        # the per-repository counts are not committed: the section points to the live job's summary
+        self.assertNotIn("| Alpha | alpha, alpha-cli |", text)
+        self.assertIn("computed from the mains by the Conformance (live) workflow and shown in its job summary", text)
         self.assertIn("| beta | Beta | not written |", text)
         self.assertNotRegex(text, r"20\d\d-\d\d-\d\d")
-        self.assertIn("### Conformance manifests (status counts of the 2 gates in each repository's manifest at main)", text)
+        self.assertIn("### Conformance manifests (2 gates)", text)
         self.assertEqual(self.run_main("--check"), (0, "law-status: 1 README(s) compared, 0 differ\n"))
 
     def test_a_roster_change_without_regenerating_fails_the_check(self):
@@ -95,8 +95,8 @@ class Gen(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("found: README.md: the Status section differs", out)
 
-    def test_a_state_or_golden_change_fails_the_check(self):
-        for name, text in (("conformance/manifest-state.toml", STATE.replace('"pass" = 3', '"pass" = 4')),
+    def test_a_gate_or_golden_change_fails_the_check(self):
+        for name, text in (("conformance/gates.toml", '[[gate]]\nid = "G1"\n'),
                            ("e2e/golden/run.digest", GOLDEN + "0.5.2 cccc\n")):
             self.setUp()
             self.run_main()
@@ -138,7 +138,7 @@ class Gen(unittest.TestCase):
         self.assertEqual(self.run_main("--check")[0], 2)
 
     def test_nothing_to_render_exits_2(self):
-        for name, text in (("release-train.toml", ""), ("conformance/manifest-state.toml", ""),
+        for name, text in (("release-train.toml", ""),
                            ("e2e/golden/run.digest", "0.5.0\n"), ("e2e/golden/run.digest", "")):
             self.setUp()
             (self.d / name).write_text(text, encoding="utf-8")
