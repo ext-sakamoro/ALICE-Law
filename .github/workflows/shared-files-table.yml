@@ -21,6 +21,7 @@ on:
       - "scripts/test_holder_mode_check.py"
       - "scripts/shared_files_branch_live.py"
       - "scripts/test_shared_files_branch_live.py"
+      - "scripts/ci_base.py"
       - ".github/workflows/shared-files-table.yml"
 
 permissions:
@@ -37,6 +38,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0  # the landing mode's base (scripts/ci_base.py) is read from the history
 
       - name: Test the shared-file checker and its generator
         run: |
@@ -45,13 +48,18 @@ jobs:
           python3 scripts/test_holder_mode_check.py
           python3 scripts/test_shared_files_branch_live.py
 
-      # the landing mode (base: main's table): a row that converged on the mains while this branch is checked, and that
-      # the branch left as main has it, is a note; conformance-live.yml on main asks for the regeneration
-      - name: The table is the generated one and every main carries each copy (against main's table)
+      # the landing mode (base: the table at the base scripts/ci_base.py names, the merge-base with main on ci/): a row
+      # that converged on the mains while this branch is checked, and that the branch left as the base has it, is a
+      # note; conformance-live.yml on main asks for the regeneration
+      - name: The table is the generated one and every main carries each copy (against the base's table)
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
         run: |
-          git fetch -q --depth 1 origin main:refs/remotes/origin/main
+          git fetch -q origin main
+          base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
           n=$(python3 -c "import sys; sys.path.insert(0, 'scripts'); import shared_files_check as s; print(s.lock_in(open('.github/workflows/conformance-live.yml', encoding='utf-8').read(), 'conformance-live.yml'))")
-          python3 scripts/shared_files_branch_live.py --base-ref origin/main --lock-file .github/workflows/conformance-live.yml --expect-copies "$n"
+          python3 scripts/shared_files_branch_live.py --base-ref "$base" --lock-file .github/workflows/conformance-live.yml --expect-copies "$n"
 
       # a holder runs the checker from a temporary directory holding only the table and the checker, in crate mode:
       # its own scripts/shared_files.sh, pinned to this commit (2026-10-30: a rule that needed planned/ was green here

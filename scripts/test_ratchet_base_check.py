@@ -104,5 +104,41 @@ class RatchetBaseCheck(unittest.TestCase):
         self.assertEqual(rbc.main(["x", str(self.tree({"a.yml": GOOD}))]), 0)
 
 
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class TheLandingModeCallSites(unittest.TestCase):
+    """The landing mode of the shared-file table (shared_files_branch_live.py) in the ci/ workflow and in preflight
+    reads the table at the ci_base.py base, never origin/main's tip"""
+
+    def calls(self, text: str) -> list[str]:
+        return [ln.strip() for ln in text.splitlines()
+                if "shared_files_branch_live.py" in ln and not ln.lstrip().startswith(("#", "-", "python3 scripts/test_"))]
+
+    def test_the_ci_workflow_passes_the_ci_base_base_from_the_history(self):
+        text = (ROOT / ".github" / "workflows" / "shared-files-table.yml").read_text(encoding="utf-8")
+        calls = self.calls(text)
+        self.assertEqual(len(calls), 1, calls)
+        self.assertIn('--base-ref "$base"', calls[0])
+        self.assertNotIn("origin/main", calls[0])
+        self.assertIn('base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")', text)
+        self.assertLess(text.index("base=$(python3 scripts/ci_base.py"), text.index(calls[0]))
+        self.assertIn("fetch-depth: 0", text)
+        self.assertNotIn("--depth 1", text)
+
+    def test_preflight_passes_the_ci_base_base(self):
+        text = (ROOT / "scripts" / "preflight.sh").read_text(encoding="utf-8")
+        calls = self.calls(text)
+        self.assertEqual(len(calls), 1, calls)
+        self.assertIn('--base-ref "$base"', calls[0])
+        self.assertNotIn("origin/main", calls[0])
+        self.assertLess(text.index("base=$(python3 scripts/ci_base.py)"), text.index(calls[0]))
+
+    def test_the_repository_has_no_finding(self):
+        findings, reads = rbc.check(ROOT)
+        self.assertEqual(findings, [])
+        self.assertGreater(reads, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
