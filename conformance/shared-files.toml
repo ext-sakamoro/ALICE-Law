@@ -110,7 +110,7 @@ repos = ["ALICE-DB", "ALICE-Edge"]
 path = "scripts/ci_base.py"
 sha256 = "79245d26227b2a4aee9492bd0cfa1f27b4c8433f9a54edacaff526c9a927df69"
 source = { repo = "ALICE-DB", rev = "965129d965a1bab017348206c1b28dc00fb3c6f0" }
-repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"]
+repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/ci_test_coverage_check.py"
@@ -344,7 +344,7 @@ repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Ph
 path = "scripts/test_ci_base.py"
 sha256 = "1f64d968b3914b25fa2a05a833fc2a2ed9dd090e153852ffe6e357747f13252b"
 source = { repo = "ALICE-DB", rev = "965129d965a1bab017348206c1b28dc00fb3c6f0" }
-repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Physics"]
+repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/test_ci_test_coverage_check.py"
