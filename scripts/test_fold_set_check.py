@@ -144,6 +144,34 @@ fn real() { alice_det_math::cos(1.0); }
     def test_cfg_test_on_a_public_item_is_removed(self):
         self.assertEqual(self.pins('#[cfg(test)]\npub fn g() { alice_det_math::sin(); }\n#[cfg(test)]\npub(crate) mod h { fn i() { alice_det_math::sin(); } }\nfn f() { alice_det_math::cos(); }'), {"cos"})
 
+    def test_cfg_test_on_a_macro_item_removes_it_and_only_directly_under_it(self):
+        src = "#[cfg(test)]\nthread_local! { static A: f32 = alice_det_math::sin(1.0); }\nfn f() { alice_det_math::cos(); }"
+        self.assertEqual(self.pins(src), {"cos"})
+        src = "#[cfg(test)]\nm!(alice_det_math::sin(1.0));\nfn f() { alice_det_math::cos(); }"
+        self.assertEqual(self.pins(src), {"cos"})
+        self.assertEqual(self.pins("thread_local! { static A: f32 = alice_det_math::sin(1.0); }"), {"sin"})
+
+    def test_cfg_test_on_a_statement_keeps_it_in_the_read_without_a_finding(self):
+        src = "fn f() {\n#[cfg(test)]\nalice_det_math::sin(1.0);\nalice_det_math::cos(1.0);\n}"
+        self.assertEqual(self.pins(src), {"sin", "cos"})
+        self.assertEqual(self.pins("fn f() {\n#[cfg(test)]\n{ alice_det_math::sin(1.0); }\n}"), {"sin"})
+
+    def test_a_path_attribute_inside_the_repository_is_read(self):
+        extra = {"shared/x.rs": "pub fn g() { alice_det_math::sin(1.0); }\n"}
+        self.assertEqual(self.pins('#[path = "../shared/x.rs"]\nmod x;\nfn f() { alice_det_math::cos(); }', extra=extra),
+                         {"sin", "cos"})
+
+    def test_a_path_attribute_on_a_test_item_is_not_read(self):
+        extra = {"shared/x.rs": "pub fn g() { alice_det_math::sin(1.0); }\n"}
+        src = '#[cfg(test)]\n#[path = "../shared/x.rs"]\nmod x;\nfn f() { alice_det_math::cos(); }'
+        self.assertEqual(self.pins(src, extra=extra), {"cos"})
+
+    def test_path_attributes_that_name_each_other_end(self):
+        extra = {"shared/a.rs": '#[path = "b.rs"]\nmod b;\npub fn g() { alice_det_math::sin(1.0); }\n',
+                 "shared/b.rs": '#[path = "a.rs"]\nmod a;\npub fn h() { alice_det_math::cos(1.0); }\n'}
+        self.assertEqual(self.pins('#[path = "../shared/a.rs"]\nmod a;', extra=extra), {"sin", "cos"})
+        self.assertEqual(self.found('#[path = "../shared/a.rs"]\nmod a;', extra=extra).files, 3)
+
     def test_a_macro_body_is_read(self):
         self.assertEqual(self.pins("macro_rules! m { () => { alice_det_math::sin(1.0) } }"), {"sin"})
 
@@ -177,6 +205,18 @@ class NotUnderstood(Base):
     def test_a_path_naming_nothing(self):
         self.assert_finding("fn f() { alice_det_math::no_such(); }", "names nothing")
         self.assert_finding("const A: u32 = alice_det_math::consts::SPLIT_MASK;", "names nothing")
+
+    def test_a_path_attribute_it_cannot_read(self):
+        self.assert_finding('#[path = "../../outside.rs"]\nmod x;', "outside the repository")
+        self.assert_finding('#[path = "../missing.rs"]\nmod x;', "names no file")
+        self.assert_finding('#[path = concat!("a", ".rs")]\nmod x;', "not a plain string")
+        self.assert_finding('#[cfg_attr(unix, path = "a.rs")]\nmod x;', "cfg_attr")
+        # inside an inline module rustc's base directory differs: the file next to this one is not what it reads
+        f = self.found('mod inner {\n#[path = "x.rs"]\nmod x;\n}', extra={"src/x.rs": "fn g() { alice_det_math::sin(1.0); }\n"})
+        self.assertTrue(any("inside a block or an inline module" in x for x in f.findings), f.findings)
+
+    def test_include(self):
+        self.assert_finding('include!("../gen.rs");', "include!")
 
     def test_an_unterminated_raw_string(self):
         self.assert_finding('const A: &str = r#"never closed;', "unterminated")
