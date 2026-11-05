@@ -3,19 +3,25 @@
 
 A crate that derives an identifier from the arithmetic it uses folds alice_det_math::function_pin(name) for each
 function it calls, so a change to a function it does not call leaves its identifier alone. That is only sound if the
-set is the real one, so the set is read from the source. For each Rust file under a package's src/ (tests, benches,
-examples and #[cfg(test)] items are not the crate's arithmetic), with comments and string literals removed:
+set is the real one, so the set is read from the source. For each Rust file under a package's src/ (tests, benches, examples and #[cfg(test)] items are not the crate's
+arithmetic), with comments and string literals removed:
 
-  alice_det_math::a::b(..)             a path; resolved through alice-det-math's function-paths.toml
+  alice_det_math::a::b(..), ::alice_det_math::.., crate::|self::|super::alice_det_math::..   a path, resolved through
+                                       alice-det-math's function-paths.toml
   use alice_det_math::{a, b::c as d};  each imported item counts, a `pub use` too: a caller of the re-export depends on it
-  use alice_det_math::metric;          a module import: the file's `metric::x` paths are resolved
+  use alice_det_math::metric;          a module import counts every function of the module (the names reach other files)
   a type (metric::MetricWeights)       all its methods: a method call `w.norm(..)` names no path
 
-Names the crate's Cargo.toml gives the package (`dm = { package = "alice-det-math", .. }`) count as alice_det_math.
-`use alice_det_math as dm;` at the top of a file makes `dm::x` a path in that file. A form it cannot resolve is a
-finding, never a skip: a glob, the same alias as a `pub use` or inside a module, a path through a macro variable
-(`alice_det_math::$f`), a path naming nothing in the table (`consts::*` for now: they have no pins yet). Items that are not arithmetic (the identifier
-API, [no_arithmetic]) are accepted and listed apart.
+Names the crate's Cargo.toml gives the package (`dm = { package = "alice-det-math", .. }`, `dm = { workspace = true }`
+through the workspace root) count as alice_det_math. `use alice_det_math as dm;` at the top of a file makes `dm::x` a
+path in that file, wherever in the file it stands.
+
+Everything else is a finding, never a skip: any token naming the crate or such an alias that does not start a resolved
+path (a macro taking the crate as an identifier, `extern crate`, `use {alice_det_math as dm}`, `pub use alice_det_math`),
+an alias reached from elsewhere (`super::dm`) or declared public or inside a module, a glob, a path through a macro
+variable, a name not in the table (`consts::*` for now: they have no pins yet), #[cfg(test)] on anything but an item (it
+cannot be told where it ends), #[path], include!, a lib or bin outside src/, and a build script that uses the crate.
+Items that are not arithmetic (the identifier API, [no_arithmetic]) are accepted and listed apart.
 
   fold_set_check.py print ROOT [--paths FILE]   the set found, the identifier items used, the findings
   fold_set_check.py check ROOT [--paths FILE]   also compares with DET_MATH_FUNCTIONS in the source, plus the
@@ -109,28 +115,54 @@ def tokens(text: str) -> list[str]:
     return out
 
 
-def without_test_items(toks: list[str]) -> list[str]:
-    """the tokens with each #[cfg(test)] item removed (up to its matching brace, or its `;`)"""
+ITEM_KEYWORDS = {"mod", "fn", "use", "struct", "enum", "union", "impl", "const", "static", "trait", "type", "extern",
+                 "unsafe", "async", "macro_rules"}
+CFG_TEST = ["#", "[", "cfg", "(", "test", ")", "]"]
+
+
+def without_test_items(toks: list[str], rel: str, findings: list[str]) -> list[str]:
+    """the tokens with each #[cfg(test)] item removed, up to its matching brace or its `;` outside any bracket. On
+    anything but an item it stays, and it is a finding: where a field, an arm or a parameter ends cannot be told"""
     out: list[str] = []
     i, n = 0, len(toks)
     while i < n:
-        if toks[i:i + 7] == ["#", "[", "cfg", "(", "test", ")", "]"]:
-            i += 7
-            depth = 0
-            while i < n:
-                t = toks[i]
-                i += 1
-                if t == "{":
-                    depth += 1
-                elif t == "}":
-                    depth -= 1
-                    if depth == 0:
-                        break
-                elif t == ";" and depth == 0:
-                    break
+        if toks[i:i + 7] != CFG_TEST:
+            out.append(toks[i])
+            i += 1
             continue
-        out.append(toks[i])
-        i += 1
+        j = i + 7
+        while j < n and toks[j] == "#":    # other attributes of the same item
+            depth, j = 0, j + 1
+            while j < n:
+                depth += {"[": 1, "]": -1}.get(toks[j], 0)
+                j += 1
+                if depth == 0:
+                    break
+        k = j
+        if k < n and toks[k] == "pub":     # `pub a: u8` is a field: an item keyword must follow the visibility
+            k += 1
+            if k < n and toks[k] == "(":
+                while k < n and toks[k] != ")":
+                    k += 1
+                k += 1
+        if k >= n or toks[k] not in ITEM_KEYWORDS:
+            findings.append(f"{rel}: #[cfg(test)] on something that is not an item")
+            out.extend(toks[i:i + 7])
+            i += 7
+            continue
+        depth = 0
+        while j < n:
+            t = toks[j]
+            j += 1
+            if t in "{[(":
+                depth += 1
+            elif t in "}])":
+                depth -= 1
+                if depth == 0 and t == "}":
+                    break
+            elif t == ";" and depth == 0:
+                break
+        i = j
     return out
 
 
@@ -168,22 +200,55 @@ def resolve(path: list[str], t: Table, f: Found, where: str) -> None:
         f.findings.append(f"{where}: alice_det_math::{p} names nothing in function-paths.toml")
 
 
-def path_starts_here(toks: list[str], i: int) -> bool:
-    """toks[i] begins a path: nothing before it, or a leading `::` with no segment before that (`a::alice_det_math`
-    is another crate's item of that name)"""
+RELATIVE = {"crate", "self", "super"}
+
+
+def path_prefix_ok(toks: list[str], i: int) -> bool:
+    """what stands before toks[i] lets it start a path: nothing, a leading `::`, or crate:: / self:: / super::"""
     if i == 0 or toks[i - 1] != "::":
         return True
-    return i < 2 or not IDENT.fullmatch(toks[i - 2])
+    return i < 2 or not IDENT.fullmatch(toks[i - 2]) or toks[i - 2] in RELATIVE
 
 
-def scan_file(rel: str, text: str, crate_names: set[str], t: Table, f: Found) -> None:
-    toks = without_test_items(tokens(text))
+def module_pins(path: list[str], t: Table) -> set[str] | None:
+    """every pin under the module `path`, None when it is no module of the table"""
+    prefix = "::".join(path) + "::"
+    pins = {pin for k, pin in t.paths.items() if k.startswith(prefix)}
+    return pins or None
+
+
+def file_aliases(toks: list[str], crate_names: set[str], rel: str, f: Found) -> set[str]:
+    """the first pass over a file: its `use alice_det_math as dm;` aliases, wherever in the file they stand"""
+    out: set[str] = set()
+    depth = 0
+    for i, tok in enumerate(toks):
+        depth += {"{": 1, "}": -1}.get(tok, 0)
+        if tok != "use":
+            continue
+        j = i + 1 + (toks[i + 1:i + 2] == ["::"])
+        if j + 2 < len(toks) and toks[j] in crate_names and toks[j + 1] == "as":
+            public = i > 0 and toks[i - 1] in ("pub", ")")
+            if public or depth > 0:
+                f.findings.append(f"{rel}: `use alice_det_math as {toks[j + 2]}` "
+                                  f"{'public' if public else 'inside a module'}: not followed")
+            else:
+                out.add(toks[j + 2])
+    return out
+
+
+def scan_file(rel: str, text: str, crate_names: set[str], aliases: set[str], t: Table, f: Found) -> None:
+    """the second pass; `aliases` are this file's, and the other files' are refused when reached by a path"""
+    toks = without_test_items(tokens(text), rel, f.findings)
     f.files += 1
-    crate_names = set(crate_names)
-    modules: dict[str, list[str]] = {}
+    names = crate_names | file_aliases(toks, crate_names, rel, f)
     n = len(toks)
     i = 0
-    depth = 0
+
+    for x in range(n):
+        if toks[x:x + 4] == ["#", "[", "path", "="]:
+            f.findings.append(f"{rel}: #[path] names a file outside what is read")
+        if toks[x:x + 2] == ["include", "!"]:
+            f.findings.append(f"{rel}: include! brings in source that is not read")
 
     def use_tree(i: int, prefix: list[str]) -> int:
         path = list(prefix)
@@ -211,13 +276,16 @@ def scan_file(rel: str, text: str, crate_names: set[str], t: Table, f: Found) ->
             if path[-1] == "self":
                 path = path[:-1]
             if not path:
-                f.findings.append(f"{rel}: `use alice_det_math as {alias}`: an alias of the crate")
+                f.findings.append(f"{rel}: `use alice_det_math::{{self as {alias}}}`: an alias of the crate")
                 return i
             joined = "::".join(path)
-            is_module = joined not in t.paths and joined not in t.types and joined not in t.no_arithmetic \
-                and path[0] not in IDENTIFIER_ITEMS and any(k.startswith(joined + "::") for k in t.paths)
-            if is_module:
-                modules[alias or path[-1]] = path
+            pins = None
+            if joined not in t.paths and joined not in t.types and joined not in t.no_arithmetic \
+                    and path[0] not in IDENTIFIER_ITEMS and path[0] != "law_bits":
+                pins = module_pins(path, t)
+            if pins is not None:
+                f.uses += 1
+                f.pins.update(pins)
             else:
                 resolve(path, t, f, rel)
             return i
@@ -225,72 +293,48 @@ def scan_file(rel: str, text: str, crate_names: set[str], t: Table, f: Found) ->
 
     while i < n:
         tok = toks[i]
-        if tok == "use":
-            j = i + 1
-            if j < n and toks[j] == "::":
-                j += 1
-            if j < n and toks[j] in crate_names:
-                j += 1
-                if j < n and toks[j] == "::":
-                    i = use_tree(j + 1, [])
-                elif j + 1 < n and toks[j] == "as":
-                    public = i > 0 and (toks[i - 1] == "pub" or toks[i - 1] == ")")
-                    if public or depth > 0:
-                        f.findings.append(f"{rel}: `use alice_det_math as {toks[j + 1]}` "
-                                          f"{'public' if public else 'inside a module'}: not followed")
-                    else:
-                        crate_names.add(toks[j + 1])
-                    i = j + 2
-                else:
-                    i = j
+        if tok == "use" and i + 1 < n:
+            j = i + 1 + (toks[i + 1] == "::")
+            if j < n and toks[j] in names:
+                if j + 1 < n and toks[j + 1] == "::":
+                    i = use_tree(j + 2, [])
+                    continue
+                if j + 1 < n and toks[j + 1] == "as":
+                    i = j + 3      # the alias, already taken (or refused) by the first pass
+                    continue
+        if tok in aliases - names and i > 0 and toks[i - 1] == "::":
+            f.findings.append(f"{rel}: {'::'.join(toks[max(i - 2, 0):i + 1])}: an alias of alice_det_math reached by a path")
+        if tok in names:
+            if i + 1 < n and toks[i + 1] == "::" and path_prefix_ok(toks, i):
+                j, path = i + 2, []
+                while j < n:
+                    if toks[j] == "$":
+                        f.findings.append(f"{rel}: {'::'.join(['alice_det_math', *path])}::$… through a macro variable")
+                        path = []
+                        break
+                    if toks[j] in ("<", "*", "{"):
+                        if toks[j] != "<":
+                            j = use_tree(j, path)
+                            path = []
+                        break
+                    path.append(toks[j])
+                    j += 1
+                    if j < n and toks[j] == "::" and j + 1 < n and toks[j + 1] != "<":
+                        j += 1
+                        continue
+                    break
+                if path:
+                    resolve(path, t, f, rel)
+                i = j
                 continue
-        if tok == "{":
-            depth += 1
-        elif tok == "}":
-            depth -= 1
-        if tok in crate_names and i + 1 < n and toks[i + 1] == "::" and path_starts_here(toks, i):
-            j, path = i + 2, []
-            while j < n:
-                if toks[j] == "$":
-                    f.findings.append(f"{rel}: {'::'.join(['alice_det_math', *path])}::$… through a macro variable")
-                    path = []
-                    break
-                if toks[j] == "<":     # a turbofish or generic argument ends the path
-                    break
-                path.append(toks[j])
-                j += 1
-                if j < n and toks[j] == "::" and j + 1 < n and toks[j + 1] != "<":
-                    j += 1
-                    continue
-                break
-            if path:
-                resolve(path, t, f, rel)
-            i = j
-            continue
-        if tok in modules and i + 1 < n and toks[i + 1] == "::" and not (i > 0 and toks[i - 1] == "::"):
-            j, path = i + 2, list(modules[tok])
-            while j < n:
-                if toks[j] == "$":
-                    f.findings.append(f"{rel}: {tok}::$… through a macro variable")
-                    path = []
-                    break
-                if toks[j] == "<":
-                    break
-                path.append(toks[j])
-                j += 1
-                if j < n and toks[j] == "::" and j + 1 < n and toks[j + 1] != "<":
-                    j += 1
-                    continue
-                break
-            if path:
-                resolve(path, t, f, rel)
-            i = j
-            continue
+            f.findings.append(f"{rel}: `{tok}` here does not start a path this can resolve")
         i += 1
 
 
-def crate_names_in(manifest: dict) -> set[str]:
+def crate_names_in(manifest: dict, workspace: dict | None = None) -> set[str]:
+    """the names `manifest` gives alice-det-math; `dm = { workspace = true }` is looked up in the workspace root's table"""
     names = {"alice_det_math"}
+    shared = (workspace or {}).get("dependencies") or {}
     tables = [manifest.get(k) for k in ("dependencies", "build-dependencies")]
     tables.append((manifest.get("workspace") or {}).get("dependencies"))
     for spec in (manifest.get("target") or {}).values():
@@ -298,9 +342,18 @@ def crate_names_in(manifest: dict) -> set[str]:
             tables += [spec.get(k) for k in ("dependencies", "build-dependencies")]
     for tb in tables:
         for key, spec in (tb or {}).items():
+            if isinstance(spec, dict) and spec.get("workspace") is True:
+                spec = shared.get(key, spec)
             if isinstance(spec, dict) and spec.get("package") == PACKAGE:
                 names.add(key.replace("-", "_"))
     return names
+
+
+def has_det_math(table: dict | None, names: set[str]) -> bool:
+    for key, spec in (table or {}).items():
+        if key.replace("-", "_") in names or (isinstance(spec, dict) and spec.get("package") == PACKAGE):
+            return True
+    return False
 
 
 def packages(root: Path) -> list[Path]:
@@ -308,17 +361,45 @@ def packages(root: Path) -> list[Path]:
                   if not (SKIP_DIRS & set(p.relative_to(root).parts)) and "[package]" in p.read_text(encoding="utf-8"))
 
 
+def read_toml(path: Path) -> dict:
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        raise InputError(f"{path}: {e}") from None
+
+
 def scan(root: Path, t: Table) -> Found:
     f = Found()
+    root_manifest = root / "Cargo.toml"
+    workspace = (read_toml(root_manifest).get("workspace") or {}) if root_manifest.is_file() else {}
     for pkg in packages(root):
-        try:
-            names = crate_names_in(tomllib.loads((pkg / "Cargo.toml").read_text(encoding="utf-8")))
-        except tomllib.TOMLDecodeError as e:
-            raise InputError(f"{pkg}/Cargo.toml: {e}") from None
-        for src in sorted((pkg / "src").rglob("*.rs")) if (pkg / "src").is_dir() else []:
+        manifest = read_toml(pkg / "Cargo.toml")
+        names = crate_names_in(manifest, workspace)
+        rel_pkg = pkg.relative_to(root)
+        targets = [manifest.get("lib") or {}, *(manifest.get("bin") or [])]
+        for target in targets:
+            p = target.get("path")
+            if p and "src" not in Path(p).parts:
+                f.findings.append(f"{rel_pkg / 'Cargo.toml'}: a target at {p}, outside src/, is not read")
+        build = pkg / str((manifest.get("package") or {}).get("build") or "build.rs")
+        if has_det_math(manifest.get("build-dependencies"), names) or (
+                build.is_file() and any(n in tokens(build.read_text(encoding="utf-8")) for n in names)):
+            f.findings.append(f"{rel_pkg / build.name}: a build script using alice-det-math is not read")
+        files = sorted((pkg / "src").rglob("*.rs")) if (pkg / "src").is_dir() else []
+        texts: dict[str, str] = {}
+        aliases_by_file: dict[str, set[str]] = {}
+        for src in files:
             rel = str(src.relative_to(root))
+            texts[rel] = src.read_text(encoding="utf-8")
             try:
-                scan_file(rel, src.read_text(encoding="utf-8"), names, t, f)
+                probe = Found()
+                aliases_by_file[rel] = file_aliases(tokens(texts[rel]), names, rel, probe)
+            except InputError:
+                aliases_by_file[rel] = set()
+        every = set().union(*aliases_by_file.values()) if aliases_by_file else set()
+        for rel, text in texts.items():
+            try:
+                scan_file(rel, text, names, every, t, f)
             except InputError as e:
                 f.findings.append(f"{rel}: {e}")
     return f
