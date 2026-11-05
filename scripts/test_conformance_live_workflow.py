@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "conformance-live.yml"
+PREFLIGHT = WORKFLOW.parent.parent.parent / "scripts" / "preflight.sh"
 STEP_RE = re.compile(r"^      - (?:name: (?P<name>.*)|uses: .*)$")
 
 
@@ -93,6 +94,23 @@ class Workflow(unittest.TestCase):
         self.assertNotIn("--state-drift-note", whole)
         self.assertNotIn("manifest-state.toml", whole)
         self.assertNotIn("pending-state.toml", whole)
+
+    def test_the_alarm_runs_daily_and_on_a_push_to_main_and_nothing_silences_it(self):
+        # the live job is the only place a finding at a crate's main shows: each setting here keeps that alarm
+        whole = WORKFLOW.read_text(encoding="utf-8")
+        triggers = whole[whole.index("\non:\n"):whole.index("\npermissions:")]
+        self.assertRegex(triggers, r"(?m)^  schedule:\n    - cron: ")
+        self.assertRegex(triggers, r"(?m)^  push:\n    branches: \[main\]$")
+        self.assertRegex(triggers, r"(?m)^  workflow_dispatch:$")
+        job = whole[whole.index("\n  live:\n"):whole.index("\n  holder:\n")]
+        self.assertNotIn("continue-on-error", job)
+        self.assertNotRegex(job, r"(?m)^\s*(- )?if:")
+
+    def test_the_preflight_reads_no_other_repository(self):
+        # the roster check without --internal reads the mains: another repository's manifest would refuse a push here
+        lines = [ln for ln in PREFLIGHT.read_text(encoding="utf-8").splitlines()
+                 if ln.startswith("python3 scripts/conformance_roster_check.py")]
+        self.assertEqual(lines, ["python3 scripts/conformance_roster_check.py --internal"])
 
     def test_the_strict_shared_file_check_runs_daily_and_the_landing_gate_on_a_push(self):
         daily = self.step("Strict every day (scripts/shared_files_strict.sh --daily)")

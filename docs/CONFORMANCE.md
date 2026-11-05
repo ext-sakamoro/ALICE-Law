@@ -722,8 +722,9 @@ This repository records no other repository's status counts. The Conformance
 on each run and publishes them in its job summary
 (`scripts/conformance_roster_check.py --summary`); a manifest with a finding at a
 crate's main turns that run red, as an alarm on this repository's CI, not as a
-gate on the crate. A crate's landing therefore needs no change here, and nothing
-here refuses it: each repository's own gates decide its landing. A lander that
+gate on the crate. A crate's landing therefore needs no change here (a crate's
+first manifest removes its `missing-manifests.toml` entry here; until then the
+live run reports the entry as stale), and nothing here refuses it: each repository's own gates decide its landing. A lander that
 wants to know what its landing will show runs, from a clone of this repository:
 
     python3 scripts/land_law_state.py --candidate ALICE-X=<clone of the crate>@<commit> [--candidate ...]

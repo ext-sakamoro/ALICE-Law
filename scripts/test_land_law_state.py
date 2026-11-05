@@ -170,6 +170,43 @@ class LandLawState(LandBase):
         self.assertEqual(code, 2, out)
         self.assertIn("nothing was compared", out)
 
+    def test_a_candidate_removing_the_only_manifest_is_not_a_pass(self):
+        # the state at the mains compares something, the landed state nothing
+        (self.root / "conformance" / "missing-manifests.toml").write_text(
+            '[missing.beta]\nfixed-in = "Beta"\nwhy = "w"\n[missing.alpha]\nfixed-in = "Alpha"\nwhy = "w"\n', encoding="utf-8")
+        self.mains = {"Alpha": manifest(), "Beta": None}
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": None}))
+        self.assertEqual(code, 2, out)
+        self.assertIn("nothing was compared", out)
+
+    def test_a_crates_only_change_is_a_change(self):
+        counts = {"pass": 1, "fail-known": 0, "unverified": 0, "n/a": 0}
+        lines = lls.changes({"A": {"crates": ["a"], "counts": counts}}, {"A": {"crates": ["a", "b"], "counts": counts}})
+        self.assertEqual(lines, ["A: crates ['a'] -> ['a', 'b']"])
+
+    def test_another_crates_manifest_that_is_not_utf8_is_reported_and_the_state_computed(self):
+        def remote(repo):
+            if repo == "Beta":
+                raise crc.ManifestNotText("Beta at main: alice-law-conformance.toml is not UTF-8: x")
+            return self.mains.get(repo), set(PATHS)
+        self.remote = remote
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": manifest()}))
+        self.assertEqual(code, 0, out)
+        self.assertIn("found: Beta at main: alice-law-conformance.toml is not UTF-8", out)
+        self.assertIn("land_law_state: state moves: no", out)
+
+    def test_a_candidate_that_is_not_utf8_at_a_real_commit_is_reported(self):
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run(["git", "init", "-q", d], check=True, env=ENV)
+            (Path(d) / "alice-law-conformance.toml").write_bytes(b"\xff\xfe not text")
+            subprocess.run(["git", "-C", d, "add", "-A"], check=True, env=ENV)
+            subprocess.run(["git", "-C", d, "commit", "-qm", "x"], check=True, env=ENV)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = lls.main(["--candidate", f"Alpha={d}@HEAD"], remote=self.remote, root=self.root)
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertIn("is not UTF-8", out.getvalue())
+
     def test_a_candidate_adding_a_line_reference_is_reported(self):
         more = manifest(G3='status = "unverified"\nnote = "see src/lib.rs:40"')
         code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": more}))
