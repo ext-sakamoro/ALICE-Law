@@ -618,7 +618,7 @@ def prefetch(g: Path, rev: str, rels: list[str], env: dict[str, str] | None = No
     oids = []
     for rel in sorted(set(rels)):
         r = subprocess.run(["git", "-C", str(g), "rev-parse", "-q", "--verify", f"{rev}:{rel}"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8")
         if r.returncode == 0:
             oids.append(r.stdout.strip())
     missing = [o for o in oids
@@ -641,7 +641,7 @@ def show(g: Path, rev: str, rel: str) -> bytes | None:
 def tree(g: Path, rev: str = "origin/main") -> dict[str, str]:
     """path -> git blob id of every file at rev (no blob is fetched)."""
     out = subprocess.run(["git", "-C", str(g), "ls-tree", "-r", "-z", rev], check=True,
-                         capture_output=True, text=True).stdout
+                         capture_output=True, text=True, encoding="utf-8").stdout
     files = {}
     for item in out.split("\0"):
         if item:
@@ -875,7 +875,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
             if got and got in known_bytes and not strict:
                 # a rollout landed before the table was regenerated: the same bytes, not drift
                 since = subprocess.run(["git", "-C", str(remote(r)), "log", "-1", "--format=%cs", "--diff-filter=A",
-                                        "origin/main", "--", e["path"]], capture_output=True, text=True).stdout.strip()
+                                        "origin/main", "--", e["path"]], capture_output=True, text=True, encoding="utf-8").stdout.strip()
                 unlisted.append((e["path"], r, got, since or "?"))
                 continue
             what = "the same bytes as its entry" if got in known_bytes else f"sha256 {got or '(unreadable)'}"
