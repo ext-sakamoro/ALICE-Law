@@ -189,6 +189,8 @@ jobs:
 
       - name: Test the conformance measurement
         run: python3 scripts/test_measure_conformance.py
+      - name: Fold set tool (tests)
+        run: python3 scripts/test_fold_set_check.py
 
       # G15: the checker the crates run (fetched at a named revision), its baseline (generated, shrink-only)
       - name: Test the surface-claims check (G15) and its baseline
