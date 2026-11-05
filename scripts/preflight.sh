@@ -113,8 +113,8 @@ python3 scripts/readme_roster_check.py
 echo "== conformance docs and schema agree"
 python3 scripts/conformance_docs_schema_check.py
 
-echo "== the committed conformance state is consistent (no other repository read; the comparison with
-# the members' mains runs on every push to main and daily, .github/workflows/conformance-live.yml)"
+echo "== this repository's own conformance inputs (no other repository read; the members' mains are read on every
+# push to main and daily, .github/workflows/conformance-live.yml)"
 python3 scripts/conformance_roster_check.py --internal
 
 echo "== the README Status section is the generated one"

@@ -25,7 +25,8 @@ stale entry, so the list shrinks in the change that lands the manifest. It is ne
 The status counts of each repository's manifest, with the crates it is read for, are computed from the
 mains on every run and published, never committed: with `--summary FILE` the run appends them to FILE as a
 Markdown table (the workflow passes the job summary). Law records no other repository's counts, so a crate
-landing needs no change here and nothing here can refuse a crate's landing; a manifest with a finding at a
+landing needs no change here (a crate's first manifest removes its missing-manifests.toml entry here, until then
+the live run reports the entry as stale) and nothing here can refuse a crate's landing; a manifest with a finding at a
 crate's main turns this check red, an alarm on this repository's own CI (scheduled and on a push to main),
 until each crate checks its own manifest in its own CI.
 
@@ -624,14 +625,38 @@ def gh_api(path: str) -> dict | None:
     return json.loads(p.stdout)
 
 
+class ManifestNotText(InputError):
+    """a repository's manifest is not UTF-8: a finding for that repository, the other repositories are still read
+    (--check-manifest, which reads only this one, stops with exit 2)"""
+
+
+def manifest_text(raw: bytes, where: str) -> str:
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise ManifestNotText(f"{where}: {MANIFEST} is not UTF-8: {e}") from e
+
+
 def gh_fetcher(owner: str, ref: str = "main"):
     def api(path: str) -> dict | None:
-        p = subprocess.run(["gh", "api", path], capture_output=True, text=True, encoding="utf-8")
+        p = subprocess.run(["gh", "api", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
         if p.returncode != 0:
             if "HTTP 404" in p.stderr or "Not Found" in p.stderr:
                 return None
             raise InputError(f"gh api {path}: {p.stderr.strip()[:200]}")
-        return json.loads(p.stdout)
+        try:
+            got = json.loads(p.stdout)
+        except ValueError as e:
+            raise InputError(f"gh api {path}: not JSON: {e}") from e
+        if not isinstance(got, dict):
+            raise InputError(f"gh api {path}: not an object")
+        return got
+
+    def content(blob: dict, path: str) -> bytes:
+        try:
+            return base64.b64decode(blob["content"])
+        except (KeyError, TypeError, ValueError) as e:
+            raise InputError(f"gh api {path}: no readable content: {e}") from e
 
     def fetch(repo: str) -> tuple[str | None, set[str]]:
         tree = api(f"repos/{owner}/{repo}/git/trees/{ref}?recursive=1")
@@ -639,7 +664,10 @@ def gh_fetcher(owner: str, ref: str = "main"):
             raise InputError(f"{owner}/{repo}: {ref} has no tree")
         if tree.get("truncated"):
             raise InputError(f"{owner}/{repo}: the file tree is truncated")
-        paths = {t["path"] for t in tree.get("tree", []) if t.get("type") == "blob"}
+        try:
+            paths = {t["path"] for t in tree.get("tree", []) if t.get("type") == "blob"}
+        except (AttributeError, KeyError, TypeError) as e:
+            raise InputError(f"{owner}/{repo}: an unreadable file tree: {e}") from e
         if MANIFEST not in paths:
             return None, paths, None
         blob = api(f"repos/{owner}/{repo}/contents/{MANIFEST}?ref={ref}")
@@ -650,19 +678,22 @@ def gh_fetcher(owner: str, ref: str = "main"):
         def read(path: str) -> str | None:
             if path not in cache:
                 b = api(f"repos/{owner}/{repo}/contents/{path}?ref={ref}") if path in paths else None
-                cache[path] = base64.b64decode(b["content"]).decode("utf-8", "replace") if b and b.get("content") else None
+                cache[path] = content(b, path).decode("utf-8", "replace") if b and b.get("content") else None
             return cache[path]
-        return base64.b64decode(blob["content"]).decode("utf-8"), paths, read
+        return manifest_text(content(blob, MANIFEST), f"{repo} at {ref}"), paths, read
     return fetch
 
 
 def git_fetcher(repo_dir: Path, ref: str):
     """the (manifest text, blob paths) of one local clone at `ref`, the shape gh_fetcher returns for main"""
-    def git(*args: str) -> str:
-        p = subprocess.run(["git", "-C", str(repo_dir), *args], capture_output=True, text=True, encoding="utf-8")
+    def git_bytes(*args: str) -> bytes:
+        p = subprocess.run(["git", "-C", str(repo_dir), *args], capture_output=True)
         if p.returncode != 0:
-            raise InputError(f"git {' '.join(args)} in {repo_dir}: {p.stderr.strip()[:200]}")
+            raise InputError(f"git {' '.join(args)} in {repo_dir}: {p.stderr.decode('utf-8', 'replace').strip()[:200]}")
         return p.stdout
+
+    def git(*args: str) -> str:
+        return git_bytes(*args).decode("utf-8", "replace")
 
     def fetch() -> tuple[str | None, set[str]]:
         p = subprocess.run(["git", "-C", str(repo_dir), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
@@ -676,7 +707,7 @@ def git_fetcher(repo_dir: Path, ref: str):
 
         def read(path: str) -> str | None:
             return git("show", f"{commit}:{path}") if path in paths else None
-        return git("show", f"{commit}:{MANIFEST}"), paths, read
+        return manifest_text(git_bytes("show", f"{commit}:{MANIFEST}"), f"{repo_dir} at {ref}"), paths, read
     return fetch
 
 
@@ -705,14 +736,16 @@ def check_one(repo_dir: Path, ref: str, gates: dict, fetch=None) -> tuple[list[s
     return findings, notes, counts, compared, len(paths)
 
 
-def render_summary(states: dict[str, dict], gates: int) -> str:
-    """the status counts per repository manifest as a Markdown table (the job summary; never committed)"""
+def render_summary(states: dict[str, dict], gates: int, findings: list[str]) -> str:
+    """the status counts per repository manifest as a Markdown table, then the findings (a repository with a finding
+    has no row: its counts are not read) (the job summary; never committed)"""
     out = [f"### Conformance manifests (status counts of the {gates} gates in each repository's manifest at main)",
            "", "| repository | read for | " + " | ".join(STATUSES) + " |", "|---|---|" + "---|" * len(STATUSES)]
     for repo in sorted(states):
         c = states[repo]
         out.append(f"| {repo} | {', '.join(sorted(c['crates']))} | "
                    + " | ".join(str(c["counts"][st]) for st in STATUSES) + " |")
+    out += ["", f"{len(findings)} findings", *(["", *(f"- {f}" for f in findings)] if findings else [])]
     return "\n".join(out) + "\n"
 
 
@@ -815,11 +848,19 @@ def check(roster: dict, gates: dict, missing: dict, fetch,
     read = compared = 0
     cache: dict[str, tuple[str | None, set[str]]] = {}
     checked: dict[str, bool] = {}  # repository -> its manifest checked clean
+    not_text: set[str] = set()
     for crate, repo in sorted(crates.items()):
         if repo not in cache:
-            cache[repo] = fetch(repo)
+            try:
+                cache[repo] = fetch(repo)
+            except ManifestNotText as e:
+                findings.append(str(e))
+                not_text.add(repo)
+                cache[repo] = (None, set(), None)
             if texts is not None and cache[repo][0] is not None:
                 texts[repo] = cache[repo][0]
+        if repo in not_text:
+            continue
         text, paths, *rest = cache[repo]
         reader = rest[0] if rest else None
         if text is None:
@@ -960,7 +1001,7 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
     if a.summary:
         try:
             with open(a.summary, "a", encoding="utf-8") as fh:
-                fh.write(render_summary(states, len(gate_vocabulary(gates))))
+                fh.write(render_summary(states, len(gate_vocabulary(gates)), findings))
         except OSError as e:
             print(f"error: the summary {a.summary}: {e}", file=sys.stderr)
             return 2

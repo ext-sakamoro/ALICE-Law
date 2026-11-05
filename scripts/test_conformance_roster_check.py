@@ -134,6 +134,42 @@ class Check(unittest.TestCase):
         self.assertIn("state: Alpha (alpha): pass 1, fail-known 1, unverified 1, n/a 0", out)
         self.assertIn("2 manifests read for 2 crates (crates that share a repository share its manifest), 6 gates compared, 0 findings", out)
 
+    def test_the_summary_names_the_findings_of_a_repository_with_no_row(self):
+        code, out, summary = self.run_check({"Alpha": manifest(), "Beta": manifest(G3='status = "Pass"')})
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("| Beta |", summary)
+        self.assertIn("| Alpha |", summary)
+        self.assertIn("1 findings\n\n- Beta:", summary)
+        self.assertIn("0 findings\n", self.run_check({"Alpha": manifest(), "Beta": manifest()})[2])
+
+    def test_a_manifest_that_is_not_utf8_is_a_finding_and_the_others_are_still_read(self):
+        def fetch(repo):
+            if repo == "Beta":
+                raise crc.ManifestNotText("Beta at main: alice-law-conformance.toml is not UTF-8: x")
+            return manifest(), set(PATHS)
+        with tempfile.TemporaryDirectory() as d:
+            f, g, r = Path(d) / "f.toml", Path(d) / "g.toml", Path(d) / "r.toml"
+            f.write_text('[baseline]\n"Alpha" = 1\n', encoding="utf-8")
+            g.write_text(GATES, encoding="utf-8")
+            r.write_text(ROSTER, encoding="utf-8")
+            s = Path(d) / "s.md"
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = crc.main(["--today", "2026-10-19", "--roster", str(r), "--gates", str(g), "--missing", str(Path(d) / "none"),
+                                 "--line-baseline", str(f), "--summary", str(s)], fetch=fetch)
+            summary = s.read_text(encoding="utf-8")
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertIn("found: Beta at main: alice-law-conformance.toml is not UTF-8", out.getvalue())
+        self.assertIn("| Alpha |", summary)
+
+    def test_a_baseline_repository_with_no_manifest_read_is_a_finding(self):
+        with tempfile.TemporaryDirectory() as d:
+            b = Path(d) / "b.toml"
+            b.write_text('[baseline]\n"Alpha" = 1\n"Beta" = 1\n"Gamma" = 0\n', encoding="utf-8")
+            code, out, _ = self.run_check({"Alpha": manifest(), "Beta": manifest()}, extra=["--line-baseline", str(b)])
+        self.assertEqual(code, 1, out)
+        self.assertIn("Gamma: in conformance/line-refs-baseline.toml but no manifest was read for it", out)
+
     def test_the_summary_is_appended_to_what_the_job_wrote_before(self):
         # GITHUB_STEP_SUMMARY is shared by the job's steps: this run adds to it
         with tempfile.TemporaryDirectory() as d:
@@ -363,7 +399,7 @@ class Fetcher(unittest.TestCase):
         import types
         saved = crc.subprocess.run
 
-        def run(cmd, capture_output, text, encoding):
+        def run(cmd, capture_output, text, encoding, errors=None):
             # the API's JSON is UTF-8; the locale's code page (cp1252 on Windows) would not decode it
             assert encoding == "utf-8", encoding
             path = cmd[2]
@@ -400,6 +436,44 @@ class Fetcher(unittest.TestCase):
             self.fetch_with({"git/trees": (1, "HTTP 500: server error")})
         with self.assertRaises(crc.InputError):
             self.fetch_with({"git/trees": (1, "gh: Not Found (HTTP 404)")})
+
+
+class FetcherBadAnswers(unittest.TestCase):
+    """what gh answers that is not what was asked: not computed (InputError), never a traceback"""
+
+    def fetch_with(self, *answers):
+        import subprocess
+        real = crc.subprocess.run
+        it = iter(answers)
+
+        def run(cmd, **kw):
+            return subprocess.CompletedProcess(cmd, 0, next(it), "")
+        crc.subprocess.run = run
+        self.addCleanup(setattr, crc.subprocess, "run", real)
+        return crc.gh_fetcher("o")("Alpha")
+
+    TREE = '{"tree": [{"path": "alice-law-conformance.toml", "type": "blob"}]}'
+
+    def test_each_bad_answer_is_an_input_error(self):
+        for answers in (("<html>",), ("[1]",), ('{"tree": [1]}',), ('{"tree": [{"type": "blob"}]}',),
+                        (self.TREE, "<html>"), (self.TREE, "{}"), (self.TREE, '{"content": 1}'),
+                        (self.TREE, '{"content": "a"}')):
+            with self.subTest(answers=answers), self.assertRaises(crc.InputError) as c:
+                self.fetch_with(*answers)
+            self.assertNotIsInstance(c.exception, crc.ManifestNotText)
+
+    def test_bytes_that_are_not_utf8_are_the_manifest_error(self):
+        import base64
+        import json
+        b = base64.b64encode(b"\xff\xfe").decode()
+        with self.assertRaises(crc.ManifestNotText):
+            self.fetch_with(self.TREE, json.dumps({"content": b}))
+
+    def test_a_good_answer_reads(self):
+        import base64
+        import json
+        b = base64.b64encode("a = 1\n".encode()).decode()
+        self.assertEqual(self.fetch_with(self.TREE, json.dumps({"content": b}))[0], "a = 1\n")
 
 
 class CheckManifest(unittest.TestCase):

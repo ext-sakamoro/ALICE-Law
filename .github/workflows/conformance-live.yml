@@ -4,7 +4,8 @@
 # holds alice-law-conformance.toml at the main of its repository with every gate, valid
 # statuses and located fail-known entries. The status counts are computed from the mains on
 # every run and published in the job summary; nothing records them here, so a crate landing
-# needs no change in this repository and nothing here refuses it. A manifest with a finding at
+# needs no change in this repository (a crate's first manifest removes its missing-manifests.toml
+# entry here, until then this run reports the entry as stale) and nothing here refuses it. A manifest with a finding at
 # a crate's main turns this run red (an alarm on this repository's CI), until each crate checks
 # its own manifest in its own CI. Nothing compared is a failure.
 #
@@ -147,7 +148,8 @@ jobs:
       - name: Strict on a push to main (scripts/shared_files_strict.sh)
         if: github.event_name == 'push'
         env:
-          # the state checks (conformance_roster_check.py) read the crates' mains through gh api
+          # scripts/workflow_gh_token_check.py follows the script to conformance_roster_check.py, which can call gh
+          # (this step runs it with --internal, which does not)
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
@@ -157,10 +159,9 @@ jobs:
           base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
           LAW_BASE_REF="$base" scripts/shared_files_strict.sh
 
-      # the daily run is strict: an unlisted holder of the same bytes and a state
-      # behind the crates' mains are findings, and the owner regenerates the table and the state
+      # the daily run is strict: an unlisted holder of the same bytes is a finding, and the owner regenerates the table
       - name: Strict every day (scripts/shared_files_strict.sh --daily)
         if: github.event_name == 'schedule'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}  # for scripts/workflow_gh_token_check.py, as in the step above
         run: scripts/shared_files_strict.sh --daily

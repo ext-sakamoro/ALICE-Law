@@ -12,7 +12,8 @@ main (GitHub), through the same checks as scripts/conformance_roster_check.py, a
 the candidates landed against the state at the mains. It prints each changed count and the verdict
 `land_law_state: state moves: no` or `land_law_state: state moves: yes`, and the findings the landed state
 would show in Law's live check (a manifest with a finding, a line-number reference above the baseline in
-conformance/line-refs-baseline.toml). It writes nothing: the landing needs no change in this repository,
+conformance/line-refs-baseline.toml). It writes nothing: the landing needs no change in this repository (a crate's first
+manifest removes its missing-manifests.toml entry here, until then Law's live check shows the entry as stale),
 and nothing here refuses it (each repository's own gates decide its landing).
 
 Exit 0 when the state was computed (whether it moves or not, with or without findings); 2 when it was not
