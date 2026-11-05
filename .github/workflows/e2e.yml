@@ -122,6 +122,7 @@ jobs:
           merge-multiple: true
       - name: Compare
         if: steps.resolve.outputs.expected != 'true' && needs.digest.outputs.test-expected != 'true'
+        shell: bash
         run: |
           n=$(ls digests | wc -l)
           test "$n" -eq 2 || { echo "expected 2 digests, found $n"; exit 1; }

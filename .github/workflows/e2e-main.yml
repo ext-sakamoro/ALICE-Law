@@ -183,6 +183,7 @@ jobs:
           path: digests
           merge-multiple: true
       - name: Compare
+        shell: bash
         run: |
           n=$(ls digests | wc -l)
           test "$n" -eq 2 || { echo "expected 2 digests, found $n"; exit 1; }
