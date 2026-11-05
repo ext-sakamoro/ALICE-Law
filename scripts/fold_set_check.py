@@ -32,6 +32,11 @@ Items that are not arithmetic (the identifier API, [no_arithmetic]) are accepted
   fold_set_check.py check ROOT [--paths FILE]   also compares with DET_MATH_FUNCTIONS in the source, plus the
                                                 `generated` list of .github/det-math-fold.toml (names only the crate's
                                                 generated code calls); exit 1 on a difference or a finding
+  fold_set_check.py write ROOT [--paths FILE]   writes that set into the crate's one DET_MATH_FUNCTIONS, sorted and as
+                                                rustfmt lays it out, and changes nothing else; exit 1 on a finding (nothing
+                                                written); exit 2 when there is no declaration or more than one (add
+                                                `pub const DET_MATH_FUNCTIONS: &[&str] = &[];` where the crate folds it), or
+                                                the file holds anything rustfmt would change
 Without --paths the table is read from the alice-det-math that `cargo metadata` resolves for ROOT.
 Exit 0 / 1, 2 on an input error (no Rust file, no table, nothing compared).
 """
@@ -573,19 +578,68 @@ def resolved_table(root: Path) -> Path:
 DECLARED_RE = re.compile(r"DET_MATH_FUNCTIONS\s*:\s*&\[&str\]\s*=\s*&\[(.*?)\]", re.S)
 
 
-def declared(root: Path) -> set[str] | None:
-    out: set[str] | None = None
+RUSTFMT = "rustfmt"
+
+
+def declarations(root: Path) -> list[tuple[Path, str, re.Match]]:
+    """each DET_MATH_FUNCTIONS of the source (file, its text, the match), a commented-out line not being one"""
+    out = []
     for pkg in packages(root):
-        for src in (pkg / "src").rglob("*.rs") if (pkg / "src").is_dir() else []:
-            m = DECLARED_RE.search(src.read_text(encoding="utf-8"))
-            if m:
-                out = (out or set()) | set(re.findall(r'"([a-z0-9_]+)"', m.group(1)))
+        for src in sorted((pkg / "src").rglob("*.rs")) if (pkg / "src").is_dir() else []:
+            text = src.read_text(encoding="utf-8")
+            for m in DECLARED_RE.finditer(text):
+                if "//" not in text[text.rfind("\n", 0, m.start()) + 1:m.start()]:
+                    out.append((src, text, m))
     return out
+
+
+def declared(root: Path) -> set[str] | None:
+    found = declarations(root)
+    if not found:
+        return None
+    return {n for _, _, m in found for n in re.findall(r'"([a-z0-9_:]+)"', m.group(1))}
+
+
+def wanted(root: Path, f: Found) -> set[str]:
+    gen_file = root / ".github" / "det-math-fold.toml"
+    return f.pins | (set(tomllib.loads(gen_file.read_text(encoding="utf-8")).get("generated", [])) if gen_file.is_file() else set())
+
+
+def rustfmt(text: str, where: Path) -> subprocess.CompletedProcess:
+    # from stdin rustfmt does not follow `mod`s; run in the file's directory so it finds the crate's rustfmt.toml
+    try:
+        return subprocess.run([RUSTFMT, "--edition", "2021"], input=text, capture_output=True, text=True,
+                              encoding="utf-8", cwd=where.parent)
+    except OSError as e:
+        raise InputError(f"{RUSTFMT}: {e}") from None
+
+
+def write(root: Path, want: set[str]) -> str:
+    """writes `want` into the one declaration; what happened, as a line"""
+    found = declarations(root)
+    if not found:
+        raise InputError("no DET_MATH_FUNCTIONS in the source: add `pub const DET_MATH_FUNCTIONS: &[&str] = &[];` "
+                         "where the crate folds it")
+    if len(found) > 1:
+        raise InputError(f"{len(found)} declarations of DET_MATH_FUNCTIONS (write needs one): "
+                         + ", ".join(str(x[0]) for x in found))
+    src, text, m = found[0]
+    new = text[:m.start(1)] + ", ".join(f'"{n}"' for n in sorted(want)) + text[m.end(1):]
+    now = rustfmt(text, src)
+    if now.returncode != 0 or now.stdout != text:
+        raise InputError(f"{src}: rustfmt would change this file: format it first (a write changes the declaration only)")
+    p = rustfmt(new, src)
+    if p.returncode != 0:
+        raise InputError(f"{src}: rustfmt: {p.stderr.strip()[:200]}")
+    if p.stdout == text:
+        return f"{src}: unchanged ({len(want)} functions)"
+    src.write_text(p.stdout, encoding="utf-8")
+    return f"{src}: written ({len(want)} functions)"
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cmd", choices=("print", "check"))
+    ap.add_argument("cmd", choices=("print", "check", "write"))
     ap.add_argument("root", type=Path)
     ap.add_argument("--paths", type=Path)
     a = ap.parse_args(argv)
@@ -606,14 +660,25 @@ def main(argv: list[str]) -> int:
         print(f"fold set: not understood: {x}")
     if a.cmd == "print":
         return 0
+    if a.cmd == "write":
+        if f.findings:
+            print("fold set: nothing written: resolve what is not understood first")
+            return 1
+        if f.uses == 0:
+            print("fold set: no use of alice_det_math found (compared nothing): nothing written", file=sys.stderr)
+            return 2
+        try:
+            print(f"fold set: {write(a.root, wanted(a.root, f))}")
+        except InputError as e:
+            print(f"fold set: {e}", file=sys.stderr)
+            return 2
+        return 0
     bad = list(f.findings)
     decl = declared(a.root)
     if decl is None:
         bad.append("no DET_MATH_FUNCTIONS in the source")
     else:
-        gen_file = a.root / ".github" / "det-math-fold.toml"
-        generated = set(tomllib.loads(gen_file.read_text(encoding="utf-8")).get("generated", [])) if gen_file.is_file() else set()
-        want = f.pins | generated
+        want = wanted(a.root, f)
         for n in sorted(want - decl):
             bad.append(f"{n} is called but is not in DET_MATH_FUNCTIONS")
         for n in sorted(decl - want):
