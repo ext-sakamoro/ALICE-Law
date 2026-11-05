@@ -1521,8 +1521,16 @@ class FieldClasses(unittest.TestCase):
         self.assertFalse(sfc.PENDING_NORMATIVE & sfc.PENDING_DERIVED)
         self.assertFalse(sfc.PENDING_REQUIRED & sfc.PENDING_OPTIONAL)
 
-    def test_every_field_of_the_repository_table_is_classified(self):
-        entries = sfc.load((HERE.parent / "conformance" / "shared-files.toml").read_text(encoding="utf-8"))
+    # A table with a pending row, whatever the repository's table holds now: it has no pending row
+    # between rollouts, and that is a good state, not an empty check.
+    TABLE_WITH_PENDING = (
+        '[[file]]\npath = "scripts/a.py"\n'
+        f'pending = {{ since = "2026-01-01", exit = "every copy has the target", target = "{"a" * 64}", '
+        f'owner = "ALICE-A", planned = "{"b" * 40}", variants = {{ "{"a" * 64}" = ["ALICE-A"], "{"c" * 64}" = ["ALICE-B"] }} }}\n'
+        'repos = ["ALICE-A", "ALICE-B"]\n'
+    )
+
+    def assert_classified(self, entries):
         rows = pend = 0
         for e in entries:
             rows += 1
@@ -1531,11 +1539,18 @@ class FieldClasses(unittest.TestCase):
                 pend += 1
                 self.assertLessEqual(set(e["pending"]), sfc.PENDING_NORMATIVE | sfc.PENDING_DERIVED, e["path"])
         self.assertGreater(rows, 0)
-        self.assertGreater(pend, 0)
+        return pend
+
+    def test_every_field_of_the_repository_table_is_classified(self):
+        self.assert_classified(sfc.load((HERE.parent / "conformance" / "shared-files.toml").read_text(encoding="utf-8")))
+
+    def test_every_field_of_a_pending_row_is_classified(self):
+        self.assertGreater(self.assert_classified(sfc.load(self.TABLE_WITH_PENDING)), 0)
 
     def test_an_unclassified_pending_field_is_refused_by_the_schema(self):
         # the schema reads its accepted pending fields from the classification: a field outside it never loads
-        text = (HERE.parent / "conformance" / "shared-files.toml").read_text(encoding="utf-8")
+        text = self.TABLE_WITH_PENDING
+        sfc.load(text)  # the table itself loads: the refusal below is for the added field
         i = text.index("pending = { since = ")
         bad = text[:i] + 'pending = { note = "x", ' + text[i + len("pending = { "):]
         with self.assertRaises(sfc.Unreadable):
