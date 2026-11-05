@@ -46,6 +46,8 @@ python3 scripts/test_workflow_concurrency.py
 python3 scripts/workflow_concurrency.py
 python3 scripts/test_workflow_pipefail.py
 python3 scripts/workflow_pipefail.py
+python3 scripts/test_check_pipe_grep_q.py
+python3 scripts/check_pipe_grep_q.py
 python3 scripts/test_locked_lockfile_check.py
 python3 scripts/locked_lockfile_check.py
 python3 scripts/test_measure_conformance.py

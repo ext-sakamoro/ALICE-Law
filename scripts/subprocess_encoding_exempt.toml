@@ -32,3 +32,15 @@ path = "test_semver_gate.py"
 owner = "ALICE-DetMath"
 reason = "a shared file whose bytes the table fixes (owner ALICE-DetMath), taken here as the bytes every other holder has; it changes in every holder at once with the next roll of its row, not in this repository alone"
 until = "2026-11-09"
+
+[[exempt]]
+path = "check_pipe_grep_q.py"
+owner = "ALICE-Analytics"
+reason = "a shared file whose bytes the table fixes (planned row, owner ALICE-Analytics); it changes in every holder at once with the next roll of its row"
+until = "2026-11-30"
+
+[[exempt]]
+path = "test_check_pipe_grep_q.py"
+owner = "ALICE-Analytics"
+reason = "a shared file whose bytes the table fixes (planned row, owner ALICE-Analytics); it changes in every holder at once with the next roll of its row"
+until = "2026-11-30"

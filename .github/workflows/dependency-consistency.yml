@@ -177,6 +177,11 @@ jobs:
           python3 scripts/test_workflow_pipefail.py
           python3 scripts/workflow_pipefail.py
 
+      - name: No pipeline ends in grep -q (shared with the crates' CI)
+        run: |
+          python3 scripts/test_check_pipe_grep_q.py
+          python3 scripts/check_pipe_grep_q.py
+
       - name: A --locked step that may follow a failed lock file generation requires its success
         run: |
           python3 scripts/test_locked_lockfile_check.py
