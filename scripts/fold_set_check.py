@@ -19,8 +19,10 @@ path in that file, wherever in the file it stands.
 Everything else is a finding, never a skip: any token naming the crate or such an alias that does not start a resolved
 path (a macro taking the crate as an identifier, `extern crate`, `use {alice_det_math as dm}`, `pub use alice_det_math`),
 an alias reached from elsewhere (`super::dm`) or declared public or inside a module, a glob, a path through a macro
-variable, a name not in the table (`consts::*` for now: they have no pins yet), #[cfg(test)] on anything but an item (it
-cannot be told where it ends), #[path], include!, a lib or bin outside src/, and a build script that uses the crate.
+variable, a name not in the table (`consts::*` for now: they have no pins yet), a #[path] that is missing, outside the
+repository, not a plain string or inside an inline module (one at the top of a file is read like the rest), include!, a lib or bin outside src/, and a build
+script that uses the crate. #[cfg(test)] removes an item, or a macro invocation in its place; on anything else (a field,
+an arm, a statement) what follows stays in the read: a larger set than the real one, never a call missed.
 Items that are not arithmetic (the identifier API, [no_arithmetic]) are accepted and listed apart.
 
   fold_set_check.py print ROOT [--paths FILE]   the set found, the identifier items used, the findings
@@ -55,6 +57,17 @@ class InputError(Exception):
     pass
 
 
+class Literal(str):
+    """a string literal's token: equal to `""`, with the contents kept for #[path]"""
+    value = ""
+
+
+def literal(text: str) -> Literal:
+    t = Literal('""')
+    t.value = text
+    return t
+
+
 def tokens(text: str) -> list[str]:
     """identifiers, `::`, and single punctuation; comments and the contents of string and char literals are gone"""
     out: list[str] = []
@@ -79,13 +92,14 @@ def tokens(text: str) -> list[str]:
             end = text.find('"' + m.group(1), m.end())
             if end < 0:
                 raise InputError("an unterminated raw string")
-            out.append('""')
+            out.append(literal(text[m.end():end]))
             i = end + 1 + len(m.group(1))
         elif c == '"' or (c in "bc" and text.startswith('"', i + 1)):
             i += 1 if c == '"' else 2
+            start = i
             while i < n and text[i] != '"':
                 i += 2 if text[i] == "\\" else 1
-            out.append('""')
+            out.append(literal(text[start:i]))
             i += 1
         elif c == "'" or (c == "b" and text.startswith("'", i + 1)):
             # a char literal, or a lifetime (no closing quote right after one character or an escape)
@@ -120,9 +134,10 @@ ITEM_KEYWORDS = {"mod", "fn", "use", "struct", "enum", "union", "impl", "const",
 CFG_TEST = ["#", "[", "cfg", "(", "test", ")", "]"]
 
 
-def without_test_items(toks: list[str], rel: str, findings: list[str]) -> list[str]:
-    """the tokens with each #[cfg(test)] item removed, up to its matching brace or its `;` outside any bracket. On
-    anything but an item it stays, and it is a finding: where a field, an arm or a parameter ends cannot be told"""
+def without_test_items(toks: list[str]) -> list[str]:
+    """the tokens with each #[cfg(test)] item removed, up to its matching brace or its `;` outside any bracket; a macro
+    invocation in that place (thread_local! { .. }) is an item too. On anything else the attribute removes nothing:
+    where a field, an arm or a statement ends need not be told, what follows is simply read"""
     out: list[str] = []
     i, n = 0, len(toks)
     while i < n:
@@ -145,8 +160,8 @@ def without_test_items(toks: list[str], rel: str, findings: list[str]) -> list[s
                 while k < n and toks[k] != ")":
                     k += 1
                 k += 1
-        if k >= n or toks[k] not in ITEM_KEYWORDS:
-            findings.append(f"{rel}: #[cfg(test)] on something that is not an item")
+        is_macro = k + 1 < n and toks[k + 1] == "!" and IDENT.fullmatch(toks[k]) is not None
+        if k >= n or not (toks[k] in ITEM_KEYWORDS or is_macro):
             out.extend(toks[i:i + 7])
             i += 7
             continue
@@ -238,15 +253,13 @@ def file_aliases(toks: list[str], crate_names: set[str], rel: str, f: Found) -> 
 
 def scan_file(rel: str, text: str, crate_names: set[str], aliases: set[str], t: Table, f: Found) -> None:
     """the second pass; `aliases` are this file's, and the other files' are refused when reached by a path"""
-    toks = without_test_items(tokens(text), rel, f.findings)
+    toks = without_test_items(tokens(text))
     f.files += 1
     names = crate_names | file_aliases(toks, crate_names, rel, f)
     n = len(toks)
     i = 0
 
     for x in range(n):
-        if toks[x:x + 4] == ["#", "[", "path", "="]:
-            f.findings.append(f"{rel}: #[path] names a file outside what is read")
         if toks[x:x + 2] == ["include", "!"]:
             f.findings.append(f"{rel}: include! brings in source that is not read")
 
@@ -368,6 +381,41 @@ def read_toml(path: Path) -> dict:
         raise InputError(f"{path}: {e}") from None
 
 
+def path_targets(toks: list[str], src: Path, root: Path, rel: str, f: Found) -> list[Path]:
+    """the files this file's #[path = ".."] attributes bring in, when they are files of the repository; anything
+    else about them is a finding (what they bring in could not be read)"""
+    out: list[Path] = []
+    top = root.resolve()
+    depth_at = 0
+    for x in range(len(toks)):
+        depth_at += {"{": 1, "}": -1}.get(toks[x], 0)
+        if toks[x:x + 2] == ["#", "["] and toks[x + 2:x + 3] == ["cfg_attr"]:
+            end = x + 2
+            depth = 1
+            while end < len(toks) and depth:
+                end += 1
+                depth += {"[": 1, "]": -1}.get(toks[end] if end < len(toks) else "", 0)
+            if "path" in toks[x + 3:end]:
+                f.findings.append(f"{rel}: a #[cfg_attr(.., path = ..)]: which file it names depends on the build")
+        if toks[x:x + 4] != ["#", "[", "path", "="]:
+            continue
+        lit = toks[x + 4] if x + 4 < len(toks) else ""
+        if depth_at > 0:   # inside an inline module the base directory is another one: not guessed
+            f.findings.append(f"{rel}: a #[path] inside a block or an inline module")
+            continue
+        if not isinstance(lit, Literal):
+            f.findings.append(f"{rel}: a #[path] that is not a plain string")
+            continue
+        target = (src.parent / lit.value).resolve()
+        if not target.is_relative_to(top):
+            f.findings.append(f"{rel}: #[path = \"{lit.value}\"] is outside the repository")
+        elif not target.is_file():
+            f.findings.append(f"{rel}: #[path = \"{lit.value}\"] names no file")
+        else:
+            out.append(target)
+    return out
+
+
 def scan(root: Path, t: Table) -> Found:
     f = Found()
     root_manifest = root / "Cargo.toml"
@@ -385,18 +433,24 @@ def scan(root: Path, t: Table) -> Found:
         if has_det_math(manifest.get("build-dependencies"), names) or (
                 build.is_file() and any(n in tokens(build.read_text(encoding="utf-8")) for n in names)):
             f.findings.append(f"{rel_pkg / build.name}: a build script using alice-det-math is not read")
-        files = sorted((pkg / "src").rglob("*.rs")) if (pkg / "src").is_dir() else []
+        pending = sorted((pkg / "src").rglob("*.rs")) if (pkg / "src").is_dir() else []
         texts: dict[str, str] = {}
-        aliases_by_file: dict[str, set[str]] = {}
-        for src in files:
-            rel = str(src.relative_to(root))
+        seen: set[Path] = set()
+        every: set[str] = set()
+        while pending:     # each file once: two files naming each other through #[path] end here
+            src = pending.pop(0)
+            key = src.resolve()
+            if key in seen:
+                continue
+            seen.add(key)
+            rel = str(key.relative_to(root.resolve()))
             texts[rel] = src.read_text(encoding="utf-8")
             try:
-                probe = Found()
-                aliases_by_file[rel] = file_aliases(tokens(texts[rel]), names, rel, probe)
+                toks = without_test_items(tokens(texts[rel]))
             except InputError:
-                aliases_by_file[rel] = set()
-        every = set().union(*aliases_by_file.values()) if aliases_by_file else set()
+                continue   # reported when the file is scanned
+            every |= file_aliases(toks, names, rel, Found())
+            pending += path_targets(toks, key, root, rel, f)
         for rel, text in texts.items():
             try:
                 scan_file(rel, text, names, every, t, f)
