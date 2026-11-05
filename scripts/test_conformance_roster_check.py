@@ -70,6 +70,9 @@ def poison_root() -> Path:
     return root
 
 
+ADOPTION_G9 = '\n[[gate]]\nid = "G9"\nname = "g9"\nadoption = {since = "2026-10-01", until = "2026-11-01"}\n'
+
+
 def setUpModule():
     crc.ROOT = poison_root()
 
@@ -130,6 +133,45 @@ class Check(unittest.TestCase):
         self.assertIn("| Alpha | alpha | 1 | 1 | 1 | 0 |", summary)
         self.assertIn("state: Alpha (alpha): pass 1, fail-known 1, unverified 1, n/a 0", out)
         self.assertIn("2 manifests read for 2 crates (crates that share a repository share its manifest), 6 gates compared, 0 findings", out)
+
+    def test_the_summary_is_appended_to_what_the_job_wrote_before(self):
+        # GITHUB_STEP_SUMMARY is shared by the job's steps: this run adds to it
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "s.md"
+            f.write_text("an earlier step\n", encoding="utf-8")
+            code, out, _ = self.run_check({"Alpha": manifest(), "Beta": manifest()}, extra=["--summary", str(f)])
+            self.assertEqual(code, 0, out)
+            text = f.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("an earlier step\n"), text)
+        self.assertIn("| Alpha | alpha | 1 | 1 | 1 | 0 |", text)
+
+    def test_a_summary_that_cannot_be_written_is_not_a_pass(self):
+        code, out, _ = self.run_check({"Alpha": manifest(), "Beta": manifest()},
+                                      extra=["--summary", "/nonexistent-dir/summary.md"])
+        self.assertEqual(code, 2, out)
+        self.assertIn("error: the summary", out)
+
+    def test_a_manifest_with_no_gate_entry_is_nothing_compared(self):
+        # manifests were read but no gate was compared: not a pass whatever the findings say
+        code, out, _ = self.run_check({"Alpha": "# no gate\n", "Beta": "# no gate\n"})
+        self.assertEqual(code, 2, out)
+        self.assertIn("nothing was compared (2 manifests, 0 gates)", out)
+
+    def test_a_line_reference_above_the_baseline_turns_the_live_run_red(self):
+        with tempfile.TemporaryDirectory() as d:
+            b = Path(d) / "b.toml"
+            b.write_text('[baseline]\n"Alpha" = 0\n"Beta" = 1\n', encoding="utf-8")
+            code, out, _ = self.run_check({"Alpha": manifest(), "Beta": manifest()}, extra=["--line-baseline", str(b)])
+        self.assertEqual(code, 1, out)
+        self.assertIn("Alpha: alice-law-conformance.toml has 1 line-number reference(s), the baseline allows 0", out)
+
+    def test_an_adoption_window_finding_alone_turns_the_live_run_red(self):
+        # the window holds on --today, so the absent G9 reads as unverified: the only finding is the CHANGELOG line
+        # (this module's root has no CHANGELOG.md)
+        code, out, _ = self.run_check({"Alpha": manifest(), "Beta": manifest()}, gates=GATES + ADOPTION_G9)
+        self.assertEqual(code, 1, out)
+        self.assertIn("G9 adoption: CHANGELOG.md cannot be read", out)
+        self.assertIn(", 0 findings", out)
 
     def test_without_summary_the_counts_are_only_printed(self):
         with tempfile.TemporaryDirectory() as d:
@@ -713,6 +755,12 @@ class Internal(unittest.TestCase):
     def test_no_baseline_file_is_read_as_none_and_passes(self):
         code, out = self.run_internal(baseline=None)
         self.assertEqual(code, 0, out)
+
+    def test_an_adoption_window_finding_alone_is_red(self):
+        code, out = self.run_internal(gates=GATES + ADOPTION_G9)[:2]
+        self.assertEqual(code, 1, out)
+        self.assertIn("G9 adoption: CHANGELOG.md cannot be read", out)
+        self.assertIn(", 0 findings", out)
 
 
 class NaEvidence(unittest.TestCase):

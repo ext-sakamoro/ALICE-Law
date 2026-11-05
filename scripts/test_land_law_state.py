@@ -161,6 +161,15 @@ class LandLawState(LandBase):
         self.assertEqual(code, 2, out)
         self.assertIn("nothing was compared", out)
 
+    def test_no_manifest_at_any_main_is_not_a_pass_even_with_a_candidate(self):
+        # the candidate is read, the state at the mains compares nothing: there is no "before" to report against
+        (self.root / "conformance" / "missing-manifests.toml").write_text(
+            '[missing.alpha]\nfixed-in = "Alpha"\nwhy = "w"\n[missing.beta]\nfixed-in = "Beta"\nwhy = "w"\n', encoding="utf-8")
+        self.mains = {"Alpha": None, "Beta": None}
+        code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": manifest()}))
+        self.assertEqual(code, 2, out)
+        self.assertIn("nothing was compared", out)
+
     def test_a_candidate_adding_a_line_reference_is_reported(self):
         more = manifest(G3='status = "unverified"\nnote = "see src/lib.rs:40"')
         code, out = self.run_land("--candidate", "Alpha=/c@abc", local=self.fake_local({"abc": more}))

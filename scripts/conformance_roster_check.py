@@ -44,7 +44,7 @@ ids, the status vocabulary, the evidence paths and the location of a `fail-known
 `pass` / `n/a` read as `unverified` without evidence or a mutant), against the file tree of that
 ref instead of main's. A branch's own CI does not run this check, so a manifest can pass there and
 still be refused here once it lands; verifiers run it on the branch first. It prints the status
-counts the state file would record; it reads no other repository and writes nothing. Exit 2 when
+counts; it reads no other repository and writes nothing. Exit 2 when
 the ref has no manifest, no file or no gate was compared, or the clone or ref cannot be read.
 
 Exit 0 when every crate passes, 1 on a finding, 2 when nothing was compared (no crate, no gate,
@@ -867,10 +867,9 @@ def check_inputs(roster: dict, gates: dict, missing: dict, baseline: dict[str, i
         raise InputError("release-train.toml lists no crate to check")
     if not gate_vocabulary(gates):
         raise InputError("conformance/gates.toml lists no gate")
-    listed = missing_entries(missing, crates)
+    missing_entries(missing, crates)  # raises on a bad entry
     findings = [f"{repo}: in conformance/line-refs-baseline.toml but not a release-train repository"
                 for repo in sorted(set(baseline or {}) - set(crates.values()))]
-    del listed  # validated (missing_entries raises on a bad entry)
     return findings, len(crates)
 
 def main(argv: list[str] | None = None, fetch=None) -> int:
