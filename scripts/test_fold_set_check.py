@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import io
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -421,6 +422,17 @@ class Check(Base):
         self.assertEqual(rc, 1)
         self.assertIn("cos is in DET_MATH_FUNCTIONS but is not called", out)
 
+    def test_a_name_with_a_module_in_it_is_read_from_the_declaration(self):
+        # function pins name a function of a module as module::name
+        self.crate('pub const DET_MATH_FUNCTIONS: &[&str] = &["metric::dot", "sin"];\nfn f() { alice_det_math::sin(); }')
+        self.assertEqual(fs.declared(self.root), {"metric::dot", "sin"})
+
+    def test_a_commented_out_declaration_is_not_a_declaration(self):
+        self.crate('// pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\nfn f() { alice_det_math::sin(); }')
+        rc, out = self.main("check")
+        self.assertEqual(rc, 1)
+        self.assertIn("no DET_MATH_FUNCTIONS in the source", out)
+
     def test_generated_names_join_the_called_set(self):
         src = 'pub const DET_MATH_FUNCTIONS: &[&str] = &["sin", "cos"];\nfn f() { alice_det_math::sin(); }'
         self.crate(src, extra={".github/det-math-fold.toml": 'generated = ["cos"]\n'})
@@ -450,6 +462,116 @@ class Check(Base):
         rc, out = self.main("print")
         self.assertEqual(rc, 2)
         self.assertIn("function-paths.toml", out)
+
+
+class Write(Base):
+    FORMATTED = ('//! a crate\n\npub const DET_MATH_FUNCTIONS: &[&str] = &["tan"];\n\n'
+                 'pub fn f(x: f32) -> f32 {\n    alice_det_math::sin(x) + alice_det_math::cos(x)\n}\n')
+
+    def lib(self) -> str:
+        return (self.root / "src/lib.rs").read_text(encoding="utf-8")
+
+    def test_the_declaration_is_written_with_the_called_set_and_check_then_passes(self):
+        self.crate(self.FORMATTED)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.lib(), self.FORMATTED.replace('&["tan"]', '&["cos", "sin"]'))
+        self.assertEqual(self.main("check")[0], 0)
+
+    def test_a_second_write_changes_nothing(self):
+        self.crate(self.FORMATTED)
+        self.main("write")
+        once = self.lib()
+        rc, out = self.main("write")
+        self.assertEqual((rc, self.lib()), (0, once), out)
+        self.assertIn("unchanged", out)
+
+    def test_generated_names_are_written(self):
+        (self.root / ".github").mkdir()
+        (self.root / ".github" / "det-math-fold.toml").write_text('generated = ["atan2"]\n', encoding="utf-8")
+        self.crate(self.FORMATTED)
+        self.assertEqual(self.main("write")[0], 0)
+        self.assertIn('&["atan2", "cos", "sin"]', self.lib())
+
+    def test_a_long_set_is_written_as_rustfmt_lays_it_out(self):
+        (self.root / ".github").mkdir()
+        (self.root / ".github" / "det-math-fold.toml").write_text(
+            'generated = ["asin", "acos", "atan", "ln", "exp", "cbrt", "hypot", "atan2", "sqrt"]\n', encoding="utf-8")
+        self.crate(self.FORMATTED)
+        self.assertEqual(self.main("write")[0], 0)
+        self.assertIn('= &[\n    "acos",', self.lib())  # past the width of the declaration's line
+        q = subprocess.run(["rustfmt", "--edition", "2021"], input=self.lib(), capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(q.returncode, 0, q.stderr)
+        self.assertEqual(q.stdout, self.lib())
+        self.assertEqual(self.main("check")[0], 0)
+
+    def test_a_finding_writes_nothing(self):
+        src = self.FORMATTED + "\nuse alice_det_math::*;\n"
+        self.crate(src)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 1, out)
+        self.assertEqual(self.lib(), src)
+
+    def test_no_declaration_is_an_input_error_naming_what_to_add(self):
+        src = "pub fn f(x: f32) -> f32 {\n    alice_det_math::sin(x)\n}\n"
+        self.crate(src)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("no DET_MATH_FUNCTIONS", out)
+        self.assertEqual(self.lib(), src)
+
+    def test_two_declarations_are_an_input_error(self):
+        src = self.FORMATTED + 'pub const DET_MATH_FUNCTIONS: &[&str] = &["cos"];\n'
+        self.crate(src)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("2 declarations", out)
+        self.assertEqual(self.lib(), src)
+
+    def test_a_commented_out_declaration_is_left_and_the_real_one_written(self):
+        src = "// pub const DET_MATH_FUNCTIONS: &[&str] = &[];\n" + self.FORMATTED
+        self.crate(src)
+        self.assertEqual(self.main("write")[0], 0)
+        self.assertTrue(self.lib().startswith("// pub const DET_MATH_FUNCTIONS: &[&str] = &[];\n"))
+        self.assertIn('&["cos", "sin"]', self.lib())
+
+    def test_a_file_rustfmt_would_change_elsewhere_is_refused(self):
+        # the write changes the declaration and nothing else
+        src = self.FORMATTED + "fn   g( ) { }\n"
+        self.crate(src)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("rustfmt", out)
+        self.assertEqual(self.lib(), src)
+
+    def test_no_use_compares_nothing(self):
+        src = 'pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\n'
+        self.crate(src)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertEqual(self.lib(), src)
+
+    def test_rustfmt_failing_on_the_new_text_writes_nothing(self):
+        fake = self.d / "fake-rustfmt"
+        fake.write_text('#!/bin/sh\nt=$(cat)\ncase "$t" in *\\"cos\\"*) exit 1;; esac\nprintf "%s\\n" "$t"\n', encoding="utf-8")
+        fake.chmod(0o755)
+        real = fs.RUSTFMT
+        fs.RUSTFMT = str(fake)
+        self.addCleanup(setattr, fs, "RUSTFMT", real)
+        self.crate(self.FORMATTED)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("rustfmt:", out)
+        self.assertEqual(self.lib(), self.FORMATTED)
+
+    def test_rustfmt_missing_writes_nothing(self):
+        self.crate(self.FORMATTED)
+        real = fs.RUSTFMT
+        fs.RUSTFMT = "rustfmt-that-is-not-installed"
+        self.addCleanup(setattr, fs, "RUSTFMT", real)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertEqual(self.lib(), self.FORMATTED)
 
 
 if __name__ == "__main__":
