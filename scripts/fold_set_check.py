@@ -16,12 +16,15 @@ Names the crate's Cargo.toml gives the package (`dm = { package = "alice-det-mat
 through the workspace root) count as alice_det_math. `use alice_det_math as dm;` at the top of a file makes `dm::x` a
 path in that file, wherever in the file it stands.
 
-Everything else is a finding, never a skip: any token naming the crate or such an alias that does not start a resolved
+A call is never missed in silence, except a name built by macro expansion (only a resolver sees those): `[< >]` in
+paste! is reported, but a macro of another crate that builds the name is not visible here. Everything else is a
+finding, never a skip: any token naming the crate or such an alias that does not start a resolved
 path (a macro taking the crate as an identifier, `extern crate`, `use {alice_det_math as dm}`, `pub use alice_det_math`),
 an alias reached from elsewhere (`super::dm`) or declared public or inside a module, a glob, a path through a macro
 variable, a name not in the table (`consts::*` for now: they have no pins yet), a #[path] that is missing, outside the
-repository, not a plain string or inside an inline module (one at the top of a file is read like the rest), include!, a lib or bin outside src/, and a build
-script that uses the crate. #[cfg(test)] removes an item, or a macro invocation in its place; on anything else (a field,
+repository, not a plain string or inside an inline module (one at the top of a file is read like the rest, with the
+plain `mod`s below it), a string naming the crate inside an attribute other than doc, include!, a lib or bin outside
+src/, and a build script that uses the crate. #[cfg(test)] removes an item, or a macro invocation in its place; on anything else (a field,
 an arm, a statement) what follows stays in the read: a larger set than the real one, never a call missed.
 Items that are not arithmetic (the identifier API, [no_arithmetic]) are accepted and listed apart.
 
@@ -35,6 +38,7 @@ Exit 0 / 1, 2 on an input error (no Rust file, no table, nothing compared).
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import re
 import subprocess
@@ -112,7 +116,7 @@ def tokens(text: str) -> list[str]:
                 m = IDENT.match(text, s)
                 i = m.end() if m else s
         elif (m := IDENT.match(text, i)):
-            out.append(m.group(0))
+            out.append(m.group(0).removeprefix("r#"))
             i = m.end()
         elif c.isdigit():
             m = re.compile(r"[0-9][0-9a-zA-Z_]*").match(text, i)
@@ -251,6 +255,71 @@ def file_aliases(toks: list[str], crate_names: set[str], rel: str, f: Found) -> 
     return out
 
 
+def attribute_strings(toks: list[str], names: set[str], rel: str, f: Found) -> None:
+    """a string inside an attribute (serde's `with = ".."`) can name a path the compiler then resolves; doc is prose"""
+    for x in range(len(toks) - 1):
+        if toks[x] != "#":
+            continue
+        y = x + 1 + (toks[x + 1] == "!")
+        if y >= len(toks) or toks[y] != "[" or toks[y + 1:y + 2] == ["doc"]:
+            continue
+        depth, z = 0, y
+        while z < len(toks):
+            depth += {"[": 1, "]": -1}.get(toks[z], 0)
+            lit = toks[z]
+            if isinstance(lit, Literal) and any(n in lit.value for n in names):
+                f.findings.append(f"{rel}: an attribute's string names the crate: {lit.value[:40]}")
+            z += 1
+            if depth == 0:
+                break
+
+
+def paste_forms(toks: list[str], rel: str, f: Found) -> None:
+    """`[<a b>]` builds an identifier by concatenation (paste!): what it names cannot be read from the tokens. Told from
+    an array of a qualified type (`[<T as A>::N; 2]`) by the `>` right before the closing bracket"""
+    for x in range(len(toks) - 1):
+        if toks[x:x + 2] != ["[", "<"]:
+            continue
+        depth, z = 0, x
+        while z < len(toks):
+            depth += {"[": 1, "]": -1}.get(toks[z], 0)
+            if depth == 0:
+                if toks[z - 1] == ">":
+                    f.findings.append(f"{rel}: `[< >]` builds a name by macro expansion, which only a resolver can read")
+                break
+            z += 1
+
+
+def plain_mods(toks: list[str]) -> list[str]:
+    """the `mod name;` at the top of a file with no #[path] of their own"""
+    out = []
+    depth = 0
+    for i, tok in enumerate(toks):
+        depth += {"{": 1, "}": -1}.get(tok, 0)
+        if depth or tok != "mod" or toks[i + 2:i + 3] != [";"]:
+            continue
+        j = i - 1
+        if j >= 0 and toks[j] == ")":      # pub(crate)
+            while j >= 0 and toks[j] != "(":
+                j -= 1
+            j -= 1
+        if j >= 0 and toks[j] == "pub":
+            j -= 1
+        has_path = False
+        while j >= 0 and toks[j] == "]":   # the attributes before it
+            d = 0
+            while j >= 0:
+                d += {"]": 1, "[": -1}.get(toks[j], 0)
+                j -= 1
+                if d == 0:
+                    break
+            has_path = has_path or toks[j + 2:j + 3] == ["path"]
+            j -= 1                         # the `#`
+        if not has_path:
+            out.append(toks[i + 1])
+    return out
+
+
 def scan_file(rel: str, text: str, crate_names: set[str], aliases: set[str], t: Table, f: Found) -> None:
     """the second pass; `aliases` are this file's, and the other files' are refused when reached by a path"""
     toks = without_test_items(tokens(text))
@@ -259,6 +328,8 @@ def scan_file(rel: str, text: str, crate_names: set[str], aliases: set[str], t: 
     n = len(toks)
     i = 0
 
+    attribute_strings(toks, names, rel, f)
+    paste_forms(toks, rel, f)
     for x in range(n):
         if toks[x:x + 2] == ["include", "!"]:
             f.findings.append(f"{rel}: include! brings in source that is not read")
@@ -348,11 +419,12 @@ def crate_names_in(manifest: dict, workspace: dict | None = None) -> set[str]:
     """the names `manifest` gives alice-det-math; `dm = { workspace = true }` is looked up in the workspace root's table"""
     names = {"alice_det_math"}
     shared = (workspace or {}).get("dependencies") or {}
-    tables = [manifest.get(k) for k in ("dependencies", "build-dependencies")]
+    kinds = ("dependencies", "build-dependencies", "dev-dependencies")
+    tables = [manifest.get(k) for k in kinds]
     tables.append((manifest.get("workspace") or {}).get("dependencies"))
     for spec in (manifest.get("target") or {}).values():
         if isinstance(spec, dict):
-            tables += [spec.get(k) for k in ("dependencies", "build-dependencies")]
+            tables += [spec.get(k) for k in kinds]
     for tb in tables:
         for key, spec in (tb or {}).items():
             if isinstance(spec, dict) and spec.get("workspace") is True:
@@ -370,8 +442,19 @@ def has_det_math(table: dict | None, names: set[str]) -> bool:
 
 
 def packages(root: Path) -> list[Path]:
-    return sorted(p.parent for p in root.rglob("Cargo.toml")
-                  if not (SKIP_DIRS & set(p.relative_to(root).parts)) and "[package]" in p.read_text(encoding="utf-8"))
+    """the packages under root, outside the directories that hold fixtures, and every workspace member wherever it is
+    (a member under a directory named examples/ is part of the build)"""
+    found = {p.parent for p in root.rglob("Cargo.toml")
+             if not (SKIP_DIRS & set(p.relative_to(root).parts)) and "[package]" in p.read_text(encoding="utf-8")}
+    manifest = root / "Cargo.toml"
+    if manifest.is_file():
+        members = (read_toml(manifest).get("workspace") or {}).get("members") or []
+        for pattern in members:
+            for match in glob.glob(str(root / pattern)):    # (Path.glob refuses `.`, which workspaces use for the root)
+                d = Path(match)
+                if (d / "Cargo.toml").is_file() and "[package]" in (d / "Cargo.toml").read_text(encoding="utf-8"):
+                    found.add(d)
+    return sorted(found)
 
 
 def read_toml(path: Path) -> dict:
@@ -451,6 +534,15 @@ def scan(root: Path, t: Table) -> Found:
                 continue   # reported when the file is scanned
             every |= file_aliases(toks, names, rel, Found())
             pending += path_targets(toks, key, root, rel, f)
+            if not key.is_relative_to((pkg / "src").resolve()):
+                # a file brought in by #[path]: what its plain `mod`s load is not under src/ either
+                for name in plain_mods(toks):
+                    found = [c for c in (key.parent / f"{name}.rs", key.parent / name / "mod.rs",
+                                         key.parent / key.stem / f"{name}.rs") if c.is_file()]
+                    if found:
+                        pending += found
+                    else:
+                        f.findings.append(f"{rel}: `mod {name};` below a #[path] file: no file found for it")
         for rel, text in texts.items():
             try:
                 scan_file(rel, text, names, every, t, f)

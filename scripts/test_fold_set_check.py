@@ -172,6 +172,24 @@ fn real() { alice_det_math::cos(1.0); }
         self.assertEqual(self.pins('#[path = "../shared/a.rs"]\nmod a;', extra=extra), {"sin", "cos"})
         self.assertEqual(self.found('#[path = "../shared/a.rs"]\nmod a;', extra=extra).files, 3)
 
+    def test_a_workspace_whose_members_name_the_root_or_a_glob(self):
+        member = '[package]\nname = "e"\nversion = "0.1.0"\n[dependencies]\nalice-det-math = "0.6"\n'
+        self.assertEqual(self.pins("fn f() { alice_det_math::cos(); }", manifest=DEP + '[workspace]\nmembers = [".", "examples/*"]\n',
+                                   extra={"examples/a/Cargo.toml": member, "examples/a/src/lib.rs": "fn g() { alice_det_math::sin(); }"}),
+                         {"cos", "sin"})
+
+    def test_a_plain_mod_in_src_needs_no_lookup(self):
+        # everything under src/ is read anyway; a mod generated at build time has no file there
+        self.assertEqual(self.pins("mod generated;\nfn f() { alice_det_math::cos(); }"), {"cos"})
+
+    def test_what_must_stay_clean(self):
+        # prose and data that name the crate; an array of a qualified type is not paste
+        src = ('#[doc = "see alice_det_math::cos"]\n/// alice_det_math::cos\npub const S: &str = "alice_det_math::cos";\n'
+               "pub const N: [u8; <u8 as T>::N] = [0; <u8 as T>::N];\npub const M: [<u8 as T>::X; 1] = [X];\n"
+               "#[cfg(test)]\nmod t { fn a() { alice_det_math::cos(1.0); } }\nfn f() { alice_det_math::sin(1.0); }")
+        self.assertEqual(self.pins(src), {"sin"})
+        self.assertEqual(self.pins('#[path = "alt.rs"] mod alt;', extra={"src/alt.rs": "fn g() { alice_det_math::cos(); }"}), {"cos"})
+
     def test_a_macro_body_is_read(self):
         self.assertEqual(self.pins("macro_rules! m { () => { alice_det_math::sin(1.0) } }"), {"sin"})
 
@@ -205,6 +223,13 @@ class NotUnderstood(Base):
     def test_a_path_naming_nothing(self):
         self.assert_finding("fn f() { alice_det_math::no_such(); }", "names nothing")
         self.assert_finding("const A: u32 = alice_det_math::consts::SPLIT_MASK;", "names nothing")
+
+    def test_a_self_alias_of_the_crate(self):
+        self.assert_finding("use alice_det_math::{self as dm};", "an alias of the crate")
+
+    def test_a_plain_mod_with_no_file_below_a_path_file(self):
+        f = self.found('#[path = "../shared/x.rs"] mod x;', extra={"shared/x.rs": "pub mod gone;\n"})
+        self.assertTrue(any("no file found" in x for x in f.findings), f.findings)
 
     def test_a_path_attribute_it_cannot_read(self):
         self.assert_finding('#[path = "../../outside.rs"]\nmod x;', "outside the repository")
@@ -329,6 +354,46 @@ class Silent(Base):
     def test_a_target_outside_src(self):
         self.red("", manifest=DEP + '[[bin]]\nname = "b"\npath = "tools/b.rs"\n',
                  extra={"tools/b.rs": "fn main() { alice_det_math::sin(1.0); }\n"})
+
+    def test_a_plain_mod_below_a_path_file(self):
+        call = "pub fn f(x: f32) -> f32 { alice_det_math::sin(x) }\n"
+        head = '#[path = "../shared/x.rs"] mod x;\n'
+        self.red(head, {"shared/x.rs": "pub mod y;\n", "shared/y.rs": call})
+        self.red(head, {"shared/x.rs": "pub mod y;\n", "shared/x/y.rs": call})
+        self.red(head, {"shared/x.rs": "pub mod y;\n", "shared/y/mod.rs": call})
+        self.red(head, {"shared/x.rs": '#[path = "deep/y.rs"] mod y;\n', "shared/deep/y.rs": call})
+
+    def test_a_raw_identifier(self):
+        self.red("pub fn f(x: f32) -> f32 { r#alice_det_math::sin(x) }\n")
+
+    def test_a_string_in_an_attribute(self):
+        self.red('pub struct S { #[serde(with = "alice_det_math::sin")] pub a: f32 }\n')
+
+    def test_paste_concatenation(self):
+        self.red("pub fn f(x: f32) -> f32 { paste::paste! { [<alice_ det_math>]::sin(x) } }\n")
+
+    def test_a_workspace_member_under_a_directory_named_examples_or_tests(self):
+        member = '[package]\nname = "e"\nversion = "0.1.0"\n[dependencies]\nalice-det-math = "0.6"\n'
+        call = "pub fn f(x: f32) -> f32 { alice_det_math::sin(x) }\n"
+        for d in ("examples/engine", "tests/kit"):
+            with self.subTest(d):
+                self.red("", {f"{d}/Cargo.toml": member, f"{d}/src/lib.rs": call},
+                         manifest=DEP + f'[workspace]\nmembers = ["{d}"]\n')
+                shutil.rmtree(self.root / d.split("/")[0])
+
+    def test_a_rename_in_a_target_table_or_dev_dependencies(self):
+        call = "pub fn f(x: f32) -> f32 { dm::sin(x) }\n"
+        spec = 'dm = { package = "alice-det-math", version = "0.6" }\n'
+        self.red(call, manifest=DEP + "[target.'cfg(unix)'.dependencies]\n" + spec)
+        self.red(call, manifest=DEP + "[dev-dependencies]\n" + spec)
+
+    def test_a_cfg_test_item_does_not_swallow_the_next(self):
+        call = "pub fn f(x: f32) -> f32 { alice_det_math::sin(x) }\n"
+        for item in ("const X: [u8; 2] = [1, 2];", "const X: u8 = { 1 };", "struct U;", "thing!(a);", "use std::{f32};",
+                     "impl X<{ 1 }> for Y { fn g() {} }", "fn g() where [u8; { 1 }]: Sized {}"):
+            with self.subTest(item):
+                self.red(f"#[cfg(test)] {item}\n{call}")
+        self.red("pub trait T { #[cfg(test)] fn a(); fn b(x: f32) -> f32 { alice_det_math::sin(x) } }\n")
 
     def test_another_crate_s_item_of_that_name(self):
         self.red("fn f() { other_crate::alice_det_math::sin(1.0); }\n")
