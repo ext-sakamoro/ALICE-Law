@@ -69,17 +69,25 @@ class Forms(Base):
         self.assertEqual(self.pins("fn f(x: f32) -> f32 { alice_det_math::sin(x) }"), {"sin"})
         self.assertEqual(self.pins("fn f(x: f32) -> f32 { ::alice_det_math::single::sin(x) }"), {"sin"})
 
+    def test_a_path_through_crate_self_or_super_is_followed(self):
+        for prefix in ("crate", "self", "super"):
+            self.assertEqual(self.pins(f"fn f() {{ {prefix}::alice_det_math::cos(1.0); }}"), {"cos"}, prefix)
+
     def test_a_use_tree_with_alias_and_self(self):
         src = "use alice_det_math::{sin as s, cos, metric::{self, norm_l2}};\nfn f() { metric::MetricWeights::new(); }"
         self.assertEqual(self.pins(src), {"sin", "cos", "norm_l2", "metric_new", "metric_norm"})
+        # `metric::{self, ..}` is a module import: all of metric, whatever the file then calls
+        self.assertEqual(self.pins("use alice_det_math::metric::{self};"), {"norm_l2", "metric_new", "metric_norm"})
 
     def test_a_reexport_counts(self):
         self.assertEqual(self.pins("pub use alice_det_math::{sin, cos};"), {"sin", "cos"})
         self.assertEqual(self.pins("pub(crate) use alice_det_math::sin;"), {"sin"})
 
-    def test_a_module_import_resolves_the_file_s_paths(self):
-        self.assertEqual(self.pins("use alice_det_math::metric;\nfn f() { metric::norm_l2(); }"), {"norm_l2"})
-        self.assertEqual(self.pins("use alice_det_math::simd as v;\nfn f() { v::sin_cos(); }"), {"sin_cos"})
+    def test_a_module_import_counts_the_whole_module(self):
+        # its names reach other files, so what one file calls through it is not the whole answer
+        self.assertEqual(self.pins("use alice_det_math::metric;\nfn f() { metric::norm_l2(); }"),
+                         {"norm_l2", "metric_new", "metric_norm"})
+        self.assertEqual(self.pins("pub use alice_det_math::simd as v;"), {"sin_cos"})
 
     def test_a_type_counts_all_its_methods(self):
         self.assertEqual(self.pins("use alice_det_math::metric::MetricWeights;"), {"metric_new", "metric_norm"})
@@ -111,7 +119,6 @@ const A: &str = "alice_det_math::sin";
 const B: &str = r#"alice_det_math::sin "# ;
 const C: char = '"';
 fn lifetime<'a>(x: &'a str) -> &'a str { x }
-fn other() { other_crate::alice_det_math::sin(); }
 #[cfg(test)]
 mod tests { fn f() { alice_det_math::sin(1.0); } }
 #[cfg(test)]
@@ -126,6 +133,16 @@ fn real() { alice_det_math::cos(1.0); }
         self.assertEqual(self.pins("fn f() { alice_det_math::cos(); }",
                                    extra={"tests/fixture/Cargo.toml": DEP,
                                           "tests/fixture/src/lib.rs": "fn f() { alice_det_math::sin(); }"}), {"cos"})
+
+    def test_cfg_test_ends_at_its_own_item(self):
+        # a `;` inside an array type is not the end of the item, and what follows the item is read
+        src = '#[cfg(test)]\nconst A: [u8; 2] = [alice_det_math::sin as u8, 0];\nfn f() { alice_det_math::cos(); }'
+        self.assertEqual(self.pins(src), {"cos"})
+        src = '#[cfg(test)]\n#[allow(unused)]\npub fn g() -> [u8; 2] { alice_det_math::sin(); [0, 0] }\nfn f() { alice_det_math::cos(); }'
+        self.assertEqual(self.pins(src), {"cos"})
+
+    def test_cfg_test_on_a_public_item_is_removed(self):
+        self.assertEqual(self.pins('#[cfg(test)]\npub fn g() { alice_det_math::sin(); }\n#[cfg(test)]\npub(crate) mod h { fn i() { alice_det_math::sin(); } }\nfn f() { alice_det_math::cos(); }'), {"cos"})
 
     def test_a_macro_body_is_read(self):
         self.assertEqual(self.pins("macro_rules! m { () => { alice_det_math::sin(1.0) } }"), {"sin"})
@@ -156,8 +173,6 @@ class NotUnderstood(Base):
 
     def test_a_path_through_a_macro_variable(self):
         self.assert_finding("macro_rules! m { ($f:ident) => { alice_det_math::$f(1.0) } }", "macro variable")
-        self.assert_finding("use alice_det_math::metric;\nmacro_rules! m { ($f:ident) => { metric::$f(1.0) } }",
-                            "macro variable")
 
     def test_a_path_naming_nothing(self):
         self.assert_finding("fn f() { alice_det_math::no_such(); }", "names nothing")
@@ -194,6 +209,92 @@ class ResolvedTable(Base):
         self.metadata(101, [], "no such manifest")
         with self.assertRaisesRegex(fs.InputError, "no such manifest"):
             fs.resolved_table(self.root)
+
+
+class Silent(Base):
+    """each really calls sin (or sin64); only tan is declared. Exit 0 here is a call missed in silence"""
+
+    ANCHOR = 'pub const DET_MATH_FUNCTIONS: &[&str] = &["tan"];\npub fn anchor(x: f32) -> f32 { alice_det_math::tan(x) }\n'
+    TABLE_MORE = '"tan" = "tan"\n"double::sin64" = "sin64"\n'
+
+    def setUp(self):
+        super().setUp()
+        self.paths.write_text(TABLE.replace("[paths]\n", "[paths]\n" + self.TABLE_MORE), encoding="utf-8")
+
+    def red(self, lib: str, extra: dict[str, str] | None = None, manifest: str = DEP) -> None:
+        self.crate(self.ANCHOR + lib, manifest=manifest, extra=extra)
+        rc, out = self.main("check")
+        self.assertNotEqual(rc, 0, "a real call was missed:\n" + out)
+
+    def test_pub_use_of_a_module_used_in_another_file(self):
+        self.red("pub use alice_det_math::double;\nmod a;\n", {"src/a.rs": "pub fn f(x: f64) -> f64 { crate::double::sin64(x) }\n"})
+
+    def test_a_module_re_imported_in_another_file(self):
+        self.red("use alice_det_math::double;\nmod a;\n", {"src/a.rs": "use super::double; pub fn f(x: f64) -> f64 { double::sin64(x) }\n"})
+
+    def test_pub_use_of_the_crate_used_through_crate(self):
+        self.red("pub use alice_det_math;\nmod a;\n", {"src/a.rs": "pub fn f(x: f32) -> f32 { crate::alice_det_math::sin(x) }\n"})
+
+    def test_a_path_through_self(self):
+        self.red("use alice_det_math;\npub fn f(x: f32) -> f32 { self::alice_det_math::sin(x) }\n")
+
+    def test_extern_crate_alias(self):
+        self.red("extern crate alice_det_math as dm;\npub fn f(x: f32) -> f32 { dm::sin(x) }\n")
+
+    def test_use_braces_alias_of_the_crate(self):
+        self.red("use {alice_det_math as dm};\npub fn f(x: f32) -> f32 { dm::sin(x) }\n")
+
+    def test_an_alias_after_its_use(self):
+        self.red("pub fn f(x: f32) -> f32 { dm::sin(x) }\nuse alice_det_math as dm;\n")
+
+    def test_a_module_import_after_its_use(self):
+        self.red("pub fn f(x: f64) -> f64 { double::sin64(x) }\nuse alice_det_math::double;\n")
+
+    def test_an_alias_from_another_file(self):
+        self.red("mod a;\nuse alice_det_math as dm;\n", {"src/a.rs": "use super::dm; pub fn f(x: f32) -> f32 { dm::sin(x) }\n"})
+
+    def test_a_macro_taking_the_crate_and_the_function_as_identifiers(self):
+        self.red("macro_rules! s { ($c:ident, $f:ident, $x:expr) => { $c::$f($x) } }\n"
+                 "pub fn f(x: f32) -> f32 { s!(alice_det_math, sin, x) }\n")
+
+    def test_cfg_test_on_a_field(self):
+        self.red("pub struct S { #[cfg(test)] pub a: u8, pub b: u8 }\npub fn f(x: f32) -> f32 { alice_det_math::sin(x) }\n")
+
+    def test_cfg_test_on_a_match_arm(self):
+        self.red("pub fn f(n: u8, x: f32) -> f32 { match n { #[cfg(test)] 0 => 0.0, _ => alice_det_math::sin(x), } }\n")
+
+    def test_cfg_test_on_a_parameter(self):
+        self.red("pub fn f(#[cfg(test)] a: u8, x: f32) -> f32 { alice_det_math::sin(x) }\n")
+
+    def test_a_path_attribute(self):
+        self.red('#[path = "../shared/x.rs"] mod x;\n', {"shared/x.rs": "pub fn f(a: f32) -> f32 { alice_det_math::sin(a) }\n"})
+
+    def test_include(self):
+        self.red('include!("../gen.rs");\n', {"gen.rs": "pub fn f(a: f32) -> f32 { alice_det_math::sin(a) }\n"})
+
+    def test_a_tests_directory_inside_src_is_read(self):
+        self.red("mod tests;\n", {"src/tests/mod.rs": "pub fn f(x: f32) -> f32 { alice_det_math::sin(x) }\n"})
+
+    def test_a_rename_in_the_workspace_table(self):
+        root = DEP.replace("[dependencies]\n", '[workspace]\nmembers = ["m"]\n[workspace.dependencies]\n'
+                           'dm = { package = "alice-det-math", version = "0.6" }\n[dependencies]\n')
+        self.red("", {"m/Cargo.toml": '[package]\nname = "m"\nversion = "0.1.0"\n[dependencies]\ndm = { workspace = true }\n',
+                      "m/src/lib.rs": "pub fn f(x: f32) -> f32 { dm::sin(x) }\n"}, manifest=root)
+
+    def test_a_build_script(self):
+        self.red("", {"build.rs": "fn main() { let _ = alice_det_math::sin(1.0); }\n"},
+                 manifest=DEP + '[build-dependencies]\nalice-det-math = "0.6"\n')
+        self.red("", {"build.rs": "fn main() { let _ = alice_det_math::sin(1.0); }\n"})
+
+    def test_a_target_outside_src(self):
+        self.red("", manifest=DEP + '[[bin]]\nname = "b"\npath = "tools/b.rs"\n',
+                 extra={"tools/b.rs": "fn main() { alice_det_math::sin(1.0); }\n"})
+
+    def test_another_crate_s_item_of_that_name(self):
+        self.red("fn f() { other_crate::alice_det_math::sin(1.0); }\n")
+        f = self.found("fn f() { other_crate::alice_det_math::sin(1.0); }\n")
+        self.assertEqual(f.pins, set())
+        self.assertTrue(any("does not start a path" in x for x in f.findings), f.findings)
 
 
 class Check(Base):
