@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import shutil
 import subprocess
 import sys
@@ -569,6 +570,137 @@ class Write(Base):
         real = fs.RUSTFMT
         fs.RUSTFMT = "rustfmt-that-is-not-installed"
         self.addCleanup(setattr, fs, "RUSTFMT", real)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertEqual(self.lib(), self.FORMATTED)
+
+    def fake_rustfmt(self, body: str) -> None:
+        fake = self.d / "fake-rustfmt"
+        fake.write_text("#!/bin/sh\n" + body, encoding="utf-8")
+        fake.chmod(0o755)
+        real = fs.RUSTFMT
+        fs.RUSTFMT = str(fake)
+        self.addCleanup(setattr, fs, "RUSTFMT", real)
+
+    def test_rustfmt_failing_on_the_file_as_it_is_says_why_and_writes_nothing(self):
+        self.fake_rustfmt('cat >/dev/null\necho "error: expected one of the things" >&2\nexit 1\n')
+        self.crate(self.FORMATTED)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("rustfmt: error: expected one of the things", out)
+        self.assertNotIn("would change", out)
+        self.assertEqual(self.lib(), self.FORMATTED)
+
+    def test_rustfmt_runs_in_the_file_directory_with_the_edition(self):
+        seen = self.d / "seen"
+        self.fake_rustfmt(f'pwd >> "{seen}"\necho "$@" >> "{seen}"\ncat\n')
+        self.crate('//! a\npub mod inner;\n', extra={"src/inner/mod.rs": self.FORMATTED})
+        rc, out = self.main("write")
+        self.assertEqual(rc, 0, out)
+        lines = seen.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(lines[0], str((self.root / "src/inner").resolve()))
+        self.assertEqual(lines[1], "--edition 2021")
+
+    def test_a_crlf_file_keeps_its_line_ends(self):
+        src = self.FORMATTED.replace("\n", "\r\n")
+        self.crate("")
+        (self.root / "src/lib.rs").write_bytes(src.encode())
+        rc, out = self.main("write")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual((self.root / "src/lib.rs").read_bytes().decode(), src.replace('&["tan"]', '&["cos", "sin"]'))
+
+    def test_a_crlf_file_goes_to_rustfmt_as_lf(self):
+        # a rustfmt that keeps what it is given would otherwise come back with \r\r\n
+        self.fake_rustfmt("cat\n")
+        src = self.FORMATTED.replace("\n", "\r\n")
+        self.crate("")
+        (self.root / "src/lib.rs").write_bytes(src.encode())
+        rc, out = self.main("write")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual((self.root / "src/lib.rs").read_bytes().decode(), src.replace('&["tan"]', '&["cos", "sin"]'))
+
+    def test_a_file_with_both_line_ends_is_not_rewritten(self):
+        src = self.FORMATTED.replace("\n", "\r\n", 1)
+        self.crate("")
+        (self.root / "src/lib.rs").write_bytes(src.encode())
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("would change", out)
+        self.assertEqual((self.root / "src/lib.rs").read_bytes().decode(), src)
+
+    def test_a_comment_inside_the_list_is_not_lost(self):
+        src = self.FORMATTED.replace('&["tan"]', '&[\n    // the old one\n    "tan",\n]')
+        self.crate(src)
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("a comment inside", out)
+        self.assertEqual(self.lib(), src)
+
+    def test_a_declaration_in_a_comment_or_a_string_is_not_one(self):
+        for name, decl in (("line", '// pub const DET_MATH_FUNCTIONS: &[&str] = &["tan"];\n'),
+                           ("block", '/* pub const DET_MATH_FUNCTIONS: &[&str] = &["tan"]; */\n'),
+                           ("nested", '/* /* a */ DET_MATH_FUNCTIONS: &[&str] = &["tan"]; */\n'),
+                           ("string", 'pub const D: &str = "DET_MATH_FUNCTIONS: &[&str] = &[]";\n'),
+                           ("raw", 'pub const D: &str = r#"DET_MATH_FUNCTIONS: &[&str] = &[]"#;\n')):
+            with self.subTest(name):
+                src = decl + "pub fn f(x: f32) -> f32 {\n    alice_det_math::sin(x)\n}\n"
+                self.crate(src)
+                rc, out = self.main("write")
+                self.assertEqual(rc, 2, out)
+                self.assertIn("no DET_MATH_FUNCTIONS", out)
+                self.assertEqual(self.lib(), src)
+                rc, out = self.main("check")
+                self.assertEqual(rc, 1, out)
+                self.assertIn("no DET_MATH_FUNCTIONS", out)
+
+    def test_a_url_before_the_declaration_on_its_line_does_not_hide_it(self):
+        self.crate('pub const U: &str = "a://b"; pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\n'
+                   'pub fn f(x: f32) -> f32 {\n    alice_det_math::sin(x)\n}\n')
+        rc, out = self.main("check")
+        self.assertEqual(rc, 0, out)
+
+    def test_a_name_commented_out_in_the_list_is_not_declared(self):
+        self.crate('pub const DET_MATH_FUNCTIONS: &[&str] = &[\n    // "sin",\n];\n'
+                   'pub fn f(x: f32) -> f32 {\n    alice_det_math::sin(x)\n}\n')
+        rc, out = self.main("check")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("sin is called but is not in DET_MATH_FUNCTIONS", out)
+
+    def generated(self, toml: bytes) -> None:
+        (self.root / ".github").mkdir(exist_ok=True)
+        (self.root / ".github" / "det-math-fold.toml").write_bytes(toml)
+
+    def test_a_bad_generated_list_is_exit_2_and_writes_nothing(self):
+        for name, toml, needle in (("a string", b'generated = "atan2"\n', "not a list"),
+                                   ("not strings", b'generated = [1]\n', "not a list"),
+                                   ("upper case", b'generated = ["Atan2"]\n', "not lower-case"),
+                                   ("an empty name", b'generated = [""]\n', "not lower-case"),
+                                   ("bad TOML", b'generated = [\n', "fold set:"),
+                                   ("not UTF-8", b'generated = ["\xff"]\n', "fold set:"),
+                                   ("too deep", b'generated = ' + b'[' * 100000, "fold set:")):
+            for cmd in ("write", "check"):
+                with self.subTest(name, cmd=cmd):
+                    self.crate(self.FORMATTED)
+                    self.generated(toml)
+                    rc, out = self.main(cmd)
+                    self.assertEqual(rc, 2, out)
+                    self.assertIn(needle, out)
+                    self.assertNotIn("Traceback", out)
+                    self.assertEqual(self.lib(), self.FORMATTED)
+
+    def test_a_source_that_is_not_utf8_is_exit_2(self):
+        self.crate(self.FORMATTED)
+        (self.root / "src/other.rs").write_bytes(b"\xff\xfe\n")
+        rc, out = self.main("write")
+        self.assertEqual(rc, 2, out)
+        self.assertEqual(self.lib(), self.FORMATTED)
+
+    @unittest.skipIf(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), "needs file modes that bind")
+    def test_a_read_only_source_is_exit_2(self):
+        self.crate(self.FORMATTED)
+        lib = self.root / "src/lib.rs"
+        lib.chmod(0o444)
+        self.addCleanup(lib.chmod, 0o644)
         rc, out = self.main("write")
         self.assertEqual(rc, 2, out)
         self.assertEqual(self.lib(), self.FORMATTED)

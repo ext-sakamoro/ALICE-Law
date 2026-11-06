@@ -35,8 +35,8 @@ Items that are not arithmetic (the identifier API, [no_arithmetic]) are accepted
   fold_set_check.py write ROOT [--paths FILE]   writes that set into the crate's one DET_MATH_FUNCTIONS, sorted and as
                                                 rustfmt lays it out, and changes nothing else; exit 1 on a finding (nothing
                                                 written); exit 2 when there is no declaration or more than one (add
-                                                `pub const DET_MATH_FUNCTIONS: &[&str] = &[];` where the crate folds it), or
-                                                the file holds anything rustfmt would change
+                                                `pub const DET_MATH_FUNCTIONS: &[&str] = &[];` where the crate folds it), the
+                                                file holds anything rustfmt would change, or the list holds a comment
 Without --paths the table is read from the alice-det-math that `cargo metadata` resolves for ROOT.
 Exit 0 / 1, 2 on an input error (no Rust file, no table, nothing compared).
 """
@@ -77,9 +77,13 @@ def literal(text: str) -> Literal:
     return t
 
 
-def tokens(text: str) -> list[str]:
-    """identifiers, `::`, and single punctuation; comments and the contents of string and char literals are gone"""
+def tokens(text: str, comments: list[tuple[int, int]] | None = None,
+           strings: list[tuple[int, int]] | None = None) -> list[str]:
+    """identifiers, `::`, and single punctuation; comments and the contents of string and char literals are gone
+    (`comments` and `strings`, when given, receive where they were)"""
     out: list[str] = []
+    comments = [] if comments is None else comments
+    strings = [] if strings is None else strings
     i, n = 0, len(text)
     while i < n:
         c = text[i]
@@ -87,8 +91,10 @@ def tokens(text: str) -> list[str]:
             i += 1
         elif text.startswith("//", i):
             j = text.find("\n", i)
+            comments.append((i, n if j < 0 else j))
             i = n if j < 0 else j
         elif text.startswith("/*", i):
+            at = i
             depth, i = 1, i + 2
             while i < n and depth:
                 if text.startswith("/*", i):
@@ -97,18 +103,21 @@ def tokens(text: str) -> list[str]:
                     depth, i = depth - 1, i + 2
                 else:
                     i += 1
+            comments.append((at, i))
         elif (m := re.compile(r'(?:b|c)?r(#*)"').match(text, i)):
             end = text.find('"' + m.group(1), m.end())
             if end < 0:
                 raise InputError("an unterminated raw string")
             out.append(literal(text[m.end():end]))
             i = end + 1 + len(m.group(1))
+            strings.append((m.end(), end))
         elif c == '"' or (c in "bc" and text.startswith('"', i + 1)):
             i += 1 if c == '"' else 2
             start = i
             while i < n and text[i] != '"':
                 i += 2 if text[i] == "\\" else 1
             out.append(literal(text[start:i]))
+            strings.append((start, i))
             i += 1
         elif c == "'" or (c == "b" and text.startswith("'", i + 1)):
             # a char literal, or a lifetime (no closing quote right after one character or an escape)
@@ -576,19 +585,27 @@ def resolved_table(root: Path) -> Path:
 
 
 DECLARED_RE = re.compile(r"DET_MATH_FUNCTIONS\s*:\s*&\[&str\]\s*=\s*&\[(.*?)\]", re.S)
+NAME_RE = re.compile(r"[a-z0-9_:]+")
 
 
 RUSTFMT = "rustfmt"
 
 
 def declarations(root: Path) -> list[tuple[Path, str, re.Match]]:
-    """each DET_MATH_FUNCTIONS of the source (file, its text, the match), a commented-out line not being one"""
+    """each DET_MATH_FUNCTIONS of the source (file, its text as it is on disk, the match on that text with its comments
+    blanked), one in a comment or a string literal not being one"""
     out = []
     for pkg in packages(root):
         for src in sorted((pkg / "src").rglob("*.rs")) if (pkg / "src").is_dir() else []:
-            text = src.read_text(encoding="utf-8")
-            for m in DECLARED_RE.finditer(text):
-                if "//" not in text[text.rfind("\n", 0, m.start()) + 1:m.start()]:
+            text = src.read_bytes().decode("utf-8")
+            comments: list[tuple[int, int]] = []
+            strings: list[tuple[int, int]] = []
+            tokens(text, comments, strings)
+            blank = list(text)
+            for start, end in comments:
+                blank[start:end] = [" "] * (end - start)
+            for m in DECLARED_RE.finditer("".join(blank)):
+                if not any(start <= m.start() < end for start, end in strings):
                     out.append((src, text, m))
     return out
 
@@ -597,21 +614,35 @@ def declared(root: Path) -> set[str] | None:
     found = declarations(root)
     if not found:
         return None
-    return {n for _, _, m in found for n in re.findall(r'"([a-z0-9_:]+)"', m.group(1))}
+    return {n for _, _, m in found for n in re.findall(rf'"({NAME_RE.pattern})"', m.group(1))}
 
 
 def wanted(root: Path, f: Found) -> set[str]:
     gen_file = root / ".github" / "det-math-fold.toml"
-    return f.pins | (set(tomllib.loads(gen_file.read_text(encoding="utf-8")).get("generated", [])) if gen_file.is_file() else set())
+    if not gen_file.is_file():
+        return set(f.pins)
+    generated = tomllib.loads(gen_file.read_text(encoding="utf-8")).get("generated", [])
+    if not isinstance(generated, list) or not all(isinstance(n, str) for n in generated):
+        raise InputError(f"{gen_file}: `generated` is not a list of strings")
+    bad = [n for n in generated if not NAME_RE.fullmatch(n)]
+    if bad:
+        raise InputError(f"{gen_file}: `generated` names that are not lower-case function ids: {', '.join(bad)}")
+    return f.pins | set(generated)
 
 
 def rustfmt(text: str, where: Path) -> subprocess.CompletedProcess:
     # from stdin rustfmt does not follow `mod`s; run in the file's directory so it finds the crate's rustfmt.toml
+    # from stdin it answers with LF whatever it was given: a CRLF file goes in as LF and comes back as CRLF (bytes, since
+    # text mode would rewrite the line ends itself); a file with both then differs from the answer, as unformatted
+    crlf = "\r\n" in text
     try:
-        return subprocess.run([RUSTFMT, "--edition", "2021"], input=text, capture_output=True, text=True,
-                              encoding="utf-8", cwd=where.parent)
+        p = subprocess.run([RUSTFMT, "--edition", "2021"], input=text.replace("\r\n", "\n").encode("utf-8"),
+                           capture_output=True, cwd=where.parent)
     except OSError as e:
         raise InputError(f"{RUSTFMT}: {e}") from None
+    out = p.stdout.decode("utf-8")
+    return subprocess.CompletedProcess(p.args, p.returncode, out.replace("\n", "\r\n") if crlf else out,
+                                       p.stderr.decode("utf-8", "replace"))
 
 
 def write(root: Path, want: set[str]) -> str:
@@ -624,33 +655,28 @@ def write(root: Path, want: set[str]) -> str:
         raise InputError(f"{len(found)} declarations of DET_MATH_FUNCTIONS (write needs one): "
                          + ", ".join(str(x[0]) for x in found))
     src, text, m = found[0]
+    if text[m.start(1):m.end(1)] != m.group(1):
+        raise InputError(f"{src}: a comment inside the DET_MATH_FUNCTIONS list: a write would lose it, move it out of the list")
     new = text[:m.start(1)] + ", ".join(f'"{n}"' for n in sorted(want)) + text[m.end(1):]
     now = rustfmt(text, src)
-    if now.returncode != 0 or now.stdout != text:
+    if now.returncode != 0:
+        raise InputError(f"{src}: rustfmt: {now.stderr.strip()[:200]}")
+    if now.stdout != text:
         raise InputError(f"{src}: rustfmt would change this file: format it first (a write changes the declaration only)")
     p = rustfmt(new, src)
     if p.returncode != 0:
         raise InputError(f"{src}: rustfmt: {p.stderr.strip()[:200]}")
     if p.stdout == text:
         return f"{src}: unchanged ({len(want)} functions)"
-    src.write_text(p.stdout, encoding="utf-8")
+    src.write_bytes(p.stdout.encode("utf-8"))
     return f"{src}: written ({len(want)} functions)"
 
 
-def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cmd", choices=("print", "check", "write"))
-    ap.add_argument("root", type=Path)
-    ap.add_argument("--paths", type=Path)
-    a = ap.parse_args(argv)
-    try:
-        t = load_table(a.paths or resolved_table(a.root))
-        f = scan(a.root, t)
-        if f.files == 0:
-            raise InputError(f"no Rust source under {a.root}")
-    except InputError as e:
-        print(f"fold set: {e}", file=sys.stderr)
-        return 2
+def run(a: argparse.Namespace) -> int:
+    t = load_table(a.paths or resolved_table(a.root))
+    f = scan(a.root, t)
+    if f.files == 0:
+        raise InputError(f"no Rust source under {a.root}")
     print(f"fold set: {f.files} files, {f.uses} uses: {len(f.pins)} functions, {len(f.identifier)} identifier items, "
           f"{len(f.findings)} findings")
     print("fold set: functions: " + " ".join(sorted(f.pins)))
@@ -667,11 +693,7 @@ def main(argv: list[str]) -> int:
         if f.uses == 0:
             print("fold set: no use of alice_det_math found (compared nothing): nothing written", file=sys.stderr)
             return 2
-        try:
-            print(f"fold set: {write(a.root, wanted(a.root, f))}")
-        except InputError as e:
-            print(f"fold set: {e}", file=sys.stderr)
-            return 2
+        print(f"fold set: {write(a.root, wanted(a.root, f))}")
         return 0
     bad = list(f.findings)
     decl = declared(a.root)
@@ -688,6 +710,19 @@ def main(argv: list[str]) -> int:
     for b in bad:
         print(f"fold set: {b}")
     return 1 if bad else 0
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("cmd", choices=("print", "check", "write"))
+    ap.add_argument("root", type=Path)
+    ap.add_argument("--paths", type=Path)
+    a = ap.parse_args(argv)
+    try:
+        return run(a)
+    except (InputError, OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, RecursionError) as e:
+        print(f"fold set: {e}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import contextlib
 import importlib.util
 import io
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -162,6 +163,22 @@ class Check(unittest.TestCase):
         self.assertIn("found: Beta at main: alice-law-conformance.toml is not UTF-8", out.getvalue())
         self.assertIn("| Alpha |", summary)
 
+    def test_a_manifest_that_is_not_utf8_gives_one_finding_for_two_crates_of_its_repository(self):
+        # no "no manifest" finding on top: the repository was read, its manifest is not text
+        def fetch(repo):
+            raise crc.ManifestNotText(f"{repo} at main: alice-law-conformance.toml is not UTF-8: x")
+        roster = tomllib.loads('[crate.a]\nversion = "1.0.0"\nstate = "published"\norder = 1\nrepo = "Beta"\n'
+                               '[crate.b]\nversion = "1.0.0"\nstate = "published"\norder = 2\nrepo = "Beta"\n')
+        findings = crc.check(roster, tomllib.loads(GATES), {}, fetch)[0]
+        self.assertEqual(findings, ["Beta at main: alice-law-conformance.toml is not UTF-8: x"])
+
+    def test_a_manifest_nested_past_the_recursion_limit_is_a_finding(self):
+        deep = "a = " + "[" * 100000
+        out = self.run_check({"Alpha": manifest(), "Beta": deep})
+        self.assertEqual(out[0], 1, out)
+        self.assertIn("Beta", out[1])
+        self.assertNotIn("Traceback", out[1])
+
     def test_a_baseline_repository_with_no_manifest_read_is_a_finding(self):
         with tempfile.TemporaryDirectory() as d:
             b = Path(d) / "b.toml"
@@ -201,13 +218,18 @@ class Check(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("Alpha: alice-law-conformance.toml has 1 line-number reference(s), the baseline allows 0", out)
 
+    def test_an_adoption_finding_is_counted_and_listed_in_the_summary(self):
+        code, out, summary = self.run_check({"Alpha": manifest(), "Beta": manifest()}, gates=GATES + ADOPTION_G9)
+        self.assertEqual(code, 1, out)
+        self.assertIn("1 findings\n\n- G9 adoption: CHANGELOG.md cannot be read", summary)
+
     def test_an_adoption_window_finding_alone_turns_the_live_run_red(self):
         # the window holds on --today, so the absent G9 reads as unverified: the only finding is the CHANGELOG line
         # (this module's root has no CHANGELOG.md)
         code, out, _ = self.run_check({"Alpha": manifest(), "Beta": manifest()}, gates=GATES + ADOPTION_G9)
         self.assertEqual(code, 1, out)
         self.assertIn("G9 adoption: CHANGELOG.md cannot be read", out)
-        self.assertIn(", 0 findings", out)
+        self.assertIn(", 1 findings", out)
 
     def test_without_summary_the_counts_are_only_printed(self):
         with tempfile.TemporaryDirectory() as d:
@@ -468,6 +490,18 @@ class FetcherBadAnswers(unittest.TestCase):
         b = base64.b64encode(b"\xff\xfe").decode()
         with self.assertRaises(crc.ManifestNotText):
             self.fetch_with(self.TREE, json.dumps({"content": b}))
+
+    def test_the_manifest_error_is_an_input_error(self):
+        # the modes that read one manifest take it as an unreadable input: exit 2, no traceback
+        self.assertTrue(issubclass(crc.ManifestNotText, crc.InputError))
+
+    def test_a_file_that_is_not_utf8_reads_with_replacement(self):
+        import base64
+        import json
+        tree = json.dumps({"tree": [{"path": "alice-law-conformance.toml", "type": "blob"}, {"path": "a.rs", "type": "blob"}]})
+        fetched = self.fetch_with(tree, json.dumps({"content": base64.b64encode(b"a = 1\n").decode()}),
+                                  json.dumps({"content": base64.b64encode(b"x\xff").decode()}))
+        self.assertEqual(fetched[2]("a.rs"), "x\ufffd")
 
     def test_a_good_answer_reads(self):
         import base64
@@ -834,7 +868,7 @@ class Internal(unittest.TestCase):
         code, out = self.run_internal(gates=GATES + ADOPTION_G9)[:2]
         self.assertEqual(code, 1, out)
         self.assertIn("G9 adoption: CHANGELOG.md cannot be read", out)
-        self.assertIn(", 0 findings", out)
+        self.assertIn(", 1 findings", out)
 
 
 class NaEvidence(unittest.TestCase):

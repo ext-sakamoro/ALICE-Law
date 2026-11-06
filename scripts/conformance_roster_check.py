@@ -154,7 +154,7 @@ class InputError(Exception):
 def load_toml(path: Path) -> dict:
     try:
         return tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as e:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, RecursionError) as e:
         raise InputError(f"{path}: {e}") from e
 
 
@@ -300,7 +300,7 @@ def integration_test_file(path: str, paths: set[str], read) -> bool:
         return False
     try:
         return isinstance(tomllib.loads(read(manifest) or "").get("package"), dict)
-    except tomllib.TOMLDecodeError:
+    except (tomllib.TOMLDecodeError, RecursionError):
         return False
 
 
@@ -519,7 +519,7 @@ def check_manifest(crate: str, text: str, vocab: dict[str, tuple[str, ...]], pat
     where = f"{crate}: {MANIFEST}"
     try:
         manifest = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as e:
+    except (tomllib.TOMLDecodeError, RecursionError) as e:
         return [f"{where}: not valid TOML ({e})"], {}, 0
     findings: list[str] = []
     ids = {k for k in manifest if GATE_ID_RE.match(k)}
@@ -774,7 +774,7 @@ def line_refs(text: str) -> int:
     """the line-number references in the string fields of a manifest's gate tables"""
     try:
         data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
+    except (tomllib.TOMLDecodeError, RecursionError):
         return 0  # an unreadable manifest is the manifest check's finding
     n = 0
 
@@ -960,7 +960,7 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
             return 2
         shown = ", ".join(f"{s} {counts[s]}" for s in STATUSES) if not findings else "not counted"
         print(f"manifest check: {repo_name(Path(a.check_manifest))}@{a.ref}: {compared} gates compared against "
-              f"{nfiles} files, {len(findings)} findings ({shown})")
+              f"{nfiles} files, {len(adoption) + len(findings)} findings ({shown})")
         return 1 if findings or adoption else 0
     try:
         roster = load_toml(Path(a.roster))
@@ -985,7 +985,7 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
     if a.internal:
         for f in findings:
             print(f"found: {f}")
-        print(f"conformance inputs (internal): {n} release-train crates, {len(findings)} findings")
+        print(f"conformance inputs (internal): {n} release-train crates, {len(adoption) + len(findings)} findings")
         return 1 if findings or adoption else 0
     for n in notes:
         print(f"note: {n}")
@@ -1001,12 +1001,12 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
     if a.summary:
         try:
             with open(a.summary, "a", encoding="utf-8") as fh:
-                fh.write(render_summary(states, len(gate_vocabulary(gates)), findings))
+                fh.write(render_summary(states, len(gate_vocabulary(gates)), adoption + findings))
         except OSError as e:
             print(f"error: the summary {a.summary}: {e}", file=sys.stderr)
             return 2
     print(f"conformance roster: {files} manifests read for {read} crates (crates that share a repository share "
-          f"its manifest), {compared} gates compared, {len(findings)} findings")
+          f"its manifest), {compared} gates compared, {len(adoption) + len(findings)} findings")
     return 1 if findings or adoption else 0
 
 if __name__ == "__main__":
