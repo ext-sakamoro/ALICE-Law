@@ -610,11 +610,22 @@ def declarations(root: Path) -> list[tuple[Path, str, re.Match]]:
     return out
 
 
+def declared_names(where: Path, body: str) -> set[str]:
+    """the names of one declaration's list (its comments already blanked); anything else in the list is an input error: a
+    string this does not read would pass check and be dropped by a write"""
+    names = re.findall(r'"([^"]*)"', body)
+    rest = re.sub(r'"[^"]*"', "", body).replace(",", "").strip()
+    bad = [n for n in names if not NAME_RE.fullmatch(n)] + ([rest[:40]] if rest else [])
+    if bad:
+        raise InputError(f"{where}: DET_MATH_FUNCTIONS holds what is not a lower-case function id: {', '.join(bad)}")
+    return set(names)
+
+
 def declared(root: Path) -> set[str] | None:
     found = declarations(root)
     if not found:
         return None
-    return {n for _, _, m in found for n in re.findall(rf'"({NAME_RE.pattern})"', m.group(1))}
+    return {n for src, _, m in found for n in declared_names(src, m.group(1))}
 
 
 def wanted(root: Path, f: Found) -> set[str]:
@@ -655,6 +666,7 @@ def write(root: Path, want: set[str]) -> str:
         raise InputError(f"{len(found)} declarations of DET_MATH_FUNCTIONS (write needs one): "
                          + ", ".join(str(x[0]) for x in found))
     src, text, m = found[0]
+    declared_names(src, m.group(1))
     if text[m.start(1):m.end(1)] != m.group(1):
         raise InputError(f"{src}: a comment inside the DET_MATH_FUNCTIONS list: a write would lose it, move it out of the list")
     new = text[:m.start(1)] + ", ".join(f'"{n}"' for n in sorted(want)) + text[m.end(1):]

@@ -666,6 +666,18 @@ class Write(Base):
         self.assertEqual(rc, 1, out)
         self.assertIn("sin is called but is not in DET_MATH_FUNCTIONS", out)
 
+    def test_what_the_list_holds_that_is_not_a_name_is_an_error_not_dropped(self):
+        for name, item in (("upper case", '"COS"'), ("a comment in a string", '"//x"'), ("an empty name", '""'),
+                           ("a space", '"s in"'), ("a constant", "OTHER"), ("a raw string", 'r"sin"')):
+            for cmd in ("check", "write"):
+                with self.subTest(name, cmd=cmd):
+                    src = self.FORMATTED.replace('&["tan"]', f'&["cos", "sin", {item}]')
+                    self.crate(src)
+                    rc, out = self.main(cmd)
+                    self.assertEqual(rc, 2, out)
+                    self.assertIn("not a lower-case function id", out)
+                    self.assertEqual(self.lib(), src)
+
     def generated(self, toml: bytes) -> None:
         (self.root / ".github").mkdir(exist_ok=True)
         (self.root / ".github" / "det-math-fold.toml").write_bytes(toml)

@@ -285,6 +285,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` と `conformance/pending-state.toml`、`conformance_roster_check.py` の `--write` / `--state` / `--pending` / `--strict` / `--state-drift-note` と pending の 3 日の規則、`land_law_state.py` の `--write` / `--today` crate の着地のたびに要った追いかけの commit と、着地済の entry が他の repository の着地を止める経路がなくなる
 
 ### Fixed
+- `scripts/fold_set_check.py`: `DET_MATH_FUNCTIONS` の list に小文字の関数名として読めないもの (`"COS"`、`"//x"`、定数、raw string) があれば exit 2 にする これまでは数えずに check を通し、write で消していた
 - `scripts/fold_set_check.py`: block comment の中や文字列の中の `DET_MATH_FUNCTIONS` を宣言として読まない list の中で comment にした名前を宣言として数えない 同じ行の前に `//` を含む文字列があっても宣言を見落とさない
 - `scripts/fold_set_check.py write`: list の中に comment があると消えるので書かずに exit 2 にする CRLF の file は CRLF のまま書く (LF に書き換えていた) 手元の file に対する rustfmt の失敗は「would change」でなく rustfmt の出力を出す
 - `scripts/fold_set_check.py`: `generated` が文字列の list でない時 (文字列は 1 文字ずつの名前に読んでいた)、小文字の関数名でない時は exit 2 壊れた TOML、UTF-8 でない file、読取専用の file、深すぎる入れ子は traceback でなく exit 2
