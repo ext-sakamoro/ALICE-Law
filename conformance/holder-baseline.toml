@@ -482,11 +482,6 @@ kind = "authors"
 path = "Cargo.toml"
 
 [[entry]]
-repo = "eb3c7d3bafcbc8bedbc73df865104788adaa33d929a5807def4038b1b8f3e4f9"
-kind = "authors"
-path = "Cargo.toml"
-
-[[entry]]
 repo = "ec37e45b194ea3ecafb53bcd9219a3e20c84f24b04705fbc60c3f5d743d6396d"
 kind = "authors"
 path = "Cargo.toml"
