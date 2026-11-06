@@ -57,7 +57,8 @@ SKIP_DIRS = {"tests", "benches", "examples", "target", "fuzz"}
 IDENT = re.compile(r"r#[A-Za-z_]\w*|[A-Za-z_]\w*")
 PUNCT = ("::", "=>", "->", "..=", "...", "..")
 # the identifier API of alice-det-math: names, not arithmetic
-IDENTIFIER_ITEMS = {"SEMANTICS_ID", "PREVIOUS_SEMANTICS_IDS", "FUNCTION_PINS", "function_pin", "check_semantics",
+IDENTIFIER_ITEMS = {"SEMANTICS_ID", "PREVIOUS_SEMANTICS_IDS", "FUNCTION_PINS", "function_pin", "assert_function_pins",
+                    "check_semantics",
                     "check_semantics_against", "verify_semantics_against", "SemanticsCheck", "SemanticsMismatch",
                     "semantics"}
 

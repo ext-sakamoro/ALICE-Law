@@ -108,6 +108,11 @@ class Forms(Base):
     def test_a_turbofish_ends_the_path(self):
         self.assertEqual(self.pins("fn f() { alice_det_math::sin::<f32>(1.0); }"), {"sin"})
 
+    def test_the_pin_guard_is_an_identifier_item(self):
+        f = self.found("const _: () = alice_det_math::assert_function_pins(PINS);\n")
+        self.assertEqual(f.identifier, {"assert_function_pins"})
+        self.assertEqual(f.findings, [])
+
     def test_identifier_items_are_apart(self):
         f = self.found("const A: [u8; 32] = alice_det_math::SEMANTICS_ID;\nuse alice_det_math::law_bits::f32_bits;")
         self.assertEqual((f.pins, f.findings), (set(), []))
