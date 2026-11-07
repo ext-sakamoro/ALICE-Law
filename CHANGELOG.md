@@ -285,6 +285,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` と `conformance/pending-state.toml`、`conformance_roster_check.py` の `--write` / `--state` / `--pending` / `--strict` / `--state-drift-note` と pending の 3 日の規則、`land_law_state.py` の `--write` / `--today` crate の着地のたびに要った追いかけの commit と、着地済の entry が他の repository の着地を止める経路がなくなる
 
 ### Fixed
+- `shared_files_check.py`: `--private` で読める product repo の名前を 1 つ足した (集合は名前の SHA-256 だけを持つ)
 - `conformance/holder-baseline.toml`: 直った 1 行 (`eb3c7d3b` の `Cargo.toml` の authors) を `holder_live.py --shrink` で外す 検査は各 repository の既定 branch を読むので、既定 branch を変えると読む bytes も変わる この repository は既定 branch が main になった時点で出現が無くなり、毎日の検査が古い行として red にしていた
 - `scripts/fold_set_check.py`: `DET_MATH_FUNCTIONS` の list に小文字の関数名として読めないもの (`"COS"`、`"//x"`、定数、raw string) があれば exit 2 にする これまでは数えずに check を通し、write で消していた
 - `scripts/fold_set_check.py`: block comment の中や文字列の中の `DET_MATH_FUNCTIONS` を宣言として読まない list の中で comment にした名前を宣言として数えない 同じ行の前に `//` を含む文字列があっても宣言を見落とさない

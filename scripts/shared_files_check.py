@@ -128,6 +128,7 @@ REPO = re.compile(r"^ALICE-[A-Za-z0-9-]+$")
 # already in lower case and its hash is listed
 PRODUCT_REPO_HASHES = {
     "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970",
+    "30a8054cec310312b5efb4a9b7918bc9017a9ba7791be810fe620717c1baf887",
 }
 PRODUCT_REPO = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
