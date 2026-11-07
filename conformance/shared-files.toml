@@ -218,7 +218,8 @@ repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-Physics"
 
 [[file]]
 path = "scripts/min_passed.py"
-pending = { since = "2026-11-07", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "d9fc9a7b2f6a13eeb600ed16094ecbe3273499dd39b46f7d713bec6ea976abcb", owner = "ALICE-GameEngine", planned = "73f4410bb2970dd13f8171fb259eb6b97bdacece", variants = { "d9fc9a7b2f6a13eeb600ed16094ecbe3273499dd39b46f7d713bec6ea976abcb" = ["ALICE-GameEngine"], "ec7a1f2fd72daba87df12a3835e9b6d6a883c30a2e1341899fe3dfef14d824db" = ["ALICE-FBX"] } }
+sha256 = "d9fc9a7b2f6a13eeb600ed16094ecbe3273499dd39b46f7d713bec6ea976abcb"
+source = { repo = "ALICE-FBX", rev = "9b0ee806c415074a9b948422be93e07543d2c61d" }
 repos = ["ALICE-FBX", "ALICE-GameEngine"]
 
 [[file]]
@@ -429,13 +430,13 @@ repos = ["ALICE-Analytics", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_libm_dependency_guard.py"
-sha256 = "29bcd89978a6b68b80fe1f7ff18997830aeca2742443b284c7ee0c5cc0c0eb90"
-source = { repo = "ALICE-DetMath", rev = "16bb3d0e0793ff21dad28c251ec3bc378006a8c1" }
+pending = { since = "2026-11-07", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "a6aef79024ae5ecb94869166fa9854b1aa4d7a69365718b54b20da8609e23f16", owner = "ALICE-DetMath", planned = "0b7c51a0e1c640125abdb6cd3dd8a0c7ed939006", moved_from = { planned = "9a287f82b410ccf36e00c47a44ba4f54c26db861", target = "29bcd89978a6b68b80fe1f7ff18997830aeca2742443b284c7ee0c5cc0c0eb90" }, first_move = true, variants = { "29bcd89978a6b68b80fe1f7ff18997830aeca2742443b284c7ee0c5cc0c0eb90" = ["ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync"] } }
 repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync"]
 
 [[file]]
 path = "scripts/test_min_passed.py"
-pending = { since = "2026-11-07", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "2fd80bd13edc03bca498c5c9f1c3af3d670ceb826cb97dbd2ed60c10de2e969c", owner = "ALICE-GameEngine", planned = "374c8a9341afa470fd32eba3055ed5441eea6d8f", variants = { "1894e5dba211e684369338c4110b9e0c112e37298ddf3f3a645f528d7c077df0" = ["ALICE-FBX"], "2fd80bd13edc03bca498c5c9f1c3af3d670ceb826cb97dbd2ed60c10de2e969c" = ["ALICE-GameEngine"] } }
+sha256 = "2fd80bd13edc03bca498c5c9f1c3af3d670ceb826cb97dbd2ed60c10de2e969c"
+source = { repo = "ALICE-FBX", rev = "9b0ee806c415074a9b948422be93e07543d2c61d" }
 repos = ["ALICE-FBX", "ALICE-GameEngine"]
 
 [[file]]
