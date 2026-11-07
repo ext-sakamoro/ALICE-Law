@@ -32,7 +32,7 @@ Items that are not arithmetic (the identifier API, [no_arithmetic]) are accepted
   fold_set_check.py check ROOT [--paths FILE]   also compares with DET_MATH_FUNCTIONS in the source, plus the
                                                 `generated` list of .github/det-math-fold.toml (names only the crate's
                                                 generated code calls), and requires the crate's
-                                                `const _: () = alice_det_math::assert_function_pins(..)`; exit 1 on a
+                                                `const _: () = alice_det_math::assert_function_pins(DET_MATH_PINS)`; exit 1 on a
                                                 difference, a finding or no such item
   fold_set_check.py write ROOT [--paths FILE]   writes that set into the crate's one DET_MATH_FUNCTIONS, sorted and as
                                                 rustfmt lays it out, and changes nothing else; exit 1 on a finding (nothing
@@ -613,12 +613,13 @@ def declarations(root: Path) -> list[tuple[Path, str, re.Match]]:
     return out
 
 
-GUARD_RE = re.compile(r"\bconst\s+_\s*:\s*\(\s*\)\s*=\s*(?:\w+\s*::\s*)*assert_function_pins\s*\(")
+GUARD_RE = re.compile(r"\bconst\s+_\s*:\s*\(\s*\)\s*=\s*(?:\w+\s*::\s*)*assert_function_pins\s*\(\s*DET_MATH_PINS\s*\)")
 
 
 def guarded(root: Path) -> bool:
-    """a `const _: () = alice_det_math::assert_function_pins(..)` in the source, one in a comment or a string literal
-    not being one: without it, an identifier the crate recorded and the one this build resolves are never compared"""
+    """a `const _: () = alice_det_math::assert_function_pins(DET_MATH_PINS)` in the source, one in a comment or a string
+    literal not being one: without it, an identifier the crate recorded and the one this build resolves are never
+    compared. A text check: it does not read cfg, reachability or what the name resolves to"""
     for pkg in packages(root):
         for src in sorted((pkg / "src").rglob("*.rs")) if (pkg / "src").is_dir() else []:
             text = src.read_bytes().decode("utf-8")
@@ -743,9 +744,10 @@ def run(a: argparse.Namespace) -> int:
             bad.append(f"{n} is in DET_MATH_FUNCTIONS but is not called")
     if f.uses == 0:
         bad.append("no use of alice_det_math found (compared nothing)")
-    # read by the walk (so not under cfg(test)) and in a const item (so it stops the compile)
-    if decl is not None and not ("assert_function_pins" in f.identifier and guarded(a.root)):
-        bad.append("no `const _: () = alice_det_math::assert_function_pins(..)` in the source: the folded identifiers "
+    # the name read by the walk, and a const item over the crate's own table (so it stops the compile)
+    named = any(p.split("::")[-1] == "assert_function_pins" for p in f.identifier)
+    if decl is not None and not (named and guarded(a.root)):
+        bad.append("no `const _: () = alice_det_math::assert_function_pins(DET_MATH_PINS)` in the source: the folded identifiers "
                    "are not compared with this build")
     for b in bad:
         print(f"fold set: {b}")

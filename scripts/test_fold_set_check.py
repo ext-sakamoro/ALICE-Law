@@ -35,7 +35,7 @@ TABLE = '''[paths]
 DEP = '[package]\nname = "x"\nversion = "0.1.0"\n[dependencies]\nalice-det-math = "0.6"\n'
 
 
-GUARD = 'const _: () = alice_det_math::assert_function_pins(PINS);\n'
+GUARD = 'const _: () = alice_det_math::assert_function_pins(DET_MATH_PINS);\n'
 
 
 class Base(unittest.TestCase):
@@ -112,7 +112,7 @@ class Forms(Base):
         self.assertEqual(self.pins("fn f() { alice_det_math::sin::<f32>(1.0); }"), {"sin"})
 
     def test_the_pin_guard_is_an_identifier_item(self):
-        f = self.found("const _: () = alice_det_math::assert_function_pins(PINS);\n")
+        f = self.found("const _: () = alice_det_math::assert_function_pins(DET_MATH_PINS);\n")
         self.assertEqual(f.identifier, {"assert_function_pins"})
         self.assertEqual(f.findings, [])
 
@@ -456,7 +456,7 @@ class Check(Base):
         self.guard_red('pub const S: &str = "' + GUARD.strip().replace('"', "") + '";\n')
 
     def test_the_guard_only_in_a_comment_or_a_string_with_the_name_really_used(self):
-        used = "fn g() { alice_det_math::assert_function_pins(PINS); }\n"
+        used = "fn g() { alice_det_math::assert_function_pins(DET_MATH_PINS); }\n"
         self.guard_red(used + "// " + GUARD)
         self.guard_red(used + "/* " + GUARD + "*/\n")
         self.guard_red(used + 'pub const S: &str = "' + GUARD.strip() + '";\n')
@@ -465,14 +465,24 @@ class Check(Base):
         self.guard_red("#[cfg(test)]\nmod t {\n    " + GUARD + "}\n")
 
     def test_the_guard_called_at_run_time_only(self):
-        self.guard_red("fn g() { alice_det_math::assert_function_pins(PINS); }\n")
+        self.guard_red("fn g() { alice_det_math::assert_function_pins(DET_MATH_PINS); }\n")
 
     def test_the_guard_named_and_not_run(self):
         self.guard_red("use alice_det_math::assert_function_pins;\n")
 
+    def test_the_guard_on_another_table(self):
+        self.guard_red('const _: () = alice_det_math::assert_function_pins(&[("tan", TAN)]);\n')
+        self.guard_red("const _: () = alice_det_math::assert_function_pins(OTHER_PINS);\n")
+
+    def test_the_guard_by_its_module_path_passes(self):
+        self.crate('pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\nfn f() { alice_det_math::sin(); }\n'
+                   "const _: () = alice_det_math::semantics::assert_function_pins(DET_MATH_PINS);\n")
+        rc, out = self.main("check")
+        self.assertEqual(rc, 0, out)
+
     def test_the_guard_through_an_import_passes(self):
         self.crate('pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\nfn f() { alice_det_math::sin(); }\n'
-                   "use alice_det_math::assert_function_pins;\nconst _: () = assert_function_pins(PINS);\n")
+                   "use alice_det_math::assert_function_pins;\nconst _: () = assert_function_pins(DET_MATH_PINS);\n")
         rc, out = self.main("check")
         self.assertEqual(rc, 0, out)
 
