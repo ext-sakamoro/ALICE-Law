@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `conformance/shared-files.toml`: ALICE-GameEngine の bytes へ移す計画 4 行 (pending): `scripts/gated_tests.py` と試験 (`#[wasm_bindgen_test]` も数える)、`scripts/min_passed.py` と試験 (cargo の Running 行だけを読む、ALICE-GameEngine の main に着地済で ALICE-FBX が残り) 数の固定は 1516
 - `scripts/fold_set_check.py`: `assert_function_pins` (alice-det-math の guard) を識別子の項目として読む
 - `scripts/fold_set_check.py check`: crate の source に `const _: () = alice_det_math::assert_function_pins(DET_MATH_PINS)` が無いと red (comment、文字列、別の表、const でない呼び出しは数えない、文字列の照合で cfg と到達性は読まない) 畳んだ識別子と build の比較が消えても他の試験は green のままだった
 - `scripts/fold_set_check.py` (試験 `scripts/test_fold_set_check.py`): crate の source が呼ぶ alice-det-math の関数の集合を読み、crate の識別子が fold する `DET_MATH_FUNCTIONS` と比べる comment と文字列と `#[cfg(test)]` の item を除いた token を読み、path、`use` の木 (`pub use` も数える)、module の import、型 (`w.norm(..)` は path を持たないので型に触れれば method を全部数える)、Cargo.toml の rename、file の先頭の `use … as` を解決する 解決できない形 (glob、`pub use` や module の中の alias、macro 変数を通る path、表に無い名前) は見逃さず finding にする 生成コードだけが呼ぶ名前は `.github/det-math-fold.toml` の `generated` に書く 表は `cargo metadata` が解決した alice-det-math の `function-paths.toml` 比較 0 件は落ちる
