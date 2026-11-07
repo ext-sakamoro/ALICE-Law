@@ -534,7 +534,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law
 path = "scripts/test_workflow_pipefail.py"
 sha256 = "56559df0b5ee82d1d6b50b9bf45811e0371776905c3ece8236bb40c16f06b2ae"
 source = { repo = "ALICE-Analytics", rev = "7455a92d99ff9fff714fce6d8633a43bb2a0d844" }
-repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_workflow_timeouts.py"
@@ -570,7 +570,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law
 path = "scripts/workflow_pipefail.py"
 sha256 = "fc06ac644f6d3c5697056ab2cd3876ed4b5919c0b1011b9ca4410e5cab05b454"
 source = { repo = "ALICE-Analytics", rev = "7455a92d99ff9fff714fce6d8633a43bb2a0d844" }
-repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-Zip"]
+repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/workflow_timeouts.py"
