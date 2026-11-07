@@ -35,6 +35,9 @@ TABLE = '''[paths]
 DEP = '[package]\nname = "x"\nversion = "0.1.0"\n[dependencies]\nalice-det-math = "0.6"\n'
 
 
+GUARD = 'const _: () = alice_det_math::assert_function_pins(PINS);\n'
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         self.d = Path(tempfile.mkdtemp(prefix="foldset-"))
@@ -286,7 +289,7 @@ class ResolvedTable(Base):
 class Silent(Base):
     """each really calls sin (or sin64); only tan is declared. Exit 0 here is a call missed in silence"""
 
-    ANCHOR = 'pub const DET_MATH_FUNCTIONS: &[&str] = &["tan"];\npub fn anchor(x: f32) -> f32 { alice_det_math::tan(x) }\n'
+    ANCHOR = GUARD + 'pub const DET_MATH_FUNCTIONS: &[&str] = &["tan"];\npub fn anchor(x: f32) -> f32 { alice_det_math::tan(x) }\n'
     TABLE_MORE = '"tan" = "tan"\n"double::sin64" = "sin64"\n'
 
     def setUp(self):
@@ -410,7 +413,7 @@ class Silent(Base):
 
 
 class Check(Base):
-    DECL = 'pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\nfn f() { alice_det_math::sin(); }'
+    DECL = GUARD + 'pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\nfn f() { alice_det_math::sin(); }'
 
     def test_the_declared_set_matches(self):
         self.crate(self.DECL)
@@ -439,8 +442,42 @@ class Check(Base):
         self.assertEqual(rc, 1)
         self.assertIn("no DET_MATH_FUNCTIONS in the source", out)
 
+    def guard_red(self, src: str) -> None:
+        self.crate('pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\nfn f() { alice_det_math::sin(); }\n' + src)
+        rc, out = self.main("check")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("are not compared with this build", out)
+
+    def test_a_crate_without_the_guard(self):
+        self.guard_red("")
+
+    def test_the_guard_in_a_comment_or_a_string(self):
+        self.guard_red("// " + GUARD)
+        self.guard_red('pub const S: &str = "' + GUARD.strip().replace('"', "") + '";\n')
+
+    def test_the_guard_only_in_a_comment_or_a_string_with_the_name_really_used(self):
+        used = "fn g() { alice_det_math::assert_function_pins(PINS); }\n"
+        self.guard_red(used + "// " + GUARD)
+        self.guard_red(used + "/* " + GUARD + "*/\n")
+        self.guard_red(used + 'pub const S: &str = "' + GUARD.strip() + '";\n')
+
+    def test_the_guard_under_cfg_test(self):
+        self.guard_red("#[cfg(test)]\nmod t {\n    " + GUARD + "}\n")
+
+    def test_the_guard_called_at_run_time_only(self):
+        self.guard_red("fn g() { alice_det_math::assert_function_pins(PINS); }\n")
+
+    def test_the_guard_named_and_not_run(self):
+        self.guard_red("use alice_det_math::assert_function_pins;\n")
+
+    def test_the_guard_through_an_import_passes(self):
+        self.crate('pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\nfn f() { alice_det_math::sin(); }\n'
+                   "use alice_det_math::assert_function_pins;\nconst _: () = assert_function_pins(PINS);\n")
+        rc, out = self.main("check")
+        self.assertEqual(rc, 0, out)
+
     def test_generated_names_join_the_called_set(self):
-        src = 'pub const DET_MATH_FUNCTIONS: &[&str] = &["sin", "cos"];\nfn f() { alice_det_math::sin(); }'
+        src = GUARD + 'pub const DET_MATH_FUNCTIONS: &[&str] = &["sin", "cos"];\nfn f() { alice_det_math::sin(); }'
         self.crate(src, extra={".github/det-math-fold.toml": 'generated = ["cos"]\n'})
         self.assertEqual(self.main("check")[0], 0)
 
@@ -472,7 +509,7 @@ class Check(Base):
 
 class Write(Base):
     FORMATTED = ('//! a crate\n\npub const DET_MATH_FUNCTIONS: &[&str] = &["tan"];\n\n'
-                 'pub fn f(x: f32) -> f32 {\n    alice_det_math::sin(x) + alice_det_math::cos(x)\n}\n')
+                 'pub fn f(x: f32) -> f32 {\n    alice_det_math::sin(x) + alice_det_math::cos(x)\n}\n\n' + GUARD)
 
     def lib(self) -> str:
         return (self.root / "src/lib.rs").read_text(encoding="utf-8")
@@ -659,7 +696,7 @@ class Write(Base):
                 self.assertIn("no DET_MATH_FUNCTIONS", out)
 
     def test_a_url_before_the_declaration_on_its_line_does_not_hide_it(self):
-        self.crate('pub const U: &str = "a://b"; pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\n'
+        self.crate(GUARD + 'pub const U: &str = "a://b"; pub const DET_MATH_FUNCTIONS: &[&str] = &["sin"];\n'
                    'pub fn f(x: f32) -> f32 {\n    alice_det_math::sin(x)\n}\n')
         rc, out = self.main("check")
         self.assertEqual(rc, 0, out)

@@ -9,6 +9,7 @@ workflows are the interface, so changes to what they check are recorded here.
 
 ### Added
 - `scripts/fold_set_check.py`: `assert_function_pins` (alice-det-math の guard) を識別子の項目として読む
+- `scripts/fold_set_check.py check`: crate の source に `const _: () = alice_det_math::assert_function_pins(..)` が無いと red (comment、文字列、`cfg(test)`、const でない呼び出しは数えない) 畳んだ識別子と build の比較が消えても他の試験は green のままだった
 - `scripts/fold_set_check.py` (試験 `scripts/test_fold_set_check.py`): crate の source が呼ぶ alice-det-math の関数の集合を読み、crate の識別子が fold する `DET_MATH_FUNCTIONS` と比べる comment と文字列と `#[cfg(test)]` の item を除いた token を読み、path、`use` の木 (`pub use` も数える)、module の import、型 (`w.norm(..)` は path を持たないので型に触れれば method を全部数える)、Cargo.toml の rename、file の先頭の `use … as` を解決する 解決できない形 (glob、`pub use` や module の中の alias、macro 変数を通る path、表に無い名前) は見逃さず finding にする 生成コードだけが呼ぶ名前は `.github/det-math-fold.toml` の `generated` に書く 表は `cargo metadata` が解決した alice-det-math の `function-paths.toml` 比較 0 件は落ちる
 - `scripts/fold_set_check.py write ROOT`: 読み取った集合 (`generated` を含む) を crate の 1 つの `DET_MATH_FUNCTIONS` に整列して書く 配置は rustfmt に任せ、宣言以外は変えない finding があれば何も書かない (exit 1)、宣言が 0 か 2 以上・rustfmt が他の箇所を変える file・use が 0 件は exit 2 `check` は comment の宣言を宣言と読まない
 - `scripts/check_pipe_grep_q.py` (試験 `scripts/test_check_pipe_grep_q.py`、共有表の bytes): pipeline の末尾が `grep -q` の行を止める (pipefail の下では `grep` が先に終わると前段が SIGPIPE で落ち、結果が反転する) CI の `dependency-consistency.yml` と `scripts/preflight.sh` で走る text mode の subprocess は共有表の次の roll で直すので `scripts/subprocess_encoding_exempt.toml` に載せた

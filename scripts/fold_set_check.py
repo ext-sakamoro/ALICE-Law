@@ -31,7 +31,9 @@ Items that are not arithmetic (the identifier API, [no_arithmetic]) are accepted
   fold_set_check.py print ROOT [--paths FILE]   the set found, the identifier items used, the findings
   fold_set_check.py check ROOT [--paths FILE]   also compares with DET_MATH_FUNCTIONS in the source, plus the
                                                 `generated` list of .github/det-math-fold.toml (names only the crate's
-                                                generated code calls); exit 1 on a difference or a finding
+                                                generated code calls), and requires the crate's
+                                                `const _: () = alice_det_math::assert_function_pins(..)`; exit 1 on a
+                                                difference, a finding or no such item
   fold_set_check.py write ROOT [--paths FILE]   writes that set into the crate's one DET_MATH_FUNCTIONS, sorted and as
                                                 rustfmt lays it out, and changes nothing else; exit 1 on a finding (nothing
                                                 written); exit 2 when there is no declaration or more than one (add
@@ -611,6 +613,27 @@ def declarations(root: Path) -> list[tuple[Path, str, re.Match]]:
     return out
 
 
+GUARD_RE = re.compile(r"\bconst\s+_\s*:\s*\(\s*\)\s*=\s*(?:\w+\s*::\s*)*assert_function_pins\s*\(")
+
+
+def guarded(root: Path) -> bool:
+    """a `const _: () = alice_det_math::assert_function_pins(..)` in the source, one in a comment or a string literal
+    not being one: without it, an identifier the crate recorded and the one this build resolves are never compared"""
+    for pkg in packages(root):
+        for src in sorted((pkg / "src").rglob("*.rs")) if (pkg / "src").is_dir() else []:
+            text = src.read_bytes().decode("utf-8")
+            comments: list[tuple[int, int]] = []
+            strings: list[tuple[int, int]] = []
+            tokens(text, comments, strings)
+            blank = list(text)
+            for start, end in comments:
+                blank[start:end] = [" "] * (end - start)
+            for m in GUARD_RE.finditer("".join(blank)):
+                if not any(start <= m.start() < end for start, end in strings):
+                    return True
+    return False
+
+
 def declared_names(where: Path, body: str) -> set[str]:
     """the names of one declaration's list (its comments already blanked); anything else in the list is an input error: a
     string this does not read would pass check and be dropped by a write"""
@@ -720,6 +743,10 @@ def run(a: argparse.Namespace) -> int:
             bad.append(f"{n} is in DET_MATH_FUNCTIONS but is not called")
     if f.uses == 0:
         bad.append("no use of alice_det_math found (compared nothing)")
+    # read by the walk (so not under cfg(test)) and in a const item (so it stops the compile)
+    if decl is not None and not ("assert_function_pins" in f.identifier and guarded(a.root)):
+        bad.append("no `const _: () = alice_det_math::assert_function_pins(..)` in the source: the folded identifiers "
+                   "are not compared with this build")
     for b in bad:
         print(f"fold set: {b}")
     return 1 if bad else 0
