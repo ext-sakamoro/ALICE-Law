@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- e2e (main): 各 crate の識別子の照合を関数ごとの pin に合わせる 識別子は自分の pin と `DET_MATH_PINS` (`det-math <関数>` の名前) を畳んだ値、各関数の pin は link した alice-det-math の `FUNCTION_PINS` と同じ、を確かめる (無い関数名・違う pin・両方の形・crate の pin の食い違いは失敗) 関数ごとの pin を持たない crate (alice-edge) は従来の `alice-det-math` の pin で見る 世界の減衰は main では 1 秒あたりの率 `-ln(0.99)·60` (Physics main の `damping_rate`)、公開版では従来どおり 1 step あたり 0.99
 - `scripts/public_text_check.py`: 非公開 repository の hash の区画を今の公開範囲から生成し直した (`scripts/gen_private_repo_hashes.py`、非公開 328 / ALICE-* 150、新しく非公開になった 9 件が加わった)
 - `conformance/shared-files.toml`: `scripts/package_integrity.py` と試験 (ALICE-Analytics / ALICE-DB / ALICE-Edge / ALICE-LOL) を ALICE-Analytics の新しい bytes へ移す計画 2 行 (`branch` / `tag` / 既定の branch で取る git 依存を同じ指定で patch し、Cargo.lock が解決した commit の source を確かめる、初回の移動) と、`scripts/id_move_check.py` と試験の目標を ALICE-Analytics の新しい bytes に付け替える 2 行 (履歴で `.github/alice-siblings` を消した base は兄弟の無い base として扱う、`8e013d66…` → `f75597be…`)
 - `scripts/fold_set_check.py`: alice-det-math の function-paths.toml の `[consts]` を読み、`consts::<定数>` をその定数を法則に使う関数の pin として数える (JIT や shader で同じ法則を定数から出力する crate、例: ALICE-SDF の Cranelift JIT が sin_cos の 8 定数を使う) `[consts]` の無い表 (前の det-math) は今までどおり finding

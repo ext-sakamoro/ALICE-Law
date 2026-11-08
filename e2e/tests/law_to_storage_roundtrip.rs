@@ -248,14 +248,27 @@ fn rod() -> Vec<f32> {
     out
 }
 
+/// The world's damping: a velocity kept at 99/100 per 1/60 s step. The published releases take
+/// that factor per `step()`; on main the damping is a rate in 1/s, and the velocity is multiplied
+/// by `exp(-c dt)` once per `step(dt)`, so the same loss is `c = -ln(0.99) / (1/60)`.
+#[cfg(not(feature = "main-mode"))]
+fn world_damping() -> PhysicsConfig {
+    PhysicsConfig { damping: Fix128::from_ratio(99, 100), ..Default::default() }
+}
+
+#[cfg(feature = "main-mode")]
+fn world_damping() -> PhysicsConfig {
+    let rate = (Fix128::ZERO - Fix128::from_ratio(99, 100).ln()) * Fix128::from_int(60);
+    PhysicsConfig { damping_rate: rate, ..Default::default() }
+}
+
 /// Positions as `f64` for the series, and the raw fixed-point words for the digest
 fn world() -> (Vec<f64>, Vec<u8>) {
     let config = PhysicsConfig {
         substeps: 4,
         iterations: 8,
         gravity: Vec3Fix::new(Fix128::ZERO, Fix128::from_int(-10), Fix128::ZERO),
-        damping: Fix128::from_ratio(99, 100),
-        ..Default::default()
+        ..world_damping()
     };
     let mut world = PhysicsWorld::new(config);
     world.add_body(RigidBody::new_static(Vec3Fix::new(
@@ -474,12 +487,15 @@ fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
 /// which takes it in itself, `depth` crates down.
 #[derive(Debug, PartialEq, Eq)]
 enum DetMathBinding {
+    /// each alice-det-math function the crate calls, pinned to the linked alice-det-math's own pin
+    PerFunction,
     Direct,
     Via { crate_name: String, depth: usize },
 }
 
-/// One checked crate: its name, its pins and its identifier.
-type Checked<'a> = (&'a str, &'a [(&'a str, [u8; 32])], [u8; 32]);
+/// One checked crate: its name, its own pins, its alice-det-math function pins (`DET_MATH_PINS`,
+/// empty for a crate from before them) and its identifier.
+type Checked<'a> = (&'a str, &'a [(&'a str, [u8; 32])], &'a [(&'a str, [u8; 32])], [u8; 32]);
 
 /// The [`DetMathBinding`] of `name` among `crates`, against the alice-det-math identifier this
 /// build linked. Every pin named after another checked crate must hold that crate's identifier,
@@ -491,20 +507,36 @@ fn det_math_binding(
     crates: &[Checked<'_>],
     name: &str,
     semantics: &[u8; 32],
+    function_pins: &[(&str, [u8; 32])],
     stack: &mut Vec<String>,
 ) -> Result<DetMathBinding, String> {
-    let Some((_, pins, _)) = crates.iter().find(|(n, _, _)| *n == name) else {
+    let Some((_, pins, det_pins, _)) = crates.iter().find(|(n, _, _, _)| *n == name) else {
         return Err(format!("{name} is not a checked crate"));
     };
     if stack.iter().any(|s| s == name) {
         return Err(format!("{name}: a cycle of crate pins ({} -> {name})", stack.join(" -> ")));
     }
     for (pin, value) in pins.iter() {
-        if let Some((_, _, id)) = crates.iter().find(|(n, _, _)| n == pin && *n != name) {
+        if let Some((_, _, _, id)) = crates.iter().find(|(n, _, _, _)| n == pin && *n != name) {
             if value != id {
                 return Err(format!("{name}: its {pin} pin is not {pin}'s identifier"));
             }
         }
+    }
+    if !det_pins.is_empty() {
+        if pins.iter().any(|(n, _)| *n == "alice-det-math") {
+            return Err(format!("{name}: it pins alice-det-math both whole and per function"));
+        }
+        for (f, pin) in det_pins.iter() {
+            match function_pins.iter().find(|(n, _)| n == f) {
+                None => return Err(format!("{name}: its det-math {f} pin names no alice-det-math function")),
+                Some((_, linked)) if linked != pin => {
+                    return Err(format!("{name}: its det-math {f} pin is not the linked alice-det-math's"));
+                }
+                Some(_) => {}
+            }
+        }
+        return Ok(DetMathBinding::PerFunction);
     }
     let direct: Vec<_> = pins.iter().filter(|(n, _)| *n == "alice-det-math").collect();
     match direct.len() {
@@ -516,15 +548,15 @@ fn det_math_binding(
     stack.push(name.to_string());
     let mut why = Vec::new();
     for (pin, value) in pins.iter() {
-        let Some((_, _, id)) = crates.iter().find(|(n, _, _)| n == pin && *n != name) else {
+        let Some((_, _, _, id)) = crates.iter().find(|(n, _, _, _)| n == pin && *n != name) else {
             continue;
         };
         debug_assert_eq!(value, id, "checked above");
-        match det_math_binding(crates, pin, semantics, stack) {
+        match det_math_binding(crates, pin, semantics, function_pins, stack) {
             Ok(b) => {
                 stack.pop();
                 let depth = match b {
-                    DetMathBinding::Direct => 1,
+                    DetMathBinding::Direct | DetMathBinding::PerFunction => 1,
                     DetMathBinding::Via { depth, .. } => depth + 1,
                 };
                 return Ok(DetMathBinding::Via { crate_name: (*pin).to_string(), depth });
@@ -539,32 +571,58 @@ fn det_math_binding(
     ))
 }
 
-/// On main each crate has its own identifier (ALICE-Law G6), the fold of its own pins: folding
-/// them must give the crate's identifier (so pins that were not the ones folded fail here), and
-/// they must take in the alice-det-math this build linked, directly or through another checked
-/// crate's identifier (so an identifier that ignored alice-det-math fails here).
+/// On main each crate has its own identifier (ALICE-Law G6), the fold of its own pins and, for a
+/// crate that pins each alice-det-math function it calls (`DET_MATH_PINS`), those pins under the
+/// name `det-math <function>`: folding them must give the crate's identifier (so pins that were not
+/// the ones folded fail here), and they must take in the alice-det-math this build linked: each
+/// function pin the linked one's own (`alice_det_math::FUNCTION_PINS`), or a whole `alice-det-math`
+/// pin (a crate from before the per-function pins), or another checked crate's identifier that
+/// does (so an identifier that ignored alice-det-math fails here).
 #[cfg(feature = "main-mode")]
 fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
-    let crates: [(&str, &[(&str, [u8; 32])], [u8; 32]); 4] = [
-        ("alice-zip", alice_zip::semantics::ZIP_SEMANTICS_PINS, alice_zip::law::SEMANTICS_ID),
-        ("alice-db", alice_db::semantics::DB_SEMANTICS_PINS, alice_db::DB_SEMANTICS_ID),
+    let crates: [Checked<'_>; 4] = [
+        (
+            "alice-zip",
+            alice_zip::semantics::ZIP_SEMANTICS_PINS,
+            alice_zip::semantics::DET_MATH_PINS,
+            alice_zip::law::SEMANTICS_ID,
+        ),
+        (
+            "alice-db",
+            alice_db::semantics::DB_SEMANTICS_PINS,
+            alice_db::semantics::DET_MATH_PINS,
+            alice_db::DB_SEMANTICS_ID,
+        ),
         (
             "alice-analytics",
             &alice_analytics::semantics::ANALYTICS_SEMANTICS_PINS,
+            alice_analytics::semantics::DET_MATH_PINS,
             alice_analytics::semantics::ANALYTICS_SEMANTICS_ID,
         ),
-        ("alice-edge", &alice_edge::EDGE_SEMANTICS_PINS, alice_edge::EDGE_SEMANTICS_ID),
+        ("alice-edge", &alice_edge::EDGE_SEMANTICS_PINS, &[], alice_edge::EDGE_SEMANTICS_ID),
     ];
-    for (name, pins, id) in crates {
-        assert_eq!(fold(pins), id, "{name}: its identifier is not the fold of its pins");
-        let binding = det_math_binding(&crates, name, semantics, &mut Vec::new()).unwrap_or_else(|e| panic!("{e}"));
+    for (name, pins, det_pins, id) in crates {
+        assert_eq!(fold_with_functions(pins, det_pins), id, "{name}: its identifier is not the fold of its pins");
+        let binding = det_math_binding(&crates, name, semantics, alice_det_math::FUNCTION_PINS, &mut Vec::new())
+            .unwrap_or_else(|e| panic!("{e}"));
         let how = match &binding {
+            DetMathBinding::PerFunction => format!("per function ({} pins)", det_pins.len()),
             DetMathBinding::Direct => "directly".to_string(),
             DetMathBinding::Via { crate_name, depth } => format!("through {crate_name} (depth {depth})"),
         };
-        println!("e2e: {name} identifier {} folds {} pins, alice-det-math {how}", hex(&id), pins.len());
+        println!("e2e: {name} identifier {} folds {} pins, alice-det-math {how}", hex(&id), pins.len() + det_pins.len());
     }
     crates.len()
+}
+
+/// [`fold`] of a crate's own pins and its alice-det-math function pins, each of the latter under
+/// the name `det-math <function>` (the names the crates fold them under)
+#[cfg(feature = "main-mode")]
+fn fold_with_functions(pins: &[(&str, [u8; 32])], det_pins: &[(&str, [u8; 32])]) -> [u8; 32] {
+    let names: Vec<String> = det_pins.iter().map(|(n, _)| format!("det-math {n}")).collect();
+    let mut all: Vec<(&str, [u8; 32])> = pins.to_vec();
+    all.extend(names.iter().map(String::as_str).zip(det_pins.iter().map(|(_, d)| *d)));
+    fold(&all)
 }
 
 /// alice-det-math's fold: entries sorted by name (byte order), then SHA-256 over each
@@ -883,43 +941,84 @@ fn det_math_binding_follows_crate_pins_and_refuses_the_rest() {
     let zip_pins = [("golden", [3u8; 32]), ("alice-det-math", det)];
     let db_pins = [("model", [4u8; 32]), ("alice-zip", zip_id)];
     let no_det = [("model", [5u8; 32])];
-    let crates: [Checked<'_>; 2] = [("alice-zip", &zip_pins, zip_id), ("alice-db", &db_pins, db_id)];
-    let b = |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &det, &mut Vec::new());
+    let crates: [Checked<'_>; 2] = [("alice-zip", &zip_pins, &[], zip_id), ("alice-db", &db_pins, &[], db_id)];
+    let b = |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &det, &[], &mut Vec::new());
     assert_eq!(b(&crates, "alice-zip"), Ok(DetMathBinding::Direct));
     assert_eq!(b(&crates, "alice-db"), Ok(DetMathBinding::Via { crate_name: "alice-zip".into(), depth: 1 }));
     // depth counts the chain
     let x_pins = [("alice-db", db_id)];
-    let three: [Checked<'_>; 3] = [crates[0], crates[1], ("alice-x", &x_pins, x_id)];
+    let three: [Checked<'_>; 3] = [crates[0], crates[1], ("alice-x", &x_pins, &[], x_id)];
     assert_eq!(b(&three, "alice-x"), Ok(DetMathBinding::Via { crate_name: "alice-db".into(), depth: 2 }));
     // the zip pin dropped: neither binding
-    let dropped: [Checked<'_>; 2] = [crates[0], ("alice-db", &no_det, db_id)];
+    let dropped: [Checked<'_>; 2] = [crates[0], ("alice-db", &no_det, &[], db_id)];
     assert!(b(&dropped, "alice-db").unwrap_err().contains("neither directly nor through"));
     // the zip pin is not the linked zip's identifier
     let stale_pins = [("model", [4u8; 32]), ("alice-zip", other)];
-    let stale: [Checked<'_>; 2] = [crates[0], ("alice-db", &stale_pins, db_id)];
+    let stale: [Checked<'_>; 2] = [crates[0], ("alice-db", &stale_pins, &[], db_id)];
     assert!(b(&stale, "alice-db").unwrap_err().contains("its alice-zip pin is not alice-zip's identifier"));
     // a chain through a crate that does not take alice-det-math in
-    let hollow: [Checked<'_>; 2] = [("alice-zip", &no_det, zip_id), ("alice-db", &db_pins, db_id)];
+    let hollow: [Checked<'_>; 2] = [("alice-zip", &no_det, &[], zip_id), ("alice-db", &db_pins, &[], db_id)];
     assert!(b(&hollow, "alice-db").unwrap_err().contains("alice-zip: its pins take in alice-det-math neither"));
     // a different alice-det-math, or the same one twice
     assert!(b(&crates, "alice-zip").is_ok());
     let wrong = [("alice-det-math", other)];
-    assert!(b(&[("alice-zip", &wrong, zip_id)], "alice-zip").unwrap_err().contains("a different alice-det-math"));
+    assert!(b(&[("alice-zip", &wrong, &[], zip_id)], "alice-zip").unwrap_err().contains("a different alice-det-math"));
     let twice = [("alice-det-math", det), ("alice-det-math", det)];
-    assert!(b(&[("alice-zip", &twice, zip_id)], "alice-zip").unwrap_err().contains("2 times"));
+    assert!(b(&[("alice-zip", &twice, &[], zip_id)], "alice-zip").unwrap_err().contains("2 times"));
     // a stale crate pin is an error even when another route binds, and even beside a direct pin
     let an_id = [13u8; 32];
     let an_pins = [("alice-det-math", det)];
     let mixed_pins = [("alice-zip", zip_id), ("alice-analytics", other)];
-    let mixed: [Checked<'_>; 3] = [crates[0], ("alice-analytics", &an_pins, an_id), ("alice-db", &mixed_pins, db_id)];
+    let mixed: [Checked<'_>; 3] = [crates[0], ("alice-analytics", &an_pins, &[], an_id), ("alice-db", &mixed_pins, &[], db_id)];
     assert!(b(&mixed, "alice-db").unwrap_err().contains("its alice-analytics pin is not alice-analytics's identifier"));
     let direct_stale = [("alice-det-math", det), ("alice-zip", other)];
-    let ds: [Checked<'_>; 2] = [crates[0], ("alice-edge", &direct_stale, [14u8; 32])];
+    let ds: [Checked<'_>; 2] = [crates[0], ("alice-edge", &direct_stale, &[], [14u8; 32])];
     assert!(b(&ds, "alice-edge").unwrap_err().contains("its alice-zip pin is not alice-zip's identifier"));
     // a cycle of crate pins
     let (a_pins, c_pins) = ([("alice-c", [21u8; 32])], [("alice-a", [20u8; 32])]);
-    let cycle: [Checked<'_>; 2] = [("alice-a", &a_pins, [20u8; 32]), ("alice-c", &c_pins, [21u8; 32])];
+    let cycle: [Checked<'_>; 2] = [("alice-a", &a_pins, &[], [20u8; 32]), ("alice-c", &c_pins, &[], [21u8; 32])];
     assert!(b(&cycle, "alice-a").unwrap_err().contains("cycle"));
+}
+
+/// The per-function rule of [`det_math_binding`] (a crate that pins each alice-det-math function it
+/// calls, `DET_MATH_PINS`) beside the whole-crate rule of a crate from before those pins, on made-up
+/// crates and a made-up function table (runs in both modes).
+#[test]
+fn det_math_binding_reads_per_function_pins_and_keeps_the_whole_crate_rule() {
+    let det = [1u8; 32];
+    let functions = [("sin", [30u8; 32]), ("max64", [31u8; 32])];
+    let b = |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &det, &functions, &mut Vec::new());
+    let (zip_id, db_id, edge_id) = ([10u8; 32], [11u8; 32], [12u8; 32]);
+    let zip_own = [("golden", [3u8; 32])];
+    let zip_det = [("sin", [30u8; 32])];
+    let db_own = [("model", [4u8; 32]), ("alice-zip", zip_id)];
+    let db_det = [("max64", [31u8; 32]), ("sin", [30u8; 32])];
+    let edge_own = [("q16", [5u8; 32]), ("alice-det-math", det)];
+    let crates: [Checked<'_>; 3] = [
+        ("alice-zip", &zip_own, &zip_det, zip_id),
+        ("alice-db", &db_own, &db_det, db_id),
+        ("alice-edge", &edge_own, &[], edge_id),
+    ];
+    assert_eq!(b(&crates, "alice-zip"), Ok(DetMathBinding::PerFunction));
+    assert_eq!(b(&crates, "alice-db"), Ok(DetMathBinding::PerFunction));
+    // the crate from before the per-function pins keeps its whole alice-det-math pin
+    assert_eq!(b(&crates, "alice-edge"), Ok(DetMathBinding::Direct));
+    // a function pin that is not the linked alice-det-math's
+    let wrong = [("sin", [99u8; 32])];
+    assert!(b(&[("alice-zip", &zip_own, &wrong, zip_id)], "alice-zip").unwrap_err().contains("det-math sin pin is not the linked"));
+    // a function pin naming a function alice-det-math does not have
+    let unknown = [("sinh", [30u8; 32])];
+    assert!(b(&[("alice-zip", &zip_own, &unknown, zip_id)], "alice-zip").unwrap_err().contains("det-math sinh pin names no alice-det-math function"));
+    // a crate that takes alice-det-math in neither per function, nor whole, nor through a crate
+    let none: [Checked<'_>; 1] = [("alice-zip", &zip_own, &[], zip_id)];
+    assert!(b(&none, "alice-zip").unwrap_err().contains("neither directly nor through"));
+    // both forms at once
+    let both = [("golden", [3u8; 32]), ("alice-det-math", det)];
+    assert!(b(&[("alice-zip", &both, &zip_det, zip_id)], "alice-zip").unwrap_err().contains("both whole and per function"));
+    // a stale crate pin is still refused beside per-function pins
+    let stale_own = [("model", [4u8; 32]), ("alice-zip", [77u8; 32])];
+    let stale: [Checked<'_>; 2] = [crates[0], ("alice-db", &stale_own, &db_det, db_id)];
+    assert!(b(&stale, "alice-db").unwrap_err().contains("its alice-zip pin is not alice-zip's identifier"));
 }
 
 /// A release without a new identifier is built with the row it started at; one older than every
