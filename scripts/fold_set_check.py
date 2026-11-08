@@ -21,7 +21,7 @@ paste! is reported, but a macro of another crate that builds the name is not vis
 finding, never a skip: any token naming the crate or such an alias that does not start a resolved
 path (a macro taking the crate as an identifier, `extern crate`, `use {alice_det_math as dm}`, `pub use alice_det_math`),
 an alias reached from elsewhere (`super::dm`) or declared public or inside a module, a glob, a path through a macro
-variable, a name not in the table (`consts::*` for now: they have no pins yet), a #[path] that is missing, outside the
+variable, a name not in the table (a `consts::*` constant counts as the functions its [consts] row names), a #[path] that is missing, outside the
 repository, not a plain string or inside an inline module (one at the top of a file is read like the rest, with the
 plain `mod`s below it), a string naming the crate inside an attribute other than doc, include!, a lib or bin outside
 src/, and a build script that uses the crate. #[cfg(test)] removes an item, or a macro invocation in its place; on anything else (a field,
@@ -207,6 +207,9 @@ class Table:
     paths: dict[str, str]
     types: dict[str, list[str]]
     no_arithmetic: dict[str, str]
+    # a kernel constant of `consts` and the pins of the functions whose law reads it (a JIT or a shader emitting
+    # the law from the constant emits those functions); empty for a det-math whose table has no [consts]
+    consts: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -232,6 +235,8 @@ def resolve(path: list[str], t: Table, f: Found, where: str) -> None:
         f.pins.update(t.types[p])
     elif p in t.paths:
         f.pins.add(t.paths[p])
+    elif p in t.consts:
+        f.pins.update(t.consts[p])
     else:
         f.findings.append(f"{where}: alice_det_math::{p} names nothing in function-paths.toml")
 
@@ -571,7 +576,7 @@ def scan(root: Path, t: Table) -> Found:
 def load_table(path: Path) -> Table:
     try:
         d = tomllib.loads(path.read_text(encoding="utf-8"))
-        return Table(d["paths"], d["types"], d["no_arithmetic"])
+        return Table(d["paths"], d["types"], d["no_arithmetic"], d.get("consts", {}))
     except (OSError, tomllib.TOMLDecodeError, KeyError) as e:
         raise InputError(f"function-paths.toml ({path}): {e}") from None
 
