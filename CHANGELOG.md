@@ -177,6 +177,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- 公開文の検査: ALICE-LLM の `src/llama3.rs` に、crate が実装する model の名を関数名と試験で使う行の許可を 2 つ足した (その path だけ、行数ちょうど) 同じ file の基準線の行は使われなくなったので消した 他の path や行数の違いは今までどおり finding
 - conformance の状態は観測だけにする: 他の repository の manifest の status の件数をこの repository に記録しない `scripts/conformance_roster_check.py` は実行のたびに各 main から件数を計算し、`--summary FILE` で Markdown の表を FILE に足す (Conformance (live) は job summary に出す) crate の main の manifest に finding があれば live は red のまま (この repository の CI の警報で、crate の着地は止めない) state の差は finding にしない (記録した state が無い) `--internal` はこの repository 自身の conformance の入力 (roster・gates・missing-manifests・line-reference の baseline) だけを見る
 - `scripts/conformance_roster_check.py` / `scripts/land_law_state.py`: UTF-8 でない manifest はその repository の finding にして他の repository を読み続ける (live は red のまま summary を出す、land_law_state は exit 0) gh の応答が JSON や期待の形でない時は exit 2 job summary に findings を出す (finding のある repository は表に行が無い)
 - `scripts/land_law_state.py` は報告だけにする: candidate を着地させた状態と各 main の状態を比べて変わる件数と `state moves: no` / `state moves: yes` を出し、着地後の状態に出る finding を表示する 何も書かない 計算できれば exit 0 (動いても finding があっても)、計算できなければ 2

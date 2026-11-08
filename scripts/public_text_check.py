@@ -359,6 +359,11 @@ def private_names(line: str) -> list[str]:
 # check (a new mention under a prefix, a removed one, or a mistyped entry).
 # keyed by repo_key(<repository name>)
 ALLOWED: dict[str, dict[str, int]] = {
+    "7218f32b0e056930aa0b50b7188ffcded8e75ba4f201971c26a746a5a0661bba": {
+        # the model family the crate implements, named in its public function and their tests (src/llama3.rs only)
+        "116b7ca768b4d902c0cf6321eb5d6dc9a455630c3df760d333c95bc85bb77199": 219,
+        "84eee6cc62aed1d932024ac92298c60fbf3867a941d95a55406c2c247a249728": 1,
+    },
     "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192": {
         # the Agent Skills format word in the product's own skill (each file of skills/lol-sdf/, per word,
         # at the lines it is on; the skills/ directory as a path is not the word)
