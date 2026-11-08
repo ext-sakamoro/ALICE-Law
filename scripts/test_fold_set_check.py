@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests of scripts/fold_set_check.py on throwaway crates. Each fixture's expected set is written by hand from what the
-fixture's source calls, never from running the tool. function-paths.toml here is a small stand-in with the three shapes
-(a path, a type, a no-arithmetic item)."""
+fixture's source calls, never from running the tool. function-paths.toml here is a small stand-in with the four shapes
+(a path, a type, a kernel constant, a no-arithmetic item)."""
 from __future__ import annotations
 
 import contextlib
@@ -28,6 +28,9 @@ TABLE = '''[paths]
 
 [types]
 "metric::MetricWeights" = ["metric_new", "metric_norm"]
+
+[consts]
+"consts::SIN_P" = ["cos", "sin", "sin_cos"]
 
 [no_arithmetic]
 "law_bits::f32_bits" = "returns the bits"
@@ -232,7 +235,23 @@ class NotUnderstood(Base):
 
     def test_a_path_naming_nothing(self):
         self.assert_finding("fn f() { alice_det_math::no_such(); }", "names nothing")
+        # a constant without a [consts] row (the stand-in table maps SIN_P only)
         self.assert_finding("const A: u32 = alice_det_math::consts::SPLIT_MASK;", "names nothing")
+
+    def test_a_kernel_constant_counts_as_the_functions_whose_law_reads_it(self):
+        # a JIT emitting sin_cos from the constants: it folds the pins of the kernel's functions
+        f = self.found("fn emit() -> [f32; 3] { alice_det_math::consts::SIN_P }")
+        self.assertEqual(f.findings, [])
+        self.assertEqual(f.pins, {"cos", "sin", "sin_cos"})
+
+    def test_a_table_without_consts_still_loads_and_leaves_constants_unresolved(self):
+        old = self.d / "old-paths.toml"
+        old.write_text(TABLE.replace('[consts]\n"consts::SIN_P" = ["cos", "sin", "sin_cos"]\n\n', ""), encoding="utf-8")
+        t = fs.load_table(old)
+        self.assertEqual(t.consts, {})
+        self.crate("fn emit() -> [f32; 3] { alice_det_math::consts::SIN_P }")
+        f = fs.scan(self.root, t)
+        self.assertTrue(any("names nothing" in x for x in f.findings), f.findings)
 
     def test_a_self_alias_of_the_crate(self):
         self.assert_finding("use alice_det_math::{self as dm};", "an alias of the crate")
