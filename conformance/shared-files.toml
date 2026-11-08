@@ -26,7 +26,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = ".github/workflows/public-text.yml"
 sha256 = "9b24f9a9b70b91bfcc246abcfe2812b1a6077416495b8e2417cda97aece64998"
 source = { repo = "ALICE-Analytics", rev = "b67c3c2c1266c081914a479404941f45558c6073" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
 exempt = { "ALICE-Law" = "runs its own scripts/public_text_check.py in place; the crates' workflow fetches that file from here" }
 
 [[file]]
@@ -248,7 +248,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 path = "scripts/public_text.sh"
 sha256 = "49f1f971bcf2d9c704f11feff6ba40c26c28f2a47af2f156056c58e712ce1bfe"
 source = { repo = "ALICE-DB", rev = "f1847df0aea24694ebd27b26d877f853bc304f80" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/readme_parity_check.py"
@@ -463,7 +463,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 path = "scripts/test_public_text.py"
 sha256 = "7ed40dbcb935dd91cf7482177a90c491bf8021d51258995c759e5c39ffa6722e"
 source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/test_readme_parity_check.py"
