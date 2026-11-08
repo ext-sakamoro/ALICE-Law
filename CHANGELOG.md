@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `conformance/shared-files.toml`: `scripts/id_move_check.py` と試験を ALICE-Analytics の新しい bytes (`rev` の無い git 依存を Cargo.lock の commit で読む) へ移す計画 2 行 (pending、owner ALICE-Analytics、planned b33050c2 / target 8e013d66、試験 planned 0eedfd68 / target 713be48f) 数の固定は 1479
 - `conformance/shared-files.toml`: `scripts/test_libm_dependency_guard.py` を ALICE-DetMath の新しい bytes (試験用の tree を 1 つの一時 dir の下に作り試験の後に消す) へ移す計画 1 行 (pending、owner ALICE-DetMath、planned 0b7c51a0 / target a6aef790)、`scripts/min_passed.py` と試験の 2 行は全 holder が target になったので uniform 数の固定は 1513
 - `conformance/shared-files.toml`: ALICE-GameEngine の bytes へ移す計画 4 行 (pending): `scripts/gated_tests.py` と試験 (`#[wasm_bindgen_test]` も数える)、`scripts/min_passed.py` と試験 (cargo の Running 行だけを読む、ALICE-GameEngine の main に着地済で ALICE-FBX が残り) 数の固定は 1516
 - `scripts/fold_set_check.py`: `assert_function_pins` (alice-det-math の guard) を識別子の項目として読む
