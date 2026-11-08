@@ -26,7 +26,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = ".github/workflows/public-text.yml"
 sha256 = "9b24f9a9b70b91bfcc246abcfe2812b1a6077416495b8e2417cda97aece64998"
 source = { repo = "ALICE-Analytics", rev = "b67c3c2c1266c081914a479404941f45558c6073" }
-repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-View", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
 exempt = { "ALICE-Law" = "runs its own scripts/public_text_check.py in place; the crates' workflow fetches that file from here" }
 
 [[file]]
@@ -86,7 +86,7 @@ repos = ["ALICE-LOL", "ALICE-TRT"]
 path = "scripts/changed_paths.py"
 sha256 = "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7"
 source = { repo = "ALICE-API", rev = "b6675c55a35c0798826eefa2449e10e8c2cf73a5" }
-repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Eco-System", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-TRT", "ALICE-Text", "ALICE-View", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Eco-System", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-TRT", "ALICE-Text", "ALICE-View", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/changed_paths_yaml_oracle.py"
@@ -225,7 +225,7 @@ repos = ["ALICE-FBX", "ALICE-GameEngine"]
 path = "scripts/no_direct_rkyv.py"
 sha256 = "c6037af106010774eb89be5e81fa0435026e265c1d95a15083b46dcfd2327327"
 source = { repo = "ALICE-Edge", rev = "c4334a6a777ae8172d753cdb7cccde5c80aa0eae" }
-repos = ["ALICE-Edge", "ALICE-ML", "ALICE-TRT", "ALICE-View"]
+repos = ["ALICE-Edge", "ALICE-ML", "ALICE-Search", "ALICE-TRT", "ALICE-View", "ALICE-Voice"]
 
 [[file]]
 path = "scripts/order_guard.py"
@@ -235,8 +235,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/package_git_patches.py"
-pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "2776dcc0fb59a92443d4fb4949637768f17cd48aa244de049ff2c68831be7576", owner = "ALICE-Physics", planned = "70b1eccd5579c84a63a10cedd4b10f62211b2995", moved_from = { planned = "bff8c998fd9bae045607fc7530357a61b536b81c", target = "e016a94d2db59c59f7d7915ac14b03ecc6af6d2ec986e4a9e2f345184a091287" }, first_move = true, variants = { "e016a94d2db59c59f7d7915ac14b03ecc6af6d2ec986e4a9e2f345184a091287" = ["ALICE-Physics", "ALICE-SDF"] } }
-repos = ["ALICE-Physics", "ALICE-SDF"]
+pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "2776dcc0fb59a92443d4fb4949637768f17cd48aa244de049ff2c68831be7576", owner = "ALICE-Physics", planned = "70b1eccd5579c84a63a10cedd4b10f62211b2995", moved_from = { planned = "bff8c998fd9bae045607fc7530357a61b536b81c", target = "e016a94d2db59c59f7d7915ac14b03ecc6af6d2ec986e4a9e2f345184a091287" }, first_move = true, variants = { "e016a94d2db59c59f7d7915ac14b03ecc6af6d2ec986e4a9e2f345184a091287" = ["ALICE-Physics", "ALICE-SDF", "ALICE-Signal"] } }
+repos = ["ALICE-Physics", "ALICE-SDF", "ALICE-Signal"]
 
 [[file]]
 path = "scripts/package_integrity.py"
@@ -248,7 +248,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 path = "scripts/public_text.sh"
 sha256 = "49f1f971bcf2d9c704f11feff6ba40c26c28f2a47af2f156056c58e712ce1bfe"
 source = { repo = "ALICE-DB", rev = "f1847df0aea24694ebd27b26d877f853bc304f80" }
-repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-View", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/readme_parity_check.py"
@@ -282,7 +282,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = "scripts/sibling_coverage_guard.py"
 sha256 = "57315a0dbc4ffb5d8d284b5957f5524cfed70c2f872526913bdc4220691e8320"
 source = { repo = "ALICE-Kinematics", rev = "d6b9dbef79bd40cbc873e4a5ae7bf72c315c83ce" }
-repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Identity", "ALICE-Kinematics", "ALICE-Queue"]
+repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Identity", "ALICE-Kinematics", "ALICE-Legal", "ALICE-Queue"]
 
 [[file]]
 path = "scripts/stub_guard.sh"
@@ -440,7 +440,7 @@ repos = ["ALICE-FBX", "ALICE-GameEngine"]
 path = "scripts/test_no_direct_rkyv.py"
 sha256 = "6e09569717156bb1f8dc10bc96a896cc94430b9543aa4b203e51505c3ac7497f"
 source = { repo = "ALICE-Edge", rev = "c4334a6a777ae8172d753cdb7cccde5c80aa0eae" }
-repos = ["ALICE-Edge", "ALICE-ML", "ALICE-TRT", "ALICE-View"]
+repos = ["ALICE-Edge", "ALICE-ML", "ALICE-Search", "ALICE-TRT", "ALICE-View", "ALICE-Voice"]
 
 [[file]]
 path = "scripts/test_order_guard.py"
@@ -450,8 +450,8 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/test_package_git_patches.py"
-pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "8db8e0e231fec4203113b261e03a8d086ab36e4b4b8f4428182bd7082ba19d90", owner = "ALICE-Physics", planned = "d6b04e58888d7f0ca67d2fb0d61b643b81eb5ea3", moved_from = { planned = "55701ede1c0c523f1dda677ec42cabd7af1be55b", target = "eb96897f1ee21b6b9d5b6936446c7eced04652df3cb42da33ffa7e2d206dbdf5" }, first_move = true, variants = { "eb96897f1ee21b6b9d5b6936446c7eced04652df3cb42da33ffa7e2d206dbdf5" = ["ALICE-Physics", "ALICE-SDF"] } }
-repos = ["ALICE-Physics", "ALICE-SDF"]
+pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "8db8e0e231fec4203113b261e03a8d086ab36e4b4b8f4428182bd7082ba19d90", owner = "ALICE-Physics", planned = "d6b04e58888d7f0ca67d2fb0d61b643b81eb5ea3", moved_from = { planned = "55701ede1c0c523f1dda677ec42cabd7af1be55b", target = "eb96897f1ee21b6b9d5b6936446c7eced04652df3cb42da33ffa7e2d206dbdf5" }, first_move = true, variants = { "eb96897f1ee21b6b9d5b6936446c7eced04652df3cb42da33ffa7e2d206dbdf5" = ["ALICE-Physics", "ALICE-SDF", "ALICE-Signal"] } }
+repos = ["ALICE-Physics", "ALICE-SDF", "ALICE-Signal"]
 
 [[file]]
 path = "scripts/test_package_integrity.py"
@@ -463,7 +463,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"]
 path = "scripts/test_public_text.py"
 sha256 = "7ed40dbcb935dd91cf7482177a90c491bf8021d51258995c759e5c39ffa6722e"
 source = { repo = "ALICE-Analytics", rev = "070f34096622b019f838aef737582960b832e99b" }
-repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-FBX", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-View", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/test_readme_parity_check.py"
@@ -497,7 +497,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 path = "scripts/test_sibling_coverage_guard.py"
 sha256 = "21b9784f3390f9921f90a02feb05c1c338c10548e5d386fe15b2d9cba7532a14"
 source = { repo = "ALICE-Kinematics", rev = "c2870472ffafad833b623251f18debf1448122a5" }
-repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Identity", "ALICE-Kinematics", "ALICE-Queue"]
+repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Identity", "ALICE-Kinematics", "ALICE-Legal", "ALICE-Queue"]
 
 [[file]]
 path = "scripts/test_tracked_binaries.py"
@@ -533,7 +533,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law
 path = "scripts/test_workflow_timeouts.py"
 sha256 = "6ebb8cc878a8fb69b56e9ee7da96874a47a37e0f8614a6963b0bae4704b4f0ce"
 source = { repo = "ALICE-Analytics", rev = "1cbbf23dfb2c1b877563710a9c25611cb68e2300" }
-repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Codec", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "scripts/tracked_binaries.py"
@@ -569,7 +569,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law
 path = "scripts/workflow_timeouts.py"
 sha256 = "fa7d8651f8f63060585a4bcb9db6ccdc0ccb632c5ceecd7cc203f62bf2cc1ae0"
 source = { repo = "ALICE-Analytics", rev = "1cbbf23dfb2c1b877563710a9c25611cb68e2300" }
-repos = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Codec", "ALICE-DetMath", "ALICE-Edge", "ALICE-LLM", "ALICE-LOL", "ALICE-Physics", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
 
 [[file]]
 path = "tests/float_environment.rs"
