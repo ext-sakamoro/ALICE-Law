@@ -545,6 +545,11 @@ ALLOWED: dict[str, dict[str, int]] = {
         "994c4b6281c79930d57e193ae4d07e9f0f0d9ef405bdaf8e2d9b930c69567c45": 1,
         "c98a6bd295e3e40e635718aef307281f056819f944b4662afe8efd3b1a9da44a": 1,
     },
+    "7bc7bbf1c0be20ad56186deeee18e365398c650bb49bc70e7cd01bc3d26467dc": {
+        # the browser's own API name: the web-sys feature that names the type, and the one `use` of it
+        "4cbacd7be90e144cf90504dfa1d1b10879741a7f1beb16b79009e1a692115c9a": 1,
+        "09e1f72353fdc507dc8be51c6cf3cb87bd2210ab3be78d9bdee0f83de264ffbb": 1,
+    },
 }
 
 
