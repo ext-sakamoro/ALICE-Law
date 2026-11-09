@@ -125,6 +125,13 @@ TRUST_MUTATIONS = [
         "a tampered signature verified",
     ),
     (
+        "identity: a signed unit is opened against the digest it carries, not the one its parts give",
+        "ALICE-Identity/src/artifact.rs",
+        "            &bound_digest(law_ref, payload),\n",
+        "            signature.digest(),\n",
+        "a rewritten stored artifact was accepted",
+    ),
+    (
         "sync: bytes from a peer whose Hello was not accepted are received",
         "ALICE-Sync/src/session.rs",
         "            Frame::Bytes { from, .. } => self.gate.handshaken(*from).await,",
