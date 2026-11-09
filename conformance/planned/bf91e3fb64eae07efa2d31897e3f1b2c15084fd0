@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import sys
 import tarfile
 import tempfile
@@ -101,6 +102,11 @@ class Fixture(unittest.TestCase):
                 return 0, "", "Packaged"
             if build_error:
                 return 101, "", build_error
+            if cmd[1] == "generate-lockfile":
+                (cwd / "Cargo.lock").write_text('[[package]]\nname = "alice-det-math"\n')
+                return 0, "", "Locking"
+            if cmd[1] == "update":
+                return 0, "", "Updating"
             if "--locked" not in cmd:
                 (cwd / "Cargo.lock").write_text('[[package]]\nname = "alice-det-math"\n')
             return 0, "", "Finished"
@@ -208,14 +214,28 @@ class GitBase(Fixture):
             return '[[package]]\nname = "alice-crate"\nversion = "0.6.0"\n'
         return f'[[package]]\nname = "alice-det-math"\nversion = "0.5.2"\nsource = "{source}"\n'
 
-    def git_runner(self, fresh: str | None = PINNED, shipped: str | None = None):
+    def git_runner(self, fresh: str | None = PINNED, shipped: str | None = None, precise_error: str | None = None):
+        """cargo as the git tests see it: the shipped-lock check writes `shipped`, a fresh resolution
+        (`generate-lockfile`) writes `fresh` (the branch tip), and `update -p NAME --precise C` moves
+        NAME's git source in the lock to commit C (or fails with `precise_error`)"""
         base = self.runner()
+        state = {"fresh": False}
 
         def run(cmd: list[str], cwd: Path) -> tuple[int, str, str]:
+            if cmd[1] == "update" and precise_error is not None:
+                self.calls.append(cmd)
+                return 101, "", precise_error
             rc, out, err = base(cmd, cwd)
-            if cmd[1] == "check" and "--locked" in cmd and shipped is not None:
+            if cmd[1] == "generate-lockfile":
+                state["fresh"] = True
+                (cwd / "Cargo.lock").write_text(self.lock(fresh))
+            elif cmd[1] == "update" and "--precise" in cmd:
+                commit = cmd[cmd.index("--precise") + 1]
+                text = (cwd / "Cargo.lock").read_text(encoding="utf-8")
+                (cwd / "Cargo.lock").write_text(re.sub(r"#[0-9a-f]{40}\"", f"#{commit}\"", text))
+            elif cmd[1] == "check" and "--locked" in cmd and not state["fresh"] and shipped is not None:
                 (cwd / "Cargo.lock").write_text(self.lock(shipped))
-            if cmd[1] == "check" and "--locked" not in cmd:
+            elif cmd[1] == "check" and "--locked" not in cmd:
                 (cwd / "Cargo.lock").write_text(self.lock(fresh))
             return rc, out, err
 
@@ -316,12 +336,57 @@ class GitBranch(GitBase):
                 else:
                     self.assertFalse(any(".branch=" in a or ".tag=" in a for a in c), c)
 
-    def test_a_branch_whose_tip_moved_since_the_tested_lock_fails(self) -> None:
+    def test_a_branch_whose_tip_moved_since_the_tested_lock_is_checked_at_the_locked_commit(self) -> None:
+        """the fresh resolution takes the tip (MOVED); the check pins it back to the commit this
+        repository's Cargo.lock resolved (TESTED) with `cargo update --precise` and passes: a push
+        upstream does not turn this repository's check red (the "lock behind main" signal is the
+        scheduled report's, not this gate's)"""
         source = self.use("branch=main")
         moved = source.replace(TESTED, MOVED)
         rc, out = self.main(runner=self.git_runner(fresh=moved, shipped=source))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("git pins: 1, compared 2 against the locks", out)
+        cargo = [c for c in self.calls if c[0] == "cargo"]
+        verbs = [c[1] for c in cargo]
+        gen = verbs.index("generate-lockfile")
+        upd = [i for i, c in enumerate(cargo) if c[1] == "update"]
+        self.assertEqual(len(upd), 1, cargo)
+        self.assertEqual(cargo[upd[0]][2:6], ["-p", "alice-det-math", "--precise", TESTED])
+        last_check = max(i for i, v in enumerate(verbs) if v == "check")
+        self.assertLess(gen, upd[0])
+        self.assertLess(upd[0], last_check)
+        self.assertIn("--locked", cargo[last_check], "the fresh check must not move the pinned lock again")
+        self.assertIn(f'patch.crates-io.alice-det-math.branch={json.dumps("main")}', cargo[upd[0]])
+
+    def test_a_locked_commit_that_cannot_be_checked_out_fails(self) -> None:
+        """the locked commit is gone from the remote (force-pushed away): red, not a fallback to the tip"""
+        source = self.use("branch=main")
+        rc, out = self.main(runner=self.git_runner(
+            fresh=source.replace(TESTED, MOVED), shipped=source,
+            precise_error="error: revspec '1111' not found"))
         self.assertEqual(rc, 1, out)
-        self.assertIn(f"the freshly resolved Cargo.lock takes alice-det-math from ['{moved}'], not {source}", out)
+        self.assertIn(f"cannot take alice-det-math at the locked commit {TESTED}", out)
+        self.assertIn("revspec", out)
+
+    def test_a_rev_dep_needs_no_precise_and_a_crates_io_dep_stays_fresh(self) -> None:
+        """only a git dependency by branch / tag / the default branch is pinned back; a rev is exact
+        already, and a crates.io dependency keeps the fresh resolution (no `cargo update` names it)"""
+        (self.root / "Cargo.toml").write_text(
+            '[package]\nname = "alice-crate"\nversion = "0.6.0"\n\n[dependencies]\n'
+            f'alice-det-math = {{ git = "{GIT}", rev = "{REV}", version = "0.5.2" }}\n'
+            'serde = "1"\n'
+        )
+        rc, out = self.main(runner=self.git_runner(shipped=PINNED))
+        self.assertEqual(rc, 0, out)
+        self.assertEqual([c for c in self.calls if c[:2] == ["cargo", "update"]], [], self.calls)
+        source = self.use("branch=main")
+        with open(self.root / "Cargo.toml", "a", encoding="utf-8") as f:
+            f.write('serde = "1"\n')
+        self.calls.clear()
+        rc, out = self.main(runner=self.git_runner(fresh=source.replace(TESTED, MOVED), shipped=source))
+        self.assertEqual(rc, 0, out)
+        names = [c[3] for c in self.calls if c[:2] == ["cargo", "update"]]
+        self.assertEqual(names, ["alice-det-math"], self.calls)
 
     def test_a_second_source_of_the_package_fails(self) -> None:
         """a transitive git dependency taking the same package by `?rev` next to this crate's
@@ -414,6 +479,22 @@ class GitPinnedMore(GitBase):
             f'--config=patch.crates-io.alice-det-math.git={json.dumps(GIT)}',
             f'--config=patch.crates-io.alice-det-math.rev={json.dumps(REV)}',
         ])
+
+
+class TestResultParser(unittest.TestCase):
+    """`passed_tests` reads libtest's summary lines; CI colours them (`CARGO_TERM_COLOR=always`,
+    `--color always`), so the coloured line must read the same as the plain one. oracle: the counts
+    are written out from the sample lines"""
+
+    def test_plain_and_coloured_summaries_read_the_same(self) -> None:
+        plain = "test result: ok. 3 passed; 0 failed; 0 ignored\ntest result: FAILED. 1 passed; 2 failed; 0 ignored\n"
+        coloured = ("test result: \x1b[32mok\x1b[0m. 3 passed; 0 failed; 0 ignored\n"
+                    "test result: \x1b[31mFAILED\x1b[0m. 1 passed; 2 failed; 0 ignored\n")
+        self.assertEqual(pi.passed_tests(plain), (4, 2))
+        self.assertEqual(pi.passed_tests(coloured), (4, 2))
+
+    def test_no_summary_line_is_zero_tests(self) -> None:
+        self.assertEqual(pi.passed_tests("\x1b[1m\x1b[32m   Compiling\x1b[0m alice-crate v0.6.0\n"), (0, 0))
 
 
 class RegistryIndex(unittest.TestCase):
@@ -571,7 +652,9 @@ class PackageContents(Fixture):
         self.assertEqual(rc, 0, out)
         self.assertGreaterEqual(len(self.calls), 6)
         self.assertTrue(all(any("patch.crates-io.alice-zip.path=" in a for a in c) for c in self.calls), self.calls)
-        self.assertIn(["--lib", "--all-features"], [c[2:4] for c in self.calls if c[1] == "check" and "--locked" not in c])
+        checks = [c for c in self.calls if c[1] == "check"]
+        self.assertEqual(checks[-1][2:5], ["--locked", "--lib", "--all-features"], "the fresh check runs on the generated lock")
+        self.assertIn("generate-lockfile", [c[1] for c in self.calls])
         self.assertIn(["--locked", "--all-features", "--all-targets"], [c[2:5] for c in self.calls if c[1] == "check" and "--locked" in c])
 
 

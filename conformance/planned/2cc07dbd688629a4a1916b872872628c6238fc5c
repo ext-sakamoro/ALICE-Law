@@ -492,13 +492,19 @@ def run_cmd(cmd: list[str], cwd: Path) -> tuple[int, str, str]:
     return p.returncode, p.stdout, p.stderr
 
 
+# this script reads cargo test's output (scripts/cargo_output_parser_check.py): its runs set
+# CARGO_TERM_COLOR=never, and the reader still drops escape codes, so a coloured summary
+# (CARGO_TERM_COLOR=always / --color always in CI) reads the same (tests carry a coloured sample)
+CARGO_OUTPUT_PARSER = True
+ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 TEST_RESULT_RE = re.compile(r"^test result: (\w+)\. (\d+) passed; (\d+) failed", re.M)
 
 
 def passed_tests(out: str) -> tuple[int, int]:
-    """(passed, failed) summed over every `test result:` line of a cargo test run."""
+    """(passed, failed) summed over every `test result:` line of a cargo test run (escape codes
+    removed first)."""
     passed = failed = 0
-    for m in TEST_RESULT_RE.finditer(out):
+    for m in TEST_RESULT_RE.finditer(ESCAPE_RE.sub("", out)):
         passed += int(m.group(2))
         failed += int(m.group(3))
     return passed, failed
@@ -581,7 +587,23 @@ def package_and_build(
                 return [f"`cargo test {spec}` ran no test in the unpacked crate (compared nothing)"]
             print(f"package_integrity: unpacked `cargo test {spec}`: {passed} passed")
         (pkg / "Cargo.lock").unlink(missing_ok=True)
-        rc, stdout, stderr = runner(["cargo", "check", *shlex.split(opts.check_args), *patches], pkg)
+        # a fresh resolution: crates.io dependencies at their newest compatible versions; a git
+        # dependency taken by branch / tag / the default branch is then put back at the commit this
+        # repository's Cargo.lock resolved (what was tested here), since the fresh resolution takes
+        # the branch tip and another repository's push must not decide this check (a lock behind
+        # the tip is the scheduled report's line, not a finding here); a rev is exact already
+        rc, stdout, stderr = runner(["cargo", "generate-lockfile", *patches], pkg)
+        if rc != 0:
+            return [f"the unpacked crate has no fresh resolution:\n{stdout + stderr}"]
+        for b in blocked:
+            if b.get("kind") != "git" or b["ref"][0] == "rev":
+                continue
+            rc, stdout, stderr = runner(
+                ["cargo", "update", "-p", b["name"], "--precise", b["commit"], *patches], pkg)
+            if rc != 0:
+                return [f"the fresh resolution cannot take {b['name']} at the locked commit {b['commit']} "
+                        f"(gone from {b['git']}?):\n{stdout + stderr}"]
+        rc, stdout, stderr = runner(["cargo", "check", "--locked", *shlex.split(opts.check_args), *patches], pkg)
         out = stdout + stderr
         if rc != 0:
             return [f"the unpacked crate does not build with a fresh resolution:\n{out}"]
