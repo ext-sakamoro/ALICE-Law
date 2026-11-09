@@ -104,9 +104,16 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-      - *clone
-      - &patch-trust
-        name: Patch the trust path's crates with the checkouts
+      - name: Check out the main branches side by side
+        run: |
+          mkdir -p "$RUNNER_TEMP/core"
+          echo "| repository | main |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for r in $REPOSITORIES; do
+            git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
+            echo "| $r | $(git -C "$RUNNER_TEMP/core/$r" rev-parse --short HEAD) |" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Patch the trust path's crates with the checkouts
         run: |
           python3 scripts/main_mode.py --package e2e-trust patch "$RUNNER_TEMP/core"
           cd e2e-trust && cargo --version && cargo generate-lockfile
@@ -148,7 +155,10 @@ jobs:
       - name: Mutations
         if: steps.patch.outputs.expected != 'true'
         run: python3 scripts/e2e_teeth.py "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
-      - *patch-trust
+      - name: Patch the trust path's crates with the checkouts
+        run: |
+          python3 scripts/main_mode.py --package e2e-trust patch "$RUNNER_TEMP/core"
+          cd e2e-trust && cargo --version && cargo generate-lockfile
       - name: Mutations of the trust path
         run: python3 scripts/e2e_teeth.py --package e2e-trust "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
 
