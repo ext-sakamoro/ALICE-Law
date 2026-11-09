@@ -165,8 +165,7 @@ repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DB", "ALICE-DetMath", "ALICE-E
 
 [[file]]
 path = "scripts/feature_check.py"
-sha256 = "bde32f911f108cfa74d411845681d9995335e942eab9f10d44a2d35235fe68f1"
-source = { repo = "ALICE-Search", rev = "9b09685618a1c5beb1c51e16d4470abb3f754c05" }
+pending = { since = "2026-11-09", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "c90bb580fd4a716622182094f2d445d0f721cb126de8df3d831ae3e1052e2a31", owner = "ALICE-Search", planned = "2a525219a04727140fcdf0fa37344bb5060262bb", moved_from = { planned = "14b33055a6697a57bd699a29f9dcd75a355bad05", target = "bde32f911f108cfa74d411845681d9995335e942eab9f10d44a2d35235fe68f1" }, first_move = true, variants = { "bde32f911f108cfa74d411845681d9995335e942eab9f10d44a2d35235fe68f1" = ["ALICE-Search", "ALICE-Text", "ALICE-Voice"] } }
 repos = ["ALICE-Search", "ALICE-Text", "ALICE-Voice"]
 
 [[file]]
@@ -247,8 +246,10 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/package_git_patches.py"
-pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "2776dcc0fb59a92443d4fb4949637768f17cd48aa244de049ff2c68831be7576", owner = "ALICE-Physics", planned = "70b1eccd5579c84a63a10cedd4b10f62211b2995", moved_from = { planned = "bff8c998fd9bae045607fc7530357a61b536b81c", target = "e016a94d2db59c59f7d7915ac14b03ecc6af6d2ec986e4a9e2f345184a091287" }, variants = { "2776dcc0fb59a92443d4fb4949637768f17cd48aa244de049ff2c68831be7576" = ["ALICE-Physics"], "e016a94d2db59c59f7d7915ac14b03ecc6af6d2ec986e4a9e2f345184a091287" = ["ALICE-SDF", "ALICE-Signal"] } }
-repos = ["ALICE-Physics", "ALICE-SDF", "ALICE-Signal"]
+sha256 = "2776dcc0fb59a92443d4fb4949637768f17cd48aa244de049ff2c68831be7576"
+source = { repo = "ALICE-Physics", rev = "01f8b0f11a22825e32bebd1e0039034e8d10fbd9" }
+repos = ["ALICE-Physics"]
+exempt = { "ALICE-SDF" = "moves to scripts/package_integrity.py (git dependencies taken by branch); its copy is being removed", "ALICE-Signal" = "moves to scripts/package_integrity.py (git dependencies taken by branch); its copy is being removed" }
 
 [[file]]
 path = "scripts/package_integrity.py"
@@ -467,8 +468,10 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-Kinematics", "ALICE
 
 [[file]]
 path = "scripts/test_package_git_patches.py"
-pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "8db8e0e231fec4203113b261e03a8d086ab36e4b4b8f4428182bd7082ba19d90", owner = "ALICE-Physics", planned = "d6b04e58888d7f0ca67d2fb0d61b643b81eb5ea3", moved_from = { planned = "55701ede1c0c523f1dda677ec42cabd7af1be55b", target = "eb96897f1ee21b6b9d5b6936446c7eced04652df3cb42da33ffa7e2d206dbdf5" }, variants = { "8db8e0e231fec4203113b261e03a8d086ab36e4b4b8f4428182bd7082ba19d90" = ["ALICE-Physics"], "eb96897f1ee21b6b9d5b6936446c7eced04652df3cb42da33ffa7e2d206dbdf5" = ["ALICE-SDF", "ALICE-Signal"] } }
-repos = ["ALICE-Physics", "ALICE-SDF", "ALICE-Signal"]
+sha256 = "8db8e0e231fec4203113b261e03a8d086ab36e4b4b8f4428182bd7082ba19d90"
+source = { repo = "ALICE-Physics", rev = "01f8b0f11a22825e32bebd1e0039034e8d10fbd9" }
+repos = ["ALICE-Physics"]
+exempt = { "ALICE-SDF" = "moves to scripts/package_integrity.py (git dependencies taken by branch); its copy is being removed", "ALICE-Signal" = "moves to scripts/package_integrity.py (git dependencies taken by branch); its copy is being removed" }
 
 [[file]]
 path = "scripts/test_package_integrity.py"
