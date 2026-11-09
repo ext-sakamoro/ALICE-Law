@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/public_text_check.py`: 非公開 repository の hash の区画を今の公開範囲から生成し直した (`scripts/gen_private_repo_hashes.py`、非公開 328 / ALICE-* 150、新しく非公開になった 9 件が加わった)
 - `conformance/shared-files.toml`: `scripts/package_integrity.py` と試験 (ALICE-Analytics / ALICE-DB / ALICE-Edge / ALICE-LOL) を ALICE-Analytics の新しい bytes へ移す計画 2 行 (`branch` / `tag` / 既定の branch で取る git 依存を同じ指定で patch し、Cargo.lock が解決した commit の source を確かめる、初回の移動) と、`scripts/id_move_check.py` と試験の目標を ALICE-Analytics の新しい bytes に付け替える 2 行 (履歴で `.github/alice-siblings` を消した base は兄弟の無い base として扱う、`8e013d66…` → `f75597be…`)
 - `scripts/fold_set_check.py`: alice-det-math の function-paths.toml の `[consts]` を読み、`consts::<定数>` をその定数を法則に使う関数の pin として数える (JIT や shader で同じ法則を定数から出力する crate、例: ALICE-SDF の Cranelift JIT が sin_cos の 8 定数を使う) `[consts]` の無い表 (前の det-math) は今までどおり finding
 - `scripts/public_text_check.py`: ALICE-View の許可 2 行 (browser の API の型名: web-sys の feature 名と、その型の `use` 1 行、`crates/alice-view-web/Cargo.toml` と `crates/alice-view-web/src/page.rs` に 1 行ずつ) その他の場所の同じ語は従来どおり finding
