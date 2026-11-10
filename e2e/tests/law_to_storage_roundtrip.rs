@@ -46,27 +46,34 @@ const EDGE_LAW_NAME: &str = "edge-window";
 /// A release that does not change the identifier (its set of functions and their bits are the
 /// same) has no row of its own: it is built with the row of the latest release listed at or
 /// before it ([`semantics_entry`]), and so are its golden digests. The locked release's row must
-/// be `alice_det_math::SEMANTICS_ID` itself, and each row before it an identifier
-/// `alice_det_math::check_semantics` accepts as a verified earlier one. A release whose identifier
-/// changes adds its row.
-const KNOWN_SEMANTICS: &[(&str, &str)] = &[
+/// be `alice_det_math::SEMANTICS_ID` itself. The third column is the generation, written here by
+/// hand (not read from alice-det-math): rows of one generation compute the same bits for every
+/// function the earlier ones pinned, so `alice_det_math::check_semantics` accepts each earlier row
+/// of the locked row's generation as a verified earlier one, and refuses every row of an earlier
+/// generation (0.6 moved the bits: data stamped by 0.5 is not read as verified on 0.6). A release
+/// whose identifier changes adds its row.
+const KNOWN_SEMANTICS: &[(&str, &str, &str)] = &[
     (
         "0.5.0",
         "135c407d4249c1c200e4d1be79a12e848ce5c355fc3a918da965849e697ef000",
+        "0.5",
     ),
     (
         "0.5.1",
         "85e0884623b154a3b2b264374907b6cbac09307ca3f9a08339e48c567d3cb315",
+        "0.5",
     ),
     // 0.6.0 names the identifier 0.5.2 carried at its last revision (0.5.2 was never published and had two)
     (
         "0.6.0",
         "a2a11b9b826227fa7a9ed8ab2c1ce63dbb07ad4c39aa2c46a363ddea6b47dbe9",
+        "0.6",
     ),
     // 0.6.1 adds tanh64 / hypot64: the identifier covers the new pins, the bits of the others are unchanged
     (
         "0.6.1",
         "6fc214e924c53557f33775df51f1f8dfe2f246d67a9e493d6fb5837d999022f2",
+        "0.6",
     ),
 ];
 /// `major.minor.patch` of a release (a pre-release or a malformed version is refused).
@@ -90,7 +97,7 @@ fn semantics_entry(version: &str) -> Option<usize> {
     let v = release(version);
     KNOWN_SEMANTICS
         .iter()
-        .rposition(|(start, _)| release(start) <= v)
+        .rposition(|(start, _, _)| release(start) <= v)
 }
 
 /// 0 to 600 s every 0.25 s: on about one point in ten, `alice_det_math::exp64` and
@@ -540,22 +547,8 @@ fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
     identifiers.len()
 }
 
-/// How a crate's identifier takes in alice-det-math: through its own `alice-det-math` pin, or
-/// through the pin of another checked crate (named after it, holding that crate's identifier)
-/// which takes it in itself, `depth` crates down.
-#[derive(Debug, PartialEq, Eq)]
-enum DetMathBinding {
-    /// each alice-det-math function the crate calls, pinned to the linked alice-det-math's own pin
-    PerFunction,
-    Direct,
-    Via {
-        crate_name: String,
-        depth: usize,
-    },
-}
-
-/// One checked crate: its name, its own pins, its alice-det-math function pins (`DET_MATH_PINS`,
-/// empty for a crate from before them) and its identifier.
+/// One checked crate: its name, its own pins, its alice-det-math function pins (`DET_MATH_PINS`)
+/// and its identifier.
 type Checked<'a> = (
     &'a str,
     &'a [(&'a str, [u8; 32])],
@@ -563,28 +556,21 @@ type Checked<'a> = (
     [u8; 32],
 );
 
-/// The [`DetMathBinding`] of `name` among `crates`, against the alice-det-math identifier this
-/// build linked. Every pin named after another checked crate must hold that crate's identifier,
-/// whether or not the binding goes through it (a stale crate pin is an error even beside a
-/// direct alice-det-math pin). A pin of alice-det-math that is not the linked one, a crate that
-/// pins it more than once, a chain through a crate that does not take it in, and a cycle are
-/// each an error naming the crate.
+/// How many alice-det-math function pins of `name` among `crates` match the linked alice-det-math
+/// (`function_pins`, its `FUNCTION_PINS`). Every pin named after another checked crate must hold that
+/// crate's identifier. The crate must take alice-det-math in per function: a whole `alice-det-math`
+/// pin (the shape from before the per-function identifiers), no function pin at all, a function pin
+/// that is not the linked one's, and one naming no alice-det-math function are each an error naming
+/// the crate (on main the four crates are on the per-function shape; one still on the whole
+/// identifier fails here).
 fn det_math_binding(
     crates: &[Checked<'_>],
     name: &str,
-    semantics: &[u8; 32],
     function_pins: &[(&str, [u8; 32])],
-    stack: &mut Vec<String>,
-) -> Result<DetMathBinding, String> {
+) -> Result<usize, String> {
     let Some((_, pins, det_pins, _)) = crates.iter().find(|(n, _, _, _)| *n == name) else {
         return Err(format!("{name} is not a checked crate"));
     };
-    if stack.iter().any(|s| s == name) {
-        return Err(format!(
-            "{name}: a cycle of crate pins ({} -> {name})",
-            stack.join(" -> ")
-        ));
-    }
     for (pin, value) in pins.iter() {
         if let Some((_, _, _, id)) = crates.iter().find(|(n, _, _, _)| n == pin && *n != name) {
             if value != id {
@@ -592,85 +578,41 @@ fn det_math_binding(
             }
         }
     }
-    if !det_pins.is_empty() {
-        if pins.iter().any(|(n, _)| *n == "alice-det-math") {
-            return Err(format!(
-                "{name}: it pins alice-det-math both whole and per function"
-            ));
-        }
-        for (f, pin) in det_pins.iter() {
-            match function_pins.iter().find(|(n, _)| n == f) {
-                None => {
-                    return Err(format!(
-                        "{name}: its det-math {f} pin names no alice-det-math function"
-                    ))
-                }
-                Some((_, linked)) if linked != pin => {
-                    return Err(format!(
-                        "{name}: its det-math {f} pin is not the linked alice-det-math's"
-                    ));
-                }
-                Some(_) => {}
+    if pins.iter().any(|(n, _)| *n == "alice-det-math") {
+        return Err(format!(
+            "{name}: it pins alice-det-math's whole identifier, not each function it calls"
+        ));
+    }
+    if det_pins.is_empty() {
+        return Err(format!("{name}: it pins no alice-det-math function"));
+    }
+    for (f, pin) in det_pins.iter() {
+        match function_pins.iter().find(|(n, _)| n == f) {
+            None => {
+                return Err(format!(
+                    "{name}: its det-math {f} pin names no alice-det-math function"
+                ))
             }
-        }
-        return Ok(DetMathBinding::PerFunction);
-    }
-    let direct: Vec<_> = pins
-        .iter()
-        .filter(|(n, _)| *n == "alice-det-math")
-        .collect();
-    match direct.len() {
-        0 => {}
-        1 if &direct[0].1 == semantics => return Ok(DetMathBinding::Direct),
-        1 => return Err(format!("{name} was built with a different alice-det-math")),
-        n => {
-            return Err(format!(
-                "{name}: its pins hold alice-det-math {n} times, not once"
-            ))
-        }
-    }
-    stack.push(name.to_string());
-    let mut why = Vec::new();
-    for (pin, value) in pins.iter() {
-        let Some((_, _, _, id)) = crates.iter().find(|(n, _, _, _)| n == pin && *n != name) else {
-            continue;
-        };
-        debug_assert_eq!(value, id, "checked above");
-        match det_math_binding(crates, pin, semantics, function_pins, stack) {
-            Ok(b) => {
-                stack.pop();
-                let depth = match b {
-                    DetMathBinding::Direct | DetMathBinding::PerFunction => 1,
-                    DetMathBinding::Via { depth, .. } => depth + 1,
-                };
-                return Ok(DetMathBinding::Via {
-                    crate_name: (*pin).to_string(),
-                    depth,
-                });
+            Some((_, linked)) if linked != pin => {
+                return Err(format!(
+                    "{name}: its det-math {f} pin is not the linked alice-det-math's"
+                ));
             }
-            Err(e) => why.push(e),
+            Some(_) => {}
         }
     }
-    stack.pop();
-    Err(format!(
-        "{name}: its pins take in alice-det-math neither directly nor through a checked crate ({})",
-        if why.is_empty() {
-            "no pin names one".to_string()
-        } else {
-            why.join("; ")
-        }
-    ))
+    Ok(det_pins.len())
 }
 
-/// On main each crate has its own identifier (ALICE-Law G6), the fold of its own pins and, for a
-/// crate that pins each alice-det-math function it calls (`DET_MATH_PINS`), those pins under the
-/// name `det-math <function>`: folding them must give the crate's identifier (so pins that were not
-/// the ones folded fail here), and they must take in the alice-det-math this build linked: each
-/// function pin the linked one's own (`alice_det_math::FUNCTION_PINS`), or a whole `alice-det-math`
-/// pin (a crate from before the per-function pins), or another checked crate's identifier that
-/// does (so an identifier that ignored alice-det-math fails here).
+/// On main each crate has its own identifier (ALICE-Law G6), the fold of its own pins and of the
+/// alice-det-math function pins it calls (`DET_MATH_PINS`, under the name `det-math <function>`):
+/// folding them must give the crate's identifier (so pins that were not the ones folded fail here),
+/// and each function pin must be the linked alice-det-math's own (`alice_det_math::FUNCTION_PINS`),
+/// so an identifier that ignored alice-det-math fails here.
+/// (`_semantics`, the linked alice-det-math's whole identifier, is the published releases' binding;
+/// on main the binding is per function, so it is not read here)
 #[cfg(feature = "main-mode")]
-fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
+fn each_crate_folds_this_det_math(_semantics: &[u8; 32]) -> usize {
     let crates: [Checked<'_>; 4] = [
         (
             "alice-zip",
@@ -693,31 +635,23 @@ fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
         (
             "alice-edge",
             &alice_edge::EDGE_SEMANTICS_PINS,
-            &[],
+            alice_edge::semantics::DET_MATH_PINS,
             alice_edge::EDGE_SEMANTICS_ID,
         ),
     ];
     for (name, pins, det_pins, id) in crates {
         assert_eq!(
-            fold_with_functions(pins, det_pins),
+            fold_with_functions(pins, det_pins).unwrap_or_else(|e| panic!("{name}: {e}")),
             id,
             "{name}: its identifier is not the fold of its pins"
         );
-        let binding = det_math_binding(
-            &crates,
-            name,
-            semantics,
-            alice_det_math::FUNCTION_PINS,
-            &mut Vec::new(),
-        )
-        .unwrap_or_else(|e| panic!("{e}"));
-        let how = match &binding {
-            DetMathBinding::PerFunction => format!("per function ({} pins)", det_pins.len()),
-            DetMathBinding::Direct => "directly".to_string(),
-            DetMathBinding::Via { crate_name, depth } => {
-                format!("through {crate_name} (depth {depth})")
-            }
-        };
+        let checked = det_math_binding(&crates, name, alice_det_math::FUNCTION_PINS)
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(
+            checked > 0,
+            "{name}: no alice-det-math function pin compared"
+        );
+        let how = format!("per function ({checked} pins, each the linked one's)");
         println!(
             "e2e: {name} identifier {} folds {} pins, alice-det-math {how}",
             hex(&id),
@@ -727,22 +661,30 @@ fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
     crates.len()
 }
 
-/// [`fold`] of a crate's own pins and its alice-det-math function pins, each of the latter under
-/// the name `det-math <function>` (the names the crates fold them under)
+/// [`fold`] of a crate's own pins and its alice-det-math function pins, each of the latter once under
+/// the name `det-math <function>` (the names the crates fold them under). A crate may keep those
+/// entries in its own table (ALICE-Edge) or beside it (`DET_MATH_PINS` only, ALICE-Zip / DB /
+/// Analytics): an entry already in the own table must hold the function pin's value and is not
+/// folded twice; one that differs is an error.
 #[cfg(feature = "main-mode")]
-fn fold_with_functions(pins: &[(&str, [u8; 32])], det_pins: &[(&str, [u8; 32])]) -> [u8; 32] {
-    let names: Vec<String> = det_pins
-        .iter()
-        .map(|(n, _)| format!("det-math {n}"))
-        .collect();
-    let mut all: Vec<(&str, [u8; 32])> = pins.to_vec();
-    all.extend(
-        names
-            .iter()
-            .map(String::as_str)
-            .zip(det_pins.iter().map(|(_, d)| *d)),
-    );
-    fold(&all)
+fn fold_with_functions(
+    pins: &[(&str, [u8; 32])],
+    det_pins: &[(&str, [u8; 32])],
+) -> Result<[u8; 32], String> {
+    let mut all: Vec<(String, [u8; 32])> =
+        pins.iter().map(|(n, d)| ((*n).to_string(), *d)).collect();
+    for (f, d) in det_pins {
+        let name = format!("det-math {f}");
+        match all.iter().find(|(n, _)| *n == name) {
+            Some((_, own)) if own != d => {
+                return Err(format!("its {name} entry is not its det-math {f} pin"))
+            }
+            Some(_) => {}
+            None => all.push((name, *d)),
+        }
+    }
+    let refs: Vec<(&str, [u8; 32])> = all.iter().map(|(n, d)| (n.as_str(), *d)).collect();
+    Ok(fold(&refs))
 }
 
 /// alice-det-math's fold: entries sorted by name (byte order), then SHA-256 over each
@@ -783,20 +725,31 @@ fn cooling_semantics() -> [u8; 32] {
     alice_zip::law::SEMANTICS_ID
 }
 
-/// On main, a law stamped with alice-det-math's identifier (the arithmetic before alice-zip
-/// folded its own) reads back as that earlier arithmetic, not as the current one: the known
-/// earlier-arithmetic case, so the Current checks of the stored laws compare something.
+/// On main, a law stamped with the identifier alice-zip published before it folded its own (up to
+/// 0.10 it published alice-det-math's, the 0.5 rows of [`KNOWN_SEMANTICS`]) reads back as that
+/// earlier arithmetic, not as the current one: the known earlier-arithmetic case, so the Current
+/// checks of the stored laws compare something. Not alice-det-math's identifier of this build:
+/// after the 0.6 generation move that is no identifier alice-zip ever stamped a law with.
 #[cfg(feature = "main-mode")]
 fn earlier_arithmetic_reads_as_previous(db: &AliceDB, law: &SignalLaw) -> usize {
-    db.put_law("earlier-arithmetic", law, &alice_det_math::SEMANTICS_ID)
-        .unwrap();
-    let stored = db.get_law("earlier-arithmetic").unwrap().expect("stored");
-    assert_eq!(
-        stored.semantics,
-        alice_db::law_store::RecordSemantics::VerifiedPrevious(alice_det_math::SEMANTICS_ID),
-        "a law stamped with alice-det-math's identifier must read as the earlier arithmetic"
-    );
-    1
+    let mut compared = 0;
+    for (version, id, generation) in KNOWN_SEMANTICS {
+        if *generation != "0.5" {
+            continue;
+        }
+        let earlier = unhex(id);
+        let name = format!("earlier-arithmetic-{version}");
+        db.put_law(&name, law, &earlier).unwrap();
+        let stored = db.get_law(&name).unwrap().expect("stored");
+        assert_eq!(
+            stored.semantics,
+            alice_db::law_store::RecordSemantics::VerifiedPrevious(earlier),
+            "a law stamped with alice-det-math {version}'s identifier (alice-zip's before its own) must read as the earlier arithmetic"
+        );
+        compared += 1;
+    }
+    assert!(compared > 0, "no earlier arithmetic compared");
+    compared
 }
 
 #[cfg(feature = "main-mode")]
@@ -848,7 +801,7 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     let position = semantics_entry(&det_math_version).unwrap_or_else(|| {
         panic!("alice-det-math {det_math_version} is older than every row of KNOWN_SEMANTICS")
     });
-    let (entry_version, entry_id) = KNOWN_SEMANTICS[position];
+    let (entry_version, entry_id, entry_generation) = KNOWN_SEMANTICS[position];
     // the crate's own constant, not a copy: a release that changes the identifier without a new
     // row fails here, by name
     assert_eq!(
@@ -858,29 +811,83 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
          a release that changes its identifier adds its row to KNOWN_SEMANTICS"
     );
     assert_eq!(hex(&semantics), entry_id);
-    for (version, earlier) in &KNOWN_SEMANTICS[..position] {
+    // both directions: an earlier row of the same generation is a verified earlier identifier, a row
+    // of an earlier generation is not (a reader must not treat data with other bits as verified)
+    let (mut same, mut older) = (0usize, 0usize);
+    for (version, earlier, generation) in &KNOWN_SEMANTICS[..position] {
         let id = unhex(earlier);
-        assert_eq!(
-            alice_det_math::check_semantics(&id),
-            alice_det_math::SemanticsCheck::VerifiedPrevious(id),
-            "alice-det-math {det_math_version} does not accept the identifier of {version} as a verified earlier one"
-        );
+        if *generation == entry_generation {
+            assert_eq!(
+                alice_det_math::check_semantics(&id),
+                alice_det_math::SemanticsCheck::VerifiedPrevious(id),
+                "alice-det-math {det_math_version} does not accept the identifier of {version} (generation {generation}) as a verified earlier one"
+            );
+            same += 1;
+        } else {
+            assert_eq!(
+                alice_det_math::check_semantics(&id),
+                alice_det_math::SemanticsCheck::Mismatch,
+                "alice-det-math {det_math_version} (generation {entry_generation}) accepts the identifier of {version} (generation {generation}) though its bits differ"
+            );
+            older += 1;
+        }
     }
+    assert_eq!(same + older, position, "every earlier row compared");
+    // main is generation 0.6 with 0.6.0 before it and the 0.5 rows before that: both sides compare
+    #[cfg(feature = "main-mode")]
+    assert!(
+        same > 0 && older > 0,
+        "main mode compared {same} same-generation and {older} earlier-generation rows"
+    );
     println!(
-        "e2e: alice-det-math {det_math_version} (row {entry_version}), identifier {}, {} earlier identifier(s) accepted",
-        hex(&semantics),
-        position
+        "e2e: alice-det-math {det_math_version} (row {entry_version}, generation {entry_generation}), identifier {}, \
+         {same} earlier identifier(s) of its generation accepted, {older} of earlier generations refused",
+        hex(&semantics)
     );
     let crate_ids = each_crate_folds_this_det_math(&semantics);
-    let lol_pin = alice_lol::law_id::LOL_SEMANTICS_PINS
-        .iter()
-        .find(|(name, _)| *name == "alice-det-math")
-        .map(|(_, id)| *id)
-        .expect("alice-lol pins the alice-det-math identifier");
-    assert_eq!(
-        lol_pin, semantics,
-        "alice-lol pins a different alice-det-math"
-    );
+    // the published release pins alice-det-math's whole identifier; on main alice-lol pins each
+    // alice-det-math function it calls (`alice-det-math::<function>`), each the linked one's own
+    #[cfg(not(feature = "main-mode"))]
+    {
+        let lol_pin = alice_lol::law_id::LOL_SEMANTICS_PINS
+            .iter()
+            .find(|(name, _)| *name == "alice-det-math")
+            .map(|(_, id)| *id)
+            .expect("alice-lol pins the alice-det-math identifier");
+        assert_eq!(
+            lol_pin, semantics,
+            "alice-lol pins a different alice-det-math"
+        );
+    }
+    #[cfg(feature = "main-mode")]
+    {
+        let pins = alice_lol::law_id::LOL_SEMANTICS_PINS;
+        assert!(
+            pins.iter().all(|(name, _)| *name != "alice-det-math"),
+            "alice-lol pins alice-det-math's whole identifier, not each function it calls"
+        );
+        let mut functions = 0usize;
+        for (name, pin) in pins {
+            if let Some(f) = name.strip_prefix("alice-det-math::") {
+                let linked = alice_det_math::FUNCTION_PINS
+                    .iter()
+                    .find(|(n, _)| *n == f)
+                    .unwrap_or_else(|| {
+                        panic!("alice-lol: its {name} pin names no alice-det-math function")
+                    });
+                assert_eq!(
+                    pin, &linked.1,
+                    "alice-lol: its {name} pin is not the linked alice-det-math's"
+                );
+                functions += 1;
+            }
+        }
+        assert!(
+            functions > 0,
+            "alice-lol: no alice-det-math function pin compared"
+        );
+        println!("e2e: alice-lol takes in alice-det-math per function ({functions} pins, each the linked one's)");
+    }
     assert_eq!(
         alice_lol::law_id::fold_semantics_pins(alice_lol::law_id::LOL_SEMANTICS_PINS),
         alice_lol::law_id::LOL_SEMANTICS_ID
@@ -1125,7 +1132,9 @@ fn check_golden(rel: &str, det_math_version: &str, got: &str) {
             .split_once(' ')
             .unwrap_or_else(|| panic!("{rel}: \"<version> <digest>\" per line"));
         assert!(
-            KNOWN_SEMANTICS.iter().any(|(known, _)| *known == version),
+            KNOWN_SEMANTICS
+                .iter()
+                .any(|(known, _, _)| *known == version),
             "{rel} names alice-det-math {version}, which KNOWN_SEMANTICS does not list"
         );
         assert!(
@@ -1137,7 +1146,7 @@ fn check_golden(rel: &str, det_math_version: &str, got: &str) {
     if std::env::var_os("ALICE_LAW_E2E_BLESS").is_some() {
         lines.retain(|(v, _)| v != det_math_version);
         lines.extend([(det_math_version.to_string(), got.to_string())]);
-        lines.sort_by_key(|(v, _)| KNOWN_SEMANTICS.iter().position(|(known, _)| known == v));
+        lines.sort_by_key(|(v, _)| KNOWN_SEMANTICS.iter().position(|(known, _, _)| known == v));
         let text: String = lines.iter().map(|(v, d)| format!("{v} {d}\n")).collect();
         std::fs::write(&golden_path, text).unwrap();
         println!(
@@ -1159,116 +1168,36 @@ fn check_golden(rel: &str, det_math_version: &str, got: &str) {
 
 /// The transitive rule of [`det_math_binding`] on made-up crates (runs in both modes).
 #[test]
-fn det_math_binding_follows_crate_pins_and_refuses_the_rest() {
-    let det = [1u8; 32];
-    let other = [2u8; 32];
-    let (zip_id, db_id, x_id) = ([10u8; 32], [11u8; 32], [12u8; 32]);
-    let zip_pins = [("golden", [3u8; 32]), ("alice-det-math", det)];
-    let db_pins = [("model", [4u8; 32]), ("alice-zip", zip_id)];
-    let no_det = [("model", [5u8; 32])];
-    let crates: [Checked<'_>; 2] = [
-        ("alice-zip", &zip_pins, &[], zip_id),
-        ("alice-db", &db_pins, &[], db_id),
-    ];
-    let b = |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &det, &[], &mut Vec::new());
-    assert_eq!(b(&crates, "alice-zip"), Ok(DetMathBinding::Direct));
-    assert_eq!(
-        b(&crates, "alice-db"),
-        Ok(DetMathBinding::Via {
-            crate_name: "alice-zip".into(),
-            depth: 1
-        })
-    );
-    // depth counts the chain
-    let x_pins = [("alice-db", db_id)];
-    let three: [Checked<'_>; 3] = [crates[0], crates[1], ("alice-x", &x_pins, &[], x_id)];
-    assert_eq!(
-        b(&three, "alice-x"),
-        Ok(DetMathBinding::Via {
-            crate_name: "alice-db".into(),
-            depth: 2
-        })
-    );
-    // the zip pin dropped: neither binding
-    let dropped: [Checked<'_>; 2] = [crates[0], ("alice-db", &no_det, &[], db_id)];
-    assert!(b(&dropped, "alice-db")
-        .unwrap_err()
-        .contains("neither directly nor through"));
-    // the zip pin is not the linked zip's identifier
-    let stale_pins = [("model", [4u8; 32]), ("alice-zip", other)];
-    let stale: [Checked<'_>; 2] = [crates[0], ("alice-db", &stale_pins, &[], db_id)];
-    assert!(b(&stale, "alice-db")
-        .unwrap_err()
-        .contains("its alice-zip pin is not alice-zip's identifier"));
-    // a chain through a crate that does not take alice-det-math in
-    let hollow: [Checked<'_>; 2] = [
-        ("alice-zip", &no_det, &[], zip_id),
-        ("alice-db", &db_pins, &[], db_id),
-    ];
-    assert!(b(&hollow, "alice-db")
-        .unwrap_err()
-        .contains("alice-zip: its pins take in alice-det-math neither"));
-    // a different alice-det-math, or the same one twice
-    assert!(b(&crates, "alice-zip").is_ok());
-    let wrong = [("alice-det-math", other)];
-    assert!(b(&[("alice-zip", &wrong, &[], zip_id)], "alice-zip")
-        .unwrap_err()
-        .contains("a different alice-det-math"));
-    let twice = [("alice-det-math", det), ("alice-det-math", det)];
-    assert!(b(&[("alice-zip", &twice, &[], zip_id)], "alice-zip")
-        .unwrap_err()
-        .contains("2 times"));
-    // a stale crate pin is an error even when another route binds, and even beside a direct pin
-    let an_id = [13u8; 32];
-    let an_pins = [("alice-det-math", det)];
-    let mixed_pins = [("alice-zip", zip_id), ("alice-analytics", other)];
-    let mixed: [Checked<'_>; 3] = [
-        crates[0],
-        ("alice-analytics", &an_pins, &[], an_id),
-        ("alice-db", &mixed_pins, &[], db_id),
-    ];
-    assert!(b(&mixed, "alice-db")
-        .unwrap_err()
-        .contains("its alice-analytics pin is not alice-analytics's identifier"));
-    let direct_stale = [("alice-det-math", det), ("alice-zip", other)];
-    let ds: [Checked<'_>; 2] = [crates[0], ("alice-edge", &direct_stale, &[], [14u8; 32])];
-    assert!(b(&ds, "alice-edge")
-        .unwrap_err()
-        .contains("its alice-zip pin is not alice-zip's identifier"));
-    // a cycle of crate pins
-    let (a_pins, c_pins) = ([("alice-c", [21u8; 32])], [("alice-a", [20u8; 32])]);
-    let cycle: [Checked<'_>; 2] = [
-        ("alice-a", &a_pins, &[], [20u8; 32]),
-        ("alice-c", &c_pins, &[], [21u8; 32]),
-    ];
-    assert!(b(&cycle, "alice-a").unwrap_err().contains("cycle"));
-}
-
-/// The per-function rule of [`det_math_binding`] (a crate that pins each alice-det-math function it
-/// calls, `DET_MATH_PINS`) beside the whole-crate rule of a crate from before those pins, on made-up
-/// crates and a made-up function table (runs in both modes).
-#[test]
-fn det_math_binding_reads_per_function_pins_and_keeps_the_whole_crate_rule() {
+fn det_math_binding_takes_only_per_function_pins_and_keeps_the_crate_rule() {
+    // oracle: each expected result is fixed by what the fixture writes (the pins and the linked
+    // functions below), never by running the binding first
     let det = [1u8; 32];
     let functions = [("sin", [30u8; 32]), ("max64", [31u8; 32])];
-    let b =
-        |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &det, &functions, &mut Vec::new());
-    let (zip_id, db_id, edge_id) = ([10u8; 32], [11u8; 32], [12u8; 32]);
+    let b = |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &functions);
+    let (zip_id, db_id) = ([10u8; 32], [11u8; 32]);
     let zip_own = [("golden", [3u8; 32])];
     let zip_det = [("sin", [30u8; 32])];
     let db_own = [("model", [4u8; 32]), ("alice-zip", zip_id)];
     let db_det = [("max64", [31u8; 32]), ("sin", [30u8; 32])];
-    let edge_own = [("q16", [5u8; 32]), ("alice-det-math", det)];
-    let crates: [Checked<'_>; 3] = [
+    let crates: [Checked<'_>; 2] = [
         ("alice-zip", &zip_own, &zip_det, zip_id),
         ("alice-db", &db_own, &db_det, db_id),
-        ("alice-edge", &edge_own, &[], edge_id),
     ];
-    assert_eq!(b(&crates, "alice-zip"), Ok(DetMathBinding::PerFunction));
-    assert_eq!(b(&crates, "alice-db"), Ok(DetMathBinding::PerFunction));
-    // the crate from before the per-function pins keeps its whole alice-det-math pin
-    assert_eq!(b(&crates, "alice-edge"), Ok(DetMathBinding::Direct));
-    // a function pin that is not the linked alice-det-math's
+    assert_eq!(b(&crates, "alice-zip"), Ok(1));
+    assert_eq!(b(&crates, "alice-db"), Ok(2));
+    // the shape from before the per-function pins: a whole alice-det-math pin fails, alone or beside them
+    let whole = [("golden", [3u8; 32]), ("alice-det-math", det)];
+    assert!(b(&[("alice-zip", &whole, &[], zip_id)], "alice-zip")
+        .unwrap_err()
+        .contains("whole identifier"));
+    assert!(b(&[("alice-zip", &whole, &zip_det, zip_id)], "alice-zip")
+        .unwrap_err()
+        .contains("whole identifier"));
+    // no function pin at all (an identifier that ignored alice-det-math)
+    assert!(b(&[("alice-zip", &zip_own, &[], zip_id)], "alice-zip")
+        .unwrap_err()
+        .contains("pins no alice-det-math function"));
+    // a function pin that drifted from the linked alice-det-math's
     let wrong = [("sin", [99u8; 32])];
     assert!(b(&[("alice-zip", &zip_own, &wrong, zip_id)], "alice-zip")
         .unwrap_err()
@@ -1278,22 +1207,35 @@ fn det_math_binding_reads_per_function_pins_and_keeps_the_whole_crate_rule() {
     assert!(b(&[("alice-zip", &zip_own, &unknown, zip_id)], "alice-zip")
         .unwrap_err()
         .contains("det-math sinh pin names no alice-det-math function"));
-    // a crate that takes alice-det-math in neither per function, nor whole, nor through a crate
-    let none: [Checked<'_>; 1] = [("alice-zip", &zip_own, &[], zip_id)];
-    assert!(b(&none, "alice-zip")
-        .unwrap_err()
-        .contains("neither directly nor through"));
-    // both forms at once
-    let both = [("golden", [3u8; 32]), ("alice-det-math", det)];
-    assert!(b(&[("alice-zip", &both, &zip_det, zip_id)], "alice-zip")
-        .unwrap_err()
-        .contains("both whole and per function"));
-    // a stale crate pin is still refused beside per-function pins
+    // a crate pin that is not that crate's identifier
     let stale_own = [("model", [4u8; 32]), ("alice-zip", [77u8; 32])];
     let stale: [Checked<'_>; 2] = [crates[0], ("alice-db", &stale_own, &db_det, db_id)];
     assert!(b(&stale, "alice-db")
         .unwrap_err()
         .contains("its alice-zip pin is not alice-zip's identifier"));
+    assert!(b(&crates, "alice-x")
+        .unwrap_err()
+        .contains("not a checked crate"));
+}
+
+#[cfg(feature = "main-mode")]
+#[test]
+fn the_fold_takes_the_det_math_entries_in() {
+    // dropping the det-math entries from the fold gives another identifier (oracle: folds of
+    // different entry sets, compared with each other, not with a recorded value)
+    let own = [("golden", [3u8; 32])];
+    let det = [("sin", [30u8; 32])];
+    let with = fold(&[("golden", [3u8; 32]), ("det-math sin", [30u8; 32])]);
+    assert_ne!(fold_with_functions(&own, &det).unwrap(), fold(&own));
+    assert_eq!(fold_with_functions(&own, &det).unwrap(), with);
+    // the entry already in the own table (ALICE-Edge's shape) is folded once, not twice
+    let inside = [("golden", [3u8; 32]), ("det-math sin", [30u8; 32])];
+    assert_eq!(fold_with_functions(&inside, &det).unwrap(), with);
+    // an own entry that is not the function pin's value is an error
+    let drifted = [("golden", [3u8; 32]), ("det-math sin", [99u8; 32])];
+    assert!(fold_with_functions(&drifted, &det)
+        .unwrap_err()
+        .contains("is not its det-math sin pin"));
 }
 
 /// A release without a new identifier is built with the row it started at; one older than every
@@ -1308,14 +1250,14 @@ fn a_release_is_built_with_the_row_it_started_at() {
     assert_eq!(at("0.5.10"), Some("0.5.1"));
     // every row's release is built with its own row, and a release past the last row with the last one
     // (independent of how many rows follow: appending a row keeps every line true)
-    for (version, _) in KNOWN_SEMANTICS {
+    for (version, _, _) in KNOWN_SEMANTICS {
         assert_eq!(
             at(version),
             Some(*version),
             "{version} is built with its own row"
         );
     }
-    let (last, _) = KNOWN_SEMANTICS.last().unwrap();
+    let (last, _, _) = KNOWN_SEMANTICS.last().unwrap();
     let (major, minor, patch) = release(last);
     assert_eq!(at(&format!("{major}.{minor}.{}", patch + 1)), Some(*last));
     assert_eq!(at("0.4.9"), None);
@@ -1331,8 +1273,14 @@ fn a_release_is_built_with_the_row_it_started_at() {
             "{} and {} record the same identifier",
             pair[0].0, pair[1].0
         );
+        assert!(
+            pair[0].2 <= pair[1].2,
+            "{} is of a later generation than {}",
+            pair[0].0,
+            pair[1].0
+        );
     }
-    let ids: std::collections::BTreeSet<_> = KNOWN_SEMANTICS.iter().map(|(_, id)| *id).collect();
+    let ids: std::collections::BTreeSet<_> = KNOWN_SEMANTICS.iter().map(|(_, id, _)| *id).collect();
     assert_eq!(
         ids.len(),
         KNOWN_SEMANTICS.len(),
