@@ -37,7 +37,6 @@ use alice_physics::solver::{PhysicsConfig, PhysicsWorld, RigidBody};
 use alice_physics::transient_thermal::{stable_dt_1d, transient_step_1d, ThermalMaterial};
 use alice_zip::law::{Provenance, SignalLaw, ValidRange};
 
-
 const LAW_NAME: &str = "newton-cooling";
 /// The law alice-edge fits on a sensor window, stored and restored next to the first
 const EDGE_LAW_NAME: &str = "edge-window";
@@ -51,18 +50,33 @@ const EDGE_LAW_NAME: &str = "edge-window";
 /// `alice_det_math::check_semantics` accepts as a verified earlier one. A release whose identifier
 /// changes adds its row.
 const KNOWN_SEMANTICS: &[(&str, &str)] = &[
-    ("0.5.0", "135c407d4249c1c200e4d1be79a12e848ce5c355fc3a918da965849e697ef000"),
-    ("0.5.1", "85e0884623b154a3b2b264374907b6cbac09307ca3f9a08339e48c567d3cb315"),
+    (
+        "0.5.0",
+        "135c407d4249c1c200e4d1be79a12e848ce5c355fc3a918da965849e697ef000",
+    ),
+    (
+        "0.5.1",
+        "85e0884623b154a3b2b264374907b6cbac09307ca3f9a08339e48c567d3cb315",
+    ),
     // 0.6.0 names the identifier 0.5.2 carried at its last revision (0.5.2 was never published and had two)
-    ("0.6.0", "a2a11b9b826227fa7a9ed8ab2c1ce63dbb07ad4c39aa2c46a363ddea6b47dbe9"),
+    (
+        "0.6.0",
+        "a2a11b9b826227fa7a9ed8ab2c1ce63dbb07ad4c39aa2c46a363ddea6b47dbe9",
+    ),
     // 0.6.1 adds tanh64 / hypot64: the identifier covers the new pins, the bits of the others are unchanged
-    ("0.6.1", "6fc214e924c53557f33775df51f1f8dfe2f246d67a9e493d6fb5837d999022f2"),
+    (
+        "0.6.1",
+        "6fc214e924c53557f33775df51f1f8dfe2f246d67a9e493d6fb5837d999022f2",
+    ),
 ];
 /// `major.minor.patch` of a release (a pre-release or a malformed version is refused).
 fn release(version: &str) -> (u64, u64, u64) {
     let parts: Vec<u64> = version
         .split('.')
-        .map(|p| p.parse().unwrap_or_else(|_| panic!("alice-det-math {version}: not major.minor.patch")))
+        .map(|p| {
+            p.parse()
+                .unwrap_or_else(|_| panic!("alice-det-math {version}: not major.minor.patch"))
+        })
         .collect();
     match parts[..] {
         [major, minor, patch] => (major, minor, patch),
@@ -74,7 +88,9 @@ fn release(version: &str) -> (u64, u64, u64) {
 /// starts at or before it, or `None` for a release older than every row.
 fn semantics_entry(version: &str) -> Option<usize> {
     let v = release(version);
-    KNOWN_SEMANTICS.iter().rposition(|(start, _)| release(start) <= v)
+    KNOWN_SEMANTICS
+        .iter()
+        .rposition(|(start, _)| release(start) <= v)
 }
 
 /// 0 to 600 s every 0.25 s: on about one point in ten, `alice_det_math::exp64` and
@@ -220,14 +236,18 @@ fn ties() -> Vec<f32> {
 
 /// A sensor window in integer counts (a ramp with a bounded wobble), as alice-edge reads it
 fn edge_samples() -> Vec<i32> {
-    (0..64_i32).map(|i| 1000 + 37 * i + (i * i * 7) % 23 - 11).collect()
+    (0..64_i32)
+        .map(|i| 1000 + 37 * i + (i * i * 7) % 23 - 11)
+        .collect()
 }
 
 /// alice-edge's fixed-point fit of the window (slope and intercept in Q16.16) and the law it
 /// makes of it, through its public API
 fn edge_law(samples: &[i32]) -> (Vec<i32>, SignalLaw) {
     let (slope_q, intercept_q) = alice_edge::q16_linear::fit_linear_fixed(samples);
-    let law = alice_edge::law::linear_law(samples, Provenance::new("alice-edge", "Q16.16 linear fit")).unwrap();
+    let law =
+        alice_edge::law::linear_law(samples, Provenance::new("alice-edge", "Q16.16 linear fit"))
+            .unwrap();
     (vec![slope_q, intercept_q], law)
 }
 
@@ -253,13 +273,19 @@ fn rod() -> Vec<f32> {
 /// by `exp(-c dt)` once per `step(dt)`, so the same loss is `c = -ln(0.99) / (1/60)`.
 #[cfg(not(feature = "main-mode"))]
 fn world_damping() -> PhysicsConfig {
-    PhysicsConfig { damping: Fix128::from_ratio(99, 100), ..Default::default() }
+    PhysicsConfig {
+        damping: Fix128::from_ratio(99, 100),
+        ..Default::default()
+    }
 }
 
 #[cfg(feature = "main-mode")]
 fn world_damping() -> PhysicsConfig {
     let rate = (Fix128::ZERO - Fix128::from_ratio(99, 100).ln()) * Fix128::from_int(60);
-    PhysicsConfig { damping_rate: rate, ..Default::default() }
+    PhysicsConfig {
+        damping_rate: rate,
+        ..Default::default()
+    }
 }
 
 /// Positions as `f64` for the series, and the raw fixed-point words for the digest
@@ -329,15 +355,27 @@ fn digest_of(run: &Run, world_raw: &[u8], with_edge: bool) -> [u8; 32] {
         bytes.push(tag);
         bytes.extend_from_slice(&(n as u64).to_le_bytes());
     }
-    run.cooling.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
-    run.thermal_residuals.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
-    run.rod.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
-    run.ties.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
+    run.cooling
+        .iter()
+        .for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
+    run.thermal_residuals
+        .iter()
+        .for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
+    run.rod
+        .iter()
+        .for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
+    run.ties
+        .iter()
+        .for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
     if with_edge {
-        run.edge_fit.iter().for_each(|v| bytes.extend_from_slice(&v.to_le_bytes()));
+        run.edge_fit
+            .iter()
+            .for_each(|v| bytes.extend_from_slice(&v.to_le_bytes()));
         bytes.extend_from_slice(&run.edge_record);
     }
-    run.world.iter().for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
+    run.world
+        .iter()
+        .for_each(|v| bytes.extend_from_slice(&v.to_bits().to_le_bytes()));
     bytes.extend_from_slice(&run.law_record);
     bytes.extend_from_slice(&run.summary);
     bytes.extend_from_slice(world_raw);
@@ -355,7 +393,8 @@ fn summary_bytes(s: &alice_analytics::law::ResidualSummary) -> Vec<u8> {
         f.extend([d.mean, d.min, d.max, d.max_abs, d.p50, d.p90, d.p99]);
     }
     b.push(u8::from(s.distribution.is_some()));
-    f.iter().for_each(|v| b.extend_from_slice(&v.to_bits().to_le_bytes()));
+    f.iter()
+        .for_each(|v| b.extend_from_slice(&v.to_bits().to_le_bytes()));
     b
 }
 
@@ -366,7 +405,8 @@ fn summary_bytes(s: &alice_analytics::law::ResidualSummary) -> Vec<u8> {
 fn locked_alice_versions() -> Vec<(String, Vec<String>)> {
     let lock = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.lock"))
         .expect("Cargo.lock next to Cargo.toml");
-    let mut found: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+    let mut found: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
     let mut name: Option<String> = None;
     // only `[[package]]` entries: `[[patch.unused]]` lists patches Cargo did not use
     let mut in_package = false;
@@ -379,7 +419,10 @@ fn locked_alice_versions() -> Vec<(String, Vec<String>)> {
             name = Some(v.trim_end_matches('"').to_string());
         } else if let (Some(n), Some(v)) = (&name, line.strip_prefix("version = \"")) {
             if n.starts_with("alice-") {
-                found.entry(n.clone()).or_default().push(v.trim_end_matches('"').to_string());
+                found
+                    .entry(n.clone())
+                    .or_default()
+                    .push(v.trim_end_matches('"').to_string());
             }
         }
     }
@@ -415,7 +458,13 @@ fn compare_bits<T: Copy + std::fmt::Debug, B: PartialEq + std::fmt::Debug>(
     read: &[T],
     bits: impl Fn(T) -> B,
 ) -> usize {
-    assert_eq!(read.len(), written.len(), "{what}: read {} of {} values", read.len(), written.len());
+    assert_eq!(
+        read.len(),
+        written.len(),
+        "{what}: read {} of {} values",
+        read.len(),
+        written.len()
+    );
     for (i, (w, r)) in written.iter().zip(read).enumerate() {
         assert_eq!(bits(*w), bits(*r), "{what}[{i}]: wrote {w:?}, read {r:?}");
     }
@@ -446,7 +495,9 @@ fn save(dir: &Path, run: &Run, law: &SignalLaw, edge: &SignalLaw) -> (u64, u64) 
         world.put_f64(i as i64, *v).unwrap();
     }
     let version = db.put_law(LAW_NAME, law, &cooling_semantics()).unwrap();
-    let edge_version = db.put_law(EDGE_LAW_NAME, edge, &alice_edge::SEMANTICS_ID).unwrap();
+    let edge_version = db
+        .put_law(EDGE_LAW_NAME, edge, &alice_edge::SEMANTICS_ID)
+        .unwrap();
     db.flush().unwrap();
     db.close().unwrap();
     (version, edge_version)
@@ -455,14 +506,18 @@ fn save(dir: &Path, run: &Run, law: &SignalLaw, edge: &SignalLaw) -> (u64, u64) 
 fn values_f64(db: &AliceDB, name: &str) -> Vec<f64> {
     let s = db.series(name).unwrap();
     let rows = s.scan_f64(i64::MIN, i64::MAX).unwrap();
-    rows.iter().enumerate().for_each(|(i, (k, _))| assert_eq!(*k, i as i64, "{name}: key {k} at {i}"));
+    rows.iter()
+        .enumerate()
+        .for_each(|(i, (k, _))| assert_eq!(*k, i as i64, "{name}: key {k} at {i}"));
     rows.into_iter().map(|(_, v)| v).collect()
 }
 
 fn values_f32(db: &AliceDB, name: &str) -> Vec<f32> {
     let s = db.series(name).unwrap();
     let rows = s.scan_f32(i64::MIN, i64::MAX).unwrap();
-    rows.iter().enumerate().for_each(|(i, (k, _))| assert_eq!(*k, i as i64, "{name}: key {k} at {i}"));
+    rows.iter()
+        .enumerate()
+        .for_each(|(i, (k, _))| assert_eq!(*k, i as i64, "{name}: key {k} at {i}"));
     rows.into_iter().map(|(_, v)| v).collect()
 }
 
@@ -477,7 +532,10 @@ fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
         ("alice-edge", alice_edge::SEMANTICS_ID),
     ];
     for (name, id) in identifiers {
-        assert_eq!(&id, semantics, "{name} was built with a different alice-det-math");
+        assert_eq!(
+            &id, semantics,
+            "{name} was built with a different alice-det-math"
+        );
     }
     identifiers.len()
 }
@@ -490,12 +548,20 @@ enum DetMathBinding {
     /// each alice-det-math function the crate calls, pinned to the linked alice-det-math's own pin
     PerFunction,
     Direct,
-    Via { crate_name: String, depth: usize },
+    Via {
+        crate_name: String,
+        depth: usize,
+    },
 }
 
 /// One checked crate: its name, its own pins, its alice-det-math function pins (`DET_MATH_PINS`,
 /// empty for a crate from before them) and its identifier.
-type Checked<'a> = (&'a str, &'a [(&'a str, [u8; 32])], &'a [(&'a str, [u8; 32])], [u8; 32]);
+type Checked<'a> = (
+    &'a str,
+    &'a [(&'a str, [u8; 32])],
+    &'a [(&'a str, [u8; 32])],
+    [u8; 32],
+);
 
 /// The [`DetMathBinding`] of `name` among `crates`, against the alice-det-math identifier this
 /// build linked. Every pin named after another checked crate must hold that crate's identifier,
@@ -514,7 +580,10 @@ fn det_math_binding(
         return Err(format!("{name} is not a checked crate"));
     };
     if stack.iter().any(|s| s == name) {
-        return Err(format!("{name}: a cycle of crate pins ({} -> {name})", stack.join(" -> ")));
+        return Err(format!(
+            "{name}: a cycle of crate pins ({} -> {name})",
+            stack.join(" -> ")
+        ));
     }
     for (pin, value) in pins.iter() {
         if let Some((_, _, _, id)) = crates.iter().find(|(n, _, _, _)| n == pin && *n != name) {
@@ -525,25 +594,40 @@ fn det_math_binding(
     }
     if !det_pins.is_empty() {
         if pins.iter().any(|(n, _)| *n == "alice-det-math") {
-            return Err(format!("{name}: it pins alice-det-math both whole and per function"));
+            return Err(format!(
+                "{name}: it pins alice-det-math both whole and per function"
+            ));
         }
         for (f, pin) in det_pins.iter() {
             match function_pins.iter().find(|(n, _)| n == f) {
-                None => return Err(format!("{name}: its det-math {f} pin names no alice-det-math function")),
+                None => {
+                    return Err(format!(
+                        "{name}: its det-math {f} pin names no alice-det-math function"
+                    ))
+                }
                 Some((_, linked)) if linked != pin => {
-                    return Err(format!("{name}: its det-math {f} pin is not the linked alice-det-math's"));
+                    return Err(format!(
+                        "{name}: its det-math {f} pin is not the linked alice-det-math's"
+                    ));
                 }
                 Some(_) => {}
             }
         }
         return Ok(DetMathBinding::PerFunction);
     }
-    let direct: Vec<_> = pins.iter().filter(|(n, _)| *n == "alice-det-math").collect();
+    let direct: Vec<_> = pins
+        .iter()
+        .filter(|(n, _)| *n == "alice-det-math")
+        .collect();
     match direct.len() {
         0 => {}
         1 if &direct[0].1 == semantics => return Ok(DetMathBinding::Direct),
         1 => return Err(format!("{name} was built with a different alice-det-math")),
-        n => return Err(format!("{name}: its pins hold alice-det-math {n} times, not once")),
+        n => {
+            return Err(format!(
+                "{name}: its pins hold alice-det-math {n} times, not once"
+            ))
+        }
     }
     stack.push(name.to_string());
     let mut why = Vec::new();
@@ -559,7 +643,10 @@ fn det_math_binding(
                     DetMathBinding::Direct | DetMathBinding::PerFunction => 1,
                     DetMathBinding::Via { depth, .. } => depth + 1,
                 };
-                return Ok(DetMathBinding::Via { crate_name: (*pin).to_string(), depth });
+                return Ok(DetMathBinding::Via {
+                    crate_name: (*pin).to_string(),
+                    depth,
+                });
             }
             Err(e) => why.push(e),
         }
@@ -567,7 +654,11 @@ fn det_math_binding(
     stack.pop();
     Err(format!(
         "{name}: its pins take in alice-det-math neither directly nor through a checked crate ({})",
-        if why.is_empty() { "no pin names one".to_string() } else { why.join("; ") }
+        if why.is_empty() {
+            "no pin names one".to_string()
+        } else {
+            why.join("; ")
+        }
     ))
 }
 
@@ -599,18 +690,39 @@ fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
             alice_analytics::semantics::DET_MATH_PINS,
             alice_analytics::semantics::ANALYTICS_SEMANTICS_ID,
         ),
-        ("alice-edge", &alice_edge::EDGE_SEMANTICS_PINS, &[], alice_edge::EDGE_SEMANTICS_ID),
+        (
+            "alice-edge",
+            &alice_edge::EDGE_SEMANTICS_PINS,
+            &[],
+            alice_edge::EDGE_SEMANTICS_ID,
+        ),
     ];
     for (name, pins, det_pins, id) in crates {
-        assert_eq!(fold_with_functions(pins, det_pins), id, "{name}: its identifier is not the fold of its pins");
-        let binding = det_math_binding(&crates, name, semantics, alice_det_math::FUNCTION_PINS, &mut Vec::new())
-            .unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(
+            fold_with_functions(pins, det_pins),
+            id,
+            "{name}: its identifier is not the fold of its pins"
+        );
+        let binding = det_math_binding(
+            &crates,
+            name,
+            semantics,
+            alice_det_math::FUNCTION_PINS,
+            &mut Vec::new(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
         let how = match &binding {
             DetMathBinding::PerFunction => format!("per function ({} pins)", det_pins.len()),
             DetMathBinding::Direct => "directly".to_string(),
-            DetMathBinding::Via { crate_name, depth } => format!("through {crate_name} (depth {depth})"),
+            DetMathBinding::Via { crate_name, depth } => {
+                format!("through {crate_name} (depth {depth})")
+            }
         };
-        println!("e2e: {name} identifier {} folds {} pins, alice-det-math {how}", hex(&id), pins.len() + det_pins.len());
+        println!(
+            "e2e: {name} identifier {} folds {} pins, alice-det-math {how}",
+            hex(&id),
+            pins.len() + det_pins.len()
+        );
     }
     crates.len()
 }
@@ -619,9 +731,17 @@ fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
 /// the name `det-math <function>` (the names the crates fold them under)
 #[cfg(feature = "main-mode")]
 fn fold_with_functions(pins: &[(&str, [u8; 32])], det_pins: &[(&str, [u8; 32])]) -> [u8; 32] {
-    let names: Vec<String> = det_pins.iter().map(|(n, _)| format!("det-math {n}")).collect();
+    let names: Vec<String> = det_pins
+        .iter()
+        .map(|(n, _)| format!("det-math {n}"))
+        .collect();
     let mut all: Vec<(&str, [u8; 32])> = pins.to_vec();
-    all.extend(names.iter().map(String::as_str).zip(det_pins.iter().map(|(_, d)| *d)));
+    all.extend(
+        names
+            .iter()
+            .map(String::as_str)
+            .zip(det_pins.iter().map(|(_, d)| *d)),
+    );
     fold(&all)
 }
 
@@ -668,7 +788,8 @@ fn cooling_semantics() -> [u8; 32] {
 /// earlier-arithmetic case, so the Current checks of the stored laws compare something.
 #[cfg(feature = "main-mode")]
 fn earlier_arithmetic_reads_as_previous(db: &AliceDB, law: &SignalLaw) -> usize {
-    db.put_law("earlier-arithmetic", law, &alice_det_math::SEMANTICS_ID).unwrap();
+    db.put_law("earlier-arithmetic", law, &alice_det_math::SEMANTICS_ID)
+        .unwrap();
     let stored = db.get_law("earlier-arithmetic").unwrap().expect("stored");
     assert_eq!(
         stored.semantics,
@@ -687,12 +808,17 @@ fn law_record(name: &str, version: u64, law: &SignalLaw, semantics: &[u8; 32]) -
 /// current one: a record the store read as unpinned or as another arithmetic fails here).
 #[cfg(not(feature = "main-mode"))]
 fn restore_law(db: &AliceDB, name: &str) -> SignalLaw {
-    db.get_law(name).unwrap().unwrap_or_else(|| panic!("{name} was saved"))
+    db.get_law(name)
+        .unwrap()
+        .unwrap_or_else(|| panic!("{name} was saved"))
 }
 
 #[cfg(feature = "main-mode")]
 fn restore_law(db: &AliceDB, name: &str) -> SignalLaw {
-    let stored = db.get_law(name).unwrap().unwrap_or_else(|| panic!("{name} was saved"));
+    let stored = db
+        .get_law(name)
+        .unwrap()
+        .unwrap_or_else(|| panic!("{name} was saved"));
     assert_eq!(
         stored.semantics,
         alice_db::law_store::RecordSemantics::Current,
@@ -710,7 +836,10 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     // alice-det-math release in the build
     let locked = locked_alice_versions();
     let twice: Vec<_> = locked.iter().filter(|(_, v)| v.len() > 1).collect();
-    assert!(twice.is_empty(), "linked at two or more versions: {twice:?}");
+    assert!(
+        twice.is_empty(),
+        "linked at two or more versions: {twice:?}"
+    );
     let det_math_version = locked
         .iter()
         .find(|(name, _)| name == "alice-det-math")
@@ -748,7 +877,10 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         .find(|(name, _)| *name == "alice-det-math")
         .map(|(_, id)| *id)
         .expect("alice-lol pins the alice-det-math identifier");
-    assert_eq!(lol_pin, semantics, "alice-lol pins a different alice-det-math");
+    assert_eq!(
+        lol_pin, semantics,
+        "alice-lol pins a different alice-det-math"
+    );
     assert_eq!(
         alice_lol::law_id::fold_semantics_pins(alice_lol::law_id::LOL_SEMANTICS_PINS),
         alice_lol::law_id::LOL_SEMANTICS_ID
@@ -756,10 +888,20 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     let compared_ids = crate_ids + 1;
 
     for core in [
-        "alice-det-math", "alice-crypto", "alice-zip", "alice-analytics",
-        "alice-db", "alice-physics", "alice-sdf", "alice-lol", "alice-edge",
+        "alice-det-math",
+        "alice-crypto",
+        "alice-zip",
+        "alice-analytics",
+        "alice-db",
+        "alice-physics",
+        "alice-sdf",
+        "alice-lol",
+        "alice-edge",
     ] {
-        assert!(locked.iter().any(|(n, _)| n == core), "{core} is not in Cargo.lock");
+        assert!(
+            locked.iter().any(|(n, _)| n == core),
+            "{core} is not in Cargo.lock"
+        );
     }
 
     // 1. read
@@ -773,16 +915,25 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     let thermal_residuals = thermal_residuals();
     let rod = rod();
     let ties = ties();
-    assert!(ties.iter().any(|v| v.to_bits() == 0x8000_0000) && ties.iter().any(|v| v.to_bits() == 0),
-            "the tie step produced no signed zero of one kind");
+    assert!(
+        ties.iter().any(|v| v.to_bits() == 0x8000_0000) && ties.iter().any(|v| v.to_bits() == 0),
+        "the tie step produced no signed zero of one kind"
+    );
     let (world, world_raw) = world();
     let samples = edge_samples();
     let (edge_fit, edge) = edge_law(&samples);
     assert_eq!(edge.coefficients().len(), 2, "alice-edge fits a line");
 
     // 3. fit
-    let points: Vec<(f64, f64)> = (0..COOLING_POINTS).map(|i| (cooling_time(i), cooling[i as usize])).collect();
-    let law = SignalLaw::fit_polynomial(&points, 4, Provenance::new("alice-lol research law", "least squares, degree 4")).unwrap();
+    let points: Vec<(f64, f64)> = (0..COOLING_POINTS)
+        .map(|i| (cooling_time(i), cooling[i as usize]))
+        .collect();
+    let law = SignalLaw::fit_polynomial(
+        &points,
+        4,
+        Provenance::new("alice-lol research law", "least squares, degree 4"),
+    )
+    .unwrap();
     let summary = alice_analytics::law::residual_summary(&law, &points);
     assert_eq!(summary.count, COOLING_POINTS as u64);
 
@@ -801,7 +952,12 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     };
     let (version, edge_version) = save(&dir, &run, &law, &edge);
     run.law_record = law_record(LAW_NAME, version, &law, &cooling_semantics());
-    run.edge_record = law_record(EDGE_LAW_NAME, edge_version, &edge, &alice_edge::SEMANTICS_ID);
+    run.edge_record = law_record(
+        EDGE_LAW_NAME,
+        edge_version,
+        &edge,
+        &alice_edge::SEMANTICS_ID,
+    );
     let computed = digest(&run, &world_raw);
 
     // 5. restore
@@ -814,7 +970,12 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         rod: values_f32(&db, "rod"),
         ties: values_f32(&db, "ties"),
         edge_fit: edge_law(&samples).0,
-        edge_record: law_record(EDGE_LAW_NAME, edge_version, &restored_edge, &alice_edge::SEMANTICS_ID),
+        edge_record: law_record(
+            EDGE_LAW_NAME,
+            edge_version,
+            &restored_edge,
+            &alice_edge::SEMANTICS_ID,
+        ),
         world: values_f64(&db, "world"),
         law_record: law_record(LAW_NAME, version, &restored_law, &cooling_semantics()),
         summary: Vec::new(),
@@ -826,7 +987,10 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         .map(|(i, v)| (cooling_time(i as i64), *v))
         .collect();
     let restored_summary = alice_analytics::law::residual_summary(&restored_law, &restored_points);
-    let restored = Run { summary: summary_bytes(&restored_summary), ..restored };
+    let restored = Run {
+        summary: summary_bytes(&restored_summary),
+        ..restored
+    };
     #[cfg(feature = "main-mode")]
     let earlier = earlier_arithmetic_reads_as_previous(&db, &restored_law);
     drop(db);
@@ -835,25 +999,64 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     // 6. compare
     let mut compared = 0;
     compared += compare_bits("cooling", &run.cooling, &restored.cooling, f64::to_bits);
-    compared += compare_bits("thermal", &run.thermal_residuals, &restored.thermal_residuals, f32::to_bits);
+    compared += compare_bits(
+        "thermal",
+        &run.thermal_residuals,
+        &restored.thermal_residuals,
+        f32::to_bits,
+    );
     compared += compare_bits("rod", &run.rod, &restored.rod, f32::to_bits);
     compared += compare_bits("ties", &run.ties, &restored.ties, f32::to_bits);
     compared += compare_bits("world", &run.world, &restored.world, f64::to_bits);
-    compared += compare_bits("law coefficients", law.coefficients(), restored_law.coefficients(), f64::to_bits);
+    compared += compare_bits(
+        "law coefficients",
+        law.coefficients(),
+        restored_law.coefficients(),
+        f64::to_bits,
+    );
     let domain = |l: &SignalLaw| [l.domain().lo, l.domain().hi];
-    compared += compare_bits("law domain", &domain(&law), &domain(&restored_law), f64::to_bits);
-    assert_eq!(run.law_record, restored.law_record, "the law record changed on the way through the store");
+    compared += compare_bits(
+        "law domain",
+        &domain(&law),
+        &domain(&restored_law),
+        f64::to_bits,
+    );
+    assert_eq!(
+        run.law_record, restored.law_record,
+        "the law record changed on the way through the store"
+    );
     assert!(!run.law_record.is_empty());
-    assert_eq!(law.law_id(&semantics), restored_law.law_id(&semantics), "law id");
-    compared += compare_bits("edge law coefficients", edge.coefficients(), restored_edge.coefficients(), f64::to_bits);
-    compared += compare_bits("edge law domain", &domain(&edge), &domain(&restored_edge), f64::to_bits);
+    assert_eq!(
+        law.law_id(&semantics),
+        restored_law.law_id(&semantics),
+        "law id"
+    );
+    compared += compare_bits(
+        "edge law coefficients",
+        edge.coefficients(),
+        restored_edge.coefficients(),
+        f64::to_bits,
+    );
+    compared += compare_bits(
+        "edge law domain",
+        &domain(&edge),
+        &domain(&restored_edge),
+        f64::to_bits,
+    );
     #[cfg(feature = "main-mode")]
     {
         compared += earlier;
     }
-    assert_eq!(run.edge_record, restored.edge_record, "the alice-edge law record changed on the way through the store");
+    assert_eq!(
+        run.edge_record, restored.edge_record,
+        "the alice-edge law record changed on the way through the store"
+    );
     assert!(!run.edge_record.is_empty());
-    assert_eq!(edge.law_id(&semantics), restored_edge.law_id(&semantics), "alice-edge law id");
+    assert_eq!(
+        edge.law_id(&semantics),
+        restored_edge.law_id(&semantics),
+        "alice-edge law id"
+    );
     compared += 2; // edge law record, edge law id
     assert_eq!(summary, restored_summary, "residual summary");
     assert_eq!(run.summary, restored.summary, "residual summary bits");
@@ -878,17 +1081,28 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     // alice-det-math release ("<version> <digest>"): the run is digested with law records that
     // carry identifiers derived from the arithmetic, so each release of it has its own digest
     let got = hex(&computed);
-    println!("e2e: run digest without the alice-edge records {}", hex(&digest_of(&run, &world_raw, false)));
+    println!(
+        "e2e: run digest without the alice-edge records {}",
+        hex(&digest_of(&run, &world_raw, false))
+    );
     // the values alone (the law records left out) are the same in both modes: main mode
     // changes the record format (it carries an identifier, ALICE-Law G8), not what is computed
-    let values = Run { law_record: Vec::new(), edge_record: Vec::new(), ..run.clone() };
+    let values = Run {
+        law_record: Vec::new(),
+        edge_record: Vec::new(),
+        ..run.clone()
+    };
     let values_got = hex(&digest(&values, &world_raw));
     println!("e2e: values digest {values_got}");
     if let Some(out) = std::env::var_os("ALICE_LAW_E2E_DIGEST_OUT") {
         // for the comparison of two architectures: the whole run in the published mode
         // (.github/workflows/e2e.yml, against golden/run.digest), the values on main
         // (e2e-main.yml, against golden/values.digest)
-        let shown = if cfg!(feature = "main-mode") { &values_got } else { &got };
+        let shown = if cfg!(feature = "main-mode") {
+            &values_got
+        } else {
+            &got
+        };
         // keyed like the golden files: by the KNOWN_SEMANTICS row the release is built with
         std::fs::write(out, format!("{entry_version} {shown}\n")).unwrap();
     }
@@ -907,12 +1121,17 @@ fn check_golden(rel: &str, det_math_version: &str, got: &str) {
     let recorded = std::fs::read_to_string(&golden_path).unwrap_or_default();
     let mut lines: Vec<(String, String)> = Vec::new();
     for l in recorded.lines().filter(|l| !l.trim().is_empty()) {
-        let (version, digest) = l.split_once(' ').unwrap_or_else(|| panic!("{rel}: \"<version> <digest>\" per line"));
+        let (version, digest) = l
+            .split_once(' ')
+            .unwrap_or_else(|| panic!("{rel}: \"<version> <digest>\" per line"));
         assert!(
             KNOWN_SEMANTICS.iter().any(|(known, _)| *known == version),
             "{rel} names alice-det-math {version}, which KNOWN_SEMANTICS does not list"
         );
-        assert!(lines.iter().all(|(v, _)| v != version), "{rel} names {version} twice");
+        assert!(
+            lines.iter().all(|(v, _)| v != version),
+            "{rel} names {version} twice"
+        );
         lines.extend([(version.to_string(), digest.to_string())]);
     }
     if std::env::var_os("ALICE_LAW_E2E_BLESS").is_some() {
@@ -921,14 +1140,20 @@ fn check_golden(rel: &str, det_math_version: &str, got: &str) {
         lines.sort_by_key(|(v, _)| KNOWN_SEMANTICS.iter().position(|(known, _)| known == v));
         let text: String = lines.iter().map(|(v, d)| format!("{v} {d}\n")).collect();
         std::fs::write(&golden_path, text).unwrap();
-        println!("e2e: wrote {} for alice-det-math {det_math_version}", golden_path.display());
+        println!(
+            "e2e: wrote {} for alice-det-math {det_math_version}",
+            golden_path.display()
+        );
     } else {
         let want = lines
             .iter()
             .find(|(v, _)| v == det_math_version)
             .map(|(_, d)| d.clone())
             .unwrap_or_else(|| panic!("{rel} has no digest for alice-det-math {det_math_version}: record it with ALICE_LAW_E2E_BLESS=1"));
-        assert_eq!(got, want, "{rel}: the run computes something else than when the golden was recorded");
+        assert_eq!(
+            got, want,
+            "{rel}: the run computes something else than when the golden was recorded"
+        );
     }
 }
 
@@ -941,42 +1166,81 @@ fn det_math_binding_follows_crate_pins_and_refuses_the_rest() {
     let zip_pins = [("golden", [3u8; 32]), ("alice-det-math", det)];
     let db_pins = [("model", [4u8; 32]), ("alice-zip", zip_id)];
     let no_det = [("model", [5u8; 32])];
-    let crates: [Checked<'_>; 2] = [("alice-zip", &zip_pins, &[], zip_id), ("alice-db", &db_pins, &[], db_id)];
+    let crates: [Checked<'_>; 2] = [
+        ("alice-zip", &zip_pins, &[], zip_id),
+        ("alice-db", &db_pins, &[], db_id),
+    ];
     let b = |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &det, &[], &mut Vec::new());
     assert_eq!(b(&crates, "alice-zip"), Ok(DetMathBinding::Direct));
-    assert_eq!(b(&crates, "alice-db"), Ok(DetMathBinding::Via { crate_name: "alice-zip".into(), depth: 1 }));
+    assert_eq!(
+        b(&crates, "alice-db"),
+        Ok(DetMathBinding::Via {
+            crate_name: "alice-zip".into(),
+            depth: 1
+        })
+    );
     // depth counts the chain
     let x_pins = [("alice-db", db_id)];
     let three: [Checked<'_>; 3] = [crates[0], crates[1], ("alice-x", &x_pins, &[], x_id)];
-    assert_eq!(b(&three, "alice-x"), Ok(DetMathBinding::Via { crate_name: "alice-db".into(), depth: 2 }));
+    assert_eq!(
+        b(&three, "alice-x"),
+        Ok(DetMathBinding::Via {
+            crate_name: "alice-db".into(),
+            depth: 2
+        })
+    );
     // the zip pin dropped: neither binding
     let dropped: [Checked<'_>; 2] = [crates[0], ("alice-db", &no_det, &[], db_id)];
-    assert!(b(&dropped, "alice-db").unwrap_err().contains("neither directly nor through"));
+    assert!(b(&dropped, "alice-db")
+        .unwrap_err()
+        .contains("neither directly nor through"));
     // the zip pin is not the linked zip's identifier
     let stale_pins = [("model", [4u8; 32]), ("alice-zip", other)];
     let stale: [Checked<'_>; 2] = [crates[0], ("alice-db", &stale_pins, &[], db_id)];
-    assert!(b(&stale, "alice-db").unwrap_err().contains("its alice-zip pin is not alice-zip's identifier"));
+    assert!(b(&stale, "alice-db")
+        .unwrap_err()
+        .contains("its alice-zip pin is not alice-zip's identifier"));
     // a chain through a crate that does not take alice-det-math in
-    let hollow: [Checked<'_>; 2] = [("alice-zip", &no_det, &[], zip_id), ("alice-db", &db_pins, &[], db_id)];
-    assert!(b(&hollow, "alice-db").unwrap_err().contains("alice-zip: its pins take in alice-det-math neither"));
+    let hollow: [Checked<'_>; 2] = [
+        ("alice-zip", &no_det, &[], zip_id),
+        ("alice-db", &db_pins, &[], db_id),
+    ];
+    assert!(b(&hollow, "alice-db")
+        .unwrap_err()
+        .contains("alice-zip: its pins take in alice-det-math neither"));
     // a different alice-det-math, or the same one twice
     assert!(b(&crates, "alice-zip").is_ok());
     let wrong = [("alice-det-math", other)];
-    assert!(b(&[("alice-zip", &wrong, &[], zip_id)], "alice-zip").unwrap_err().contains("a different alice-det-math"));
+    assert!(b(&[("alice-zip", &wrong, &[], zip_id)], "alice-zip")
+        .unwrap_err()
+        .contains("a different alice-det-math"));
     let twice = [("alice-det-math", det), ("alice-det-math", det)];
-    assert!(b(&[("alice-zip", &twice, &[], zip_id)], "alice-zip").unwrap_err().contains("2 times"));
+    assert!(b(&[("alice-zip", &twice, &[], zip_id)], "alice-zip")
+        .unwrap_err()
+        .contains("2 times"));
     // a stale crate pin is an error even when another route binds, and even beside a direct pin
     let an_id = [13u8; 32];
     let an_pins = [("alice-det-math", det)];
     let mixed_pins = [("alice-zip", zip_id), ("alice-analytics", other)];
-    let mixed: [Checked<'_>; 3] = [crates[0], ("alice-analytics", &an_pins, &[], an_id), ("alice-db", &mixed_pins, &[], db_id)];
-    assert!(b(&mixed, "alice-db").unwrap_err().contains("its alice-analytics pin is not alice-analytics's identifier"));
+    let mixed: [Checked<'_>; 3] = [
+        crates[0],
+        ("alice-analytics", &an_pins, &[], an_id),
+        ("alice-db", &mixed_pins, &[], db_id),
+    ];
+    assert!(b(&mixed, "alice-db")
+        .unwrap_err()
+        .contains("its alice-analytics pin is not alice-analytics's identifier"));
     let direct_stale = [("alice-det-math", det), ("alice-zip", other)];
     let ds: [Checked<'_>; 2] = [crates[0], ("alice-edge", &direct_stale, &[], [14u8; 32])];
-    assert!(b(&ds, "alice-edge").unwrap_err().contains("its alice-zip pin is not alice-zip's identifier"));
+    assert!(b(&ds, "alice-edge")
+        .unwrap_err()
+        .contains("its alice-zip pin is not alice-zip's identifier"));
     // a cycle of crate pins
     let (a_pins, c_pins) = ([("alice-c", [21u8; 32])], [("alice-a", [20u8; 32])]);
-    let cycle: [Checked<'_>; 2] = [("alice-a", &a_pins, &[], [20u8; 32]), ("alice-c", &c_pins, &[], [21u8; 32])];
+    let cycle: [Checked<'_>; 2] = [
+        ("alice-a", &a_pins, &[], [20u8; 32]),
+        ("alice-c", &c_pins, &[], [21u8; 32]),
+    ];
     assert!(b(&cycle, "alice-a").unwrap_err().contains("cycle"));
 }
 
@@ -987,7 +1251,8 @@ fn det_math_binding_follows_crate_pins_and_refuses_the_rest() {
 fn det_math_binding_reads_per_function_pins_and_keeps_the_whole_crate_rule() {
     let det = [1u8; 32];
     let functions = [("sin", [30u8; 32]), ("max64", [31u8; 32])];
-    let b = |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &det, &functions, &mut Vec::new());
+    let b =
+        |cs: &[Checked<'_>], n: &str| det_math_binding(cs, n, &det, &functions, &mut Vec::new());
     let (zip_id, db_id, edge_id) = ([10u8; 32], [11u8; 32], [12u8; 32]);
     let zip_own = [("golden", [3u8; 32])];
     let zip_det = [("sin", [30u8; 32])];
@@ -1005,20 +1270,30 @@ fn det_math_binding_reads_per_function_pins_and_keeps_the_whole_crate_rule() {
     assert_eq!(b(&crates, "alice-edge"), Ok(DetMathBinding::Direct));
     // a function pin that is not the linked alice-det-math's
     let wrong = [("sin", [99u8; 32])];
-    assert!(b(&[("alice-zip", &zip_own, &wrong, zip_id)], "alice-zip").unwrap_err().contains("det-math sin pin is not the linked"));
+    assert!(b(&[("alice-zip", &zip_own, &wrong, zip_id)], "alice-zip")
+        .unwrap_err()
+        .contains("det-math sin pin is not the linked"));
     // a function pin naming a function alice-det-math does not have
     let unknown = [("sinh", [30u8; 32])];
-    assert!(b(&[("alice-zip", &zip_own, &unknown, zip_id)], "alice-zip").unwrap_err().contains("det-math sinh pin names no alice-det-math function"));
+    assert!(b(&[("alice-zip", &zip_own, &unknown, zip_id)], "alice-zip")
+        .unwrap_err()
+        .contains("det-math sinh pin names no alice-det-math function"));
     // a crate that takes alice-det-math in neither per function, nor whole, nor through a crate
     let none: [Checked<'_>; 1] = [("alice-zip", &zip_own, &[], zip_id)];
-    assert!(b(&none, "alice-zip").unwrap_err().contains("neither directly nor through"));
+    assert!(b(&none, "alice-zip")
+        .unwrap_err()
+        .contains("neither directly nor through"));
     // both forms at once
     let both = [("golden", [3u8; 32]), ("alice-det-math", det)];
-    assert!(b(&[("alice-zip", &both, &zip_det, zip_id)], "alice-zip").unwrap_err().contains("both whole and per function"));
+    assert!(b(&[("alice-zip", &both, &zip_det, zip_id)], "alice-zip")
+        .unwrap_err()
+        .contains("both whole and per function"));
     // a stale crate pin is still refused beside per-function pins
     let stale_own = [("model", [4u8; 32]), ("alice-zip", [77u8; 32])];
     let stale: [Checked<'_>; 2] = [crates[0], ("alice-db", &stale_own, &db_det, db_id)];
-    assert!(b(&stale, "alice-db").unwrap_err().contains("its alice-zip pin is not alice-zip's identifier"));
+    assert!(b(&stale, "alice-db")
+        .unwrap_err()
+        .contains("its alice-zip pin is not alice-zip's identifier"));
 }
 
 /// A release without a new identifier is built with the row it started at; one older than every
@@ -1034,18 +1309,35 @@ fn a_release_is_built_with_the_row_it_started_at() {
     // every row's release is built with its own row, and a release past the last row with the last one
     // (independent of how many rows follow: appending a row keeps every line true)
     for (version, _) in KNOWN_SEMANTICS {
-        assert_eq!(at(version), Some(*version), "{version} is built with its own row");
+        assert_eq!(
+            at(version),
+            Some(*version),
+            "{version} is built with its own row"
+        );
     }
     let (last, _) = KNOWN_SEMANTICS.last().unwrap();
     let (major, minor, patch) = release(last);
     assert_eq!(at(&format!("{major}.{minor}.{}", patch + 1)), Some(*last));
     assert_eq!(at("0.4.9"), None);
     for pair in KNOWN_SEMANTICS.windows(2) {
-        assert!(release(pair[0].0) < release(pair[1].0), "{} before {}", pair[0].0, pair[1].0);
-        assert_ne!(pair[0].1, pair[1].1, "{} and {} record the same identifier", pair[0].0, pair[1].0);
+        assert!(
+            release(pair[0].0) < release(pair[1].0),
+            "{} before {}",
+            pair[0].0,
+            pair[1].0
+        );
+        assert_ne!(
+            pair[0].1, pair[1].1,
+            "{} and {} record the same identifier",
+            pair[0].0, pair[1].0
+        );
     }
     let ids: std::collections::BTreeSet<_> = KNOWN_SEMANTICS.iter().map(|(_, id)| *id).collect();
-    assert_eq!(ids.len(), KNOWN_SEMANTICS.len(), "an identifier recorded twice");
+    assert_eq!(
+        ids.len(),
+        KNOWN_SEMANTICS.len(),
+        "an identifier recorded twice"
+    );
 }
 
 #[test]
