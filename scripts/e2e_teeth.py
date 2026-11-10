@@ -86,7 +86,7 @@ MUTATIONS = [
         # table would lose it and turn this row red)
         "zip: built against a different arithmetic identifier (stopped by alice-db's compile check)",
         "ALICE-Zip/src/law.rs",
-        "pub const SEMANTICS_ID: [u8; 32] =\n    crate::semantics::semantics_id_for(&alice_det_math::SEMANTICS_ID);",
+        "pub const SEMANTICS_ID: [u8; 32] = crate::semantics::ZIP_SEMANTICS_ID;",
         "pub const SEMANTICS_ID: [u8; 32] = [0x5a; 32];",
         "alice-zip SEMANTICS_ID has no row in DB_SEMANTICS_BY_ZIP",
     ),
