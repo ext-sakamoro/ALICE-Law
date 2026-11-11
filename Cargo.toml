@@ -4,20 +4,20 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 license = "LicenseRef-Proprietary"
-description = "Integration checks across the core ALICE crates, built from their crates.io releases"
+description = "Integration checks across the core ALICE crates, built from their main branches"
 
-# The core crates, at their latest releases, with the features that turn on
-# their dependencies on each other (so the lock file shows every link between
-# them). No path dependencies: everything comes from crates.io.
+# The core crates from their repositories' main branches (git, branch = "main", with the
+# version on main), with the features that turn on their dependencies on each other (so the
+# lock file shows every link between them). No path dependencies.
 [dependencies]
-alice-lol = { version = ">=0.4.1, <0.6", features = ["physics"] }
-alice-det-math = "0.5"
-alice-sdf = { version = "6", features = ["physics"] }
-alice-physics = { version = "3", features = ["analytics", "replay"] }
-alice-db = { version = "0.5", features = ["analytics", "crypto"] }
-alice-zip = "0.10"
-alice-crypto = "0.4"
-alice-analytics = { version = ">=0.5, <0.7", features = ["law"] }
-alice-edge = { version = ">=0.2, <0.4", features = ["sdf", "db", "dashboard"] }
+alice-lol = { git = "https://github.com/ext-sakamoro/ALICE-LOL", branch = "main", version = "0.5", features = ["physics"] }
+alice-det-math = { git = "https://github.com/ext-sakamoro/ALICE-DetMath", branch = "main", version = "0.6" }
+alice-sdf = { git = "https://github.com/ext-sakamoro/ALICE-SDF", branch = "main", version = "7", features = ["physics"] }
+alice-physics = { git = "https://github.com/ext-sakamoro/ALICE-Physics", branch = "main", version = "4", features = ["analytics"] }
+alice-db = { git = "https://github.com/ext-sakamoro/ALICE-DB", branch = "main", version = "0.6", features = ["analytics", "crypto"] }
+alice-zip = { git = "https://github.com/ext-sakamoro/ALICE-Zip", branch = "main", version = "0.11" }
+alice-crypto = { git = "https://github.com/ext-sakamoro/ALICE-Crypto", branch = "main", version = "0.7" }
+alice-analytics = { git = "https://github.com/ext-sakamoro/ALICE-Analytics", branch = "main", version = "0.7", features = ["law"] }
+alice-edge = { git = "https://github.com/ext-sakamoro/ALICE-Edge", branch = "main", version = "0.4", features = ["sdf", "db", "dashboard"] }
 
 [workspace]

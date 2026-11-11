@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
-"""Dependency consistency of the core ALICE crates, from their crates.io releases.
+"""Dependency consistency of the core ALICE crates, from their main branches.
 
-Three checks, each of which compares something and fails when it compared nothing:
+Three checks on the resolved `Cargo.lock`, each of which compares something and fails
+when it compared nothing:
 
 1. single version: every `alice-*` package appears in `Cargo.lock` at exactly one
    version (two versions of one crate are two copies of its types and its arithmetic;
    a value saved by one cannot be read back as the same type by the other)
 2. presence: every core crate is in the lock file
-3. requirement vs latest: each `alice-*` requirement on a core crate, both those of
-   this repository's `Cargo.toml` and those of every core crate at the version the
-   lock file resolved, accepts the latest release of that crate (a requirement that
-   does not is how a second version gets into a consumer's lock file)
+3. main branches: every `alice-*` package of the lock file comes from its repository's
+   main branch (`git+https://github.com/ext-sakamoro/<repository>?branch=main#<commit>`),
+   and every `alice-*` dependency of this repository's `Cargo.toml` names one (`git` +
+   `branch = "main"` + a version): a crates.io release, a commit or tag pin, or another
+   branch is a second generation of the crate beside main
 
-A problem that a release still to come will remove can be listed in the roster
+A problem that a change still to come will remove can be listed in the roster
 (`--roster release-train.toml`) under `[pending.<name>]`, with the release that
 removes it (`until = "<crate> <version>"`, a roster crate at its roster version):
 `linked = ["<crate>", ...]` (linked at two or more versions) and
-`requires = ["<crate> <version> -> <dependency> <requirement>", ...]`. Such a problem
+`source = ["<crate>", ...]` (a locked package not from its main branch). Such a problem
 is reported as expected and counted. It is still a problem when it is not listed, when
 the release its entry waits for is `published` in the roster (the entry is stale), and
 a listed item that matches no problem is one too (the entry is out of date). This
-repository's own requirements and a missing core crate cannot be listed.
+repository's own dependencies and a missing core crate cannot be listed.
+
+The requirement matching (`matches`, Cargo's rules) is kept here for
+`scripts/release_train.py` and `scripts/semver_differential.py`.
 
 usage: dep_consistency.py [--lock Cargo.lock] [--manifest Cargo.toml] [--roster release-train.toml]
 Prints a Markdown report. Exit 1 when a check finds a problem, 2 when a check
-compared nothing, the roster's pending entries are malformed, or crates.io could not
-be read.
+compared nothing, an input cannot be read, or the roster's pending entries are malformed.
 """
 from __future__ import annotations
 
@@ -203,22 +207,21 @@ def matches(req: str, version: str) -> bool:
 
 # ---------------------------------------------------------------- lock file and manifest
 
-PACKAGE_RE = re.compile(r'^\[\[package\]\]\s*\nname = "([^"]+)"\s*\nversion = "([^"]+)"', re.M)
+MAIN_SOURCE_RE = re.compile(r"^git\+https://github\.com/ext-sakamoro/[A-Za-z0-9._-]+\?branch=main#[0-9a-f]{40}$")
 
 
-def lock_packages(text: str) -> dict[str, list[str]]:
-    out: dict[str, list[str]] = defaultdict(list)
-    for name, version in PACKAGE_RE.findall(text):
-        out[name].append(version)
-    return out
+def lock_packages(text: str) -> list[tuple[str, str, str | None]]:
+    """(name, version, source) of every package of a Cargo.lock (source None for a path package)"""
+    data = tomllib.loads(text)
+    return [(p["name"], p["version"], p.get("source")) for p in data.get("package", [])]
 
 
-def manifest_requirements(text: str) -> tuple[str, dict[str, str]]:
-    """(package name, `alice-*` requirements of `[dependencies]`)
+def manifest_dependencies(text: str) -> tuple[str, dict[str, dict]]:
+    """(package name, `alice-*` entries of `[dependencies]` as tables)
 
-    Every form is read (`name = "req"`, inline tables, `[dependencies.name]` tables);
-    an `alice-*` dependency without a version (a path or git dependency) is an error,
-    since everything here must come from crates.io
+    Every form is read (`name = "req"`, inline tables, `[dependencies.name]` tables); an
+    `alice-*` dependency by path, or without a version, is an error (a path is not a
+    repository's main branch, and without a version Cargo takes whatever the branch holds)
     """
     data = tomllib.loads(text)
     name = data.get("package", {}).get("name", "")
@@ -226,14 +229,72 @@ def manifest_requirements(text: str) -> tuple[str, dict[str, str]]:
     for dep, spec in data.get("dependencies", {}).items():
         if not dep.startswith("alice-"):
             continue
-        req = spec if isinstance(spec, str) else spec.get("version")
-        if not req or (isinstance(spec, dict) and ("path" in spec or "git" in spec)):
-            raise ValueError(f"{dep} is not a crates.io dependency with a version: {spec!r}")
-        out[dep] = req
+        spec = {"version": spec} if isinstance(spec, str) else dict(spec)
+        if "path" in spec:
+            raise ValueError(f"{dep} is a path dependency: {spec!r}")
+        if not spec.get("version"):
+            raise ValueError(f"{dep} has no version: {spec!r}")
+        out[dep] = spec
     return name, out
 
 
-# ---------------------------------------------------------------- crates.io
+def names_main(spec: dict) -> bool:
+    """a dependency table that names a repository's main branch: git (this account) + branch "main",
+    no rev and no tag"""
+    return (str(spec.get("git", "")).startswith("https://github.com/ext-sakamoro/") and spec.get("branch") == "main"
+            and "rev" not in spec and "tag" not in spec)
+
+
+def check(lock_text: str, manifest_text: str) -> tuple[list[str], list[str], dict[str, int]]:
+    """(report lines, problems, number of comparisons per check)"""
+    lines: list[str] = []
+    problems: list[str] = []
+    tally = {"one version per crate": 0, "core crates present": 0, "from the main branches": 0}
+
+    own, own_deps = manifest_dependencies(manifest_text)
+    pkgs = [p for p in lock_packages(lock_text) if p[0].startswith("alice-") and p[0] != own]
+    versions: dict[str, list[str]] = defaultdict(list)
+    for name, version, _ in pkgs:
+        versions[name].append(version)
+    alice = {n: sorted(vs, key=Version) for n, vs in versions.items()}
+    lines += ["## 1. One version per crate", "", "| crate | versions in Cargo.lock | |", "|---|---|---|"]
+    for name, vs in sorted(alice.items()):
+        tally["one version per crate"] += 1
+        bad = len(vs) > 1
+        lines.append(f"| {name} | {', '.join(vs)} | {'**2 or more versions**' if bad else 'ok'} |")
+        if bad:
+            problems.append(Problem(f"{name} is linked at {len(vs)} versions: {', '.join(vs)}", ("linked", name)))
+    lines.append("")
+
+    lines += ["## 2. Every core crate is present", ""]
+    missing = [c for c in CORE if c not in alice]
+    tally["core crates present"] += len(CORE)
+    lines.append(f"{len(CORE) - len(missing)} of {len(CORE)} core crates in Cargo.lock"
+                 + (f"; missing: {', '.join(missing)}" if missing else ""))
+    lines.append("")
+    problems += [Problem(f"{c} is not in Cargo.lock", ("missing", c)) for c in missing]
+
+    lines += ["## 3. From the main branches", "", "| crate | from | |", "|---|---|---|"]
+    for dep, spec in sorted(own_deps.items()):
+        tally["from the main branches"] += 1
+        ok = names_main(spec)
+        shown = ", ".join(f"{k} = {spec[k]}" for k in ("git", "branch", "rev", "tag", "version") if k in spec)
+        lines.append(f"| this repository: {dep} | {shown} | {'ok' if ok else '**not a main branch**'} |")
+        if not ok:
+            problems.append(Problem(f"this repository names {dep} ({shown}), not its repository's main branch",
+                                    ("own", dep)))
+    for name, version, source in sorted(pkgs, key=lambda p: (p[0], Version(p[1]))):
+        tally["from the main branches"] += 1
+        ok = source is not None and bool(MAIN_SOURCE_RE.match(source))
+        lines.append(f"| {name} {version} | {source or 'path'} | {'ok' if ok else '**not a main branch**'} |")
+        if not ok:
+            problems.append(Problem(f"{name} {version} comes from {source or 'a path'}, not from its repository's "
+                                    f"main branch", ("source", name)))
+    lines.append("")
+    return lines, problems, tally
+
+
+# ---------------------------------------------------------------- crates.io (scripts/release_train.py's publish gate)
 
 Fetch = Callable[[str], dict]
 
@@ -265,58 +326,6 @@ def published_requirements(fetch: Fetch, crate: str, version: str) -> list[tuple
                    if d["kind"] == "normal" and d["crate_id"].startswith("alice-")})
 
 
-# ---------------------------------------------------------------- the checks
-
-def check(lock_text: str, manifest_text: str, fetch: Fetch) -> tuple[list[str], list[str], dict[str, int]]:
-    """(report lines, problems, number of comparisons per check)"""
-    lines: list[str] = []
-    problems: list[str] = []
-    tally = {"one version per crate": 0, "core crates present": 0, "requirements accept the latest": 0}
-
-    own, own_reqs = manifest_requirements(manifest_text)
-    pkgs = lock_packages(lock_text)
-    alice = {n: sorted(vs, key=Version) for n, vs in pkgs.items() if n.startswith("alice-") and n != own}
-    lines += ["## 1. One version per crate", "", "| crate | versions in Cargo.lock | |", "|---|---|---|"]
-    for name, vs in sorted(alice.items()):
-        tally["one version per crate"] += 1
-        bad = len(vs) > 1
-        lines.append(f"| {name} | {', '.join(vs)} | {'**2 or more versions**' if bad else 'ok'} |")
-        if bad:
-            problems.append(Problem(f"{name} is linked at {len(vs)} versions: {', '.join(vs)}", ("linked", name)))
-    lines.append("")
-
-    lines += ["## 2. Every core crate is present", ""]
-    missing = [c for c in CORE if c not in alice]
-    tally["core crates present"] += len(CORE)
-    lines.append(f"{len(CORE) - len(missing)} of {len(CORE)} core crates in Cargo.lock"
-                 + (f"; missing: {', '.join(missing)}" if missing else ""))
-    lines.append("")
-    problems += [Problem(f"{c} is not in Cargo.lock", ("missing", c)) for c in missing]
-
-    lines += ["## 3. Requirements accept the latest release", "",
-              "| crate (version) | requires | latest | |", "|---|---|---|---|"]
-    latest = {c: latest_release(fetch, c) for c in CORE}
-    sources: list[tuple[str, str, str, bool]] = [
-        ("this repository", dep, req, False) for dep, req in sorted(own_reqs.items())
-    ]
-    for crate in CORE:
-        for version in alice.get(crate, []):
-            for dep, req, optional in published_requirements(fetch, crate, version):
-                sources.append((f"{crate} {version}", dep, req, optional))
-    for who, dep, req, optional in sources:
-        if dep not in CORE:
-            continue
-        tally["requirements accept the latest"] += 1
-        ok = matches(req, latest[dep])
-        opt = " (optional)" if optional else ""
-        lines.append(f"| {who} | {dep} {req}{opt} | {latest[dep]} | {'ok' if ok else '**does not accept the latest**'} |")
-        if not ok:
-            problems.append(Problem(f"{who} requires {dep} {req}{opt}, which does not accept the latest release "
-                                    f"{latest[dep]}", ("requires", who, dep, req)))
-    lines.append("")
-    return lines, problems, tally
-
-
 # ---------------------------------------------------------------- problems a coming release removes
 
 class PendingError(ValueError):
@@ -339,17 +348,13 @@ def load_pending(roster_text: str) -> list[dict]:
         keys = []
         for item in entry.get("linked", []):
             keys.append(("linked", item))
-        for item in entry.get("requires", []):
-            who, sep, rest = item.partition(" -> ")
-            dep, _, req = rest.partition(" ")
-            if who == "this repository":
-                raise PendingError(f"pending.{name}: this repository's own requirements are raised, not listed")
-            if not sep or not req or len(who.split()) != 2:
-                raise PendingError(f"pending.{name}: requires {item!r} is not \"<crate> <version> -> <dependency> <requirement>\"")
-            keys.append(("requires", who, dep, req))
+        for item in entry.get("source", []):
+            if not isinstance(item, str) or not item.startswith("alice-"):
+                raise PendingError(f"pending.{name}: source {item!r} is not an alice-* crate name")
+            keys.append(("source", item))
         if not keys:
             raise PendingError(f"pending.{name}: lists no problem")
-        unknown = set(entry) - {"until", "why", "linked", "requires"}
+        unknown = set(entry) - {"until", "why", "linked", "source"}
         if unknown:
             raise PendingError(f"pending.{name}: unknown keys {sorted(unknown)}")
         out.append({"name": name, "until": until, "keys": keys,
@@ -388,7 +393,7 @@ def apply_pending(problems: list[Problem], pending: list[dict]) -> tuple[list[st
     return remaining, expected
 
 
-def main(argv: list[str] | None = None, fetch: Fetch = http_fetch) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--lock", default="Cargo.lock")
     ap.add_argument("--manifest", default="Cargo.toml")
@@ -404,9 +409,8 @@ def main(argv: list[str] | None = None, fetch: Fetch = http_fetch) -> int:
         print(f"error: {a.roster}: {e}", file=sys.stderr)
         return 2
     try:
-        lines, found, tally = check(lock.read_text(encoding="utf-8"),
-                                    manifest.read_text(encoding="utf-8"), fetch)
-    except (urllib.error.URLError, TimeoutError, KeyError, ValueError, tomllib.TOMLDecodeError) as e:
+        lines, found, tally = check(lock.read_text(encoding="utf-8"), manifest.read_text(encoding="utf-8"))
+    except (KeyError, ValueError, tomllib.TOMLDecodeError) as e:
         print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
     problems, expected = apply_pending(found, pending)

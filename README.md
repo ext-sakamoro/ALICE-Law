@@ -6,7 +6,7 @@ Integration checks across the crates in the release train (`release-train.toml`)
 
 No path dependencies. Two kinds of check:
 
-- dependency consistency (in place, from the versions published on crates.io): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, every crate `scripts/dep_consistency.py`'s own `CORE` list names is present, and each `alice-*` requirement accepts the latest published version of the crate it names
+- dependency consistency (in place, from the core crates' main branches): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, every crate `scripts/dep_consistency.py`'s own `CORE` list names is present, and every `alice-*` package of the lock file comes from its repository's main branch
 - end to end (from the core crates' main branches): read a law, compute, save, restore, and compare every value bit for bit
 
 It also holds the release train of the core crates (the plan, and the scripts run before and after each publish: [runbook](#runbook-one-crate)) and the checks of the text this repository publishes.
@@ -15,10 +15,10 @@ Contents: [Dependency consistency](#dependency-consistency) · [Release train](#
 
 ## Dependency consistency
 
-`Cargo.toml` depends on the latest release of each core crate, with the features that turn on their dependencies on each other, so the lock file shows every link between them.
+`Cargo.toml` names each core crate from its repository's main branch (git, `branch = "main"`, with the version on main), with the features that turn on their dependencies on each other, so the lock file shows every link between them.
 
 ```sh
-cargo generate-lockfile                 # resolve against crates.io as it is today
+cargo generate-lockfile                 # resolve the main branches as they are today
 python3 scripts/dep_consistency.py      # Markdown report; exit 1 on a problem, 2 when a check compared nothing
 ```
 
@@ -26,13 +26,13 @@ The checks:
 
 1. one version per crate: two versions of one crate in a lock file are two copies of its types and its arithmetic, and a value saved through one is not the same type as the value the other reads back
 2. presence: every crate `CORE` names is in the lock file
-3. requirement vs latest: the `alice-*` requirements of this repository and of every core crate at the version the lock file resolved must accept the latest release of the crate they name (the latest stable release, or the latest pre-release when a crate has no stable one). A requirement that does not is how a second version gets into a user's lock file
+3. main branches: every `alice-*` package of the lock file comes from its repository's main branch (`git+https://github.com/ext-sakamoro/<repository>?branch=main#<commit>`), and every `alice-*` dependency of this repository's `Cargo.toml` names one (`git`, `branch = "main"`, a version). A crates.io release, a commit or tag pin, or another branch of a crate is a second generation of it beside main
 
-A problem that a release still to come removes is listed in `release-train.toml` under `[pending.<name>]`, with that release (`until = "<crate> <version>"`) and the problems it removes (`linked = [<crate>, ...]`, `requires = ["<crate> <version> -> <dependency> <requirement>", ...]`). With `--roster release-train.toml` (as CI runs it) the report counts them as expected per entry. A problem that is not listed fails the run, as does an entry whose release the roster marks `published` (stale: remove it and raise the requirements that release allows) and a listed item that matches no problem (out of date). This repository's own requirements and a missing core crate cannot be listed: they are raised or added, not waited for. So a red run is a problem to fix, not a release still to come.
+A problem that a release still to come removes is listed in `release-train.toml` under `[pending.<name>]`, with that release (`until = "<crate> <version>"`) and the problems it removes (`linked = [<crate>, ...]`, `source = [<crate>, ...]`). With `--roster release-train.toml` (as CI runs it) the report counts them as expected per entry. A problem that is not listed fails the run, as does an entry whose release the roster marks `published` (stale: remove it) and a listed item that matches no problem (out of date). This repository's own dependencies and a missing core crate cannot be listed: they are changed or added, not waited for. So a red run is a problem to fix, not a release still to come.
 
-Each check reports how many comparisons it made, and a check that made none fails the run (exit 2), as does a dependency of this repository on an `alice-*` crate by path or git. This repository's own package is not one of the crates checked.
+Each check reports how many comparisons it made, and a check that made none fails the run (exit 2), as does a dependency of this repository on an `alice-*` crate by path or without a version. This repository's own package is not one of the crates checked.
 
-The requirement matching follows Cargo's rules (carets, tildes, ranges, wildcards such as `1.2.*` and `1.x`, pre-releases). `scripts/semver_differential.py` compares it with the [semver](https://crates.io/crates/semver) crate (`tools/semver-oracle`) on generated requirement / version pairs and on a fixed grid of every operator and requirement shape against the versions one step away, and fails on any disagreement, including a requirement that one of the two reads and the other does not.
+The requirement matching (used by the release train below) follows Cargo's rules (carets, tildes, ranges, wildcards such as `1.2.*` and `1.x`, pre-releases). `scripts/semver_differential.py` compares it with the [semver](https://crates.io/crates/semver) crate (`tools/semver-oracle`) on generated requirement / version pairs and on a fixed grid of every operator and requirement shape against the versions one step away, and fails on any disagreement, including a requirement that one of the two reads and the other does not.
 
 CI (`.github/workflows/dependency-consistency.yml`) runs the tests, the comparison with the semver crate and the check every Monday, on demand, and on a push that changes the check. The report is in the job summary.
 
