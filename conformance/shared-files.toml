@@ -8,7 +8,7 @@ path = ".github/actions/alice-siblings/action.yml"
 sha256 = "dbf112b30db1b196be0fe4eaa575e49de26790b5be085f90c8508851c9223905"
 source = { repo = "ALICE-Analytics", rev = "9d8fbdaa28dd73d1620f358ddf06cec953aecbcc" }
 repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
-exempt = { "ALICE-API" = { "reason" = "its ci.yml still uses its copy (earlier bytes) on main; a pending change replaces the sibling checkout by git dependencies and deletes the copy (it follows ALICE-Queue, whose git dependency it takes)", "until" = "2026-11-14" }, "ALICE-Cloud-Gateway" = { "reason" = "its main still holds the copy; a pending change takes every ALICE dependency by git, scans the committed lock and deletes the copy", "until" = "2026-11-14" }, "ALICE-Container" = { "reason" = "a pending change moves its alice-* dependencies to git (branch main) and deletes this copy with the sibling checkout", "until" = "2026-11-14" }, "ALICE-Kinematics" = "takes no sibling checkout any more; its unused copy is being removed", "ALICE-Queue" = { "reason" = "a pending change moves its alice-* dependencies to git (branch main) and deletes this copy with the sibling checkout", "until" = "2026-11-14" }, "text-to-print" = { "reason" = "its own action with per-dependency deploy keys, until the canonical one (owner ALICE-Analytics) takes that mechanism and every copy converges on it", "until" = "2026-11-11" } }
+exempt = { "text-to-print" = { "reason" = "its own action with per-dependency deploy keys, until the canonical one (owner ALICE-Analytics) takes that mechanism and every copy converges on it", "until" = "2026-11-11" } }
 
 [[file]]
 path = ".github/workflows/changed-paths-oracle.yml"
