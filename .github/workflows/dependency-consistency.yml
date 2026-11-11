@@ -48,7 +48,7 @@ concurrency:
 
 jobs:
   check:
-    name: One version per crate, requirements accept the latest
+    name: One version per crate, every alice-* package from its main branch
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
