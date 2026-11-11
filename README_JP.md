@@ -6,7 +6,7 @@ release train (`release-train.toml`) に載る crate をまたいだ統合の検
 
 path 依存を使わない 検査は 2 種類:
 
-- 依存の整合 (この場で、crates.io に公開された版から): すべての `alice-*` crate が `Cargo.lock` でちょうど 1 つの版に解決され、`scripts/dep_consistency.py` 自身の `CORE` 一覧が挙げる crate がすべてあり、各 `alice-*` の要求が、その要求が名指す crate の最新の公開版を受ける
+- 依存の整合 (この場で、core crate の main branch から): すべての `alice-*` crate が `Cargo.lock` でちょうど 1 つの版に解決され、`scripts/dep_consistency.py` 自身の `CORE` 一覧が挙げる crate がすべてあり、lock file のすべての `alice-*` の package がその repository の main branch から来る
 - end to end (core crate の main branch から): law を読み、計算し、保存し、復元し、すべての値を bit で比べる
 
 core crate の release train (計画と、各公開の前後に走らせる script: [runbook](#runbook-crate-ごと)) と、この repository が公開する text の検査も持つ
@@ -15,10 +15,10 @@ core crate の release train (計画と、各公開の前後に走らせる scri
 
 ## 依存の整合
 
-`Cargo.toml` は各 core crate の最新の公開版に、互いへの依存を有効にする feature つきで依存するので、lock file に crate 同士のすべての繋がりが現れる
+`Cargo.toml` は各 core crate をその repository の main branch から (git、`branch = "main"`、main の版つき)、互いへの依存を有効にする feature つきで名指すので、lock file に crate 同士のすべての繋がりが現れる
 
 ```sh
-cargo generate-lockfile                 # resolve against crates.io as it is today
+cargo generate-lockfile                 # resolve the main branches as they are today
 python3 scripts/dep_consistency.py      # Markdown report; exit 1 on a problem, 2 when a check compared nothing
 ```
 
@@ -26,13 +26,13 @@ python3 scripts/dep_consistency.py      # Markdown report; exit 1 on a problem, 
 
 1. crate ごとに 1 つの版: 1 つの lock file に同じ crate が 2 つの版であれば、その型と算術の写しが 2 つあることになり、一方を通して保存した値は、もう一方が読み戻す値と同じ型ではない
 2. 揃っていること: `CORE` が挙げる crate がすべて lock file にある
-3. 要求と最新版: この repository と、lock file が解決した版の各 core crate の `alice-*` の要求が、名指す crate の最新の公開版 (最新の安定版、安定版の無い crate では最新の pre-release) を受けること 受けない要求は、利用者の lock file に 2 つ目の版が入る経路になる
+3. main branch: lock file のすべての `alice-*` の package がその repository の main branch (`git+https://github.com/ext-sakamoro/<repository>?branch=main#<commit>`) から来て、この repository の `Cargo.toml` のすべての `alice-*` 依存が main branch を名指す (`git`、`branch = "main"`、版) こと crates.io の公開版、commit や tag の固定、別の branch は、main の隣に置かれた同じ crate の 2 つ目の世代になる
 
-まだ来ない公開で消える問題は、`release-train.toml` の `[pending.<name>]` にその公開 (`until = "<crate> <version>"`) と、それで消える問題 (`linked = [<crate>, ...]`、`requires = ["<crate> <version> -> <dependency> <requirement>", ...]`) とともに載せる (CI のように) `--roster release-train.toml` を付けると、report はそれらを entry ごとに予期したものとして数える 載っていない問題は run を失敗させ、roster がその公開を `published` にした entry (古い: 外して、その公開で許される要求に上げる) と、どの問題にも当たらない項目 (期限切れ) も失敗させる この repository 自身の要求と欠けた core crate は載せられない: 待つのでなく上げるか加える したがって red の run は直すべき問題であって、まだ来ない公開ではない
+まだ来ない公開で消える問題は、`release-train.toml` の `[pending.<name>]` にその公開 (`until = "<crate> <version>"`) と、それで消える問題 (`linked = [<crate>, ...]`、`source = [<crate>, ...]`) とともに載せる (CI のように) `--roster release-train.toml` を付けると、report はそれらを entry ごとに予期したものとして数える 載っていない問題は run を失敗させ、roster がその公開を `published` にした entry (古い: 外す) と、どの問題にも当たらない項目 (期限切れ) も失敗させる この repository 自身の依存と欠けた core crate は載せられない: 待つのでなく変えるか加える したがって red の run は直すべき問題であって、まだ来ない公開ではない
 
-各検査は比べた件数を報告し、1 件も比べなかった検査は run を失敗させる (exit 2) この repository が `alice-*` crate に path や git で依存していても同じ この repository 自身の package は検査する crate に含まれない
+各検査は比べた件数を報告し、1 件も比べなかった検査は run を失敗させる (exit 2) この repository が `alice-*` crate に path や版なしで依存していても同じ この repository 自身の package は検査する crate に含まれない
 
-要求の照合は Cargo の規則 (caret、tilde、範囲、`1.2.*` や `1.x` のような wildcard、pre-release) に従う `scripts/semver_differential.py` が、生成した要求と版の組と、すべての演算子と要求の形を隣り合う版と突き合わせる固定の格子で、[semver](https://crates.io/crates/semver) crate (`tools/semver-oracle`) と比べ、食い違いがあれば失敗する (片方だけが読める要求も食い違いに数える)
+要求の照合 (下の release train が使う) は Cargo の規則 (caret、tilde、範囲、`1.2.*` や `1.x` のような wildcard、pre-release) に従う `scripts/semver_differential.py` が、生成した要求と版の組と、すべての演算子と要求の形を隣り合う版と突き合わせる固定の格子で、[semver](https://crates.io/crates/semver) crate (`tools/semver-oracle`) と比べ、食い違いがあれば失敗する (片方だけが読める要求も食い違いに数える)
 
 CI (`.github/workflows/dependency-consistency.yml`) は試験、semver crate との比較と検査を、毎週月曜、手動、検査を変える push で走らせる report は job summary にある
 

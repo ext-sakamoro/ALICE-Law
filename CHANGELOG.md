@@ -180,6 +180,9 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- root の `alice-law-integration` (Cargo.toml): core crate 9 個を crates.io の版から git の main branch + main の版に替えた (alice-physics は 4、feature `replay` は main に無いので外した) Cargo.lock は main から解決し直した
+- `scripts/dep_consistency.py`: 3 つ目の検査を「要求が crates.io の最新版を受ける」から「lock file のすべての `alice-*` package がその repository の main branch (`git+https://github.com/ext-sakamoro/<repository>?branch=main#<commit>`) から来て、この repository の `alice-*` 依存が main branch を名指す」に替えた crates.io の版、commit・tag の固定、別の branch は失敗 (比較 0 件も失敗) pending の `requires` を `source = [<crate>]` に crates.io を読む関数は release train のために残す
+- `.github/workflows/dependency-consistency.yml` と README: 依存の整合を main branch からの検査として書き直した
 - e2e: core crate 9 個 (alice-lol / alice-physics / alice-sdf / alice-db / alice-zip / alice-crypto / alice-analytics / alice-det-math / alice-edge) を crates.io の版から git の main branch + main の版 (`branch = "main"`) に替えた 試験は main の意味だけを持ち (feature `main-mode` と公開版の分岐を削除)、`golden/values.digest` は main から取り直した 0.6.1 の 1 行 (値は不変 `41138e6a…`)、記録した各 repository の main の commit を `golden/values.provenance` に置く
 - `scripts/main_mode.py`: e2e/Cargo.toml の要求を main の版へ上げる処理と feature の有効化をやめ、要求が checkout の版を受けない時 (main の新しい major に manifest が遅れている) は何も書かずに exit 1 で止める (`stale_requirements`) git の source を checkout で patch する処理と verify は同じ
 - `scripts/gen-law-readme-block.py`: `e2e/golden/run.digest` の無い revision (main branch だけを確かめる) では、end to end の行を「`<crate>` <版>、main branch から」と値の digest (`golden/values.digest`) で書き、2 つの architecture の比較は `e2e-main.yml` から読む それより前の revision の block は従来どおり

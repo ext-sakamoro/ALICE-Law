@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests of scripts/dep_consistency.py (python3 scripts/test_dep_consistency.py)
 
-No network: crates.io is replaced by a fixture.
+No network: the lock file and the manifest are fixtures.
 """
 from __future__ import annotations
 
@@ -19,31 +19,32 @@ dc = importlib.util.module_from_spec(spec)
 sys.modules["dc"] = dc
 spec.loader.exec_module(dc)
 
+SHA = "0123456789abcdef0123456789abcdef01234567"
+REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
 
-def lock(*pkgs: tuple[str, str]) -> str:
-    return "version = 4\n\n" + "".join(
-        f'[[package]]\nname = "{n}"\nversion = "{v}"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n\n'
-        for n, v in pkgs)
+
+def main_source(crate: str) -> str:
+    return f"git+https://github.com/ext-sakamoro/{crate.upper()}?branch=main#{SHA}"
+
+
+def lock(*pkgs: tuple, source=None) -> str:
+    """packages (name, version) or (name, version, source); by default from the repository's main branch"""
+    out = "version = 4\n\n"
+    for p in pkgs:
+        n, v = p[0], p[1]
+        src = p[2] if len(p) > 2 else (source or main_source(n))
+        out += f'[[package]]\nname = "{n}"\nversion = "{v}"\n' + (f'source = "{src}"\n' if src else "") + "\n"
+    return out
 
 
 ALL_CORE = [(c, "1.0.0") for c in dc.CORE]
-MANIFEST = "[package]\nname = \"x\"\n\n[dependencies]\n" + "".join(f'{c} = "1.0"\n' for c in dc.CORE)
 
 
-def fixture(latest: dict[str, str] | None = None, deps: dict[tuple[str, str], list[tuple[str, str, bool]]] | None = None):
-    latest = latest or {c: "1.0.0" for c in dc.CORE}
-    deps = deps or {}
+def dep(crate: str, extra: str = "") -> str:
+    return f'{crate} = {{ git = "https://github.com/ext-sakamoro/{crate.upper()}", branch = "main", version = "1.0"{extra} }}\n'
 
-    def fetch(path: str) -> dict:
-        parts = path.split("/")
-        if len(parts) == 1:
-            return {"crate": {"max_stable_version": latest[parts[0]], "max_version": latest[parts[0]]}}
-        crate, version, _ = parts
-        return {"dependencies": [
-            {"crate_id": d, "req": r, "optional": o, "kind": "normal"} for d, r, o in deps.get((crate, version), [])
-        ] + [{"crate_id": "serde", "req": "^1", "optional": False, "kind": "normal"},
-             {"crate_id": "alice-zip", "req": "^0.1", "optional": False, "kind": "dev"}]}
-    return fetch
+
+MANIFEST = "[package]\nname = \"x\"\n\n[dependencies]\n" + "".join(dep(c) for c in dc.CORE) + 'serde = "1"\n'
 
 
 class Matches(unittest.TestCase):
@@ -120,92 +121,74 @@ class Matches(unittest.TestCase):
                 dc.matches(req, "1.0.0")
 
 
-class Checks(unittest.TestCase):
-    def run_check(self, lock_text, manifest=MANIFEST, fetch=None):
-        return dc.check(lock_text, manifest, fetch or fixture())
 
+class Checks(unittest.TestCase):
     def test_a_consistent_set_passes(self):
-        _, problems, tally = self.run_check(lock(*ALL_CORE, ("x", "0.0.0")))
+        _, problems, tally = dc.check(lock(*ALL_CORE, ("x", "0.0.0", None)), MANIFEST)
         self.assertEqual(problems, [])
         n = len(dc.CORE)
-        self.assertEqual(tally, {"one version per crate": n, "core crates present": n,
-                                 "requirements accept the latest": n},
-                         "one row per core crate (this repository's own package not counted)")
+        self.assertEqual(tally, {"one version per crate": n, "core crates present": n, "from the main branches": 2 * n},
+                         "each locked alice-* package and each of this repository's alice-* dependencies (own package not counted)")
 
     def test_two_versions_of_a_crate_fail(self):
-        _, problems, _ = self.run_check(lock(*ALL_CORE, ("alice-zip", "0.7.0")))
+        _, problems, _ = dc.check(lock(*ALL_CORE, ("alice-zip", "0.7.0")), MANIFEST)
         self.assertEqual(problems, ["alice-zip is linked at 2 versions: 0.7.0, 1.0.0"])
 
     def test_a_non_core_alice_crate_is_also_checked(self):
-        _, problems, _ = self.run_check(lock(*ALL_CORE, ("alice-cache", "0.1.0"), ("alice-cache", "0.2.0")))
+        _, problems, _ = dc.check(lock(*ALL_CORE, ("alice-cache", "0.1.0"), ("alice-cache", "0.2.0")), MANIFEST)
         self.assertEqual(problems, ["alice-cache is linked at 2 versions: 0.1.0, 0.2.0"])
 
     def test_a_missing_core_crate_fails(self):
-        _, problems, _ = self.run_check(lock(*[p for p in ALL_CORE if p[0] != "alice-crypto"]))
+        _, problems, _ = dc.check(lock(*[p for p in ALL_CORE if p[0] != "alice-crypto"]), MANIFEST)
         self.assertEqual(problems, ["alice-crypto is not in Cargo.lock"])
 
-    def test_a_requirement_that_refuses_the_latest_fails(self):
-        latest = {c: "1.0.0" for c in dc.CORE} | {"alice-zip": "1.1.0"}
-        deps = {("alice-db", "1.0.0"): [("alice-zip", "~1.0", False), ("alice-crypto", "^1", True)]}
-        _, problems, tally = self.run_check(lock(*ALL_CORE), fetch=fixture(latest, deps))
-        self.assertEqual(problems, ["alice-db 1.0.0 requires alice-zip ~1.0, which does not accept the latest release 1.1.0"])
-        self.assertEqual(tally["requirements accept the latest"], len(dc.CORE) + 2, "non-alice and dev dependencies are not compared")
+    def test_a_crates_io_source_in_the_lock_fails(self):
+        _, problems, _ = dc.check(lock(*[p for p in ALL_CORE if p[0] != "alice-zip"], ("alice-zip", "1.0.0", REGISTRY)),
+                                  MANIFEST)
+        self.assertEqual(problems, [f"alice-zip 1.0.0 comes from {REGISTRY}, not from its repository's main branch"])
 
-    def test_this_repository_must_follow_the_latest_too(self):
-        latest = {c: "1.0.0" for c in dc.CORE} | {"alice-lol": "2.0.0"}
-        _, problems, _ = self.run_check(lock(*ALL_CORE), fetch=fixture(latest))
-        self.assertEqual(problems, ["this repository requires alice-lol 1.0, which does not accept the latest release 2.0.0"])
+    def test_a_commit_or_tag_source_in_the_lock_fails(self):
+        for src in (f"git+https://github.com/ext-sakamoro/ALICE-ZIP?rev={SHA}#{SHA}",
+                    f"git+https://github.com/ext-sakamoro/ALICE-ZIP?tag=v1.0.0#{SHA}",
+                    f"git+https://github.com/ext-sakamoro/ALICE-ZIP?branch=dev#{SHA}",
+                    f"git+https://example.invalid/ALICE-ZIP?branch=main#{SHA}"):
+            _, problems, _ = dc.check(lock(*[p for p in ALL_CORE if p[0] != "alice-zip"], ("alice-zip", "1.0.0", src)),
+                                      MANIFEST)
+            self.assertEqual(len(problems), 1, src)
+            self.assertIn("not from its repository's main branch", problems[0], src)
 
-    def test_each_resolved_version_is_asked(self):
-        asked = []
-        base = fixture()
+    def test_a_non_alice_package_is_not_judged_by_source(self):
+        _, problems, tally = dc.check(lock(*ALL_CORE, ("serde", "1.0.0", REGISTRY)), MANIFEST)
+        self.assertEqual(problems, [])
+        self.assertEqual(tally["from the main branches"], 2 * len(dc.CORE))
 
-        def fetch(path):
-            asked.append(path)
-            return base(path)
-        self.run_check(lock(*ALL_CORE, ("alice-zip", "0.7.0")), fetch=fetch)
-        self.assertIn("alice-zip/0.7.0/dependencies", asked)
-        self.assertIn("alice-zip/1.0.0/dependencies", asked)
+    def test_this_repository_must_name_the_main_branches_too(self):
+        for spec, why in (('"1.0"', "crates.io"), (f'{{ git = "https://github.com/ext-sakamoro/ALICE-LOL", rev = "{SHA}", version = "1.0" }}', "rev"),
+                          ('{ git = "https://github.com/ext-sakamoro/ALICE-LOL", version = "1.0" }', "no branch"),
+                          ('{ git = "https://github.com/ext-sakamoro/ALICE-LOL", branch = "dev", version = "1.0" }', "dev")):
+            manifest = MANIFEST.replace(dep("alice-lol"), f"alice-lol = {spec}\n")
+            _, problems, _ = dc.check(lock(*ALL_CORE), manifest)
+            self.assertEqual(len(problems), 1, why)
+            self.assertIn("this repository names alice-lol", problems[0], why)
 
-    def test_latest_is_the_latest_stable_release_when_there_is_one(self):
-        # crates.io's max_version includes pre-releases: 0.5.0-beta.1 published after 0.4.0
-        # must not make every `^0.4` requirement "behind"; with no stable release (alice-db
-        # today) the pre-release is the latest
-        def fetch(path):
-            if path == "alice-det-math":
-                return {"crate": {"max_stable_version": "1.0.0", "max_version": "1.1.0-beta.1"}}
-            if path == "alice-db":
-                return {"crate": {"max_stable_version": None, "max_version": "1.0.0-beta.2"}}
-            return fixture()(path)
-        self.assertEqual(dc.latest_release(fetch, "alice-det-math"), "1.0.0")
-        self.assertEqual(dc.latest_release(fetch, "alice-db"), "1.0.0-beta.2")
-        _, problems, _ = self.run_check(lock(*ALL_CORE), fetch=fetch)
-        self.assertEqual(problems, ["this repository requires alice-db 1.0, which does not accept the latest release 1.0.0-beta.2"])
-
-    def test_manifest_requirements(self):
-        text = ('[package]\nname = "x"\n[dependencies]\nalice-a = "0.3"\n'
-                'alice-b = { version = "0.3.0-beta.2", features = ["c"] }\nserde = "1"\n'
-                '[dependencies.alice-d]\nversion = "0.8"\nfeatures = ["e"]\n'
+    def test_manifest_dependencies(self):
+        text = ('[package]\nname = "x"\n[dependencies]\n' + dep("alice-a") + 'serde = "1"\n'
+                '[dependencies.alice-d]\ngit = "https://github.com/ext-sakamoro/ALICE-D"\nbranch = "main"\nversion = "0.8"\n'
                 '[dev-dependencies]\nalice-c = "9"\n')
-        self.assertEqual(dc.manifest_requirements(text),
-                         ("x", {"alice-a": "0.3", "alice-b": "0.3.0-beta.2", "alice-d": "0.8"}))
+        name, deps = dc.manifest_dependencies(text)
+        self.assertEqual(name, "x")
+        self.assertEqual(sorted(deps), ["alice-a", "alice-d"])
+        self.assertEqual(deps["alice-d"]["branch"], "main")
 
-    def test_a_table_form_requirement_is_checked(self):
-        # `[dependencies.alice-lol]` must not read as "no requirement": here it is behind
-        manifest = MANIFEST.replace('alice-lol = "1.0"\n', "") + '[dependencies.alice-lol]\nversion = "0.9"\n'
-        _, problems, tally = self.run_check(lock(*ALL_CORE), manifest=manifest)
-        self.assertEqual(problems, ["this repository requires alice-lol 0.9, which does not accept the latest release 1.0.0"])
-        self.assertEqual(tally["requirements accept the latest"], len(dc.CORE))
-
-    def test_a_path_or_git_dependency_is_refused(self):
+    def test_a_path_dependency_or_one_without_a_version_is_refused(self):
         for spec in ('{ path = "../ALICE-LOL" }', '{ path = "../ALICE-LOL", version = "1" }',
-                     '{ git = "https://example.invalid/x" }'):
+                     '{ git = "https://github.com/ext-sakamoro/ALICE-LOL", branch = "main" }'):
             with self.assertRaises(ValueError, msg=spec):
-                dc.manifest_requirements(f'[package]\nname = "x"\n[dependencies]\nalice-lol = {spec}\n')
+                dc.manifest_dependencies(f'[package]\nname = "x"\n[dependencies]\nalice-lol = {spec}\n')
 
 
 class Cli(unittest.TestCase):
-    def run_main(self, lock_text, manifest=MANIFEST, fetch=None):
+    def run_main(self, lock_text, manifest=MANIFEST):
         with tempfile.TemporaryDirectory() as d:
             lp, mp = Path(d, "Cargo.lock"), Path(d, "Cargo.toml")
             if lock_text is not None:
@@ -213,7 +196,7 @@ class Cli(unittest.TestCase):
             mp.write_text(manifest, encoding="utf-8")
             out, err = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                code = dc.main(["--lock", str(lp), "--manifest", str(mp)], fetch=fetch or fixture())
+                code = dc.main(["--lock", str(lp), "--manifest", str(mp)])
             return code, out.getvalue(), err.getvalue()
 
     def test_exit_codes(self):
@@ -221,21 +204,21 @@ class Cli(unittest.TestCase):
         code, out, _ = self.run_main(lock(*ALL_CORE, ("alice-zip", "0.7.0")))
         self.assertEqual(code, 1)
         self.assertIn("1 problems", out)
+        self.assertEqual(self.run_main(lock(*ALL_CORE, source=REGISTRY))[0], 1, "everything from crates.io")
 
     def test_nothing_compared_fails(self):
         self.assertEqual(self.run_main("version = 4\n")[0], 2, "an empty lock file")
         self.assertEqual(self.run_main(None)[0], 2, "no lock file")
 
     def test_a_check_that_compares_nothing_fails(self):
-        # no alice-* requirement anywhere: check 3 compares nothing, so the run is not a pass
+        # no alice-* package in the lock and no alice-* dependency: nothing is from main or not
         bare = '[package]\nname = "x"\n[dependencies]\nserde = "1"\n'
-        code, out, err = self.run_main(lock(*ALL_CORE), manifest=bare)
+        code, out, err = self.run_main(lock(("serde", "1.0.0", REGISTRY)), manifest=bare)
         self.assertEqual(code, 2)
-        self.assertIn("nothing was compared by: requirements accept the latest", err)
-        self.assertIn("| requirements accept the latest | 0 |", out)
+        self.assertIn("nothing was compared by: one version per crate, from the main branches", err)
 
     def test_this_repositorys_package_is_not_a_row(self):
-        code, out, _ = self.run_main(lock(*ALL_CORE, ("x", "0.0.0"), ("alice-law-x", "0.0.0")),
+        code, out, _ = self.run_main(lock(*ALL_CORE, ("x", "0.0.0", None), ("alice-law-x", "0.0.0", None)),
                                      manifest=MANIFEST.replace('name = "x"', 'name = "alice-law-x"'))
         self.assertEqual(code, 0)
         self.assertNotIn("| alice-law-x |", out)
@@ -244,12 +227,7 @@ class Cli(unittest.TestCase):
     def test_a_path_dependency_stops_the_run(self):
         code, _, err = self.run_main(lock(*ALL_CORE), manifest=MANIFEST + '[dependencies.alice-x]\npath = "../x"\n')
         self.assertEqual(code, 2)
-        self.assertIn("not a crates.io dependency", err)
-
-    def test_crates_io_failure_is_not_a_pass(self):
-        def broken(path):
-            raise dc.urllib.error.URLError("offline")
-        self.assertEqual(self.run_main(lock(*ALL_CORE), fetch=broken)[0], 2)
+        self.assertIn("path", err)
 
 
 ROSTER_BASE = """
@@ -258,21 +236,21 @@ version = "2.0.0"
 state = "prepared"
 order = 0
 """
-# alice-zip linked twice (0.7.0 brought by alice-db 1.0.0, whose ^0.7 does not accept the latest)
-TWO_ZIP = dict(lock_pkgs=(*ALL_CORE, ("alice-zip", "0.7.0")),
-               deps={("alice-db", "1.0.0"): [("alice-zip", "^0.7", False)]})
+# alice-zip linked twice, the second copy a commit pin some core crate still names
+OLD_ZIP = f"git+https://github.com/ext-sakamoro/ALICE-ZIP?rev={SHA}#{SHA}"
+TWO_ZIP = dict(lock_pkgs=(*ALL_CORE, ("alice-zip", "0.7.0", OLD_ZIP)))
 PENDING = """
 [pending.db-2]
 until = "alice-db 2.0.0"
 linked = ["alice-zip"]
-requires = ["alice-db 1.0.0 -> alice-zip ^0.7"]
+source = ["alice-zip"]
 """
 
 
 class Pending(unittest.TestCase):
-    """problems a coming release removes: named, counted, and time-boxed to that release"""
+    """problems a coming change removes: named, counted, and time-boxed"""
 
-    def run_main(self, roster, lock_pkgs=ALL_CORE, deps=None, manifest=MANIFEST):
+    def run_main(self, roster, lock_pkgs=ALL_CORE, manifest=MANIFEST):
         with tempfile.TemporaryDirectory() as d:
             lp, mp, rp = Path(d, "Cargo.lock"), Path(d, "Cargo.toml"), Path(d, "r.toml")
             lp.write_text(lock(*lock_pkgs), encoding="utf-8")
@@ -280,8 +258,7 @@ class Pending(unittest.TestCase):
             rp.write_text(roster, encoding="utf-8")
             out, err = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                code = dc.main(["--lock", str(lp), "--manifest", str(mp), "--roster", str(rp)],
-                               fetch=fixture(None, deps))
+                code = dc.main(["--lock", str(lp), "--manifest", str(mp), "--roster", str(rp)])
             return code, out.getvalue(), err.getvalue()
 
     def test_listed_problems_are_expected_and_counted(self):
@@ -290,20 +267,10 @@ class Pending(unittest.TestCase):
         self.assertIn("| db-2 | alice-db 2.0.0 | 2 |", out)
         self.assertIn("0 problems, expected (2) until a release", out)
 
-    def test_without_the_roster_they_are_problems(self):
-        with tempfile.TemporaryDirectory() as d:
-            lp, mp = Path(d, "Cargo.lock"), Path(d, "Cargo.toml")
-            lp.write_text(lock(*TWO_ZIP["lock_pkgs"]), encoding="utf-8")
-            mp.write_text(MANIFEST, encoding="utf-8")
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                code = dc.main(["--lock", str(lp), "--manifest", str(mp)], fetch=fixture(None, TWO_ZIP["deps"]))
-        self.assertEqual(code, 1)
-
     def test_an_unlisted_problem_is_still_a_problem(self):
-        roster = ROSTER_BASE + PENDING.replace('requires = ["alice-db 1.0.0 -> alice-zip ^0.7"]\n', "")
-        code, _, err = self.run_main(roster, **TWO_ZIP)
+        code, _, err = self.run_main(ROSTER_BASE + PENDING.replace('source = ["alice-zip"]\n', ""), **TWO_ZIP)
         self.assertEqual(code, 1)
-        self.assertIn("alice-db 1.0.0 requires alice-zip ^0.7", err)
+        self.assertIn("alice-zip 0.7.0 comes from", err)
 
     def test_a_pending_entry_past_its_release_is_stale(self):
         roster = ROSTER_BASE.replace('state = "prepared"', 'state = "published"') + PENDING
@@ -316,21 +283,22 @@ class Pending(unittest.TestCase):
         code, _, err = self.run_main(roster, **TWO_ZIP)
         self.assertEqual(code, 1)
         self.assertIn("('linked', 'alice-sdf'), which is not a problem any more", err)
-        code, _, err = self.run_main(ROSTER_BASE + PENDING)  # nothing is linked twice at all
-        self.assertEqual(code, 1)
+        self.assertEqual(self.run_main(ROSTER_BASE + PENDING)[0], 1)  # nothing is wrong at all
 
-    def test_the_requirement_must_match_exactly(self):
-        roster = ROSTER_BASE + PENDING.replace("alice-zip ^0.7", "alice-zip ^0.6")
-        self.assertEqual(self.run_main(roster, **TWO_ZIP)[0], 1)
+    def test_this_repositorys_own_dependency_cannot_be_listed(self):
+        manifest = MANIFEST.replace(dep("alice-lol"), 'alice-lol = "1.0"\n')
+        roster = ROSTER_BASE + PENDING.replace('source = ["alice-zip"]', 'source = ["alice-zip", "alice-lol"]')
+        code, _, err = self.run_main(roster, manifest=manifest, **TWO_ZIP)
+        self.assertEqual(code, 1)
+        self.assertIn("this repository names alice-lol", err)
 
     def test_malformed_entries_exit_2(self):
         for bad in (PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-db 9.9.9"'),  # not the roster version
                     PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-nope 1.0.0"'),
                     PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-db"'),
-                    PENDING.replace("alice-db 1.0.0 -> alice-zip ^0.7", "alice-db 1.0.0 alice-zip ^0.7"),
-                    PENDING.replace("alice-db 1.0.0 -> alice-zip ^0.7", "this repository -> alice-zip 0.7"),
                     PENDING.replace('linked = ["alice-zip"]', 'linked = ["alice-zip", "alice-zip"]'),
                     PENDING.replace('linked = ["alice-zip"]', 'linkd = ["alice-zip"]'),
+                    PENDING.replace('source = ["alice-zip"]', 'requires = ["alice-db 1.0.0 -> alice-zip ^0.7"]'),
                     '[pending.empty]\nuntil = "alice-db 2.0.0"\n',
                     PENDING + PENDING.replace("db-2", "db-2b")):  # the same problem in two entries
             self.assertEqual(self.run_main(ROSTER_BASE + bad, **TWO_ZIP)[0], 2, bad)

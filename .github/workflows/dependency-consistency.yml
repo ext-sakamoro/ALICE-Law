@@ -1,13 +1,15 @@
-# Dependency consistency of the core ALICE crates, from their crates.io releases
+# Dependency consistency of the core ALICE crates, from their main branches
 #
-# Resolves this repository's Cargo.toml against crates.io as it is today (the
-# committed Cargo.lock is replaced in the runner's checkout, never committed), then
-# scripts/dep_consistency.py checks the result: one version per alice-* crate, every
-# core crate present, and every alice-* requirement accepting the latest
-# release. The report goes to the job summary. Nothing compared is a failure.
+# Resolves this repository's Cargo.toml (each core crate from its repository's main
+# branch) as the mains are today (the committed Cargo.lock is replaced in the runner's
+# checkout, never committed), then scripts/dep_consistency.py checks the result: one
+# version per alice-* crate, every core crate present, and every alice-* package from
+# its repository's main branch (a crates.io release, a commit or tag pin, or another
+# branch is a second generation beside main). The report goes to the job summary.
+# Nothing compared is a failure.
 #
 # Weekly and on demand, and on a push that changes the check itself. It does not run
-# on pushes to the core crates; a new release is picked up by the next weekly run.
+# on pushes to the core crates; a change on a main is picked up by the next weekly run.
 #
 # The ratchets below compare this tree's conformance/ files with the same files at the base
 # scripts/ci_base.py names: on a push to main the commit main stood at before the push (every
@@ -251,7 +253,7 @@ jobs:
       - name: Compare the requirement matching with the semver crate
         run: python3 scripts/semver_differential.py
 
-      - name: Resolve against crates.io as it is today
+      - name: Resolve the main branches as they are today
         run: |
           cargo --version
           cargo generate-lockfile
