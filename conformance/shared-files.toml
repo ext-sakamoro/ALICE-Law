@@ -7,8 +7,8 @@
 path = ".github/actions/alice-siblings/action.yml"
 sha256 = "dbf112b30db1b196be0fe4eaa575e49de26790b5be085f90c8508851c9223905"
 source = { repo = "ALICE-Analytics", rev = "9d8fbdaa28dd73d1620f358ddf06cec953aecbcc" }
-repos = ["ALICE-Analytics", "ALICE-Cloud-Gateway", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
-exempt = { "ALICE-API" = { "reason" = "its ci.yml still uses its copy (earlier bytes) on main; a pending change replaces the sibling checkout by git dependencies and deletes the copy (it follows ALICE-Queue, whose git dependency it takes)", "until" = "2026-11-14" }, "ALICE-Container" = { "reason" = "a pending change moves its alice-* dependencies to git (branch main) and deletes this copy with the sibling checkout", "until" = "2026-11-14" }, "ALICE-Queue" = { "reason" = "a pending change moves its alice-* dependencies to git (branch main) and deletes this copy with the sibling checkout", "until" = "2026-11-14" }, "ALICE-Kinematics" = "takes no sibling checkout any more; its unused copy is being removed", "text-to-print" = { "reason" = "its own action with per-dependency deploy keys, until the canonical one (owner ALICE-Analytics) takes that mechanism and every copy converges on it", "until" = "2026-11-11" } }
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Cloud-Gateway", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
+exempt = { "ALICE-API" = { "reason" = "its ci.yml still uses its copy (earlier bytes) on main; a pending change replaces the sibling checkout by git dependencies and deletes the copy (it follows ALICE-Queue, whose git dependency it takes)", "until" = "2026-11-14" }, "ALICE-Container" = { "reason" = "a pending change moves its alice-* dependencies to git (branch main) and deletes this copy with the sibling checkout", "until" = "2026-11-14" }, "ALICE-Kinematics" = "takes no sibling checkout any more; its unused copy is being removed", "ALICE-Queue" = { "reason" = "a pending change moves its alice-* dependencies to git (branch main) and deletes this copy with the sibling checkout", "until" = "2026-11-14" }, "text-to-print" = { "reason" = "its own action with per-dependency deploy keys, until the canonical one (owner ALICE-Analytics) takes that mechanism and every copy converges on it", "until" = "2026-11-11" } }
 
 [[file]]
 path = ".github/workflows/changed-paths-oracle.yml"
@@ -45,7 +45,7 @@ repos = ["ALICE-Eco-System", "ALICE-LOL", "ALICE-Text"]
 path = "scripts/alice_siblings_check.py"
 sha256 = "ca03c5601e1b158d10e026bd96bbc51b8442286ea6e0235bd346cf372fd7df73"
 source = { repo = "ALICE-Analytics", rev = "ff0af3ed630f48e3949515ae5fe789e882b1a4c3" }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
 
 [[file]]
 path = "scripts/api_boundary.py"
@@ -206,8 +206,8 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 
 [[file]]
 path = "scripts/id_move_check.py"
-pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "f75597be9a908dafff9b39eaf67a54ddb4076ab3587e562879fe615cf5e87791", owner = "ALICE-Analytics", planned = "a1a40f44286b592b8a480983d90e9c8ec21f4cfc", moved_from = { planned = "b33050c2c7f81fee6d185c0c29cbc8ee73fd1583", target = "8e013d663869dbd9ebfad8df91c03fdfd610103a4c56acd4b3791e8eae7f2d0a" }, variants = { "8e013d663869dbd9ebfad8df91c03fdfd610103a4c56acd4b3791e8eae7f2d0a" = ["ALICE-DB", "ALICE-ML", "ALICE-Physics", "ALICE-Sync"], "f406e0e954b006da73b18ea365d0d862b5b6ad8774a8c49f37e9f8ac3d9640ff" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Font", "ALICE-Identity", "ALICE-LLM", "ALICE-Sign", "ALICE-Zip"], "f75597be9a908dafff9b39eaf67a54ddb4076ab3587e562879fe615cf5e87791" = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"] } }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Zip"]
+pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "f75597be9a908dafff9b39eaf67a54ddb4076ab3587e562879fe615cf5e87791", owner = "ALICE-Analytics", planned = "a1a40f44286b592b8a480983d90e9c8ec21f4cfc", moved_from = { planned = "b33050c2c7f81fee6d185c0c29cbc8ee73fd1583", target = "8e013d663869dbd9ebfad8df91c03fdfd610103a4c56acd4b3791e8eae7f2d0a" }, variants = { "8e013d663869dbd9ebfad8df91c03fdfd610103a4c56acd4b3791e8eae7f2d0a" = ["ALICE-DB", "ALICE-ML", "ALICE-Physics", "ALICE-Sync"], "f406e0e954b006da73b18ea365d0d862b5b6ad8774a8c49f37e9f8ac3d9640ff" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Font", "ALICE-Identity", "ALICE-LLM", "ALICE-Sign", "ALICE-Zip"], "f75597be9a908dafff9b39eaf67a54ddb4076ab3587e562879fe615cf5e87791" = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"] } }
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/law_readme_block_check.py"
@@ -226,6 +226,12 @@ path = "scripts/libm_dependency_guard.py"
 sha256 = "1c0d7f29d719c1cfdb98ef7cb718f97f20cc19f5396a0a8fd27bcae96a55eb85"
 source = { repo = "ALICE-DetMath", rev = "59814a33359f4dd21bac259182399ab528246752" }
 repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync"]
+
+[[file]]
+path = "scripts/lock_sources_check.py"
+sha256 = "1cea7ad5535f288161a773f001e2dca02c284a8901ab6012b522b360c57ad6a2"
+source = { repo = "ALICE-Edge", rev = "418f287ac0ba3e954ba4ff1ce9b53076ad5fd074" }
+repos = ["ALICE-Edge", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/min_passed.py"
@@ -254,8 +260,8 @@ exempt = { "ALICE-SDF" = "moves to scripts/package_integrity.py (git dependencie
 
 [[file]]
 path = "scripts/package_integrity.py"
-pending = { since = "2026-11-09", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "672775541e6eb7ca0afb908bd37511c0a6562aa835975edc33616c9bed3d60fe", owner = "ALICE-Analytics", planned = "2cc07dbd688629a4a1916b872872628c6238fc5c", variants = { "672775541e6eb7ca0afb908bd37511c0a6562aa835975edc33616c9bed3d60fe" = ["ALICE-Analytics", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"], "69aa736b71affbc15df1c6381217f1f9d992a0aff89ba7d44ba92e7d9ed2d802" = ["ALICE-DB"] } }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
+pending = { since = "2026-11-09", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "672775541e6eb7ca0afb908bd37511c0a6562aa835975edc33616c9bed3d60fe", owner = "ALICE-Analytics", planned = "2cc07dbd688629a4a1916b872872628c6238fc5c", variants = { "672775541e6eb7ca0afb908bd37511c0a6562aa835975edc33616c9bed3d60fe" = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"], "69aa736b71affbc15df1c6381217f1f9d992a0aff89ba7d44ba92e7d9ed2d802" = ["ALICE-DB"] } }
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
 
 [[file]]
 path = "scripts/public_text.sh"
@@ -271,8 +277,8 @@ repos = ["ALICE-Law", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/release_baseline.py"
-pending = { since = "2026-11-05", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "b91acf26085c5382c5461ee4d7dc85d1369c21215313ff67a86690f35d5ceda6", owner = "ALICE-DetMath", planned = "6182d2ba27ee72371d53b96304dd924556776374", moved_from = { planned = "abf90beacc1636b6b5996ddd1e2817df4c9e66a8", target = "c281c6cd5d8e2ec0e41a27fc28aa701dfd882ff5a42991911250e2efdc2f598b" }, variants = { "a082069cc1611d0d6fc46b1ef3c38ae141fdc967f2c86c0efb83d4789a51e84f" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Font", "ALICE-Identity", "ALICE-LLM", "ALICE-Sign", "ALICE-Zip"], "b91acf26085c5382c5461ee4d7dc85d1369c21215313ff67a86690f35d5ceda6" = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"], "c281c6cd5d8e2ec0e41a27fc28aa701dfd882ff5a42991911250e2efdc2f598b" = ["ALICE-DB", "ALICE-Law", "ALICE-ML", "ALICE-Physics", "ALICE-Sync"] } }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Zip"]
+pending = { since = "2026-11-05", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "b91acf26085c5382c5461ee4d7dc85d1369c21215313ff67a86690f35d5ceda6", owner = "ALICE-DetMath", planned = "6182d2ba27ee72371d53b96304dd924556776374", moved_from = { planned = "abf90beacc1636b6b5996ddd1e2817df4c9e66a8", target = "c281c6cd5d8e2ec0e41a27fc28aa701dfd882ff5a42991911250e2efdc2f598b" }, variants = { "a082069cc1611d0d6fc46b1ef3c38ae141fdc967f2c86c0efb83d4789a51e84f" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Font", "ALICE-Identity", "ALICE-LLM", "ALICE-Sign", "ALICE-Zip"], "b91acf26085c5382c5461ee4d7dc85d1369c21215313ff67a86690f35d5ceda6" = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"], "c281c6cd5d8e2ec0e41a27fc28aa701dfd882ff5a42991911250e2efdc2f598b" = ["ALICE-DB", "ALICE-Law", "ALICE-ML", "ALICE-Physics", "ALICE-Sync"] } }
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/run_tests.sh"
@@ -313,7 +319,7 @@ repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-OS
 path = "scripts/test_alice_siblings_check.py"
 sha256 = "b40f4b9fcfd5021c6c497a67731aa5c6fbaae996034af692e31f052f55beff0b"
 source = { repo = "ALICE-Analytics", rev = "7d2a42ec21c1e50cebd0c4f60526bcc19787370e" }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
 
 [[file]]
 path = "scripts/test_api_boundary.py"
@@ -424,8 +430,8 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 
 [[file]]
 path = "scripts/test_id_move_check.py"
-pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "df32a27d72bb385097e55fa5b12daba84bdcd771a273d3d97d8c1c68ff4d07e7", owner = "ALICE-Analytics", planned = "2f24fddfc1604d7d566a9806e3f7fd200851bb3d", variants = { "4652d139abc8035d77380a404ce04b47d07f807ef01d64bdebd608e243856a47" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Font", "ALICE-Identity", "ALICE-LLM", "ALICE-Sign", "ALICE-Zip"], "713be48f9604e3cf510c0f7e17a89bf94fb24b429a252035479f129666951590" = ["ALICE-DB", "ALICE-ML", "ALICE-Physics", "ALICE-Sync"], "df32a27d72bb385097e55fa5b12daba84bdcd771a273d3d97d8c1c68ff4d07e7" = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"] } }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Zip"]
+pending = { since = "2026-11-08", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "df32a27d72bb385097e55fa5b12daba84bdcd771a273d3d97d8c1c68ff4d07e7", owner = "ALICE-Analytics", planned = "2f24fddfc1604d7d566a9806e3f7fd200851bb3d", variants = { "4652d139abc8035d77380a404ce04b47d07f807ef01d64bdebd608e243856a47" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Font", "ALICE-Identity", "ALICE-LLM", "ALICE-Sign", "ALICE-Zip"], "713be48f9604e3cf510c0f7e17a89bf94fb24b429a252035479f129666951590" = ["ALICE-DB", "ALICE-ML", "ALICE-Physics", "ALICE-Sync"], "df32a27d72bb385097e55fa5b12daba84bdcd771a273d3d97d8c1c68ff4d07e7" = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"] } }
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_law_boundary_scan.py"
@@ -449,6 +455,12 @@ path = "scripts/test_libm_dependency_guard.py"
 sha256 = "a6aef79024ae5ecb94869166fa9854b1aa4d7a69365718b54b20da8609e23f16"
 source = { repo = "ALICE-DB", rev = "af45ce9551d43a8a715ed44e74cc689e0a0ba316" }
 repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync"]
+
+[[file]]
+path = "scripts/test_lock_sources_check.py"
+sha256 = "8f91803757fe8b638d5b071158b7fc29564cf126e1f749340af09d8fbef76ea1"
+source = { repo = "ALICE-Edge", rev = "418f287ac0ba3e954ba4ff1ce9b53076ad5fd074" }
+repos = ["ALICE-Edge", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_min_passed.py"
@@ -477,8 +489,8 @@ exempt = { "ALICE-SDF" = "moves to scripts/package_integrity.py (git dependencie
 
 [[file]]
 path = "scripts/test_package_integrity.py"
-pending = { since = "2026-11-09", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "3540c6f03b58d54dafb25a2b1685862b637c44b123247d3fc3ec7dd9051ebee3", owner = "ALICE-Analytics", planned = "bf91e3fb64eae07efa2d31897e3f1b2c15084fd0", variants = { "3540c6f03b58d54dafb25a2b1685862b637c44b123247d3fc3ec7dd9051ebee3" = ["ALICE-Analytics", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"], "81a6a26e5b1f5074d8a2ff097ba97b9b81ec93436a4ed01b1727eda2bac9ef87" = ["ALICE-DB"] } }
-repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
+pending = { since = "2026-11-09", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "3540c6f03b58d54dafb25a2b1685862b637c44b123247d3fc3ec7dd9051ebee3", owner = "ALICE-Analytics", planned = "bf91e3fb64eae07efa2d31897e3f1b2c15084fd0", variants = { "3540c6f03b58d54dafb25a2b1685862b637c44b123247d3fc3ec7dd9051ebee3" = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"], "81a6a26e5b1f5074d8a2ff097ba97b9b81ec93436a4ed01b1727eda2bac9ef87" = ["ALICE-DB"] } }
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
 
 [[file]]
 path = "scripts/test_public_text.py"
@@ -494,8 +506,8 @@ repos = ["ALICE-Law", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_release_baseline.py"
-pending = { since = "2026-11-05", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "49e8188edd81deef716f04006774c0009109a6408d0b6e3d2241da34791b25c6", owner = "ALICE-DetMath", planned = "3691ecaa3571a4d20faaf381995963079021f5e1", moved_from = { planned = "f25baf8eef4365acc153753e531fabed0f21d3b5", target = "6306d60e767ec5530e57f09a6fe35dd38cb657c892ef126d18c2144863bcdc3c" }, variants = { "49e8188edd81deef716f04006774c0009109a6408d0b6e3d2241da34791b25c6" = ["ALICE-Analytics", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"], "6306d60e767ec5530e57f09a6fe35dd38cb657c892ef126d18c2144863bcdc3c" = ["ALICE-DB", "ALICE-Law", "ALICE-ML", "ALICE-Sync"], "c686ec13fe5f65ba16798961b52ef6b47d51fd3109130351535da3eb2989c36a" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Font", "ALICE-Identity", "ALICE-LLM", "ALICE-Zip"] } }
-repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Zip"]
+pending = { since = "2026-11-05", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "49e8188edd81deef716f04006774c0009109a6408d0b6e3d2241da34791b25c6", owner = "ALICE-DetMath", planned = "3691ecaa3571a4d20faaf381995963079021f5e1", moved_from = { planned = "f25baf8eef4365acc153753e531fabed0f21d3b5", target = "6306d60e767ec5530e57f09a6fe35dd38cb657c892ef126d18c2144863bcdc3c" }, variants = { "49e8188edd81deef716f04006774c0009109a6408d0b6e3d2241da34791b25c6" = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"], "6306d60e767ec5530e57f09a6fe35dd38cb657c892ef126d18c2144863bcdc3c" = ["ALICE-DB", "ALICE-Law", "ALICE-ML", "ALICE-Sync"], "c686ec13fe5f65ba16798961b52ef6b47d51fd3109130351535da3eb2989c36a" = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Font", "ALICE-Identity", "ALICE-LLM", "ALICE-Zip"] } }
+repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = "scripts/test_run_tests.py"
