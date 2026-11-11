@@ -105,6 +105,30 @@ jobs:
         # this repository at the commit under test (its own tree), every other one at its default branch
         run: python3 scripts/public_text_live.py --local "${GITHUB_REPOSITORY#*/}=."
 
+  # Jobs that must not run on ubuntu-latest (scripts/runner_pin_live.py, patterns in conformance/runner-pin.toml):
+  # ubuntu-latest moved to 26.04, where Mesa's lavapipe crashes and Playwright installs no Chromium, so a job that
+  # uses either names a fixed image. Every public repository at its default branch (this one at the commit under
+  # test); a finding, an unreadable repository and 0 workflows read are red. Daily and by hand only.
+  runner-pin:
+    name: Every public repository names a fixed image for its GPU and browser jobs
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the runner pin check
+        run: python3 scripts/test_runner_pin_check.py
+
+      - name: The public repositories' workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/runner_pin_live.py --local "${GITHUB_REPOSITORY#*/}=."
+
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
   # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a

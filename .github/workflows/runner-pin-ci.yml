@@ -1,0 +1,37 @@
+# The runner pin check on a ci/ branch: its tests, and this repository's own workflows
+#
+# Conformance (live) reads every public repository daily (scripts/runner_pin_live.py); a ci/ branch is not red for
+# another repository's job, which it cannot change. Here: the tests of scripts/runner_pin_check.py and this
+# repository's workflows (a job of its own that uses lavapipe or Playwright on ubuntu-latest is red; 0 workflows
+# read is red).
+
+name: Runner pin (ci)
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-pin-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  runner-pin:
+    name: Runner pin check (tests, then this repository's workflows)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the runner pin check
+        run: python3 scripts/test_runner_pin_check.py
+
+      - name: This repository's workflows
+        run: python3 scripts/runner_pin_check.py --repo .

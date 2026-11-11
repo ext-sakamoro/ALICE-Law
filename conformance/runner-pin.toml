@@ -1,0 +1,13 @@
+# Jobs that must not run on ubuntu-latest (scripts/runner_pin_check.py, scripts/runner_pin_live.py).
+#
+# A job whose steps install or load one of the stacks below runs on a fixed image (ubuntu-24.04), so the stack does
+# not change under the job when ubuntu-latest moves (it moved from 24.04 to 26.04 in November 2026); the job moves
+# deliberately when its image is retired:
+#   gpu-runtime  Mesa's software Vulkan and the GPU stack around it: the packages a job installs and the ICD file it
+#                loads (not the words "lavapipe" / "llvmpipe", which also appear in messages and comments of jobs
+#                that install nothing)
+#   playwright   a browser driven by Playwright: Playwright 1.56 installs no Chromium on 26.04
+# A pattern is a case-insensitive regular expression searched in the job's text (comments removed).
+[pattern]
+gpu-runtime = 'mesa-vulkan-drivers|libvulkan1|vulkan-tools|lvp_icd|swiftshader|\bxvfb\b'
+playwright = 'playwright|chromium|puppeteer|chrome-for-testing'
