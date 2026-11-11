@@ -180,6 +180,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- `conformance/shared-files.toml`: `scripts/package_integrity.py` と試験・`alice_siblings_check.py`・`id_move_check.py`・`release_baseline.py` の行に ALICE-Auth / ALICE-OS-Keystore / ALICE-MQTT を足した (3 repository は git の main branch から取る依存の package 検査をこの共有 file に移した) ALICE-Auth は持っている他の共有 file (`public-text.yml` / `public_text.sh` / `changed_paths.py` とその試験) の行にも載る 生成し直して、他の行の variant も各 main の今の bytes に合わせた 件数の lock を 1553 に
 - root の `alice-law-integration` (Cargo.toml): core crate 9 個を crates.io の版から git の main branch + main の版に替えた (alice-physics は 4、feature `replay` は main に無いので外した) Cargo.lock は main から解決し直した
 - `scripts/dep_consistency.py`: 3 つ目の検査を「要求が crates.io の最新版を受ける」から「lock file のすべての `alice-*` package がその repository の main branch (`git+https://github.com/ext-sakamoro/<repository>?branch=main#<commit>`) から来て、この repository の `alice-*` 依存が main branch を名指す」に替えた crates.io の版、commit・tag の固定、別の branch は失敗 (比較 0 件も失敗) pending の `requires` を `source = [<crate>]` に crates.io を読む関数は release train のために残す
 - `.github/workflows/dependency-consistency.yml` と README: 依存の整合を main branch からの検査として書き直した
