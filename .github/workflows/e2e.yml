@@ -124,7 +124,7 @@ jobs:
         if: steps.resolve.outputs.expected != 'true' && needs.digest.outputs.test-expected != 'true'
         shell: bash
         run: |
-          n=$(ls digests | wc -l)
+          n=$(find digests -mindepth 1 -maxdepth 1 | wc -l)
           test "$n" -eq 2 || { echo "expected 2 digests, found $n"; exit 1; }
           cat digests/*
           a=$(cat digests/digest-arm64); b=$(cat digests/digest-x86_64)  # "<the KNOWN_SEMANTICS row of the linked alice-det-math> <digest>"
