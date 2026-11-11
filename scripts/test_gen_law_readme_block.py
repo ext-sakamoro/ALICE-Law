@@ -192,6 +192,29 @@ class Render(Base):
             self.assertIn(f"digest `{DIGEST}` |", out, wf)
             self.assertNotIn("aarch64", out, wf)
 
+    def test_a_revision_that_checks_the_main_branches_says_so_and_names_no_published_requirement(self):
+        # the published lane is gone (no e2e.yml, no run.digest): the crates come from their main
+        # branches, the digest is golden/values.digest and the two architectures are e2e-main.yml's
+        git(self.law, "rm", "-q", ".github/workflows/e2e.yml", "e2e/golden/run.digest")
+        main_toml = ('[package]\nname = "e2e"\n[dependencies]\nalice-foo = { git = "https://github.com/x/ALICE-Foo", '
+                     'branch = "main", version = "1", features = ["x"] }\n')
+        self.sha = commit(self.law, {"e2e/Cargo.toml": main_toml, "e2e/golden/values.digest": f"0.5.0 {DIGEST}\n",
+                                     ".github/workflows/e2e-main.yml": WORKFLOW})
+        for lang, want in (("en", f"covered (`alice-foo` 1, from its main branch), values digest `{DIGEST}`, "
+                                  "the same on aarch64 and x86_64"),
+                           ("ja", f"対象 (`alice-foo` 1、main branch から)、値の digest `{DIGEST}`、aarch64 と x86_64 で同じ")):
+            rc, out = self.render(lang)
+            self.assertEqual(rc, 0, out)
+            self.assertIn(want, out)
+            self.assertNotIn('= "1"', out)
+            self.assertNotIn("crates.io", out)
+
+    def test_a_revision_without_any_golden_is_an_error(self):
+        git(self.law, "rm", "-q", "e2e/golden/run.digest")
+        self.sha = commit(self.law, {"e2e/golden/other": "x\n"})
+        rc, out = self.render()
+        self.assertEqual(rc, 2, out)
+
     def test_the_block_is_deterministic_and_carries_no_date(self):
         commit(self.crate, {"alice-law-conformance.toml": MANIFEST})
         a, b = self.render()[1], self.render()[1]

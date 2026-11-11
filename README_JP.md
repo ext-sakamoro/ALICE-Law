@@ -4,10 +4,10 @@
 
 release train (`release-train.toml`) に載る crate をまたいだ統合の検査: ALICE-LOL、ALICE-DetMath、ALICE-SDF、ALICE-Physics、ALICE-DB、ALICE-Zip、ALICE-Crypto、ALICE-Analytics、ALICE-Edge、ALICE-ML、ALICE-LLM、ALICE-Kinematics、ALICE-Sync、ALICE-Identity、ALICE-Channel、ALICE-Sign、ALICE-Font、ALICE-OS-Keystore この文が roster より遅れると、この file 自身の検査 `scripts/readme_roster_check.py` が失敗する
 
-ここにあるものはすべて crates.io に公開された版から build し、path 依存を使わない 検査は 2 種類:
+path 依存を使わない 検査は 2 種類:
 
-- 依存の整合 (この場で): すべての `alice-*` crate が `Cargo.lock` でちょうど 1 つの版に解決され、`scripts/dep_consistency.py` 自身の `CORE` 一覧が挙げる crate がすべてあり、各 `alice-*` の要求が、その要求が名指す crate の最新の公開版を受ける
-- end to end: law を読み、計算し、保存し、復元し、すべての値を bit で比べる
+- 依存の整合 (この場で、crates.io に公開された版から): すべての `alice-*` crate が `Cargo.lock` でちょうど 1 つの版に解決され、`scripts/dep_consistency.py` 自身の `CORE` 一覧が挙げる crate がすべてあり、各 `alice-*` の要求が、その要求が名指す crate の最新の公開版を受ける
+- end to end (core crate の main branch から): law を読み、計算し、保存し、復元し、すべての値を bit で比べる
 
 core crate の release train (計画と、各公開の前後に走らせる script: [runbook](#runbook-crate-ごと)) と、この repository が公開する text の検査も持つ
 
@@ -107,7 +107,7 @@ release train の各 crate は自分の `alice-law-conformance.toml` を reposit
 
 ## End to end
 
-`e2e/` は別の crate で、試験は 1 つ、`tests/law_to_storage_roundtrip.rs` が core crate を公開 API で通り抜ける:
+`e2e/` は別の crate で、試験は 1 つ、`tests/law_to_storage_roundtrip.rs` が core crate を公開 API で通り抜ける `e2e/Cargo.toml` は各 core crate をその repository の main branch から名指す (git、`branch = "main"`、main の版つき):
 
 1. 読む: text で書いた Newton の冷却の法則を alice-lol の研究 law の reader で読み、時間の格子で評価する
 2. 計算する: alice-lol が検査する熱の場の law (alice-physics が解く)、`alice_physics::transient_thermal` で冷える棒、`PhysicsWorld` で落ちる 2 つの物体; alice-physics (`SdfUnion`、`ScalarField3D::max_value`) と alice-sdf (重なる箱の union、intersection、subtraction) の公開の経路で、等しい 0 (+0 と -0) が min や max に出会う所 (`f32::max` / `f32::min` は符号を target に任せ、x86_64 と aarch64 で違う); alice-edge が整数の sensor の窓に当てる固定小数点の直線と、それから作る `SignalLaw` (`alice_edge::law::linear_law`)
@@ -116,32 +116,27 @@ release train の各 crate は自分の `alice-law-conformance.toml` を reposit
 5. 復元する: directory を開き直してすべてを読み戻す
 6. 比べる: すべての値を `to_bits` で、law の係数、定義域、record、識別子、残差の要約のすべての field、run 全体の alice-crypto の digest
 
-crate が 1 つの算術で build されたこと (alice-zip、alice-db、alice-analytics、alice-edge、alice-lol から見た alice-det-math の `SEMANTICS_ID` が、`KNOWN_SEMANTICS` に記録した、link した alice-det-math の公開の識別子に等しく、そこにある以前の公開の識別子を `alice_det_math::check_semantics` が検証済みの以前のものとして受けること)、すべての `alice-*` crate が 1 つの版に lock されていること、名指す 9 つの core crate が build にあること (`e2e/tests/law_to_storage_roundtrip.rs`; roster から導かないので、train に加わった repository は自動ではこの検査に届かない) も確かめる 各比較は何も比べなければ失敗する 計算した run の golden digest (`e2e/golden/run.digest`、公開ごとに 1 行 `<alice-det-math version> <digest>`: law の record は算術から導いた識別子を持つので、公開ごとに digest がある) は、crate が記録した時と同じものを今も計算しているかを示し、往復は保存と復元で何も失われないことを示す `.github/workflows/e2e-main.yml` では同じ run を aarch64 と x86_64 の runner で行い、それぞれが digest を書き (`ALICE_LAW_E2E_DIGEST_OUT`)、最後の job が 2 つが互いに等しく、その alice-det-math の公開の golden の行に等しいことを求める
+crate が 1 つの算術で build されたこと (link した alice-det-math の `SEMANTICS_ID` が `KNOWN_SEMANTICS` に記録したその版の識別子に等しく、そこにある以前の版の識別子を `alice_det_math::check_semantics` が検証済みの以前のものとして受けること、alice-zip・alice-db・alice-analytics・alice-edge の識別子がそれぞれ自分の pin と呼ぶ alice-det-math の関数の pin を畳んだものでそれらの pin が link した alice-det-math 自身のものであること、alice-lol が呼ぶ alice-det-math の関数をそれぞれ pin すること)、すべての `alice-*` crate が 1 つの版に lock されていること、名指す 9 つの core crate が build にあること (`e2e/tests/law_to_storage_roundtrip.rs`; roster から導かないので、train に加わった repository は自動ではこの検査に届かない) も確かめる 各比較は何も比べなければ失敗する 計算した値の golden digest (`e2e/golden/values.digest`、1 行 `<alice-det-math version> <digest>`; 記録した各 repository の main の commit は `e2e/golden/values.provenance`) は、crate が記録した時と同じものを今も計算しているかを示し、往復は保存と復元で何も失われないことを示す `.github/workflows/e2e-main.yml` では同じ run を aarch64 と x86_64 の runner で行い、それぞれが digest を書き (`ALICE_LAW_E2E_DIGEST_OUT`)、最後の job が 2 つが互いに等しく、その alice-det-math の公開の golden の行に等しいことを求める
 
 ```sh
 cd e2e
-cargo test --release -- --nocapture             # published releases (resolved against crates.io)
-ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of the linked alice-det-math release again
+cargo test --release -- --nocapture             # the main branches (resolved by git)
+ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of the linked alice-det-math release again (update values.provenance with it)
 ```
 
-2 つの mode が同じ試験を走らせる:
+CI (`e2e-main.yml`) では repository を並べて checkout し、`scripts/main_mode.py` が git の source を checkout で patch するので、run は各 repository の commit を名指す main の core crate が取り込まれない (版が他の core crate の要求に合わず、checkout の隣に 2 つ目の写しが link される) 時と、`e2e/Cargo.toml` が main の新しい major を受けない時に失敗する
 
-| mode | crate | workflow | 意味 |
-|---|---|---|---|
-| published | crates.io の公開版 | `e2e.yml` | gate: 必要なすべての crate が互いに合う版で公開されるまで red |
-| main | main の branch を並べ、`scripts/main_mode.py` で patch として差し込む | `e2e-main.yml` | 早期の警告: 次の公開で何が変わるか、版が他と合わないために main のどの crate が取り込まれないか |
-
-`scripts/e2e_teeth.py` (main mode、`e2e-main.yml` の teeth の job) は checkout の 1 行ずつを変え、試験が期待した message で失敗することを求める: 1 ulp ずれて decode した law の係数、f32 を通して保存した f64、何も返さない復元、反転した digest の byte、platform の libm の `exp`、わずかに長い熱の step、別の算術の識別子、1 ulp ずれた残差、build に入った 2 つ目の alice-zip の版
+`scripts/e2e_teeth.py` (`e2e-main.yml` の teeth の job) は checkout の 1 行ずつを変え、試験が期待した message で失敗することを求める: 1 ulp ずれて decode した law の係数、f32 を通して保存した f64、何も返さない復元、反転した digest の byte、platform の libm の `exp`、わずかに長い熱の step、別の算術の識別子、1 ulp ずれた残差、build に入った 2 つ目の alice-zip の版
 
 ## 公開まで失敗する step
 
-公開の前に通れない CI の step (たとえば、公開前の crate の版を crates.io から解決する end to end の crate や、一方がまだ他方の 1 つ前の major を要求している main の branch を一緒に差し込む場合) は `scripts/expected_failure.py <step> -- <command>` で包み、`release-train.toml` の `[expected-failure.<name>]` に、待つ公開 (`until`)、その失敗が持つ error の行の text (`expect`)、理由 (`why`) とともに載せる 失敗はそれ自身の error の行から読む (端末の色の code を除いた後、大文字小文字を問わず `error` で始まり `:`、`[...]`、空白、行末が続く行、`fatal:`、Rust の panic; entry は `exit` で終了の status も名指せる): どの行も `expect` の text を含み、どの `expect` の text もどれかの行にあること なので 2 つ目の無関係な error や、text を引用するだけの log の行は通らない するとそれは予期したものとして報告され、それを要する step は飛ばされる; どの run も有効な entry (step、until、why) を job summary に挙げ、`expected_failure.py --check` はどの workflow も走らせない entry と、`exit = 101` 無しで `cargo` の command を包む entry で失敗する step は、別の形で失敗した時、roster で公開が `published` になった後も失敗する時、まだ載っているのに通った時 (entry を外す) に red になる したがって red の run は直すべき問題
+公開の前に通れない CI の step (たとえば、一方がまだ他方の 1 つ前の major を要求している main の branch を一緒に差し込む場合) は `scripts/expected_failure.py <step> -- <command>` で包み、`release-train.toml` の `[expected-failure.<name>]` に、待つ公開 (`until`)、その失敗が持つ error の行の text (`expect`)、理由 (`why`) とともに載せる 失敗はそれ自身の error の行から読む (端末の色の code を除いた後、大文字小文字を問わず `error` で始まり `:`、`[...]`、空白、行末が続く行、`fatal:`、Rust の panic; entry は `exit` で終了の status も名指せる): どの行も `expect` の text を含み、どの `expect` の text もどれかの行にあること なので 2 つ目の無関係な error や、text を引用するだけの log の行は通らない するとそれは予期したものとして報告され、それを要する step は飛ばされる; どの run も有効な entry (step、until、why) を job summary に挙げ、`expected_failure.py --check` はどの workflow も走らせない entry と、`exit = 101` 無しで `cargo` の command を包む entry で失敗する step は、別の形で失敗した時、roster で公開が `published` になった後も失敗する時、まだ載っているのに通った時 (entry を外す) に red になる したがって red の run は直すべき問題
 
 ## 状態
 
 <!-- law-status:begin -->
 
-`scripts/gen_law_status.py` が `release-train.toml`・`e2e/golden/run.digest`・`conformance/` から生成する (手で編集しない、生成結果と違えば CI が失敗する) CI の結果は各 workflow の run を見る
+`scripts/gen_law_status.py` が `release-train.toml`・`e2e/golden/values.digest`・`conformance/` から生成する (手で編集しない、生成結果と違えば CI が失敗する) CI の結果は各 workflow の run を見る
 
 ### Release train
 
@@ -173,12 +168,11 @@ ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of th
 
 なし
 
-### alice-det-math の版ごとの end to end の run digest
+### alice-det-math の版ごとの end to end の値の digest (各 main branch から)
 
-| alice-det-math | run digest |
+| alice-det-math | 値の digest |
 |---|---|
-| 0.5.0 | `966a78784bb4e3341ac6627d519db896f398176b71c2402b188294db6c8e3728` |
-| 0.5.1 | `9f7cf676708a272e3817ebbf0727c610f391e1547747af4307ee44d5523267c2` |
+| 0.6.1 | `41138e6a7c3fa4316115f50b43012d77922a50ccc832586926e9294d31a237a6` |
 
 ### Conformance manifest (15 gate)
 
@@ -200,7 +194,8 @@ Enquiries: https://extoria.co.jp/
 
 ## link する公開版のライセンス
 
-end to end の試験の crate は公開版を link し、それらは Cargo.lock の版の license のまま:
+root の integration crate は公開版を link し、それらは Cargo.lock の版の license のまま:
 alice-physics 3.1.0、alice-db 0.5.1、alice-crypto 0.4.1 は
 `AGPL-3.0-or-later OR LicenseRef-Commercial`、alice-lol 0.4.1、alice-zip 0.10.0、
-alice-analytics 0.5.0、alice-sdf 6.0.0、alice-det-math 0.5.1 は `Apache-2.0`
+alice-analytics 0.5.0、alice-sdf 6.0.0、alice-det-math 0.5.1 は `Apache-2.0` end to end の試験の crate は
+core crate を各 main branch から link し、それぞれ repository の license のまま

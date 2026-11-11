@@ -17,7 +17,8 @@
 //!    identifiers (`SEMANTICS_ID`) the crates were built with
 //!
 //! Each comparison counts what it compared and fails on zero. A golden digest of the
-//! computed run (`golden/run.digest`) is a change detector, separate from the
+//! computed values (`golden/values.digest`, with the main commits it was recorded from in
+//! `golden/values.provenance`) is a change detector, separate from the
 //! round trip: the round trip says that saving and restoring loses nothing, the
 //! golden says that the crates still compute what they computed when it was recorded.
 //! `ALICE_LAW_E2E_BLESS=1` writes the current digest (for the linked alice-det-math release)
@@ -275,18 +276,9 @@ fn rod() -> Vec<f32> {
     out
 }
 
-/// The world's damping: a velocity kept at 99/100 per 1/60 s step. The published releases take
-/// that factor per `step()`; on main the damping is a rate in 1/s, and the velocity is multiplied
-/// by `exp(-c dt)` once per `step(dt)`, so the same loss is `c = -ln(0.99) / (1/60)`.
-#[cfg(not(feature = "main-mode"))]
-fn world_damping() -> PhysicsConfig {
-    PhysicsConfig {
-        damping: Fix128::from_ratio(99, 100),
-        ..Default::default()
-    }
-}
-
-#[cfg(feature = "main-mode")]
+/// The world's damping: a velocity kept at 99/100 per 1/60 s step. The damping is a rate in 1/s
+/// and the velocity is multiplied by `exp(-c dt)` once per `step(dt)`, so the loss is
+/// `c = -ln(0.99) / (1/60)`.
 fn world_damping() -> PhysicsConfig {
     let rate = (Fix128::ZERO - Fix128::from_ratio(99, 100).ln()) * Fix128::from_int(60);
     PhysicsConfig {
@@ -528,25 +520,6 @@ fn values_f32(db: &AliceDB, name: &str) -> Vec<f32> {
     rows.into_iter().map(|(_, v)| v).collect()
 }
 
-/// The published releases re-export alice-det-math's identifier: each must be the one
-/// this build linked.
-#[cfg(not(feature = "main-mode"))]
-fn each_crate_folds_this_det_math(semantics: &[u8; 32]) -> usize {
-    let identifiers = [
-        ("alice-zip", alice_zip::law::SEMANTICS_ID),
-        ("alice-db", alice_db::SEMANTICS_ID),
-        ("alice-analytics", alice_analytics::SEMANTICS_ID),
-        ("alice-edge", alice_edge::SEMANTICS_ID),
-    ];
-    for (name, id) in identifiers {
-        assert_eq!(
-            &id, semantics,
-            "{name} was built with a different alice-det-math"
-        );
-    }
-    identifiers.len()
-}
-
 /// One checked crate: its name, its own pins, its alice-det-math function pins (`DET_MATH_PINS`)
 /// and its identifier.
 type Checked<'a> = (
@@ -609,9 +582,8 @@ fn det_math_binding(
 /// folding them must give the crate's identifier (so pins that were not the ones folded fail here),
 /// and each function pin must be the linked alice-det-math's own (`alice_det_math::FUNCTION_PINS`),
 /// so an identifier that ignored alice-det-math fails here.
-/// (`_semantics`, the linked alice-det-math's whole identifier, is the published releases' binding;
-/// on main the binding is per function, so it is not read here)
-#[cfg(feature = "main-mode")]
+/// (`_semantics`, the linked alice-det-math's whole identifier, is not read here: the binding is per
+/// function)
 fn each_crate_folds_this_det_math(_semantics: &[u8; 32]) -> usize {
     let crates: [Checked<'_>; 4] = [
         (
@@ -666,7 +638,6 @@ fn each_crate_folds_this_det_math(_semantics: &[u8; 32]) -> usize {
 /// entries in its own table (ALICE-Edge) or beside it (`DET_MATH_PINS` only, ALICE-Zip / DB /
 /// Analytics): an entry already in the own table must hold the function pin's value and is not
 /// folded twice; one that differs is an error.
-#[cfg(feature = "main-mode")]
 fn fold_with_functions(
     pins: &[(&str, [u8; 32])],
     det_pins: &[(&str, [u8; 32])],
@@ -689,7 +660,6 @@ fn fold_with_functions(
 
 /// alice-det-math's fold: entries sorted by name (byte order), then SHA-256 over each
 /// entry's name length (u32, big-endian), name bytes and 32 digest bytes.
-#[cfg(feature = "main-mode")]
 fn fold(pins: &[(&str, [u8; 32])]) -> [u8; 32] {
     use sha2::{Digest, Sha256};
     let mut sorted: Vec<_> = pins.to_vec();
@@ -704,23 +674,8 @@ fn fold(pins: &[(&str, [u8; 32])]) -> [u8; 32] {
     h.finalize().into()
 }
 
-/// The record alice-db writes for a law (the published releases take no identifier; on
-/// main the record carries the identifier it was written under, ALICE-Law G8).
-#[cfg(not(feature = "main-mode"))]
-fn law_record(name: &str, version: u64, law: &SignalLaw, _semantics: &[u8; 32]) -> Vec<u8> {
-    encode_law_record(name, version, &law.to_parts()).unwrap()
-}
-
-/// The arithmetic the cooling law is stamped with: the identifier its producer, alice-zip,
-/// exports for the arithmetic a law is evaluated with. The published releases name
-/// alice-det-math's; on main alice-zip's `law::SEMANTICS_ID` is its own fold, the identifier
-/// alice-db verifies a stored record against.
-#[cfg(not(feature = "main-mode"))]
-fn cooling_semantics() -> [u8; 32] {
-    alice_det_math::SEMANTICS_ID
-}
-
-#[cfg(feature = "main-mode")]
+/// The arithmetic the cooling law is stamped with: alice-zip's `law::SEMANTICS_ID`, its own fold,
+/// the identifier alice-db verifies a stored record against.
 fn cooling_semantics() -> [u8; 32] {
     alice_zip::law::SEMANTICS_ID
 }
@@ -730,7 +685,6 @@ fn cooling_semantics() -> [u8; 32] {
 /// earlier arithmetic, not as the current one: the known earlier-arithmetic case, so the Current
 /// checks of the stored laws compare something. Not alice-det-math's identifier of this build:
 /// after the 0.6 generation move that is no identifier alice-zip ever stamped a law with.
-#[cfg(feature = "main-mode")]
 fn earlier_arithmetic_reads_as_previous(db: &AliceDB, law: &SignalLaw) -> usize {
     let mut compared = 0;
     for (version, id, generation) in KNOWN_SEMANTICS {
@@ -752,21 +706,14 @@ fn earlier_arithmetic_reads_as_previous(db: &AliceDB, law: &SignalLaw) -> usize 
     compared
 }
 
-#[cfg(feature = "main-mode")]
+/// The record alice-db writes for a law: it carries the identifier it was written under
+/// (ALICE-Law G8).
 fn law_record(name: &str, version: u64, law: &SignalLaw, semantics: &[u8; 32]) -> Vec<u8> {
     encode_law_record(name, version, &law.to_parts(), semantics).unwrap()
 }
 
-/// A stored law read back (on main also its record's semantics, which must be the
-/// current one: a record the store read as unpinned or as another arithmetic fails here).
-#[cfg(not(feature = "main-mode"))]
-fn restore_law(db: &AliceDB, name: &str) -> SignalLaw {
-    db.get_law(name)
-        .unwrap()
-        .unwrap_or_else(|| panic!("{name} was saved"))
-}
-
-#[cfg(feature = "main-mode")]
+/// A stored law read back, with its record's semantics, which must be the current one: a record
+/// the store read as unpinned or as another arithmetic fails here.
 fn restore_law(db: &AliceDB, name: &str) -> SignalLaw {
     let stored = db
         .get_law(name)
@@ -834,10 +781,9 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     }
     assert_eq!(same + older, position, "every earlier row compared");
     // main is generation 0.6 with 0.6.0 before it and the 0.5 rows before that: both sides compare
-    #[cfg(feature = "main-mode")]
     assert!(
         same > 0 && older > 0,
-        "main mode compared {same} same-generation and {older} earlier-generation rows"
+        "compared {same} same-generation and {older} earlier-generation rows"
     );
     println!(
         "e2e: alice-det-math {det_math_version} (row {entry_version}, generation {entry_generation}), identifier {}, \
@@ -845,21 +791,8 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         hex(&semantics)
     );
     let crate_ids = each_crate_folds_this_det_math(&semantics);
-    // the published release pins alice-det-math's whole identifier; on main alice-lol pins each
-    // alice-det-math function it calls (`alice-det-math::<function>`), each the linked one's own
-    #[cfg(not(feature = "main-mode"))]
-    {
-        let lol_pin = alice_lol::law_id::LOL_SEMANTICS_PINS
-            .iter()
-            .find(|(name, _)| *name == "alice-det-math")
-            .map(|(_, id)| *id)
-            .expect("alice-lol pins the alice-det-math identifier");
-        assert_eq!(
-            lol_pin, semantics,
-            "alice-lol pins a different alice-det-math"
-        );
-    }
-    #[cfg(feature = "main-mode")]
+    // alice-lol pins each alice-det-math function it calls (`alice-det-math::<function>`), each
+    // the linked one's own, and not alice-det-math's whole identifier
     {
         let pins = alice_lol::law_id::LOL_SEMANTICS_PINS;
         assert!(
@@ -998,7 +931,6 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         summary: summary_bytes(&restored_summary),
         ..restored
     };
-    #[cfg(feature = "main-mode")]
     let earlier = earlier_arithmetic_reads_as_previous(&db, &restored_law);
     drop(db);
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1050,7 +982,6 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         &domain(&restored_edge),
         f64::to_bits,
     );
-    #[cfg(feature = "main-mode")]
     {
         compared += earlier;
     }
@@ -1092,8 +1023,8 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
         "e2e: run digest without the alice-edge records {}",
         hex(&digest_of(&run, &world_raw, false))
     );
-    // the values alone (the law records left out) are the same in both modes: main mode
-    // changes the record format (it carries an identifier, ALICE-Law G8), not what is computed
+    // the values alone (the law records left out): what is computed, apart from the record
+    // format (a record carries an identifier, ALICE-Law G8)
     let values = Run {
         law_record: Vec::new(),
         edge_record: Vec::new(),
@@ -1102,22 +1033,15 @@ fn a_law_survives_compute_save_and_restore_bit_for_bit() {
     let values_got = hex(&digest(&values, &world_raw));
     println!("e2e: values digest {values_got}");
     if let Some(out) = std::env::var_os("ALICE_LAW_E2E_DIGEST_OUT") {
-        // for the comparison of two architectures: the whole run in the published mode
-        // (.github/workflows/e2e.yml, against golden/run.digest), the values on main
-        // (e2e-main.yml, against golden/values.digest)
-        let shown = if cfg!(feature = "main-mode") {
-            &values_got
-        } else {
-            &got
-        };
+        // for the comparison of two architectures (e2e-main.yml): the values, against
+        // golden/values.digest
+        let shown = &values_got;
         // keyed like the golden files: by the KNOWN_SEMANTICS row the release is built with
         std::fs::write(out, format!("{entry_version} {shown}\n")).unwrap();
     }
     check_golden("golden/values.digest", entry_version, &values_got);
-    // the whole run, records included, is the published releases' format; on main the records
-    // are compared through the store above (written == read back, read as the current semantics)
-    #[cfg(not(feature = "main-mode"))]
-    check_golden("golden/run.digest", entry_version, &got);
+    // the records are compared through the store above (written == read back, read as the
+    // current semantics); the whole run's digest is printed for the log
     println!("e2e: run digest {got}");
 }
 
@@ -1166,7 +1090,7 @@ fn check_golden(rel: &str, det_math_version: &str, got: &str) {
     }
 }
 
-/// The transitive rule of [`det_math_binding`] on made-up crates (runs in both modes).
+/// The transitive rule of [`det_math_binding`] on made-up crates.
 #[test]
 fn det_math_binding_takes_only_per_function_pins_and_keeps_the_crate_rule() {
     // oracle: each expected result is fixed by what the fixture writes (the pins and the linked
@@ -1218,7 +1142,6 @@ fn det_math_binding_takes_only_per_function_pins_and_keeps_the_crate_rule() {
         .contains("not a checked crate"));
 }
 
-#[cfg(feature = "main-mode")]
 #[test]
 fn the_fold_takes_the_det_math_entries_in() {
     // dropping the det-math entries from the fold gives another identifier (oracle: folds of

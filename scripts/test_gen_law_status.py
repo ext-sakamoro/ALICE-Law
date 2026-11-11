@@ -53,7 +53,7 @@ class Gen(unittest.TestCase):
         (self.d / "conformance").mkdir()
         (self.d / "e2e" / "golden").mkdir(parents=True)
         self.files = {"conformance/gates.toml": '[[gate]]\nid = "G1"\n\n[[gate]]\nid = "G2"\n', "release-train.toml": ROSTER,
-                      "conformance/missing-manifests.toml": MISSING, "e2e/golden/run.digest": GOLDEN,
+                      "conformance/missing-manifests.toml": MISSING, "e2e/golden/values.digest": GOLDEN,
                       "README.md": README}
         for k, v in self.files.items():
             (self.d / k).write_text(v, encoding="utf-8")
@@ -97,7 +97,7 @@ class Gen(unittest.TestCase):
 
     def test_a_gate_or_golden_change_fails_the_check(self):
         for name, text in (("conformance/gates.toml", '[[gate]]\nid = "G1"\n'),
-                           ("e2e/golden/run.digest", GOLDEN + "0.5.2 cccc\n")):
+                           ("e2e/golden/values.digest", GOLDEN + "0.5.2 cccc\n")):
             self.setUp()
             self.run_main()
             (self.d / name).write_text(text, encoding="utf-8")
@@ -139,7 +139,7 @@ class Gen(unittest.TestCase):
 
     def test_nothing_to_render_exits_2(self):
         for name, text in (("release-train.toml", ""),
-                           ("e2e/golden/run.digest", "0.5.0\n"), ("e2e/golden/run.digest", "")):
+                           ("e2e/golden/values.digest", "0.5.0\n"), ("e2e/golden/values.digest", "")):
             self.setUp()
             (self.d / name).write_text(text, encoding="utf-8")
             self.assertEqual(self.run_main("--check")[0], 2, (name, text))

@@ -180,6 +180,11 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- e2e: core crate 9 個 (alice-lol / alice-physics / alice-sdf / alice-db / alice-zip / alice-crypto / alice-analytics / alice-det-math / alice-edge) を crates.io の版から git の main branch + main の版 (`branch = "main"`) に替えた 試験は main の意味だけを持ち (feature `main-mode` と公開版の分岐を削除)、`golden/values.digest` は main から取り直した 0.6.1 の 1 行 (値は不変 `41138e6a…`)、記録した各 repository の main の commit を `golden/values.provenance` に置く
+- `scripts/main_mode.py`: e2e/Cargo.toml の要求を main の版へ上げる処理と feature の有効化をやめ、要求が checkout の版を受けない時 (main の新しい major に manifest が遅れている) は何も書かずに exit 1 で止める (`stale_requirements`) git の source を checkout で patch する処理と verify は同じ
+- `scripts/gen-law-readme-block.py`: `e2e/golden/run.digest` の無い revision (main branch だけを確かめる) では、end to end の行を「`<crate>` <版>、main branch から」と値の digest (`golden/values.digest`) で書き、2 つの architecture の比較は `e2e-main.yml` から読む それより前の revision の block は従来どおり
+- `scripts/gen_law_status.py`: README の Status の golden の表を `e2e/golden/values.digest` から作る (見出しも値の digest に)
+- README: end to end は core crate の main branch から確かめる、と書き直した (crates.io の公開版から走らせる mode の表と、公開前の版を crates.io から解決する例を削除) root の integration crate は従来どおり公開版から
 - e2e (main mode): `KNOWN_SEMANTICS` の各行に世代を手で書いた (0.5 / 0.6) alice-det-math 0.6 は bit を変えた世代の移行なので、同じ世代の前の行は VerifiedPrevious、前の世代の行は Mismatch を両方向で確かめる (main mode では両側とも 1 件以上) 以前は前の行をすべて VerifiedPrevious と求めていた
 - e2e (main mode): 4 crate (zip / db / analytics / edge) と alice-lol の det-math との結び付きは関数ごとの pin だけで確かめる 識別子は自分の pin と `det-math <関数>` の項目を 1 回ずつ畳んだ値 (Edge のように自分の表に持つ形も、`DET_MATH_PINS` を別に持つ形も)、各関数の pin は link した alice-det-math の `FUNCTION_PINS` と一致 det-math 全体の識別子を pin に持つ形は失敗にした crate どうしの識別子の pin の照合は残す
 - e2e (main mode): 前の算術として読めることの確かめは、alice-zip が自分の識別子を畳む前に記録した alice-det-math 0.5 の識別子 (表の 0.5 の行) で記録した law で行う 0.6 の移行の後、link した alice-det-math 自身の識別子は alice-zip が law に記録したことの無い値なので
@@ -301,6 +306,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/shared-files.toml`: `scripts/test_shared_files.py` (owner ALICE-DetMath) の計画を、DetMath が着地した e2c85c9e / 88dd1d9a から、表の行から試験を組み非公開の repository でも走る新しい bytes (planned 39455376 / target ffb398a3) に re-roll する (moved_from は着地した組) 表を今の main から作り直したので、owner が着地した first move の flag (`scripts/shared_files.sh` / `scripts/clippy_external_coverage.py` と各試験) が外れ、pending の行の variants が今の main の持ち方になる
 
 ### Removed
+- `.github/workflows/e2e.yml` (crates.io の公開版で走らせる end to end) と `e2e/golden/run.digest` end to end は `e2e-main.yml` だけになる crates.io に公開済みの版はそのまま (yank しない)
 - `conformance/manifest-state.toml` と `conformance/pending-state.toml`、`conformance_roster_check.py` の `--write` / `--state` / `--pending` / `--strict` / `--state-drift-note` と pending の 3 日の規則、`land_law_state.py` の `--write` / `--today` crate の着地のたびに要った追いかけの commit と、着地済の entry が他の repository の着地を止める経路がなくなる
 
 ### Fixed

@@ -76,6 +76,7 @@ TEXT = {
                                           "{req_lead}{req}",
         "req_none": "no alice-det-math", "req_self": "this crate is alice-det-math", "req_lead": "this crate requires ",
         "e2e": "End to end check", "e2e_in": "covered (`{name} = \"{req}\"`), digest `{digest}`{arches}",
+        "e2e_main": "covered (`{name}` {req}, from its main branch), values digest `{digest}`{arches}",
         "e2e_out": "not part of the end to end check",
         "arches": ", the same on aarch64 and x86_64",
         "conf": "### Conformance (G1-G14)",
@@ -97,6 +98,7 @@ TEXT = {
         "arith": "算術", "arith_v": "train の alice-det-math {dm}、算術の識別子 `{sid}` {req_lead}{req}",
         "req_none": "alice-det-math なし", "req_self": "この crate が alice-det-math", "req_lead": "この crate の要求は ",
         "e2e": "end to end 検査", "e2e_in": "対象 (`{name} = \"{req}\"`)、digest `{digest}`{arches}",
+        "e2e_main": "対象 (`{name}` {req}、main branch から)、値の digest `{digest}`{arches}",
         "e2e_out": "end to end 検査の対象外",
         "arches": "、aarch64 と x86_64 で同じ",
         "conf": "### 適合 (G1-G14)",
@@ -140,8 +142,8 @@ def cell(text: str) -> str:
 
 
 def golden_digest(golden: str, det_math: str | None) -> str | None:
-    """the golden digest for an alice-det-math release: the line "<version> <digest>" of
-    e2e/golden/run.digest (an earlier revision held one digest alone)"""
+    """the golden digest for an alice-det-math release: the line "<version> <digest>" of the golden
+    file (an earlier revision held one digest alone)"""
     lines = [l.split() for l in golden.splitlines() if l.strip()]
     if len(lines) == 1 and len(lines[0]) == 1:
         return lines[0][0]
@@ -153,7 +155,11 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
     gates_text = show(law, rev, "conformance/gates.toml")
     e2e_toml = show(law, rev, "e2e/Cargo.toml")
     e2e_test = show(law, rev, "e2e/tests/law_to_storage_roundtrip.rs")
-    golden = show(law, rev, "e2e/golden/run.digest")
+    # a revision with e2e/golden/run.digest checked the published releases (e2e.yml); a later one checks
+    # the main branches only (e2e-main.yml), against e2e/golden/values.digest
+    published = show(law, rev, "e2e/golden/run.digest")
+    golden_file = "e2e/golden/run.digest" if published is not None else "e2e/golden/values.digest"
+    golden = published if published is not None else show(law, rev, golden_file)
     if None in (roster_text, gates_text, e2e_toml, e2e_test, golden):
         raise InputError(f"ALICE-Law {rev[:12]}: an input file is missing")
     roster = tomllib.loads(roster_text).get("crate", {})
@@ -169,12 +175,13 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
         raise InputError(f"ALICE-Law {rev[:12]}: no alice-det-math entry, or no identifier for alice-det-math {dm}")
     digest = golden_digest(golden, dm)
     if digest is None:
-        raise InputError(f"ALICE-Law {rev[:12]}: e2e/golden/run.digest has no digest for alice-det-math {dm}")
+        raise InputError(f"ALICE-Law {rev[:12]}: {golden_file} has no digest for alice-det-math {dm}")
     deps = tomllib.loads(e2e_toml).get("dependencies", {})
     req = deps.get(crate)
     if isinstance(req, dict):
         req = req.get("version")
-    workflow = show(law, rev, ".github/workflows/e2e.yml") or ""
+    workflow = show(law, rev, ".github/workflows/e2e.yml" if published is not None
+                    else ".github/workflows/e2e-main.yml") or ""
     gates = tomllib.loads(gates_text).get("gate", [])
     if not gates:
         raise InputError(f"ALICE-Law {rev[:12]}: conformance/gates.toml lists no gate")
@@ -182,6 +189,7 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
         "version": entry.get("version", "?"), "state": entry.get("state", "?"),
         "law_dependency": entry.get("law-dependency", True), "det_math": dm, "semantics": sid.group(1),
         "e2e_req": req, "digest": digest, "manifest_path": entry.get("manifest-path", "Cargo.toml"),
+        "main_only": published is None,
         # the job that requires the two digests to be equal, and both runners named whole
         "arches": (bool(re.search(r"^\s+digest-compare:\s*$", workflow, re.M))
                    and bool(re.search(r"runner:\s*macos-15\s*$", workflow, re.M))
@@ -314,8 +322,8 @@ def render(law: str, law_rev: str, crate: str, repo: str, crate_rev: str, lang: 
     st = t["st"]
     req = (t["req_self"] if crate == "alice-det-math"
            else f'`alice-det-math = "{cf["det_math"]}"`' if cf["det_math"] else t["req_none"])
-    e2e = (t["e2e_in"].format(name=crate, req=lf["e2e_req"], digest=lf["digest"],
-                              arches=t["arches"] if lf["arches"] else "")
+    e2e = (t["e2e_main" if lf["main_only"] else "e2e_in"].format(
+               name=crate, req=lf["e2e_req"], digest=lf["digest"], arches=t["arches"] if lf["arches"] else "")
            if lf["e2e_req"] else t["e2e_out"])
     out = [f"<!-- law-integration:begin law={sha} -->", t["title"], "", t["generated"].format(law=sha[:12]), "",
            "| | |", "|---|---|",

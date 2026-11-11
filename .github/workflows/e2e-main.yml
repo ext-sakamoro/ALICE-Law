@@ -1,10 +1,11 @@
 # End to end check of the core ALICE crates, from their main branches
 #
-# The same test as e2e.yml, with every core crate replaced by a checkout of its
-# repository's main branch (scripts/main_mode.py). An early warning: it says what the
-# next releases would do to the round trip and to the golden digest, and it fails
-# when a crate on main is not taken (its version does not fit what the others
-# require, so Cargo keeps the release from crates.io).
+# e2e/Cargo.toml names every core crate from its repository's main branch; the CI checks
+# the repositories out side by side and patches those sources with the checkouts
+# (scripts/main_mode.py), so a run names the commit of each repository and the mutations
+# below reach the test. It fails when a crate on main is not taken (its version does not
+# fit what another core crate requires, so Cargo links a second copy beside the checkout)
+# and when e2e/Cargo.toml is behind a new major on main.
 #
 # The teeth job changes one line at a time in the checkouts and requires the test
 # to fail with the expected message (scripts/e2e_teeth.py); it rebuilds the test for
@@ -74,7 +75,7 @@ jobs:
           cd e2e && cargo --version
           python3 ../scripts/expected_failure.py e2e-main-patch -- cargo generate-lockfile
 
-      # first, so a core crate that comes from crates.io beside its checkout (a member whose main does
+      # first, so a core crate that comes from elsewhere beside its checkout (a member whose main does
       # not accept another member's main) is named with its requirers before the build fails on it
       - name: Every core crate taken from main
         if: steps.patch.outputs.expected != 'true'
@@ -190,7 +191,7 @@ jobs:
           cat digests/*
           a=$(cat digests/digest-arm64); b=$(cat digests/digest-x86_64)  # "<the KNOWN_SEMANTICS row of the linked alice-det-math> <digest>"
           test -n "$a" && test "$a" = "$b" || { echo "aarch64 and x86_64 differ"; exit 1; }
-          # main mode writes the values digest (the law records are main's format, compared in
-          # the test through the store): the golden is golden/values.digest
+          # the test writes the values digest (the law records are compared in the test through
+          # the store): the golden is golden/values.digest
           grep -qxF -- "$a" e2e/golden/values.digest || { echo "both differ from the e2e/golden/values.digest line for their KNOWN_SEMANTICS row"; exit 1; }
           echo "aarch64 = x86_64 = golden: $a" >> "$GITHUB_STEP_SUMMARY"

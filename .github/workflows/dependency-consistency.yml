@@ -29,7 +29,7 @@ on:
       - "README.md"
       - "docs/CONFORMANCE.md"
       - "conformance/**"
-      - "e2e/golden/run.digest"
+      - "e2e/golden/values.provenance"
       - "e2e/golden/values.digest"
       - "README_JP.md"
       - "scripts/**"
@@ -139,7 +139,7 @@ jobs:
           fi
           python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
 
-      - name: Test main mode (the requirement raise and what verify counts)
+      - name: Test main mode (the requirements behind main and what verify counts)
         run: python3 scripts/test_main_mode.py
 
       # the committed conformance state alone (it parses, covers exactly the train's crates,

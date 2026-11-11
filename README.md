@@ -4,10 +4,10 @@ Integration checks across the crates in the release train (`release-train.toml`)
 
 [日本語](README_JP.md)
 
-Everything here is built from the versions published on crates.io, with no path dependencies. Two kinds of check:
+No path dependencies. Two kinds of check:
 
-- dependency consistency (in place): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, every crate `scripts/dep_consistency.py`'s own `CORE` list names is present, and each `alice-*` requirement accepts the latest published version of the crate it names
-- end to end: read a law, compute, save, restore, and compare every value bit for bit
+- dependency consistency (in place, from the versions published on crates.io): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, every crate `scripts/dep_consistency.py`'s own `CORE` list names is present, and each `alice-*` requirement accepts the latest published version of the crate it names
+- end to end (from the core crates' main branches): read a law, compute, save, restore, and compare every value bit for bit
 
 It also holds the release train of the core crates (the plan, and the scripts run before and after each publish: [runbook](#runbook-one-crate)) and the checks of the text this repository publishes.
 
@@ -107,7 +107,7 @@ Each crate in the release train carries its own `alice-law-conformance.toml` at 
 
 ## End to end
 
-`e2e/` is a separate crate with one test, `tests/law_to_storage_roundtrip.rs`, that goes through the core crates with their public APIs:
+`e2e/` is a separate crate with one test, `tests/law_to_storage_roundtrip.rs`, that goes through the core crates with their public APIs. `e2e/Cargo.toml` names each core crate from its repository's main branch (git, `branch = "main"`, with the version on main):
 
 1. read: Newton's law of cooling, written as text, through the alice-lol research law reader, evaluated on a time grid
 2. compute: a thermal field law checked by alice-lol (solved by alice-physics), a rod cooling with `alice_physics::transient_thermal`, two bodies falling in a `PhysicsWorld`; equal zeros (+0 and -0) meeting a min or a max on public paths of alice-physics (`SdfUnion`, `ScalarField3D::max_value`) and alice-sdf (union, intersection and subtraction of coincident boxes), where `f32::max` / `f32::min` leave the sign to the target and x86_64 and aarch64 differ; and alice-edge's fixed-point line fit of an integer sensor window and the `SignalLaw` it makes of it (`alice_edge::law::linear_law`)
@@ -116,32 +116,27 @@ Each crate in the release train carries its own `alice-law-conformance.toml` at 
 5. restore: reopen the directory and read everything back
 6. compare: every value by `to_bits`, the law coefficients, domain, record and identifier, every field of the residual summary, and the alice-crypto digest of the whole run
 
-It also checks that the crates were built with one arithmetic (the `SEMANTICS_ID` of alice-det-math as alice-zip, alice-db, alice-analytics, alice-edge and alice-lol see it, equal to the identifier recorded for the linked alice-det-math release in `KNOWN_SEMANTICS`, with the identifiers of the earlier releases there accepted by `alice_det_math::check_semantics` as verified earlier ones), that every `alice-*` crate is locked at one version, and that the nine core crates it names are in the build (`e2e/tests/law_to_storage_roundtrip.rs`; not derived from the roster, so a repository joining the train does not reach this check on its own). Each comparison fails when it compared nothing. A golden digest of the computed run (`e2e/golden/run.digest`, one line `<alice-det-math version> <digest>` per release: the law records carry identifiers derived from the arithmetic, so each release has its own digest) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing. In `.github/workflows/e2e-main.yml` the same run is made on an aarch64 and an x86_64 runner, each writes its digest (`ALICE_LAW_E2E_DIGEST_OUT`), and a last job requires the two to be equal to each other and to the golden line of their alice-det-math release.
+It also checks that the crates were built with one arithmetic (the linked alice-det-math's `SEMANTICS_ID` equal to the identifier recorded for its release in `KNOWN_SEMANTICS`, with the identifiers of the earlier releases there accepted by `alice_det_math::check_semantics` as verified earlier ones; the identifiers of alice-zip, alice-db, alice-analytics and alice-edge each the fold of their own pins and of the pins of the alice-det-math functions they call, each of those the linked alice-det-math's own, and alice-lol pinning each alice-det-math function it calls), that every `alice-*` crate is locked at one version, and that the nine core crates it names are in the build (`e2e/tests/law_to_storage_roundtrip.rs`; not derived from the roster, so a repository joining the train does not reach this check on its own). Each comparison fails when it compared nothing. A golden digest of the computed values (`e2e/golden/values.digest`, one line `<alice-det-math version> <digest>`; `e2e/golden/values.provenance` names the main commit of each repository it was recorded from) says whether the crates still compute what they computed when it was recorded; the round trip says that saving and restoring loses nothing. In `.github/workflows/e2e-main.yml` the same run is made on an aarch64 and an x86_64 runner, each writes its digest (`ALICE_LAW_E2E_DIGEST_OUT`), and a last job requires the two to be equal to each other and to the golden line of their alice-det-math release.
 
 ```sh
 cd e2e
-cargo test --release -- --nocapture             # published releases (resolved against crates.io)
-ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of the linked alice-det-math release again
+cargo test --release -- --nocapture             # the main branches (resolved by git)
+ALICE_LAW_E2E_BLESS=1 cargo test --release      # record the golden digest of the linked alice-det-math release again (update values.provenance with it)
 ```
 
-Two modes run the same test:
+In CI (`e2e-main.yml`) the repositories are checked out side by side and `scripts/main_mode.py` patches the git sources with the checkouts, so a run names the commit of each repository. It fails when a core crate on main is not taken (its version does not fit what another core crate requires, so a second copy is linked beside the checkout) and when `e2e/Cargo.toml` does not accept a new major on main.
 
-| mode | crates | workflow | meaning |
-|---|---|---|---|
-| published | crates.io releases | `e2e.yml` | the gate: red until every crate it needs is released at versions that fit together |
-| main | the main branches, side by side, patched in by `scripts/main_mode.py` | `e2e-main.yml` | early warning: what the next releases would change, and which crate on main is not taken because its version does not fit the others |
-
-`scripts/e2e_teeth.py` (main mode, the teeth job of `e2e-main.yml`) changes one line at a time in the checkouts and requires the test to fail with the expected message: a law coefficient decoded one ulp off, an f64 saved through f32, a restore that returns nothing, a flipped digest byte, `exp` from the platform libm, a slightly longer thermal step, a different arithmetic identifier, a residual one ulp off, and a second version of alice-zip in the build.
+`scripts/e2e_teeth.py` (the teeth job of `e2e-main.yml`) changes one line at a time in the checkouts and requires the test to fail with the expected message: a law coefficient decoded one ulp off, an f64 saved through f32, a restore that returns nothing, a flipped digest byte, `exp` from the platform libm, a slightly longer thermal step, a different arithmetic identifier, a residual one ulp off, and a second version of alice-zip in the build.
 
 ## Steps that fail until a release
 
-A CI step that cannot pass before a release (for example the end to end crate resolving a crate version from crates.io before it is published, or the main branches patched in together while one of them still requires the previous major of another) is wrapped in `scripts/expected_failure.py <step> -- <command>` and listed in `release-train.toml` under `[expected-failure.<name>]` with the release it waits for (`until`), the text of the error lines its failure has (`expect`) and why (`why`). The failure is read from its own error lines (after terminal colour codes are removed, a line starting with `error` in any case followed by `:`, `[...]`, a space or the end of the line, `fatal:`, or a Rust panic; an entry can also name the exit status with `exit`): every one must contain an `expect` text and every `expect` text must be in one, so a second, unrelated error or a log line that only quotes the text does not pass. It is then reported as expected and the steps that need it are skipped; every run lists the active entries (step, until, why) in the job summary, and `expected_failure.py --check` fails on an entry no workflow runs and on an entry wrapping a `cargo` command without `exit = 101`. The step is red when it fails another way, when it still fails after its release is `published` in the roster, and when it passes while it is still listed (remove the entry). So a red run is a problem to fix.
+A CI step that cannot pass before a release (for example the main branches patched in together while one of them still requires the previous major of another) is wrapped in `scripts/expected_failure.py <step> -- <command>` and listed in `release-train.toml` under `[expected-failure.<name>]` with the release it waits for (`until`), the text of the error lines its failure has (`expect`) and why (`why`). The failure is read from its own error lines (after terminal colour codes are removed, a line starting with `error` in any case followed by `:`, `[...]`, a space or the end of the line, `fatal:`, or a Rust panic; an entry can also name the exit status with `exit`): every one must contain an `expect` text and every `expect` text must be in one, so a second, unrelated error or a log line that only quotes the text does not pass. It is then reported as expected and the steps that need it are skipped; every run lists the active entries (step, until, why) in the job summary, and `expected_failure.py --check` fails on an entry no workflow runs and on an entry wrapping a `cargo` command without `exit = 101`. The step is red when it fails another way, when it still fails after its release is `published` in the roster, and when it passes while it is still listed (remove the entry). So a red run is a problem to fix.
 
 ## Status
 
 <!-- law-status:begin -->
 
-Generated by `scripts/gen_law_status.py` from `release-train.toml`, `e2e/golden/run.digest` and `conformance/` (do not edit by hand; CI fails when it differs). The CI results are the workflows' runs.
+Generated by `scripts/gen_law_status.py` from `release-train.toml`, `e2e/golden/values.digest` and `conformance/` (do not edit by hand; CI fails when it differs). The CI results are the workflows' runs.
 
 ### Release train
 
@@ -173,12 +168,11 @@ Generated by `scripts/gen_law_status.py` from `release-train.toml`, `e2e/golden/
 
 None.
 
-### End to end run digest per alice-det-math release
+### End to end values digest per alice-det-math release (from the main branches)
 
-| alice-det-math | run digest |
+| alice-det-math | values digest |
 |---|---|
-| 0.5.0 | `966a78784bb4e3341ac6627d519db896f398176b71c2402b188294db6c8e3728` |
-| 0.5.1 | `9f7cf676708a272e3817ebbf0727c610f391e1547747af4307ee44d5523267c2` |
+| 0.6.1 | `41138e6a7c3fa4316115f50b43012d77922a50ccc832586926e9294d31a237a6` |
 
 ### Conformance manifests (15 gates)
 
@@ -200,8 +194,9 @@ Enquiries: https://extoria.co.jp/
 
 ## Licences of the linked releases
 
-The end to end test crate links published releases, which keep their own
+The integration crate at the root links published releases, which keep their own
 licences at the versions in Cargo.lock: alice-physics 3.1.0, alice-db 0.5.1
 and alice-crypto 0.4.1 are `AGPL-3.0-or-later OR LicenseRef-Commercial`;
 alice-lol 0.4.1, alice-zip 0.10.0, alice-analytics 0.5.0, alice-sdf 6.0.0
-and alice-det-math 0.5.1 are `Apache-2.0`.
+and alice-det-math 0.5.1 are `Apache-2.0`. The end to end test crate links the core
+crates from their main branches, each under the licence of its repository.

@@ -6,28 +6,23 @@ publish = false
 license = "LicenseRef-Proprietary"
 description = "End to end check across the core ALICE crates: read a law, compute, save, restore, compare bit for bit"
 
-# The published releases the check is written against. `alice-lol` 0.4 is the first
-# release with the research law reader used here; 0.4.1 up to the 0.5 series is
-# accepted. Main mode (scripts/main_mode.py)
-# patches these with the main branches of the nine repositories.
+# The core crates from their main branches (git, branch = "main", with the version on main):
+# the check is what the crates on main compute, read, save and restore. The CI checks the
+# repositories out side by side and patches these sources with the checkouts
+# (scripts/main_mode.py), so the mutations of scripts/e2e_teeth.py reach the test.
 [dependencies]
-alice-lol = { version = ">=0.4.1, <0.6", features = ["physics"] }
-alice-physics = { version = "3", default-features = false, features = ["std"] }
-alice-sdf = "6"
-alice-db = "0.5"
-alice-zip = "0.10"
-alice-crypto = "0.4.1"
-alice-analytics = { version = ">=0.5, <0.7", features = ["law"] }
-alice-det-math = "0.5"
-alice-edge = { version = ">=0.2, <0.4", default-features = false, features = ["std", "law"] }
+alice-lol = { git = "https://github.com/ext-sakamoro/ALICE-LOL", branch = "main", version = "0.5", features = ["physics"] }
+alice-physics = { git = "https://github.com/ext-sakamoro/ALICE-Physics", branch = "main", version = "4", default-features = false, features = ["std"] }
+alice-sdf = { git = "https://github.com/ext-sakamoro/ALICE-SDF", branch = "main", version = "7" }
+alice-db = { git = "https://github.com/ext-sakamoro/ALICE-DB", branch = "main", version = "0.6" }
+alice-zip = { git = "https://github.com/ext-sakamoro/ALICE-Zip", branch = "main", version = "0.11" }
+alice-crypto = { git = "https://github.com/ext-sakamoro/ALICE-Crypto", branch = "main", version = "0.7" }
+alice-analytics = { git = "https://github.com/ext-sakamoro/ALICE-Analytics", branch = "main", version = "0.7", features = ["law"] }
+alice-det-math = { git = "https://github.com/ext-sakamoro/ALICE-DetMath", branch = "main", version = "0.6" }
+alice-edge = { git = "https://github.com/ext-sakamoro/ALICE-Edge", branch = "main", version = "0.4", default-features = false, features = ["std", "law"] }
 
 [dev-dependencies]
-# folds each crate's identifier pins in main mode (the procedure of alice-det-math's fold)
+# folds each crate's identifier pins (the procedure of alice-det-math's fold)
 sha2 = "0.10"
-
-[features]
-# turned on by scripts/main_mode.py in the CI checkout: the core crates are their main
-# branches, whose identifiers fold their own pins (ALICE-Law G6)
-main-mode = []
 
 [workspace]

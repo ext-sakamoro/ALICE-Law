@@ -60,8 +60,8 @@ ja = "公開まで失敗を予期する step"
 
 [[heading]]
 level = 3
-en = "End to end run digest per alice-det-math release"
-ja = "alice-det-math の版ごとの end to end の run digest"
+en = "End to end values digest per alice-det-math release (from the main branches)"
+ja = "alice-det-math の版ごとの end to end の値の digest (各 main branch から)"
 
 [[heading]]
 level = 3

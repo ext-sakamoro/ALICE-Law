@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for main_mode.py: the requirement raise of the CI copy and what verify counts as a problem."""
+"""Tests for main_mode.py: the requirements that do not accept main, and what verify counts as a problem."""
 from __future__ import annotations
 
 import importlib.util
@@ -16,14 +16,11 @@ name = "alice-law-e2e"
 version = "0.0.0"
 
 [dependencies]
-alice-db = "0.5"
-alice-zip = "0.10"
-alice-sdf = "6"
-alice-edge = { version = ">=0.2, <0.4", default-features = false, features = ["std", "law"] }
+alice-db = { git = "https://github.com/ext-sakamoro/ALICE-DB", branch = "main", version = "0.6" }
+alice-zip = { git = "https://github.com/ext-sakamoro/ALICE-Zip", branch = "main", version = "0.11" }
+alice-sdf = { git = "https://github.com/ext-sakamoro/ALICE-SDF", branch = "main", version = "7" }
+alice-edge = { git = "https://github.com/ext-sakamoro/ALICE-Edge", branch = "main", version = "0.4", default-features = false, features = ["std", "law"] }
 serde = "1"
-
-[features]
-main-mode = []
 
 [workspace]
 '''
@@ -77,26 +74,24 @@ class Accepts(unittest.TestCase):
             mm.accepts("*", "1.2.3")
 
 
-class Raise(unittest.TestCase):
-    def test_only_the_requirements_that_reject_main_are_raised_and_the_feature_is_on(self):
-        versions = {"alice-db": "0.6.0", "alice-zip": "0.11.0", "alice-sdf": "6.1.0", "alice-edge": "0.4.0"}
-        out, changed = mm.raise_requirements(MANIFEST, versions)
-        self.assertEqual(changed, ['alice-db: "0.5" -> "0.6.0"', 'alice-zip: "0.10" -> "0.11.0"',
-                                   'alice-edge: ">=0.2, <0.4" -> "0.4.0"'])
-        self.assertIn('alice-db = "0.6.0"\n', out)
-        self.assertIn('alice-sdf = "6"\n', out)  # 6.1.0 accepted: left as it is
-        self.assertIn('alice-edge = { version = "0.4.0", default-features = false, features = ["std", "law"] }', out)
-        self.assertIn('serde = "1"\n', out)  # not a core crate
-        self.assertIn('[features]\ndefault = ["main-mode"]\nmain-mode = []', out)
+class Stale(unittest.TestCase):
+    def test_a_requirement_that_rejects_main_is_named_and_the_others_pass(self):
+        versions = {"alice-db": "0.7.0", "alice-zip": "0.11.2", "alice-sdf": "7.0.0", "alice-edge": "0.5.0"}
+        self.assertEqual(mm.stale_requirements(MANIFEST, versions),
+                         ['alice-db: "0.6" does not accept main 0.7.0', 'alice-edge: "0.4" does not accept main 0.5.0'])
 
-    def test_nothing_to_raise_still_turns_the_feature_on(self):
-        out, changed = mm.raise_requirements(MANIFEST, {"alice-db": "0.5.1"})
-        self.assertEqual(changed, [])
-        self.assertIn('default = ["main-mode"]', out)
+    def test_every_requirement_accepting_main_is_no_problem(self):
+        versions = {"alice-db": "0.6.0", "alice-zip": "0.11.0", "alice-sdf": "7.0.0", "alice-edge": "0.4.0"}
+        self.assertEqual(mm.stale_requirements(MANIFEST, versions), [])
 
-    def test_a_manifest_without_the_feature_is_refused(self):
+    def test_a_core_crate_without_a_version_is_refused(self):
+        bare = MANIFEST.replace(', version = "0.6"', "")
         with self.assertRaises(ValueError):
-            mm.raise_requirements(MANIFEST.replace("main-mode = []\n", ""), {"alice-db": "0.6.0"})
+            mm.stale_requirements(bare, {"alice-db": "0.6.0"})
+
+    def test_nothing_compared_is_refused(self):
+        with self.assertRaises(ValueError):
+            mm.stale_requirements('[dependencies]\nserde = "1"\n', {"alice-db": "0.6.0"})
 
 
 def write(path: Path, text: str) -> None:
@@ -207,8 +202,28 @@ def every_core_crate_from(declared: str | None = REGISTRY) -> list[tuple[str, st
     return [("alice-law-e2e", c, declared, None) for c in mm.CRATES]
 
 
+# the requirements of the e2e manifest the patch tests use: the versions of `checkouts` (1.0.0, alice-lol 0.9.0)
+PATCH_MANIFEST = '''[package]
+name = "alice-law-e2e"
+version = "0.0.0"
+
+[dependencies]
+alice-db = { git = "https://github.com/ext-sakamoro/ALICE-DB", branch = "main", version = "1" }
+alice-lol = { git = "https://github.com/ext-sakamoro/ALICE-LOL", branch = "main", version = "0.9" }
+
+[workspace]
+'''
+
+
 class Patch(unittest.TestCase):
-    def run_patch(self, physics: str, change=None, graphs=None) -> tuple[int, str, str]:
+    def test_a_requirement_that_rejects_main_stops_the_patch(self):
+        # the e2e manifest names alice-db 0.6 while main is 1.0.0: the manifest is behind, not the crates
+        code, config, err = self.run_patch("split", manifest=PATCH_MANIFEST.replace('version = "1"', 'version = "0.6"'))
+        self.assertEqual(code, 1, err)
+        self.assertEqual(config, "")
+        self.assertIn('alice-db: "0.6" does not accept main 1.0.0', err)
+
+    def run_patch(self, physics: str, change=None, graphs=None, manifest=None) -> tuple[int, str, str]:
         # the e2e paths point into a temporary directory: a patch must never write the repository's own
         import contextlib
         import io
@@ -222,7 +237,7 @@ class Patch(unittest.TestCase):
         for name in ("ROOT", "E2E", "CONFIG"):
             self.addCleanup(setattr, mm, name, getattr(mm, name))
         mm.ROOT, mm.E2E, mm.CONFIG = d, d / "e2e", d / "e2e" / ".cargo" / "config.toml"
-        write(mm.E2E / "Cargo.toml", MANIFEST)
+        write(mm.E2E / "Cargo.toml", manifest or PATCH_MANIFEST)
         # the resolved graph after each written patch: a function of the config text, so a git entry
         # appears in the graph only once the patch for it is written (cargo is not run here)
         graphs = graphs or (lambda config: graph(every_core_crate_from()))

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check that the end to end test fails on each mistake it is meant to catch
 
-Runs in main mode (scripts/main_mode.py has patched e2e/ with the checkouts in
-<checkouts>). For each mutation: change one line in a checkout (or in e2e/), run the
+Runs on the checkouts (scripts/main_mode.py has patched e2e/ with the checkouts of the
+main branches in <checkouts>). For each mutation: change one line in a checkout (or in e2e/), run the
 test, require it to fail with the expected message, and put the line back. The
 unmutated test must pass before and after, and every checkout must be back to its
 original contents at the end.
@@ -100,7 +100,7 @@ MUTATIONS = [
     (
         "dependencies: a second version of alice-zip in the build",
         "e2e/Cargo.toml",
-        # anchored on the table, not on the alice-zip line: main mode raises that requirement
+        # anchored on the table, not on the alice-zip line: the line moves with each version on main
         "[dependencies]\n",
         '[dependencies]\nalice-zip-old = { package = "alice-zip", version = "0.9" }\n',
         "linked at two or more versions",

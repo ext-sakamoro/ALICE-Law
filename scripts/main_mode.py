@@ -1,41 +1,39 @@
 #!/usr/bin/env python3
-"""Point the end to end check at the main branches of the core repositories
+"""Point the end to end check at checkouts of the core repositories' main branches
 
-Main mode runs the same test as the published mode, with every core crate replaced
-by a checkout of its repository's main branch. The checkouts sit side by side in
-one directory (as the repositories expect: alice-lol depends on ../../ALICE-SDF and
-others by path), and this script writes Cargo `[patch]` tables that point each crate
-at its checkout. A crate is found in its checkout by its package name (the root
-package or a workspace member), so a crate that moves inside its repository is still
-patched from where it is.
+e2e/Cargo.toml names every core crate from its repository's main branch (git, branch
+"main", with the version on main). The CI checks the repositories out side by side (as
+they expect: alice-lol depends on ../../ALICE-SDF and others by path), and this script
+writes Cargo `[patch]` tables that point each crate at its checkout, so the mutations of
+scripts/e2e_teeth.py reach the test and the run names the commit of each checkout. A
+crate is found in its checkout by its package name (the root package or a workspace
+member), so a crate that moves inside its repository is still patched from where it is.
 
-Cargo applies a `[patch]` table to one source only: `[patch.crates-io]` to the
-requirements on crates.io, `[patch."<git URL>"]` to the requirements naming that
-repository by a commit. The core crates name each other both ways (a crate on main can
-require a sibling by a git commit), so the patch writes one entry per (crate, source)
-the resolved graph names, and repeats until a pass names no new one: without the git
-entries the commit a consumer names is linked beside the checkout, two copies of one
-crate in one build. A source the graph does not name gets no entry.
+Cargo applies a `[patch]` table to one source only: `[patch."<git URL>"]` to the
+requirements naming that repository by git (a branch or a commit), `[patch.crates-io]` to
+the requirements on crates.io. The core crates name each other both ways, so the patch
+writes one entry per (crate, source) the resolved graph names, and repeats until a pass
+names no new one: without an entry the copy a consumer names is linked beside the
+checkout, two copies of one crate in one build. A source the graph does not name gets no
+entry.
 
     python3 scripts/main_mode.py patch  <checkouts>   # writes e2e/.cargo/config.toml
     python3 scripts/main_mode.py verify               # after `cargo metadata` can resolve
 
-`patch` also raises e2e/Cargo.toml's own direct requirements on these crates to the
-version on main where they do not accept it, and turns on the e2e crate's `main-mode`
-feature, in the CI checkout only (the committed manifest keeps the published
-requirements the published mode resolves). The e2e crate is the test, not a consumer
-whose lag needs a warning: a consumer that does not accept a new major is reported
-before the push by the pre-push wiring check and before publishing by
-`scripts/release_train.py publish-gate`.
+`patch` first compares e2e/Cargo.toml's own requirements on these crates with the
+versions of the checkouts and stops (exit 1, nothing written) when one does not accept
+main: the manifest is behind (a new major on main), and the commit that takes the major
+raises it. A consumer that does not accept a new major is reported before the push by the
+pre-push wiring check and before publishing by `scripts/release_train.py publish-gate`.
 
 `verify` reads the resolved graph of e2e/ and fails unless every crate below came
 from its checkout, each at least once, and every written entry was used (a requirement
-from that source resolved to the checkout; none used fails). Cargo leaves a patch unused, and takes the
-crate from crates.io instead, when the version on main does not match a requirement
-on it: after the raise that can only be a requirement of one core crate on another
-(for example a new major version on main that another crate's main does not accept
-yet). That is the early warning this mode exists for, so it is a failure, not a
-note. A run that found none of the crates in the graph fails too.
+from that source resolved to the checkout; none used fails). Cargo leaves a patch unused,
+and takes the crate from elsewhere instead, when the version on main does not match a
+requirement on it: that can only be a requirement of one core crate on another (for
+example a new major version on main that another crate's main does not accept yet). That
+is the early warning this mode exists for, so it is a failure, not a note. A run that
+found none of the crates in the graph fails too.
 """
 
 from __future__ import annotations
@@ -116,28 +114,26 @@ DEP_RE = re.compile(r'^(?P<name>alice-[\w-]+)\s*=\s*(?P<rest>.*)$', re.M)
 REQ_RE = re.compile(r'^(?P<pre>\{.*?\bversion\s*=\s*|)"(?P<req>[^"]*)"')
 
 
-def raise_requirements(manifest: str, versions: dict[str, str]) -> tuple[str, list[str]]:
-    """e2e/Cargo.toml with each direct requirement on a core crate that does not accept
-    the version on main replaced by that version (caret), and the lines it changed"""
-    changed: list[str] = []
-
-    def one(m: re.Match) -> str:
+def stale_requirements(manifest: str, versions: dict[str, str]) -> list[str]:
+    """each direct requirement of e2e/Cargo.toml on a core crate that does not accept the version on
+    main (`name: "<req>" does not accept main <version>`): the manifest names the crates' main
+    branches, so such a requirement is the manifest lagging main (a new major there), raised in the
+    commit that takes it. A core crate named without a version, or no core crate named, is refused"""
+    stale: list[str] = []
+    compared = 0
+    for m in DEP_RE.finditer(manifest):
         name, rest = m["name"], m["rest"]
         if name not in versions:
-            return m.group(0)
+            continue
         r = REQ_RE.match(rest)
-        if not r:
+        if not r or not r["pre"] and not rest.startswith('"'):
             raise ValueError(f"e2e/Cargo.toml: {name} has no version requirement to compare")
-        if accepts(r["req"], versions[name]):
-            return m.group(0)
-        changed.append(f'{name}: "{r["req"]}" -> "{versions[name]}"')
-        return f'{name} = {r["pre"]}"{versions[name]}"{rest[r.end():]}'
-
-    out = DEP_RE.sub(one, manifest)
-    if not re.search(r"^\[features\]\s*$", out, re.M) or "main-mode = []" not in out:
-        raise ValueError("e2e/Cargo.toml has no `main-mode = []` feature to turn on")
-    out = re.sub(r"^\[features\]\s*$", '[features]\ndefault = ["main-mode"]', out, count=1, flags=re.M)
-    return out, changed
+        compared += 1
+        if not accepts(r["req"], versions[name]):
+            stale.append(f'{name}: "{r["req"]}" does not accept main {versions[name]}')
+    if compared == 0:
+        raise ValueError("e2e/Cargo.toml names no core crate with a version")
+    return stale
 
 
 def crate_dir(checkout: Path, crate: str) -> Path:
@@ -263,12 +259,15 @@ def patch(checkouts: Path) -> int:
             return 2
         manifest = paths[crate] / "Cargo.toml"
         versions[crate] = tomllib.loads(manifest.read_text(encoding="utf-8"))["package"]["version"]
-    manifest = E2E / "Cargo.toml"
-    raised, changed = raise_requirements(manifest.read_text(encoding="utf-8"), versions)
-    manifest.write_text(raised, encoding="utf-8")
-    for line in changed:
-        print(f"main mode: e2e requirement raised to main: {line}")
-    print(f"main mode: {len(changed)} e2e requirement(s) raised, feature main-mode on")
+    try:
+        stale = stale_requirements((E2E / "Cargo.toml").read_text(encoding="utf-8"), versions)
+    except ValueError as e:
+        print(f"main mode: {e}", file=sys.stderr)
+        return 2
+    for line in stale:
+        print(f"main mode: e2e/Cargo.toml is behind main: {line}", file=sys.stderr)
+    if stale:
+        return 1
     # from every crate on crates.io, until a pass names no source without an entry
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
     entries = {(c, CRATES_IO) for c in CRATES}
