@@ -32,6 +32,9 @@ jobs:
       - name: Test the checker
         run: python scripts/test_public_text_check.py
 
+      - name: Test the name key (made-up keys only)
+        run: python scripts/test_name_key.py
+
       - name: Test the licence files checker
         run: python scripts/test_licence_files_check.py
 
@@ -52,17 +55,38 @@ jobs:
           base=$(python scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
           python scripts/licence_files_check.py --repo . --holder-base-ref "$base"
 
+      # the private-name tables are HMAC under the repository secret: a push and a manual run need it (without it
+      # the check fails, --require-private-names); a pull request from a fork gets no secret, so there the
+      # private-name checks are skipped with a notice and every other check runs
+      - name: The name key is in no tracked file
+        env:
+          ALICE_PRIVATE_NAME_HMAC_KEY: ${{ secrets.ALICE_PRIVATE_NAME_HMAC_KEY }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          req=--require-key
+          if [ "$EVENT" = pull_request ]; then req=; fi
+          python scripts/name_key_absent.py $req
+
       - name: The tree
-        run: python scripts/public_text_check.py --tree HEAD
+        env:
+          ALICE_PRIVATE_NAME_HMAC_KEY: ${{ secrets.ALICE_PRIVATE_NAME_HMAC_KEY }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          req=--require-private-names
+          if [ "$EVENT" = pull_request ]; then req=; fi
+          python scripts/public_text_check.py --tree HEAD $req
 
       - name: The pushed commits
         env:
+          ALICE_PRIVATE_NAME_HMAC_KEY: ${{ secrets.ALICE_PRIVATE_NAME_HMAC_KEY }}
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
         run: |
+          req=--require-private-names
+          if [ "$EVENT" = pull_request ]; then req=; fi
           base=$(python scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
           if [ "$(git rev-list --count "$base..HEAD")" -gt 0 ]; then
-            python scripts/public_text_check.py --range "$base..HEAD"
+            python scripts/public_text_check.py --range "$base..HEAD" $req
           else
             echo "no new commit (base $base is HEAD)"
           fi

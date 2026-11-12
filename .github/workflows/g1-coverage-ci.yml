@@ -33,5 +33,8 @@ jobs:
       - name: Test the checker
         run: python3 scripts/test_g1_coverage_live.py
 
+      - name: Test the clippy region generator
+        run: python3 scripts/test_g1_clippy_block.py
+
       - name: This repository
         run: python3 scripts/g1_coverage_live.py --only "${GITHUB_REPOSITORY#*/}=."
