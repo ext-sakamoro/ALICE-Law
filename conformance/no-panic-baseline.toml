@@ -10,6 +10,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ABM-SaaS"]
 unwrap = 9
@@ -18,6 +19,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-API"]
 unwrap = 4
@@ -26,6 +28,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-API-Gateway-SaaS"]
 unwrap = 9
@@ -34,6 +37,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-API-SaaS"]
 unwrap = 9
@@ -42,6 +46,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-AR-Cloud-SaaS"]
 unwrap = 9
@@ -50,6 +55,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-AR-SaaS"]
 unwrap = 9
@@ -58,6 +64,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ASR-SaaS"]
 unwrap = 9
@@ -66,6 +73,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ATS-SaaS"]
 unwrap = 9
@@ -74,6 +82,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Accessibility-SaaS"]
 unwrap = 9
@@ -82,6 +91,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-AdTech-SaaS"]
 unwrap = 9
@@ -90,6 +100,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Agent"]
 unwrap = 2
@@ -98,6 +109,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Agent-Platform-SaaS"]
 unwrap = 9
@@ -106,6 +118,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Agri-SaaS"]
 unwrap = 9
@@ -114,6 +127,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-AgriIoT-SaaS"]
 unwrap = 9
@@ -122,6 +136,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Analytics"]
 unwrap = 0
@@ -130,6 +145,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 10
 
 [repo."ALICE-Analytics-SaaS"]
 unwrap = 9
@@ -138,6 +154,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Animation-SaaS"]
 unwrap = 9
@@ -146,6 +163,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Archive-SaaS"]
 unwrap = 9
@@ -154,6 +172,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-AssetMgmt-SaaS"]
 unwrap = 9
@@ -162,6 +181,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Astro-SaaS"]
 unwrap = 9
@@ -170,6 +190,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Atoms-SaaS"]
 unwrap = 9
@@ -178,6 +199,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Attendance-SaaS"]
 unwrap = 9
@@ -186,6 +208,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Audio"]
 unwrap = 0
@@ -194,6 +217,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Audio-SaaS"]
 unwrap = 9
@@ -202,6 +226,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Audit"]
 unwrap = 0
@@ -210,6 +235,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Audit-SaaS"]
 unwrap = 9
@@ -218,6 +244,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Auth"]
 unwrap = 2
@@ -226,6 +253,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Auth-SaaS"]
 unwrap = 9
@@ -234,6 +262,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-AuthZ-SaaS"]
 unwrap = 9
@@ -242,6 +271,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-AutoML"]
 unwrap = 2
@@ -250,6 +280,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 2
 
 [repo."ALICE-AutoML-SaaS"]
 unwrap = 9
@@ -258,6 +289,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Aviation-SaaS"]
 unwrap = 9
@@ -266,6 +298,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-BI-SaaS"]
 unwrap = 9
@@ -274,6 +307,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-BIM-SaaS"]
 unwrap = 9
@@ -282,6 +316,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-BLE"]
 unwrap = 0
@@ -290,6 +325,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-BLE-SaaS"]
 unwrap = 9
@@ -298,6 +334,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Backoffice-SaaS"]
 unwrap = 9
@@ -306,6 +343,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-BackupCloud-SaaS"]
 unwrap = 9
@@ -314,6 +352,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Billing-SaaS"]
 unwrap = 9
@@ -322,6 +361,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Bio"]
 unwrap = 2
@@ -330,6 +370,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Bio-Platform"]
 unwrap = 11
@@ -338,6 +379,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Bio-Platform-SaaS"]
 unwrap = 9
@@ -346,6 +388,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Bio-SaaS"]
 unwrap = 9
@@ -354,6 +397,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-BioSim-SaaS"]
 unwrap = 9
@@ -362,6 +406,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Blockchain-SaaS"]
 unwrap = 9
@@ -370,6 +415,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Booking-SaaS"]
 unwrap = 9
@@ -378,6 +424,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Bridge"]
 unwrap = 0
@@ -386,6 +433,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Bridge-SaaS"]
 unwrap = 9
@@ -394,6 +442,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Browser"]
 unwrap = 3
@@ -402,6 +451,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 4
 
 [repo."ALICE-Browser-SaaS"]
 unwrap = 9
@@ -410,6 +460,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Browser-Secure"]
 unwrap = 4
@@ -418,6 +469,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Browser-Secure-SaaS"]
 unwrap = 9
@@ -426,6 +478,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CDC-SaaS"]
 unwrap = 9
@@ -434,6 +487,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CDN"]
 unwrap = 2
@@ -442,6 +496,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 2
 
 [repo."ALICE-CDN-SaaS"]
 unwrap = 9
@@ -450,6 +505,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CDP-SaaS"]
 unwrap = 9
@@ -458,6 +514,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CI-SaaS"]
 unwrap = 9
@@ -466,6 +523,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CLM-SaaS"]
 unwrap = 9
@@ -474,6 +532,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CMS-SaaS"]
 unwrap = 9
@@ -482,6 +541,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CRM"]
 unwrap = 0
@@ -490,6 +550,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CRM-SaaS"]
 unwrap = 9
@@ -498,6 +559,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Cache"]
 unwrap = 0
@@ -506,6 +568,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 2
 
 [repo."ALICE-Cache-Cloud"]
 unwrap = 15
@@ -514,6 +577,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Cache-Cloud-SaaS"]
 unwrap = 9
@@ -522,6 +586,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Cache-SaaS"]
 unwrap = 9
@@ -530,6 +595,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Camera"]
 unwrap = 0
@@ -538,6 +604,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 5
 
 [repo."ALICE-Camera-SaaS"]
 unwrap = 9
@@ -546,6 +613,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-CareTech-SaaS"]
 unwrap = 9
@@ -554,6 +622,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Channel"]
 unwrap = 0
@@ -562,6 +631,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Chat-SaaS"]
 unwrap = 9
@@ -570,6 +640,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Chemistry"]
 unwrap = 0
@@ -578,6 +649,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Chemistry-SaaS"]
 unwrap = 9
@@ -586,6 +658,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Circuit-SaaS"]
 unwrap = 9
@@ -594,6 +667,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Climate"]
 unwrap = 1
@@ -602,6 +676,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Climate-Platform"]
 unwrap = 11
@@ -610,6 +685,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Climate-Platform-SaaS"]
 unwrap = 9
@@ -618,6 +694,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Climate-SaaS"]
 unwrap = 9
@@ -626,6 +703,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Cloud-Gateway"]
 unwrap = 0
@@ -634,6 +712,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Cloud-Gateway-SaaS"]
 unwrap = 9
@@ -642,6 +721,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Codec"]
 unwrap = 2
@@ -650,6 +730,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 13
 
 [repo."ALICE-Codec-Cloud"]
 unwrap = 11
@@ -658,6 +739,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Codec-Cloud-SaaS"]
 unwrap = 9
@@ -666,6 +748,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Codec-SaaS"]
 unwrap = 9
@@ -674,6 +757,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Collab-SaaS"]
 unwrap = 9
@@ -682,6 +766,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Collaboration-SaaS"]
 unwrap = 9
@@ -690,6 +775,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Compiler"]
 unwrap = 0
@@ -698,6 +784,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Compiler-SaaS"]
 unwrap = 9
@@ -706,6 +793,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Compliance-SaaS"]
 unwrap = 9
@@ -714,6 +802,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Config-SaaS"]
 unwrap = 9
@@ -722,6 +811,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Consensus-SaaS"]
 unwrap = 9
@@ -730,6 +820,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Construction-SaaS"]
 unwrap = 9
@@ -738,6 +829,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Container"]
 unwrap = 1
@@ -746,6 +838,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Container-Cloud"]
 unwrap = 10
@@ -754,6 +847,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Container-Cloud-SaaS"]
 unwrap = 9
@@ -762,6 +856,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Container-SaaS"]
 unwrap = 9
@@ -770,6 +865,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Content-Platform-SaaS"]
 unwrap = 9
@@ -778,6 +874,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Crypto"]
 unwrap = 0
@@ -786,6 +883,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 2
 
 [repo."ALICE-Crypto-KMS"]
 unwrap = 7
@@ -794,6 +892,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Crypto-KMS-SaaS"]
 unwrap = 9
@@ -802,6 +901,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Crypto-SaaS"]
 unwrap = 9
@@ -810,6 +910,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DAM-SaaS"]
 unwrap = 9
@@ -818,6 +919,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DB"]
 unwrap = 6
@@ -826,6 +928,7 @@ panic = 7
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 6
 
 [repo."ALICE-DB-Cloud"]
 unwrap = 12
@@ -834,6 +937,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DB-Cloud-SaaS"]
 unwrap = 9
@@ -842,6 +946,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DB-Enterprise-SaaS"]
 unwrap = 9
@@ -850,6 +955,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DB-SaaS"]
 unwrap = 9
@@ -858,6 +964,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DLP"]
 unwrap = 0
@@ -866,6 +973,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DLP-SaaS"]
 unwrap = 9
@@ -874,6 +982,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DNS"]
 unwrap = 1
@@ -882,6 +991,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DNS-SaaS"]
 unwrap = 9
@@ -890,6 +1000,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DR-SaaS"]
 unwrap = 9
@@ -898,6 +1009,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Data-Pipeline-SaaS"]
 unwrap = 9
@@ -906,6 +1018,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DataShield"]
 unwrap = 10
@@ -914,6 +1027,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DataShield-SaaS"]
 unwrap = 9
@@ -922,6 +1036,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Debug-SaaS"]
 unwrap = 9
@@ -930,6 +1045,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Delivery-SaaS"]
 unwrap = 9
@@ -938,6 +1054,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Dental-SaaS"]
 unwrap = 9
@@ -946,6 +1063,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-DetMath"]
 unwrap = 0
@@ -954,6 +1072,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 2
 
 [repo."ALICE-DevOps-SaaS"]
 unwrap = 9
@@ -962,6 +1081,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Diffusion-SaaS"]
 unwrap = 9
@@ -970,6 +1090,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Digital-Twin-SaaS"]
 unwrap = 9
@@ -978,6 +1099,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Disaster-SaaS"]
 unwrap = 9
@@ -986,6 +1108,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Document-SaaS"]
 unwrap = 9
@@ -994,6 +1117,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Drone"]
 unwrap = 0
@@ -1002,6 +1126,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Drone-SaaS"]
 unwrap = 9
@@ -1010,6 +1135,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-EHR-SaaS"]
 unwrap = 9
@@ -1018,6 +1144,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ERP"]
 unwrap = 0
@@ -1026,6 +1153,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ERP-SaaS"]
 unwrap = 9
@@ -1034,6 +1162,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ESG-SaaS"]
 unwrap = 9
@@ -1042,6 +1171,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ETL-SaaS"]
 unwrap = 9
@@ -1050,6 +1180,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Eco-System"]
 unwrap = 0
@@ -1058,6 +1189,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Ecommerce-SaaS"]
 unwrap = 9
@@ -1066,6 +1198,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-EdTech-SaaS"]
 unwrap = 9
@@ -1074,6 +1207,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Edge"]
 unwrap = 4
@@ -1082,6 +1216,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 8
 
 [repo."ALICE-Edge-AI-SaaS"]
 unwrap = 9
@@ -1090,6 +1225,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Edge-Firewall-SaaS"]
 unwrap = 9
@@ -1098,6 +1234,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Edge-IoT-SaaS"]
 unwrap = 3
@@ -1106,6 +1243,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Edge-Runtime-SaaS"]
 unwrap = 9
@@ -1114,6 +1252,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Edge-SaaS"]
 unwrap = 9
@@ -1122,6 +1261,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Email-SaaS"]
 unwrap = 9
@@ -1130,6 +1270,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Embedding-SaaS"]
 unwrap = 9
@@ -1138,6 +1279,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Energy"]
 unwrap = 0
@@ -1146,6 +1288,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Energy-Platform"]
 unwrap = 11
@@ -1154,6 +1297,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Energy-Platform-SaaS"]
 unwrap = 9
@@ -1162,6 +1306,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Energy-SaaS"]
 unwrap = 9
@@ -1170,6 +1315,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Ephemeris"]
 unwrap = 0
@@ -1178,6 +1324,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 2
+assert = 0
 
 [repo."ALICE-Exam-SaaS"]
 unwrap = 9
@@ -1186,6 +1333,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FIX"]
 unwrap = 1
@@ -1194,6 +1342,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FIX-Gateway"]
 unwrap = 3
@@ -1202,6 +1351,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FIX-Gateway-SaaS"]
 unwrap = 9
@@ -1210,6 +1360,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FIX-SaaS"]
 unwrap = 9
@@ -1218,6 +1369,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FileSystem"]
 unwrap = 0
@@ -1226,6 +1378,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FileSystem-SaaS"]
 unwrap = 9
@@ -1234,6 +1387,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FinCompliance-SaaS"]
 unwrap = 9
@@ -1242,6 +1396,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FinTech-SaaS"]
 unwrap = 9
@@ -1250,6 +1405,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Fishery-SaaS"]
 unwrap = 9
@@ -1258,6 +1414,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Fluid-SaaS"]
 unwrap = 9
@@ -1266,6 +1423,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Font"]
 unwrap = 0
@@ -1274,6 +1432,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 1
+assert = 1
 
 [repo."ALICE-Font-CDN"]
 unwrap = 3
@@ -1282,6 +1441,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Font-CDN-SaaS"]
 unwrap = 9
@@ -1290,6 +1450,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Font-SaaS"]
 unwrap = 9
@@ -1298,6 +1459,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-FoodTech-SaaS"]
 unwrap = 9
@@ -1306,6 +1468,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Forestry-SaaS"]
 unwrap = 9
@@ -1314,6 +1477,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Form-SaaS"]
 unwrap = 9
@@ -1322,6 +1486,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-GAN"]
 unwrap = 5
@@ -1330,6 +1495,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 4
 
 [repo."ALICE-GAN-SaaS"]
 unwrap = 9
@@ -1338,6 +1504,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-GRC-SaaS"]
 unwrap = 9
@@ -1346,6 +1513,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-GameCloud-SaaS"]
 unwrap = 9
@@ -1354,6 +1522,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-GameEngine"]
 unwrap = 4
@@ -1362,6 +1531,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 1
+assert = 5
 
 [repo."ALICE-GameEngine-SaaS"]
 unwrap = 9
@@ -1370,6 +1540,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Genome-SaaS"]
 unwrap = 9
@@ -1378,6 +1549,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Geo-SaaS"]
 unwrap = 9
@@ -1386,6 +1558,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Graph-SaaS"]
 unwrap = 9
@@ -1394,6 +1567,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-HRM"]
 unwrap = 0
@@ -1402,6 +1576,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-HRM-SaaS"]
 unwrap = 9
@@ -1410,6 +1585,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-HTTP"]
 unwrap = 0
@@ -1418,6 +1594,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 1
+assert = 0
 
 [repo."ALICE-HTTP-SaaS"]
 unwrap = 9
@@ -1426,6 +1603,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Haptic-SaaS"]
 unwrap = 9
@@ -1434,6 +1612,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-History"]
 unwrap = 0
@@ -1442,6 +1621,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 6
 
 [repo."ALICE-History-SaaS"]
 unwrap = 9
@@ -1450,6 +1630,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Hypervisor-SaaS"]
 unwrap = 9
@@ -1458,6 +1639,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-IP-SaaS"]
 unwrap = 9
@@ -1466,6 +1648,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-IPO-SaaS"]
 unwrap = 9
@@ -1474,6 +1657,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-IaC-SaaS"]
 unwrap = 9
@@ -1482,6 +1666,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Identity"]
 unwrap = 0
@@ -1490,6 +1675,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 2
 
 [repo."ALICE-Identity-SaaS"]
 unwrap = 9
@@ -1498,6 +1684,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Image-SaaS"]
 unwrap = 9
@@ -1506,6 +1693,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Inference-Cloud-SaaS"]
 unwrap = 9
@@ -1514,6 +1702,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-InsurTech-SaaS"]
 unwrap = 9
@@ -1522,6 +1711,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Inventory-SaaS"]
 unwrap = 9
@@ -1530,6 +1720,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Invoice-SaaS"]
 unwrap = 9
@@ -1538,6 +1729,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-IoT-SaaS"]
 unwrap = 9
@@ -1546,6 +1738,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Kinematics"]
 unwrap = 0
@@ -1554,6 +1747,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Kinematics-Cloud"]
 unwrap = 11
@@ -1562,6 +1756,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Kinematics-Cloud-SaaS"]
 unwrap = 9
@@ -1570,6 +1765,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Kinematics-SaaS"]
 unwrap = 9
@@ -1578,6 +1774,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LB-SaaS"]
 unwrap = 9
@@ -1586,6 +1783,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LLM"]
 unwrap = 25
@@ -1594,6 +1792,7 @@ panic = 31
 todo = 0
 unimplemented = 0
 unreachable = 4
+assert = 137
 
 [repo."ALICE-LLM-SaaS"]
 unwrap = 9
@@ -1602,6 +1801,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LMS"]
 unwrap = 0
@@ -1610,6 +1810,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LMS-SaaS"]
 unwrap = 9
@@ -1618,6 +1819,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LOL"]
 unwrap = 0
@@ -1626,6 +1828,7 @@ panic = 10
 todo = 0
 unimplemented = 0
 unreachable = 12
+assert = 4
 
 [repo."ALICE-Lakehouse-SaaS"]
 unwrap = 9
@@ -1634,6 +1837,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Law"]
 unwrap = 0
@@ -1642,6 +1846,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Ledger"]
 unwrap = 3
@@ -1650,6 +1855,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Ledger-SaaS"]
 unwrap = 9
@@ -1658,6 +1864,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Legal"]
 unwrap = 0
@@ -1666,6 +1873,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Legal-AI"]
 unwrap = 4
@@ -1674,6 +1882,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Legal-AI-SaaS"]
 unwrap = 9
@@ -1682,6 +1891,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Legal-SaaS"]
 unwrap = 9
@@ -1690,6 +1900,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LegalTech-SaaS"]
 unwrap = 9
@@ -1698,6 +1909,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Lint-SaaS"]
 unwrap = 9
@@ -1706,6 +1918,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LoRa"]
 unwrap = 0
@@ -1714,6 +1927,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LoRa-SaaS"]
 unwrap = 9
@@ -1722,6 +1936,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LoadBalancer-SaaS"]
 unwrap = 9
@@ -1730,6 +1945,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Log-SaaS"]
 unwrap = 9
@@ -1738,6 +1954,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-LogMgmt-SaaS"]
 unwrap = 9
@@ -1746,6 +1963,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Logistics-SaaS"]
 unwrap = 9
@@ -1754,6 +1972,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ML"]
 unwrap = 6
@@ -1762,6 +1981,7 @@ panic = 2
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 53
 
 [repo."ALICE-ML-Platform"]
 unwrap = 10
@@ -1770,6 +1990,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ML-Platform-SaaS"]
 unwrap = 9
@@ -1778,6 +1999,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ML-SaaS"]
 unwrap = 9
@@ -1786,6 +2008,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-MQTT"]
 unwrap = 0
@@ -1794,6 +2017,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-MQTT-SaaS"]
 unwrap = 9
@@ -1802,6 +2026,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Manga-SaaS"]
 unwrap = 9
@@ -1810,6 +2035,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Map-SaaS"]
 unwrap = 9
@@ -1818,6 +2044,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Maritime-SaaS"]
 unwrap = 9
@@ -1826,6 +2053,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-MarketData-SaaS"]
 unwrap = 9
@@ -1834,6 +2062,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Marketing-SaaS"]
 unwrap = 9
@@ -1842,6 +2071,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Markup"]
 unwrap = 0
@@ -1850,6 +2080,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Matchmaking-SaaS"]
 unwrap = 9
@@ -1858,6 +2089,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Media-Pipeline-SaaS"]
 unwrap = 9
@@ -1866,6 +2098,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Medical-SaaS"]
 unwrap = 9
@@ -1874,6 +2107,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Metaverse-SaaS"]
 unwrap = 9
@@ -1882,6 +2116,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Metrics-SaaS"]
 unwrap = 9
@@ -1890,6 +2125,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Migrate-SaaS"]
 unwrap = 9
@@ -1898,6 +2134,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Mining-SaaS"]
 unwrap = 9
@@ -1906,6 +2143,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Mobility-SaaS"]
 unwrap = 9
@@ -1914,6 +2152,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Monitor"]
 unwrap = 0
@@ -1922,6 +2161,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Monitor-SaaS"]
 unwrap = 9
@@ -1930,6 +2170,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Motion"]
 unwrap = 0
@@ -1938,6 +2179,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Motion-Cloud"]
 unwrap = 3
@@ -1946,6 +2188,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Motion-Cloud-SaaS"]
 unwrap = 9
@@ -1954,6 +2197,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Motion-SaaS"]
 unwrap = 9
@@ -1962,6 +2206,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Music-SaaS"]
 unwrap = 9
@@ -1970,6 +2215,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-NFC"]
 unwrap = 0
@@ -1978,6 +2224,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-NFC-SaaS"]
 unwrap = 9
@@ -1986,6 +2233,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-NLP-SaaS"]
 unwrap = 9
@@ -1994,6 +2242,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Navigation"]
 unwrap = 1
@@ -2002,6 +2251,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Navigation-SaaS"]
 unwrap = 9
@@ -2010,6 +2260,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Neural-Render-SaaS"]
 unwrap = 9
@@ -2018,6 +2269,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Neural-SaaS"]
 unwrap = 9
@@ -2026,6 +2278,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-NoCode-SaaS"]
 unwrap = 9
@@ -2034,6 +2287,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Notify-SaaS"]
 unwrap = 9
@@ -2042,6 +2296,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-OCR-SaaS"]
 unwrap = 9
@@ -2050,6 +2305,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-OS-Keystore"]
 unwrap = 0
@@ -2058,6 +2314,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 3
 
 [repo."ALICE-OTA-SaaS"]
 unwrap = 9
@@ -2066,6 +2323,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ObjectStore"]
 unwrap = 0
@@ -2074,6 +2332,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ObjectStore-SaaS"]
 unwrap = 9
@@ -2082,6 +2341,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Observability-SaaS"]
 unwrap = 9
@@ -2090,6 +2350,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Optics"]
 unwrap = 0
@@ -2098,6 +2359,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 3
 
 [repo."ALICE-Optics-SaaS"]
 unwrap = 9
@@ -2106,6 +2368,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-PKI-SaaS"]
 unwrap = 9
@@ -2114,6 +2377,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-PMS-SaaS"]
 unwrap = 9
@@ -2122,6 +2386,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-POS-SaaS"]
 unwrap = 9
@@ -2130,6 +2395,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-PackageRegistry-SaaS"]
 unwrap = 9
@@ -2138,6 +2404,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Parser"]
 unwrap = 0
@@ -2146,6 +2413,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Parser-SaaS"]
 unwrap = 9
@@ -2154,6 +2422,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Payment-SaaS"]
 unwrap = 9
@@ -2162,6 +2431,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-PaymentGateway-SaaS"]
 unwrap = 9
@@ -2170,6 +2440,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Payroll-SaaS"]
 unwrap = 9
@@ -2178,6 +2449,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-PetTech-SaaS"]
 unwrap = 9
@@ -2186,6 +2458,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Pharmacy-SaaS"]
 unwrap = 9
@@ -2194,6 +2467,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Physics"]
 unwrap = 0
@@ -2202,6 +2476,7 @@ panic = 26
 todo = 0
 unimplemented = 0
 unreachable = 6
+assert = 97
 
 [repo."ALICE-Physics-Cloud"]
 unwrap = 11
@@ -2210,6 +2485,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Physics-Cloud-SaaS"]
 unwrap = 9
@@ -2218,6 +2494,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Physics-SaaS"]
 unwrap = 9
@@ -2226,6 +2503,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-PointCloud-SaaS"]
 unwrap = 9
@@ -2234,6 +2512,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-PowerGrid-SaaS"]
 unwrap = 9
@@ -2242,6 +2521,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Presence"]
 unwrap = 0
@@ -2250,6 +2530,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Presence-SaaS"]
 unwrap = 12
@@ -2258,6 +2539,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Print-SaaS"]
 unwrap = 9
@@ -2266,6 +2548,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ProjectMgmt-SaaS"]
 unwrap = 9
@@ -2274,6 +2557,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-PropTech-SaaS"]
 unwrap = 9
@@ -2282,6 +2566,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Proxy"]
 unwrap = 0
@@ -2290,6 +2575,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Proxy-SaaS"]
 unwrap = 9
@@ -2298,6 +2584,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-QA-SaaS"]
 unwrap = 9
@@ -2306,6 +2593,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Quant-SaaS"]
 unwrap = 9
@@ -2314,6 +2602,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Quantum-SaaS"]
 unwrap = 9
@@ -2322,6 +2611,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Queue"]
 unwrap = 0
@@ -2330,6 +2620,7 @@ panic = 2
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 6
 
 [repo."ALICE-Queue-SaaS"]
 unwrap = 9
@@ -2338,6 +2629,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-RAG-SaaS"]
 unwrap = 9
@@ -2346,6 +2638,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-RAW-SaaS"]
 unwrap = 9
@@ -2354,6 +2647,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-RL-SaaS"]
 unwrap = 9
@@ -2362,6 +2656,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-RPA-SaaS"]
 unwrap = 9
@@ -2370,6 +2665,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-RTOS"]
 unwrap = 0
@@ -2378,6 +2674,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-RTOS-BSP"]
 unwrap = 0
@@ -2386,6 +2683,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-RTOS-SaaS"]
 unwrap = 9
@@ -2394,6 +2692,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Railway-SaaS"]
 unwrap = 9
@@ -2402,6 +2701,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-RateLimit-SaaS"]
 unwrap = 9
@@ -2410,6 +2710,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Realtime-SaaS"]
 unwrap = 9
@@ -2418,6 +2719,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Recommend-SaaS"]
 unwrap = 9
@@ -2426,6 +2728,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Recycle-SaaS"]
 unwrap = 9
@@ -2434,6 +2737,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Registry"]
 unwrap = 11
@@ -2442,6 +2746,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Registry-SaaS"]
 unwrap = 9
@@ -2450,6 +2755,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Render-SaaS"]
 unwrap = 9
@@ -2458,6 +2764,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Revenue-SaaS"]
 unwrap = 9
@@ -2466,6 +2773,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ReverseProxy-SaaS"]
 unwrap = 9
@@ -2474,6 +2782,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Risk"]
 unwrap = 0
@@ -2482,6 +2791,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Risk-SaaS"]
 unwrap = 9
@@ -2490,6 +2800,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Robotics-SaaS"]
 unwrap = 9
@@ -2498,6 +2809,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SDF"]
 unwrap = 129
@@ -2506,6 +2818,7 @@ panic = 21
 todo = 0
 unimplemented = 0
 unreachable = 15
+assert = 37
 
 [repo."ALICE-SDF-SaaS"]
 unwrap = 9
@@ -2514,6 +2827,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SEO-SaaS"]
 unwrap = 9
@@ -2522,6 +2836,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SIEM-SaaS"]
 unwrap = 9
@@ -2530,6 +2845,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SIMD"]
 unwrap = 0
@@ -2538,6 +2854,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 2
 
 [repo."ALICE-SIMD-Compute"]
 unwrap = 10
@@ -2546,6 +2863,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SIMD-SaaS"]
 unwrap = 9
@@ -2554,6 +2872,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SLAM-SaaS"]
 unwrap = 9
@@ -2562,6 +2881,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Sandbox-SaaS"]
 unwrap = 9
@@ -2570,6 +2890,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Scheduler-SaaS"]
 unwrap = 9
@@ -2578,6 +2899,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Search"]
 unwrap = 0
@@ -2586,6 +2908,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Search-SaaS"]
 unwrap = 9
@@ -2594,6 +2917,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SecretVault-SaaS"]
 unwrap = 9
@@ -2602,6 +2926,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Secure-Network-SaaS"]
 unwrap = 9
@@ -2610,6 +2935,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Security-SaaS"]
 unwrap = 9
@@ -2618,6 +2944,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Semantic-Telemetry-SaaS"]
 unwrap = 9
@@ -2626,6 +2953,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Sensor-SaaS"]
 unwrap = 9
@@ -2634,6 +2962,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Serial"]
 unwrap = 0
@@ -2642,6 +2971,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Serial-SaaS"]
 unwrap = 9
@@ -2650,6 +2980,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-ServiceMesh-SaaS"]
 unwrap = 9
@@ -2658,6 +2989,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Settlement"]
 unwrap = 0
@@ -2666,6 +2998,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Settlement-SaaS"]
 unwrap = 9
@@ -2674,6 +3007,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Shader"]
 unwrap = 0
@@ -2682,6 +3016,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Sign"]
 unwrap = 0
@@ -2690,6 +3025,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 1
+assert = 4
 
 [repo."ALICE-Signal"]
 unwrap = 0
@@ -2698,6 +3034,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 16
 
 [repo."ALICE-Signal-SaaS"]
 unwrap = 9
@@ -2706,6 +3043,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Smart-Grid-SaaS"]
 unwrap = 9
@@ -2714,6 +3052,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SmartCity-SaaS"]
 unwrap = 9
@@ -2722,6 +3061,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Space"]
 unwrap = 0
@@ -2730,6 +3070,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 1
+assert = 0
 
 [repo."ALICE-Space-Comm"]
 unwrap = 10
@@ -2738,6 +3079,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Space-Comm-SaaS"]
 unwrap = 9
@@ -2746,6 +3088,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Space-Drone-Bridge"]
 unwrap = 0
@@ -2754,6 +3097,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Space-SaaS"]
 unwrap = 9
@@ -2762,6 +3106,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SpaceTech-SaaS"]
 unwrap = 9
@@ -2770,6 +3115,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SportsTech-SaaS"]
 unwrap = 9
@@ -2778,6 +3124,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Storage-SaaS"]
 unwrap = 9
@@ -2786,6 +3133,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Stream-SaaS"]
 unwrap = 11
@@ -2794,6 +3142,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-StreamProc-SaaS"]
 unwrap = 9
@@ -2802,6 +3151,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Streaming-Protocol"]
 unwrap = 40
@@ -2810,6 +3160,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Streaming-Protocol-SaaS"]
 unwrap = 9
@@ -2818,6 +3169,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Subtitle-SaaS"]
 unwrap = 9
@@ -2826,6 +3178,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-SupplyChain-SaaS"]
 unwrap = 9
@@ -2834,6 +3187,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Support-SaaS"]
 unwrap = 9
@@ -2842,6 +3196,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Survey-SaaS"]
 unwrap = 9
@@ -2850,6 +3205,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Swarm"]
 unwrap = 0
@@ -2858,6 +3214,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Swarm-SaaS"]
 unwrap = 9
@@ -2866,6 +3223,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Sync"]
 unwrap = 6
@@ -2874,6 +3232,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 3
+assert = 3
 
 [repo."ALICE-Sync-SaaS"]
 unwrap = 9
@@ -2882,6 +3241,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Synth"]
 unwrap = 0
@@ -2890,6 +3250,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Synth-Cloud"]
 unwrap = 3
@@ -2898,6 +3259,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Synth-Cloud-SaaS"]
 unwrap = 9
@@ -2906,6 +3268,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Synth-SaaS"]
 unwrap = 9
@@ -2914,6 +3277,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-TRT"]
 unwrap = 1
@@ -2922,6 +3286,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 30
 
 [repo."ALICE-TRT-SaaS"]
 unwrap = 9
@@ -2930,6 +3295,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-TTS-SaaS"]
 unwrap = 9
@@ -2938,6 +3304,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Tax-SaaS"]
 unwrap = 9
@@ -2946,6 +3313,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Telemedicine-SaaS"]
 unwrap = 9
@@ -2954,6 +3322,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Terraform"]
 unwrap = 0
@@ -2962,6 +3331,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Terraform-SaaS"]
 unwrap = 9
@@ -2970,6 +3340,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Text"]
 unwrap = 6
@@ -2978,6 +3349,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Text-Compression"]
 unwrap = 13
@@ -2986,6 +3358,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Text-Compression-SaaS"]
 unwrap = 9
@@ -2994,6 +3367,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Text-SaaS"]
 unwrap = 9
@@ -3002,6 +3376,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-TextToCAD-SaaS"]
 unwrap = 7
@@ -3010,6 +3385,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-TimeSeries-SaaS"]
 unwrap = 9
@@ -3018,6 +3394,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Token"]
 unwrap = 0
@@ -3026,6 +3403,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Token-SaaS"]
 unwrap = 9
@@ -3034,6 +3412,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Train"]
 unwrap = 46
@@ -3042,6 +3421,7 @@ panic = 4
 todo = 0
 unimplemented = 0
 unreachable = 2
+assert = 81
 
 [repo."ALICE-Train-SaaS"]
 unwrap = 9
@@ -3050,6 +3430,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Translation-SaaS"]
 unwrap = 9
@@ -3058,6 +3439,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Travel-SaaS"]
 unwrap = 9
@@ -3066,6 +3448,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VCS"]
 unwrap = 0
@@ -3074,6 +3457,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VCS-SaaS"]
 unwrap = 11
@@ -3082,6 +3466,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VM"]
 unwrap = 0
@@ -3090,6 +3475,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VM-SaaS"]
 unwrap = 9
@@ -3098,6 +3484,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VNet-SaaS"]
 unwrap = 9
@@ -3106,6 +3493,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VR"]
 unwrap = 0
@@ -3114,6 +3502,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VR-SaaS"]
 unwrap = 9
@@ -3122,6 +3511,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VectorDB-SaaS"]
 unwrap = 9
@@ -3130,6 +3520,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Video"]
 unwrap = 2
@@ -3138,6 +3529,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 1
 
 [repo."ALICE-Video-SaaS"]
 unwrap = 9
@@ -3146,6 +3538,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-VideoAnalytics-SaaS"]
 unwrap = 9
@@ -3154,6 +3547,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-View"]
 unwrap = 2
@@ -3162,6 +3556,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-View-SaaS"]
 unwrap = 9
@@ -3170,6 +3565,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-View-Studio"]
 unwrap = 3
@@ -3178,6 +3574,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Vision-SaaS"]
 unwrap = 9
@@ -3186,6 +3583,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Voice"]
 unwrap = 5
@@ -3194,6 +3592,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 2
 
 [repo."ALICE-Voice-Cloud"]
 unwrap = 12
@@ -3202,6 +3601,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Voice-Cloud-SaaS"]
 unwrap = 9
@@ -3210,6 +3610,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Voice-SaaS"]
 unwrap = 9
@@ -3218,6 +3619,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-WAF"]
 unwrap = 0
@@ -3226,6 +3628,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-WAF-SaaS"]
 unwrap = 9
@@ -3234,6 +3637,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-WASM-SaaS"]
 unwrap = 9
@@ -3242,6 +3646,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-WasteMgmt-SaaS"]
 unwrap = 9
@@ -3250,6 +3655,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-WaterMgmt-SaaS"]
 unwrap = 9
@@ -3258,6 +3664,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Web3-SaaS"]
 unwrap = 9
@@ -3266,6 +3673,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-WebSocket"]
 unwrap = 0
@@ -3274,6 +3682,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-WebSocket-SaaS"]
 unwrap = 9
@@ -3282,6 +3691,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Wellness-SaaS"]
 unwrap = 9
@@ -3290,6 +3700,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Whiteboard-SaaS"]
 unwrap = 9
@@ -3298,6 +3709,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Workflow-SaaS"]
 unwrap = 9
@@ -3306,6 +3718,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Zip"]
 unwrap = 4
@@ -3314,6 +3727,7 @@ panic = 1
 todo = 0
 unimplemented = 0
 unreachable = 1
+assert = 3
 
 [repo."ALICE-Zip-Cloud"]
 unwrap = 11
@@ -3322,6 +3736,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Zip-Cloud-SaaS"]
 unwrap = 9
@@ -3330,6 +3745,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-Zip-SaaS"]
 unwrap = 9
@@ -3338,6 +3754,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-eSign-SaaS"]
 unwrap = 9
@@ -3346,6 +3763,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-gRPC"]
 unwrap = 0
@@ -3354,6 +3772,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-gRPC-SaaS"]
 unwrap = 9
@@ -3362,6 +3781,7 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
 
 [repo."ALICE-i18n-SaaS"]
 unwrap = 9
@@ -3370,3 +3790,4 @@ panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 0
+assert = 0
