@@ -1,14 +1,14 @@
-# The main commits golden/values.digest was recorded from (2026-11-12, `cargo test --release` in e2e/
+# The main commits golden/values.digest was recorded from (2026-11-13, `cargo test --release` in e2e/
 # with e2e/Cargo.toml as committed, toolchain of e2e/rust-toolchain.toml, aarch64; the two architectures
 # are compared by e2e-main.yml). One line per repository: <repository> <commit> <crates at that commit>
 # Re-record both files together (ALICE_LAW_E2E_BLESS=1) when a main changes what is computed.
-ALICE-Analytics 6ef41bc5abd923ec2fdd47618f8f2ac7d6b7b707 alice-analytics 0.7.0
-ALICE-Crypto 497e1703eb77a01d5615f4f334f886dbcab4818f alice-crypto 0.7.0
-ALICE-DB 763d28de642dc341479321da7073872d48023444 alice-db 0.6.0
+ALICE-Analytics cf16e1928fae6b73fa3c3e2792aa687175a29267 alice-analytics 0.7.0
+ALICE-Crypto 33496b48d145c3008de83bc521eba19cbf95c72e alice-crypto 0.7.0
+ALICE-DB 5db2b15cb148aeed1bd83cb1479a0989ab2a044e alice-db 0.6.0
 ALICE-DetMath d80446ebce73c5c397f7df12435cf574460400bf alice-det-math 0.6.1
-ALICE-Edge 43343e4b04fb45a3a7e8cf21defee7df44b947c0 alice-edge 0.4.0
-ALICE-LOL dadd426a09ab857c3734ed2ea34b06e623da9f05 alice-lol 0.5.0, alice-lol-layout 0.1.0, alice-lol-macro 0.4.0
-ALICE-Physics 35f17ed0e1541eb70325511d5d4e571f7b0ce482 alice-physics 4.0.0, alice-physics-core 4.0.0
-ALICE-SDF 7be08e776412575de0fa291734afb806701f3cf0 alice-sdf 7.0.0
+ALICE-Edge 5de16c5a19803578039d949da12f9fd0c6c7be1b alice-edge 0.4.0
+ALICE-LOL 82a015737b945baf4f1b46606de962d3f5387074 alice-lol 0.5.0, alice-lol-layout 0.1.0, alice-lol-macro 0.4.0
+ALICE-Physics 8ea9fb86194670419332c2a4484b84b7dd675f2c alice-physics 4.0.0, alice-physics-core 4.0.0
+ALICE-SDF 0d5830e3f2c6fece513c5e6aa9fd2e4ea7c76962 alice-sdf 7.0.0
 ALICE-Serial 16b34ebcaf3a195fe6500defb4d1e6002cb3d09d alice-serial 0.2.0
-ALICE-Zip f1aa51dada9048753bfea387ce4c6f07863d6070 alice-zip 0.11.0
+ALICE-Zip c498e1769a71532239aed179e918734dd6329d8a alice-zip 0.11.0
