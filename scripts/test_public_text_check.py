@@ -16,13 +16,25 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+# a made-up name key for every test (in this process and in each checker it starts): the committed tables
+# are made under the real key, which no test reads, so no test can match a real name
+FAKE_NAME_KEY = "5a" * 32
+os.environ["ALICE_PRIVATE_NAME_HMAC_KEY"] = FAKE_NAME_KEY
 spec = importlib.util.spec_from_file_location("ptc", HERE / "public_text_check.py")
 ptc = importlib.util.module_from_spec(spec)
 sys.modules["ptc"] = ptc
 spec.loader.exec_module(ptc)
 
 ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-       "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "GIT_OPTIONAL_LOCKS": "0"}
+       "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "GIT_OPTIONAL_LOCKS": "0",
+       "ALICE_PRIVATE_NAME_HMAC_KEY": FAKE_NAME_KEY}
+
+
+def mac(text: str | bytes) -> str:
+    """a table entry under the made-up key"""
+    import hmac
+    raw = text if isinstance(text, bytes) else text.encode("utf-8")
+    return hmac.new(bytes.fromhex(FAKE_NAME_KEY), raw, hashlib.sha256).hexdigest()
 MADE_UP = "zorblat quux"  # stands in for a private name; only its hash is in the set during a test
 
 
@@ -58,7 +70,7 @@ class Base(unittest.TestCase):
         git(self.repo, "init", "-q")
         self.base = commit(self.repo, {"README.md": "# integration checks\n\nmemory footprint, a netcode session\n"})
         self.saved = ptc.PRIVATE_NAME_HASHES
-        ptc.PRIVATE_NAME_HASHES = self.saved | {hashlib.sha256(MADE_UP.encode()).hexdigest()}
+        ptc.PRIVATE_NAME_HASHES = self.saved | {mac(MADE_UP)}
 
     def tearDown(self):
         ptc.PRIVATE_NAME_HASHES = self.saved
@@ -87,7 +99,7 @@ class Tree(Base):
         self.assertNotIn("orblat", out.lower())
 
     def test_a_private_name_glued_to_another_word_is_found(self):
-        ptc.PRIVATE_NAME_HASHES = self.saved | {hashlib.sha256(b"zorblat").hexdigest()}
+        ptc.PRIVATE_NAME_HASHES = self.saved | {mac(b"zorblat")}
         for text in ("see zorblat-notes\n", "see zorblat_notes\n", "see notes.zorblat\n", "see Zorblat-Quux-x\n",
                      "path/to/.zorblat/x\n"):
             git(self.repo, "reset", "-q", "--hard", self.base)
@@ -100,7 +112,7 @@ class Tree(Base):
         self.assertEqual(run(self.repo, "--tree")[0], 0)
 
     def test_a_glued_private_name_in_a_path_is_found(self):
-        ptc.PRIVATE_NAME_HASHES = self.saved | {hashlib.sha256(b"zorblat").hexdigest()}
+        ptc.PRIVATE_NAME_HASHES = self.saved | {mac(b"zorblat")}
         commit(self.repo, {"docs/zorblat-notes.md": "ok\n"})
         code, out = run(self.repo, "--tree")
         self.assertEqual(code, 1)
@@ -221,13 +233,14 @@ class Vocabulary(unittest.TestCase):
         self.assertEqual(ptc.repo_key("ALICE-Zorblat"), h.sha256(b"ALICE-Zorblat").hexdigest())
 
     def test_the_private_name_set_is_pinned(self):
-        # its size and the SHA-256 of its sorted lines: removing or changing a name changes them
+        # its size and the SHA-256 of its sorted lines (HMAC entries; the names not yet moved are in
+        # LEGACY_PRIVATE_NAME_SHA256, pinned by test_name_key.py): removing or changing a name changes them
         spec = importlib.util.spec_from_file_location("ptc_fresh", HERE / "public_text_check.py")
         fresh = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(fresh)  # (other tests swap ptc's set)
         h = sorted(fresh.PRIVATE_NAME_HASHES)
         self.assertEqual((len(h), hashlib.sha256("\n".join(h).encode()).hexdigest()),
-                         (57, "77a5b47d02073be0bfac874bf535b6951acf683f8f4ac347a8efdc8c73295d49"))
+                         (50, "b0ac89899cdbef83e31a36aab29d5f22164481ff18699d6742a0e3f8a5388e5f"))
 
     def test_the_repository_is_clean(self):
         code, out = run(HERE.parent, "--tree")
@@ -263,7 +276,7 @@ class SessionIds(Base):
     def with_ids(self, *ids: str):
         saved = ptc.SESSION_TOKEN_HASHES
         self.addCleanup(lambda: setattr(ptc, "SESSION_TOKEN_HASHES", saved))
-        ptc.SESSION_TOKEN_HASHES = {hashlib.sha256(i.encode()).hexdigest() for i in ids}
+        ptc.SESSION_TOKEN_HASHES = {mac(i) for i in ids}
 
     def test_in_a_commit_message_a_current_id_is_found_as_a_whole_token(self):
         self.with_ids("e9", "42")
@@ -827,7 +840,7 @@ class Shapes(unittest.TestCase):
     def test_private_home_paths_are_found_and_public_ones_pass(self):
         saved = ptc.PRIVATE_REPO_HASHES
         self.addCleanup(lambda: setattr(ptc, "PRIVATE_REPO_HASHES", saved))
-        ptc.PRIVATE_REPO_HASHES = {hashlib.sha256(b"zorblat-notes").hexdigest()}
+        ptc.PRIVATE_REPO_HASHES = {mac(b"zorblat-notes")}
         for line in ("see ~/zorblat-notes/plan.md", "/Users/someone/Zorblat-Notes/x", "/home/u/zorblat-notes/"):
             self.assertIn("private path", ptc.kinds(line), line)
         for line in ("see ~/ALICE-LOL/README.md", "/Users/runner/work/x", "zorblat-notes alone", "~/zorblat-notes2/x"):
@@ -835,8 +848,8 @@ class Shapes(unittest.TestCase):
 
     # the set as committed: its size and the SHA-256 of its sorted lines (a change of the set is a
     # change of these two numbers)
-    PRIVATE_REPO_COUNT = 328
-    PRIVATE_REPO_DIGEST = "be47e4f0c610416b1f6ffc4dbfd3f1e4dbca4f8ae22150f3cb77268ef6fcf3fb"
+    PRIVATE_REPO_COUNT = 329
+    PRIVATE_REPO_DIGEST = "7480fbfc733c105a2205ce3d3122edc83e14fee5627ce2ac2b72c4e25565aae5"
 
     def standalone(self, source: str | None = None) -> Path:
         """this checker copied alone into an empty directory (as a repository's CI fetches it)"""
@@ -875,7 +888,7 @@ class Shapes(unittest.TestCase):
     def test_a_private_path_is_found_by_the_checker_copied_alone(self):
         # the canary: one more name in the committed set, and a line with its home path, read by
         # the checker copied alone (no file beside it)
-        h = hashlib.sha256(b"zorblat-notes").hexdigest()
+        h = mac(b"zorblat-notes")
         marker = "PRIVATE_REPO_HASHES: frozenset[str] = frozenset({\n"
         d = self.standalone(lambda s: s.replace(marker, marker + f'    "{h}",\n', 1))
         r = self.run_standalone(d, self.fixture_repo("see ~/zorblat-notes/plan.md"))
@@ -918,8 +931,7 @@ class Binary(Base):
 
     def test_short_tokens_in_a_binary_run_are_dropped(self):
         # Base.tearDown restores the set (a cleanup would run after it and put back setUp's set)
-        ptc.PRIVATE_NAME_HASHES = ptc.PRIVATE_NAME_HASHES | {hashlib.sha256(b"zqx").hexdigest(),
-                                                             hashlib.sha256(b"zqxw").hexdigest()}
+        ptc.PRIVATE_NAME_HASHES = ptc.PRIVATE_NAME_HASHES | {mac(b"zqx"), mac(b"zqxw")}
         (self.repo / "noise.bin").write_bytes(b"\x89\0\x01ab.zqx!\0\xff")  # a 6-byte run, a 3-letter name
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-q", "-m", "x")
@@ -1647,7 +1659,7 @@ class Devices(Base):
     def test_host_names_by_hash_in_any_case(self):
         saved = ptc.HOST_NAME_HASHES
         self.addCleanup(lambda: setattr(ptc, "HOST_NAME_HASHES", saved))
-        ptc.HOST_NAME_HASHES = {hashlib.sha256(b"zorb-box").hexdigest()}
+        ptc.HOST_NAME_HASHES = {mac(b"zorb-box")}
         for line in ("ssh zorb-box", "on ZORB-BOX.local", "(zorb-box)"):
             self.assertIn("host name", ptc.kinds(line), line)
         for line in ("zorb box", "zorb-boxes", "a zorb-box2 run"):
@@ -1673,7 +1685,7 @@ class PrivateRepoNames(unittest.TestCase):
 
     def setUp(self):
         # a made-up repository name; the committed set is generated from the account's repositories
-        self.h = hashlib.sha256(b"alice-zorblat").hexdigest()
+        self.h = mac(b"alice-zorblat")
         saved = ptc.PRIVATE_ALICE_REPO_HASHES
         self.addCleanup(lambda: setattr(ptc, "PRIVATE_ALICE_REPO_HASHES", saved))
         ptc.PRIVATE_ALICE_REPO_HASHES = frozenset({self.h})
@@ -1847,7 +1859,7 @@ class PrivateRepoNames(unittest.TestCase):
     def test_a_public_file_name_that_holds_a_private_name_is_that_file(self):
         # the conformance manifest's file name contains a private repository's name; as the whole file
         # name it is the file, and the bare repository name, or the name as another file's stem, is not
-        conf = hashlib.sha256(b"alice-law-conformance").hexdigest()
+        conf = mac(b"alice-law-conformance")
         ptc.PRIVATE_ALICE_REPO_HASHES = frozenset({self.h, conf})
         hit = "private repository name"
         for line in ("each member carries alice-law-conformance.toml", "`ALICE-Law-Conformance.toml` at the root",

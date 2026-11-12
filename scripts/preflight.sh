@@ -17,6 +17,7 @@ python3 scripts/test_release_baseline.py
 python3 scripts/test_expected_failure.py
 python3 scripts/expected_failure.py --check
 python3 scripts/test_public_text_check.py
+python3 scripts/test_name_key.py
 python3 scripts/test_licence_files_check.py
 python3 scripts/test_holder_live.py
 python3 scripts/test_public_text_live.py
@@ -132,11 +133,12 @@ echo "== README.md and README_JP.md agree"
 python3 scripts/readme_parity_check.py
 
 echo "== public text: the tree"
-python3 scripts/public_text_check.py --tree HEAD
+python3 scripts/name_key_absent.py --require-key
+python3 scripts/public_text_check.py --tree HEAD --require-private-names
 
 echo "== public text: the commits since the base"
 if [ "$(git rev-list --count "$base..HEAD")" -gt 0 ]; then
-  python3 scripts/public_text_check.py --range "$base..HEAD"
+  python3 scripts/public_text_check.py --range "$base..HEAD" --require-private-names
 else
   echo "no commit outside origin/main"
 fi

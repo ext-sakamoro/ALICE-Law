@@ -53,6 +53,7 @@ jobs:
       - name: The public repositories' text against the baseline, as far as this change goes
         env:
           GH_TOKEN: ${{ github.token }}
+          ALICE_PRIVATE_NAME_HMAC_KEY: ${{ secrets.ALICE_PRIVATE_NAME_HMAC_KEY }}
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
         run: |
