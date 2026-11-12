@@ -198,69 +198,96 @@ class Baseline(unittest.TestCase):
 
 
 
+
 class StaleBaseline(Base):
-    """a private repository name baseline entry a tree is below is a note in the repository's own check;
-    here, with --stale-state, it is recorded on first sight and is a finding once it has stayed stale for
-    GRACE_DAYS days"""
+    """a private repository name baseline entry a tree is below is a note in the repository's own check; here
+    it is a finding once it has been stale for GRACE_DAYS days, the day it went stale read from the repository's
+    history (no stored state)"""
 
-    K1, K2 = "1" * 64, "2" * 64
+    K = "1" * 64
 
-    def stub_checker(self, stale_lines: dict[str, list[str]]) -> None:
-        # a stand-in for public_text_check.py --tree: no finding, one file, the given stale lines per repository
+    def stub_checker(self, want: int, date: str = "2026-11-01") -> None:
+        # a stand-in for public_text_check.py: the entry K counts the README lines with "ZORB" at the ref; --tree
+        # prints `stale:` when the count is below `want`, --repo-name-counts prints the counts
         stub = Path(self.tmp.name) / "stub_check.py"
         stub.write_text(
-            "import sys\n"
-            f"STALE = {stale_lines!r}\n"
-            "name = sys.argv[sys.argv.index('--repo-name') + 1]\n"
-            "for line in STALE.get(name, []):\n"
-            "    print(line)\n"
+            "import json, subprocess, sys\n"
+            f'PRIVATE_REPO_NAME_BASELINE_DATE = "{date}"\n'
+            "a = sys.argv\n"
+            "repo, ref = a[a.index('--repo') + 1], a[a.index('--tree') + 1]\n"
+            "if a[a.index('--repo-name') + 1] != 'ALICE-C':\n"
+            "    print('{}' if '--repo-name-counts' in a else 'public text: 0 findings in 1 files at HEAD')\n"
+            "    sys.exit(0)\n"
+            "r = subprocess.run(['git', '-C', repo, 'show', ref + ':README.md'], capture_output=True, text=True)\n"
+            "n = sum('ZORB' in line for line in r.stdout.splitlines())\n"
+            "if '--repo-name-counts' in a:\n"
+            f"    print(json.dumps({{'{self.K}': n}} if n else {{}}))\n"
+            "    sys.exit(0)\n"
+            f"if n < {want}:\n"
+            f"    print('stale: {self.K} %d {want}' % n)\n"
             "print('public text: 0 findings in 1 files at HEAD')\n", encoding="utf-8")
         saved = pl.CHECK
         pl.CHECK = stub
         self.addCleanup(lambda: setattr(pl, "CHECK", saved))
         self.baseline.write_text(pl.dump_baseline({}), encoding="utf-8")
 
-    def test_first_seen_is_recorded_and_the_entry_is_a_finding_after_the_grace(self):
-        self.stub_checker({"ALICE-A": [f"stale: {self.K1} 0 2"]})
-        state = Path(self.tmp.name) / "state.json"
-        code, out = self.run_live("--stale-state", str(state), "--today", "2026-11-12")
+    def at(self, name: str, files: dict, day: str) -> None:
+        env = dict(pl.os.environ)
+        saved = dict(ENV)
+        ENV.update({"GIT_COMMITTER_DATE": f"{day}T12:00:00+00:00", "GIT_AUTHOR_DATE": f"{day}T12:00:00+00:00"})
+        try:
+            self.w.repo(name, files)
+        finally:
+            ENV.clear()
+            ENV.update(saved)
+        self.assertTrue(env)
+
+    def test_the_entry_went_stale_at_the_commit_that_dropped_below_it(self):
+        self.stub_checker(want=2)
+        self.at("ALICE-C", {"README.md": "ZORB a\nZORB b\n"}, "2026-10-30")
+        self.at("ALICE-C", {"README.md": "ZORB a\nZORB b\nmore\n"}, "2026-11-03")
+        self.at("ALICE-C", {"README.md": "ZORB a\nmore\n"}, "2026-11-05")  # below the entry from here
+        self.at("ALICE-C", {"README.md": "ZORB a\nmore and more\n"}, "2026-11-08")
+        code, out = self.run_live("--today", "2026-11-06")
         self.assertEqual(code, 0, out)
         self.assertIn("1 in their 2-day grace, 0 past it", out)
-        self.assertEqual(pl.load_state(state), {f"ALICE-A {self.K1}": "2026-11-12"})
-        self.assertEqual(self.run_live("--stale-state", str(state), "--today", "2026-11-13")[0], 0)
-        code, out = self.run_live("--stale-state", str(state), "--today", "2026-11-14")
+        code, out = self.run_live("--today", "2026-11-07")
         self.assertEqual(code, 1, out)
-        self.assertIn(f"ALICE-A: private repository name baseline entry {self.K1[:12]} stale since 2026-11-12", out)
-        self.assertEqual(pl.load_state(state), {f"ALICE-A {self.K1}": "2026-11-12"}, "the first sight is kept")
+        self.assertIn(f"ALICE-C: private repository name baseline entry {self.K[:12]} stale since 2026-11-05 (2 days", out)
 
-    def test_an_entry_no_longer_stale_is_dropped(self):
-        state = Path(self.tmp.name) / "state.json"
-        state.write_text('{"ALICE-A %s": "2026-11-01"}' % self.K2, encoding="utf-8")
-        self.stub_checker({})
-        code, out = self.run_live("--stale-state", str(state), "--today", "2026-11-12")
-        self.assertEqual(code, 0, out)
-        self.assertEqual(pl.load_state(state), {})
+    def test_two_runs_give_the_same_result_with_nothing_kept_between_them(self):
+        # no state: the result is a function of the repositories and the date (a lost cache can not restart the grace)
+        self.stub_checker(want=2)
+        self.at("ALICE-C", {"README.md": "ZORB a\nZORB b\n"}, "2026-11-02")
+        self.at("ALICE-C", {"README.md": "ZORB a\n"}, "2026-11-03")
+        first = self.run_live("--today", "2026-11-10")
+        second = self.run_live("--today", "2026-11-10")
+        self.assertEqual(first, second)
+        self.assertEqual(first[0], 1)
+        self.assertIn("stale since 2026-11-03", first[1])
 
-    def test_without_a_state_stale_entries_are_only_listed(self):
-        self.stub_checker({"ALICE-A": [f"stale: {self.K1} 0 2"], "ALICE-B": [f"stale: {self.K2} 1 3"]})
-        code, out = self.run_live()
+    def test_a_drop_before_the_baseline_date_is_dated_at_the_baseline(self):
+        # every entry matched on the baseline's date, so going stale is after it; with no later commit below the
+        # entry, the baseline's date is taken (the earliest it can be: the grace is never longer than it should be)
+        self.stub_checker(want=2, date="2026-11-04")
+        self.at("ALICE-C", {"README.md": "ZORB a\n"}, "2026-11-01")
+        code, out = self.run_live("--today", "2026-11-05")
         self.assertEqual(code, 0, out)
-        self.assertIn("2 stale private repository name baseline entries (listed only", out)
+        code, out = self.run_live("--today", "2026-11-06")
+        self.assertEqual(code, 1, out)
+        self.assertIn("stale since 2026-11-04", out)
 
     def test_the_grace_by_age(self):
         today = pl.datetime.date(2026, 11, 12)
         for first, late in (("2026-11-12", False), ("2026-11-11", False), ("2026-11-10", True), ("2026-10-01", True)):
-            found, state, grace = pl.stale_findings({"ALICE-A": [self.K1]}, {f"ALICE-A {self.K1}": first}, today)
+            found, grace = pl.stale_findings({"ALICE-A": {self.K: pl.datetime.date.fromisoformat(first)}}, today)
             self.assertEqual((len(found), grace), (1, 0) if late else (0, 1), first)
-            self.assertEqual(state, {f"ALICE-A {self.K1}": first})
 
-    def test_a_malformed_state_is_refused(self):
-        state = Path(self.tmp.name) / "state.json"
-        for text in ('[]', '{"ALICE-A abc": "2026-11-12"}', '{"ALICE-A %s": "12 Nov"}' % self.K1,
-                     '{"ALICE-A %s": "2026-13-40"}' % self.K1, '{'):
-            state.write_text(text, encoding="utf-8")
-            self.stub_checker({})
-            self.assertEqual(self.run_live("--stale-state", str(state))[0], 2, text)
+    def test_a_checker_without_a_baseline_date_is_refused(self):
+        self.stub_checker(want=2)
+        pl.CHECK.write_text(pl.CHECK.read_text(encoding="utf-8").replace("PRIVATE_REPO_NAME_BASELINE_DATE", "X"),
+                            encoding="utf-8")
+        self.assertEqual(self.run_live()[0], 2)
 
 
 if __name__ == "__main__":

@@ -161,6 +161,19 @@ class Baseline(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("stale", err)
 
+    def test_the_date_moves_only_with_the_entries(self):
+        # live reads the date as the day every entry matched: a rewrite with the same entries keeps it
+        self.run_gen(self.rows(), "--today", "2026-11-01")
+        self.assertIn('PRIVATE_REPO_NAME_BASELINE_DATE = "2026-11-01"', self.checker.read_text(encoding="utf-8"))
+        self.run_gen(self.rows(), "--today", "2026-11-09")
+        self.assertIn('PRIVATE_REPO_NAME_BASELINE_DATE = "2026-11-01"', self.checker.read_text(encoding="utf-8"))
+        self.assertEqual(self.run_gen(self.rows(), "--check", "--today", "2026-11-09")[0], 0)
+        (self.repo / "README.md").write_text("built on ALICE-Zorblat\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "less"],
+                       check=True, capture_output=True)
+        self.run_gen(self.rows(), "--today", "2026-11-09")
+        self.assertIn('PRIVATE_REPO_NAME_BASELINE_DATE = "2026-11-09"', self.checker.read_text(encoding="utf-8"))
+
     def test_a_removed_mention_passes_the_tree_and_fails_the_baseline_check(self):
         # fewer lines than the entry: a note in the repository's own check (it can not lower the entry), and the
         # local --check fails until the entry is lowered here
