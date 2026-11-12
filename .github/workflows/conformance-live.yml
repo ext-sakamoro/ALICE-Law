@@ -81,7 +81,9 @@ jobs:
   # conformance/public-text-baseline.toml (scripts/public_text_live.py): a repository that never adopted
   # its own public-text workflow is read here too. The repositories are the ones listed as public at run
   # time. More findings at a place than the baseline has is red, fewer is red (stale), and a repository
-  # that could not be read is red, never a pass. Daily and by hand only, like the holder job.
+  # that could not be read is red, never a pass. A private repository name baseline entry a repository is
+  # below is red after its grace (the first-seen dates are kept in the actions cache). Daily and by hand only,
+  # like the holder job.
   public-text:
     name: Every public repository against the public text baseline
     if: github.event_name != 'push'
@@ -99,11 +101,30 @@ jobs:
       - name: Test the public text reader
         run: python3 scripts/test_public_text_live.py
 
+      # the first-seen dates of stale private repository name baseline entries, kept between runs: an entry a
+      # repository's tree is below is a note there (it can not lower ALICE-Law's entry) and red here once it
+      # has stayed stale for public_text_live.GRACE_DAYS days (lower it: gen_private_repo_hashes.py --baseline live)
+      - name: Restore the stale baseline entries' first-seen dates
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25  # v5.1.0
+        with:
+          path: .stale-state/public-text-stale.json
+          key: public-text-stale-${{ github.run_id }}
+          restore-keys: public-text-stale-
+
       - name: The public repositories' text against the baseline
         env:
           GH_TOKEN: ${{ github.token }}
         # this repository at the commit under test (its own tree), every other one at its default branch
-        run: python3 scripts/public_text_live.py --local "${GITHUB_REPOSITORY#*/}=."
+        run: |
+          mkdir -p .stale-state
+          python3 scripts/public_text_live.py --local "${GITHUB_REPOSITORY#*/}=." --stale-state .stale-state/public-text-stale.json
+
+      - name: Save the stale baseline entries' first-seen dates
+        if: always()
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25  # v5.1.0
+        with:
+          path: .stale-state/public-text-stale.json
+          key: public-text-stale-${{ github.run_id }}
 
   # Jobs that must not run on ubuntu-latest (scripts/runner_pin_live.py, patterns in conformance/runner-pin.toml):
   # ubuntu-latest moved to 26.04, where Mesa's lavapipe crashes and Playwright installs no Chromium, so a job that

@@ -1080,8 +1080,10 @@ PRIVATE_ALICE_REPO_HASHES_COMMITTED = PRIVATE_ALICE_REPO_HASHES
 
 # The private repository names a public repository's text already holds, as a ratchet: per repository
 # (sha256 of its lower-case name), sha256(<repository> NUL <path> NUL <name>) -> the number of lines. A
-# tree with more lines than its entry is a finding (a new mention), and so is one with fewer (the entry is
-# stale: lower it), so the count only goes down. Written by scripts/gen_private_repo_hashes.py --baseline.
+# tree with more lines than its entry is a finding (a new mention). One with fewer is stale: printed as a
+# note (`stale: <key> <lines> <entry>`), since only ALICE-Law can lower the entry; Conformance (live) makes a
+# stale entry a finding after its grace and gen_private_repo_hashes.py --baseline live --check fails on it,
+# so the count only goes down. Written by scripts/gen_private_repo_hashes.py --baseline.
 BASELINE_BEGIN = "# >>> " + "generated private repository name baseline >>>"
 BASELINE_END = "# <<< " + "generated private repository name baseline <<<"
 # >>> generated private repository name baseline >>>
@@ -1384,22 +1386,27 @@ def repo_name_counts(repo: str) -> dict[str, int]:
 
 
 def baseline_findings(repo: str) -> list[str]:
-    """the tree's private repository names against its baseline entry (no name is printed)"""
+    """the tree's private repository names above its baseline entry (no name is printed): a new mention.
+    Fewer lines than the entry is not the tree's finding (only ALICE-Law can lower the entry): see
+    baseline_stale"""
     base = PRIVATE_REPO_NAME_BASELINE.get(hashlib.sha256(repo.lower().encode("utf-8")).hexdigest(), {})
-    out, seen = [], set()
+    out = []
     for (path, name), n in sorted((REPO_NAME_COUNTS or {}).items()):
-        key = repo_name_key(repo, path, name)
-        seen.add(key)
-        want = base.get(key, 0)
+        want = base.get(repo_name_key(repo, path, name), 0)
         if n > want:
             out.append(f"{path}: private repository name ({n} lines, the baseline allows {want})")
-        elif n < want:
-            out.append(f"{path}: private repository name baseline is stale ({n} lines, the baseline says {want}: lower it)")
-    gone = [k for k in base if k not in seen]
-    if gone:
-        out.append(f"private repository name baseline: {len(gone)} entries name lines the tree no longer has "
-                   "(lower the baseline)")
     return out
+
+
+def baseline_stale(repo: str) -> list[tuple[str, int, int]]:
+    """(entry key, lines in the tree, the baseline's count) of each entry the tree is below, an entry whose
+    lines are gone included (0). Printed as a note by --tree: the repository cannot lower ALICE-Law's
+    baseline, so it is not a finding there; Conformance (live) turns an entry that stays stale past its grace
+    into a finding (public_text_live.py --stale-state), and gen_private_repo_hashes.py --baseline live
+    --check fails on it, so the slack it leaves is closed by lowering the entry"""
+    base = PRIVATE_REPO_NAME_BASELINE.get(hashlib.sha256(repo.lower().encode("utf-8")).hexdigest(), {})
+    got = {repo_name_key(repo, path, name): n for (path, name), n in (REPO_NAME_COUNTS or {}).items()}
+    return [(k, got.get(k, 0), want) for k, want in sorted(base.items()) if got.get(k, 0) < want]
 
 
 def private_sets_problem() -> str | None:
@@ -2807,6 +2814,7 @@ def main(argv: list[str] | None = None) -> int:
     ALLOW_STATE["used"] = {}
     try:
         CONFIG.update(load_config(a.repo, a.tree if a.tree is not None else a.range.split("..")[-1] or "HEAD"))
+        stale: list[tuple[str, int, int]] = []
         if a.tree is not None:
             global REPO_NAME_COUNTS
             REPO_NAME_COUNTS = {}
@@ -2817,6 +2825,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(json.dumps(repo_name_counts(name or "")))
                     return 0 if compared else 2
                 findings += baseline_findings(name or "")
+                stale = baseline_stale(name or "")
             finally:
                 REPO_NAME_COUNTS = None
             what = f"{compared} files at {a.tree}"
@@ -2858,6 +2867,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"public text: {REPO_CONFIG}: " + "; ".join(settings))
     for a_line in APPROVALS:
         print(f"public text: {a_line}")
+    # an entry the tree is below: not a finding here (ALICE-Law lowers it); one machine-readable line each
+    for k, n, want in stale:
+        print(f"stale: {k} {n} {want}")
+    if stale:
+        print(f"public text: {len(stale)} private repository name baseline entr{'y' if len(stale) == 1 else 'ies'} "
+              f"above this tree (ALICE-Law lowers {'it' if len(stale) == 1 else 'them'}: not a finding here)")
     if SKIPPED:
         print(f"public text: not read: {len(SKIPPED)} entries (first: {SKIPPED[0]})")
     if not zstd_available():

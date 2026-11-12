@@ -161,6 +161,20 @@ class Baseline(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("stale", err)
 
+    def test_a_removed_mention_passes_the_tree_and_fails_the_baseline_check(self):
+        # fewer lines than the entry: a note in the repository's own check (it can not lower the entry), and the
+        # local --check fails until the entry is lowered here
+        self.run_gen(self.rows())
+        (self.repo / "README.md").write_text("built on ALICE-Zorblat\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "less"],
+                       check=True, capture_output=True)
+        r = self.check_tree(self.repo, "ALICE-Public")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertRegex(r.stdout, r"stale: [0-9a-f]{64} 1 2")
+        rc, err = self.run_gen(self.rows(), "--check")
+        self.assertEqual(rc, 1)
+        self.assertIn("stale", err)
+
     def test_nothing_to_compare_writes_nothing(self):
         before = self.checker.read_text(encoding="utf-8")
         rc, err = self.run_gen([])

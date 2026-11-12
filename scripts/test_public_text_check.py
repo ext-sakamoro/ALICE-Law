@@ -1792,7 +1792,7 @@ class PrivateRepoNames(unittest.TestCase):
         self.assertIn("private repository name", ptc.kinds("ALICE-Zorblat: pass", "conformance/status.md"),
                       "the exemption is ALICE-Law's own")
 
-    def baseline_against(self, counts: dict, base: dict) -> list[str]:
+    def baseline_against(self, counts: dict, base: dict) -> tuple[list[str], list]:
         saved_c, saved_b = ptc.REPO_NAME_COUNTS, ptc.PRIVATE_REPO_NAME_BASELINE
         self.addCleanup(lambda: (setattr(ptc, "REPO_NAME_COUNTS", saved_c),
                                  setattr(ptc, "PRIVATE_REPO_NAME_BASELINE", saved_b)))
@@ -1800,24 +1800,40 @@ class PrivateRepoNames(unittest.TestCase):
         repo_h = hashlib.sha256(b"alice-public").hexdigest()
         ptc.PRIVATE_REPO_NAME_BASELINE = {repo_h: {ptc.repo_name_key("ALICE-Public", path, name): n
                                                    for (path, name), n in base.items()}}
-        return ptc.baseline_findings("ALICE-Public")
+        return ptc.baseline_findings("ALICE-Public"), ptc.baseline_stale("ALICE-Public")
 
     def test_the_baseline_is_a_ratchet(self):
         k = ("README.md", "alice-zorblat")
-        self.assertEqual(self.baseline_against({k: 2}, {k: 2}), [], "as many lines as the baseline: no finding")
-        above = self.baseline_against({k: 3}, {k: 2})
+        key = ptc.repo_name_key("ALICE-Public", *k)
+        self.assertEqual(self.baseline_against({k: 2}, {k: 2}), ([], []), "as many lines as the baseline: nothing")
+        above, stale = self.baseline_against({k: 3}, {k: 2})
         self.assertEqual(above, ["README.md: private repository name (3 lines, the baseline allows 2)"])
-        below = self.baseline_against({k: 1}, {k: 2})
-        self.assertEqual(len(below), 1)
-        self.assertIn("stale", below[0])
-        self.assertIn("lower it", below[0])
-        gone = self.baseline_against({}, {k: 2})
-        self.assertEqual(len(gone), 1)
-        self.assertIn("1 entries", gone[0])
-        other = self.baseline_against({("docs/a.md", "alice-zorblat"): 1}, {k: 1})
-        self.assertEqual(len(other), 2, "the entry is per path: another file is a new mention, and the old one is gone")
-        for f in above + below + gone + other:
+        self.assertEqual(stale, [])
+        # fewer lines, or lines gone: stale, a note (the repository can not lower ALICE-Law's entry), not a finding
+        self.assertEqual(self.baseline_against({k: 1}, {k: 2}), ([], [(key, 1, 2)]))
+        self.assertEqual(self.baseline_against({}, {k: 2}), ([], [(key, 0, 2)]))
+        other_found, other_stale = self.baseline_against({("docs/a.md", "alice-zorblat"): 1}, {k: 1})
+        self.assertEqual(len(other_found), 1, "another file is a new mention")
+        self.assertEqual(other_stale, [(key, 0, 1)], "and the old one's entry is stale")
+        for f in above + other_found:
             self.assertNotIn("zorblat", f.lower(), "a finding never prints the name")
+
+    def test_a_stale_entry_is_printed_as_a_note_and_the_run_passes(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        repo = Path(tmp.name, "r")
+        repo.mkdir()
+        git(repo, "init", "-q")
+        commit(repo, {"README.md": "# integration checks\n"})
+        repo_h = hashlib.sha256(b"alice-public").hexdigest()
+        saved = ptc.PRIVATE_REPO_NAME_BASELINE
+        self.addCleanup(lambda: setattr(ptc, "PRIVATE_REPO_NAME_BASELINE", saved))
+        key = ptc.repo_name_key("ALICE-Public", "README.md", "alice-zorblat")
+        ptc.PRIVATE_REPO_NAME_BASELINE = {repo_h: {key: 2}}
+        code, out = run(repo, "--repo-name", "ALICE-Public", "--tree", "HEAD")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"stale: {key} 0 2", out)
+        self.assertNotIn("found:", out)
 
     def test_the_counts_are_keyed_as_the_baseline(self):
         saved = ptc.REPO_NAME_COUNTS
