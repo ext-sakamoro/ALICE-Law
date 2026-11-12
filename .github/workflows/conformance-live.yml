@@ -103,6 +103,7 @@ jobs:
 
       - name: The public repositories' text against the baseline
         env:
+          ALICE_PRIVATE_NAME_HMAC_KEY: ${{ secrets.ALICE_PRIVATE_NAME_HMAC_KEY }}
           GH_TOKEN: ${{ github.token }}
         # this repository at the commit under test (its own tree), every other one at its default branch
         run: python3 scripts/public_text_live.py --local "${GITHUB_REPOSITORY#*/}=."

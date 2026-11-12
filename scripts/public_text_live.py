@@ -78,7 +78,8 @@ def key(repo: str, finding: str) -> str:
 def check(g: Path, name: str, ref: str) -> tuple[list[str], int, list[tuple[str, int]]]:
     """(findings, files compared, stale baseline entries as (key, the entry's count)) of public_text_check.py
     --tree on the checkout g at ref"""
-    r = subprocess.run([sys.executable, str(CHECK), "--repo", str(g), "--repo-name", name, "--tree", ref],
+    r = subprocess.run([sys.executable, str(CHECK), "--repo", str(g), "--repo-name", name, "--tree", ref,
+                        "--require-private-names"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     m = COMPARED_RE.search(r.stdout)
     if r.returncode not in (0, 1) or m is None:

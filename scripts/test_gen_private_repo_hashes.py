@@ -22,6 +22,9 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+# a made-up name key for these tests and for every checker they start (the real key is never read here)
+FAKE_NAME_KEY = "3c" * 32
+os.environ["ALICE_PRIVATE_NAME_HMAC_KEY"] = FAKE_NAME_KEY
 spec = importlib.util.spec_from_file_location("gprh", HERE / "gen_private_repo_hashes.py")
 gen = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gen)
@@ -29,6 +32,12 @@ spec.loader.exec_module(gen)
 
 def h(name: str) -> str:
     return hashlib.sha256(name.lower().encode("utf-8")).hexdigest()
+
+
+def mac(name: str) -> str:
+    """a private-name table entry under the made-up key"""
+    import hmac
+    return hmac.new(bytes.fromhex(FAKE_NAME_KEY), name.lower().encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 class Generate(unittest.TestCase):
@@ -60,8 +69,8 @@ class Generate(unittest.TestCase):
         rc, err = self.run_gen(self.ROWS)
         self.assertEqual(rc, 0, err)
         every, alice = self.sets()
-        self.assertEqual(every, {h("ALICE-Zorblat"), h("zorblat-notes")})
-        self.assertEqual(alice, {h("ALICE-Zorblat")})
+        self.assertEqual(every, {mac("ALICE-Zorblat"), mac("zorblat-notes")})
+        self.assertEqual(alice, {mac("ALICE-Zorblat")})
         text = self.checker.read_text(encoding="utf-8")
         for name in ("zorblat", "quux", "frob"):
             self.assertNotIn(name, text.lower(), "no name is written, only hashes")
@@ -74,7 +83,7 @@ class Generate(unittest.TestCase):
         self.assertEqual(rc, 1, "the block is stale once a repository is public")
         self.assertIn("stale", err)
         self.assertEqual(self.run_gen(rows)[0], 0)
-        self.assertEqual(self.sets()[0], {h("ALICE-Zorblat")})
+        self.assertEqual(self.sets()[0], {mac("ALICE-Zorblat")})
 
     def test_nothing_to_compare_writes_nothing(self):
         before = self.checker.read_text(encoding="utf-8")
@@ -114,7 +123,7 @@ class Baseline(unittest.TestCase):
         self.checker = d / "public_text_check.py"
         src = (HERE / "public_text_check.py").read_text(encoding="utf-8")
         marker = "PRIVATE_ALICE_REPO_HASHES: frozenset[str] = frozenset({\n"
-        self.checker.write_text(src.replace(marker, marker + f'    "{h("ALICE-Zorblat")}",\n', 1), encoding="utf-8")
+        self.checker.write_text(src.replace(marker, marker + f'    "{mac("ALICE-Zorblat")}",\n', 1), encoding="utf-8")
         self.listing = d / "public.json"
         self.repo = commit_tree({"README.md": "built on ALICE-Zorblat\nand ALICE-Zorblat\n", "docs/x.md": "clean\n"})
         self.clean = commit_tree({"README.md": "nothing private\n"})
@@ -141,7 +150,7 @@ class Baseline(unittest.TestCase):
         rc, err = self.run_gen(self.rows())
         self.assertEqual(rc, 0, err)
         text = self.checker.read_text(encoding="utf-8")
-        self.assertNotIn("zorblat", text.lower().replace(h("ALICE-Zorblat"), ""), "no name is written, only hashes")
+        self.assertNotIn("zorblat", text.lower().replace(mac("ALICE-Zorblat"), ""), "no name is written, only hashes")
         self.assertIn(f'    "{h("ALICE-Public")}": {{\n', text)
         self.assertNotIn(h("ALICE-Clean"), text, "a repository without names has no entry")
         self.assertIn(": 2,\n", text, "the two lines of README.md")
@@ -208,7 +217,7 @@ class BaselineLive(unittest.TestCase):
         self.checker = d / "public_text_check.py"
         src = (HERE / "public_text_check.py").read_text(encoding="utf-8")
         marker = "PRIVATE_ALICE_REPO_HASHES: frozenset[str] = frozenset({\n"
-        self.checker.write_text(src.replace(marker, marker + f'    "{h("ALICE-Zorblat")}",\n', 1), encoding="utf-8")
+        self.checker.write_text(src.replace(marker, marker + f'    "{mac("ALICE-Zorblat")}",\n', 1), encoding="utf-8")
         self.remote = d / "remote"
         self.listed = []
         for name, files in (("ALICE-Public", {"README.md": "built on ALICE-Zorblat\n"}),
