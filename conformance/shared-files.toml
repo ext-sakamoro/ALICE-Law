@@ -8,7 +8,6 @@ path = ".github/actions/alice-siblings/action.yml"
 sha256 = "dbf112b30db1b196be0fe4eaa575e49de26790b5be085f90c8508851c9223905"
 source = { repo = "ALICE-Analytics", rev = "9d8fbdaa28dd73d1620f358ddf06cec953aecbcc" }
 repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
-exempt = { "text-to-print" = { "reason" = "its own action with per-dependency deploy keys; text-to-print removes it (alice-* become git dependencies, the keys move to its fetch-private-deps action), and this exemption goes when that change is on its main", "until" = "2026-11-19" } }
 
 [[file]]
 path = ".github/workflows/changed-paths-oracle.yml"
