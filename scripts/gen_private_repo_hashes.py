@@ -32,8 +32,10 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import datetime
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -93,7 +95,12 @@ BASELINE_BEGIN = "# >>> " + "generated private repository name baseline >>>"
 BASELINE_END = "# <<< " + "generated private repository name baseline <<<"
 
 
-def baseline_block(per_repo: dict[str, dict[str, int]]) -> str:
+DATE_RE = re.compile(r'^PRIVATE_REPO_NAME_BASELINE_DATE = "(\d{4}-\d{2}-\d{2})"$', re.M)
+
+
+def baseline_block(per_repo: dict[str, dict[str, int]], date: str) -> str:
+    """the generated block: the entries, and the date they were generated (every entry matched the repositories'
+    text then, so an entry a tree is below has been stale since a later commit: public_text_live.py reads it)"""
     lines = [f"{BASELINE_BEGIN}\n", "PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {\n"]
     for repo_hash in sorted(per_repo):
         entries = per_repo[repo_hash]
@@ -102,7 +109,7 @@ def baseline_block(per_repo: dict[str, dict[str, int]]) -> str:
         lines.append(f'    "{repo_hash}": {{\n')
         lines += [f'        "{k}": {n},\n' for k, n in sorted(entries.items())]
         lines.append("    },\n")
-    lines += ["}\n", f"{BASELINE_END}\n"]
+    lines += ["}\n", f'PRIVATE_REPO_NAME_BASELINE_DATE = "{date}"\n', f"{BASELINE_END}\n"]
     return "".join(lines)
 
 
@@ -192,6 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--baseline", metavar="live|FILE")
     ap.add_argument("--local", metavar="NAME=DIR")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--today", help="the generation date written with new entries (YYYY-MM-DD, default today in UTC)")
     a = ap.parse_args(argv)
     if a.baseline:
         try:
@@ -207,7 +215,15 @@ def main(argv: list[str] | None = None) -> int:
                 per_repo, read = baseline_live(path, a.owner, local, a.jobs)
             else:
                 per_repo, read = baseline(path, a.baseline)
-            new = replace_between(text, BASELINE_BEGIN, BASELINE_END, baseline_block(per_repo))
+            # the date moves only when the entries do: a run that writes the same entries keeps it
+            m = DATE_RE.search(text)
+            kept = replace_between(text, BASELINE_BEGIN, BASELINE_END, baseline_block(per_repo, m.group(1))) if m else None
+            if kept == text:
+                new = text
+            else:
+                today = a.today or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+                datetime.date.fromisoformat(today)
+                new = replace_between(text, BASELINE_BEGIN, BASELINE_END, baseline_block(per_repo, today))
         except SystemExit as e:
             print(e, file=sys.stderr)
             return 2

@@ -1371,6 +1371,7 @@ PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {
         "fe908d31383f47f5bd69568b0c93a31337d4b41511d69e8458eac6ed7f003ed8": 1,
     },
 }
+PRIVATE_REPO_NAME_BASELINE_DATE = "2026-10-28"
 # <<< generated private repository name baseline <<<
 # (path, name) -> lines, while a tree is read for the baseline (None: every line naming one is a finding)
 REPO_NAME_COUNTS: dict[tuple[str, str], int] | None = None
