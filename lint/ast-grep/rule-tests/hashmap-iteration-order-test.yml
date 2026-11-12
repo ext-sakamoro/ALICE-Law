@@ -1,0 +1,66 @@
+id: hashmap-iteration-order
+invalid:
+  - |
+    #[cfg(any(test, feature = "debug"))]
+    mod dbg_tools {
+        fn g(x: f64) { let mut m = HashMap::new(); m.insert(1u8, 2u8); for _ in m.keys() {} }
+    }
+  - |
+    #[cfg(feature = "testing")]
+    mod t {
+        fn g(x: f64) { let mut m = HashMap::new(); m.insert(1u8, 2u8); for _ in m.keys() {} }
+    }
+  - |
+    fn f() -> Vec<u32> {
+        let mut m = HashMap::new();
+        m.insert(1, 2);
+        m.values().copied().collect()
+    }
+  - |
+    fn f(out: &mut Vec<u32>) {
+        let s = HashSet::new();
+        for k in &s {
+            out.push(*k);
+        }
+    }
+  - |
+    fn f() {
+        let m = HashMap::with_capacity(4);
+        for (k, v) in m.iter() { g(k, v); }
+    }
+  - |
+    fn f() -> Vec<u8> {
+        let mut m: HashMap<u8, u8> = HashMap::new();
+        m.insert(1, 2);
+        m.into_iter().map(|(k, _)| k).collect()
+    }
+valid:
+  - |
+    #[cfg(all(test, feature = "std"))]
+    mod tests {
+        fn g(x: f64) { let mut m = HashMap::new(); m.insert(1u8, 2u8); for _ in m.keys() {} }
+    }
+  - |
+    #[test]
+    fn t() { let x = 1.0f64; let mut m = HashMap::new(); m.insert(1u8, 2u8); for _ in m.keys() {} }
+  - |
+    #[tokio::test]
+    #[ignore]
+    fn t() { let x = 1.0f64; let mut m = HashMap::new(); m.insert(1u8, 2u8); for _ in m.keys() {} }
+  - |
+    fn f() -> Vec<u32> {
+        let mut m = BTreeMap::new();
+        m.insert(1, 2);
+        m.values().copied().collect()
+    }
+  - |
+    fn f(k: u32) -> Option<u32> {
+        let mut m = HashMap::new();
+        m.insert(1, 2);
+        m.get(&k).copied()
+    }
+  - |
+    fn f(v: Vec<u32>) -> u32 {
+        let m = HashMap::new();
+        m.len() as u32 + v.iter().sum::<u32>()
+    }

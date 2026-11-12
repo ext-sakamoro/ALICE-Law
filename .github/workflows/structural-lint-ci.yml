@@ -1,0 +1,44 @@
+# The structural lint ratchet on a ci/ branch: the rules' own cases, the ratchet's tests, and this repository's own row
+#
+# Conformance (live) reads every public ALICE-* repository daily (scripts/structural_lint.py); a ci/ branch is not
+# red for another repository's count, which it cannot change. Here: the rule cases of lint/ast-grep/rule-tests (run
+# by the script before any scan), scripts/test_structural_lint.py (the rules of the ratchet, the marker form, the
+# baseline, a corpus with a cross-check against an independent lexical pass), and this repository against its own
+# row of conformance/structural-lint-baseline.toml (0 files read is red).
+
+name: Structural lint ratchet (ci)
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: structural-lint-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  structural-lint:
+    name: Structural lint ratchet (tests, then this repository's row)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install the scanner (ast-grep 0.51.0, wheel pinned by hash)
+        run: |
+          printf '%s\n' 'ast-grep-cli==0.51.0 --hash=sha256:17007574681fe872473850780304b3df57ca98ac575d88957972fea8c3810c26' > "$RUNNER_TEMP/ast-grep.txt"
+          python3 -m pip install --only-binary=:all: --require-hashes -r "$RUNNER_TEMP/ast-grep.txt"
+          ast-grep --version
+
+      - name: Test the ratchet
+        run: python3 scripts/test_structural_lint.py
+
+      - name: This repository against its row
+        run: python3 scripts/structural_lint.py --only "${GITHUB_REPOSITORY#*/}=."

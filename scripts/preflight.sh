@@ -41,6 +41,8 @@ python3 scripts/test_checker_case.py
 RUSTUP_TOOLCHAIN=1.98.1 cargo test -q --locked --manifest-path tools/no-panic-scan/Cargo.toml
 RUSTUP_TOOLCHAIN=1.98.1 python3 scripts/test_no_panic_ratchet.py
 RUSTUP_TOOLCHAIN=1.98.1 python3 scripts/no_panic_ratchet.py --only ALICE-Law=.
+python3 scripts/test_structural_lint.py
+python3 scripts/structural_lint.py --only ALICE-Law=.
 python3 scripts/test_main_mode.py
 python3 scripts/test_gen_law_status.py
 python3 scripts/test_readme_parity_check.py

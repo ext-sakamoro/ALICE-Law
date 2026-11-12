@@ -189,6 +189,38 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/no_panic_ratchet.py --local "${GITHUB_REPOSITORY#*/}=." --jobs 4
 
+  # The structural lint ratchet (scripts/structural_lint.py, rules in lint/ast-grep, baseline in
+  # conformance/structural-lint-baseline.toml): every public ALICE-* repository at its default branch (this one at
+  # the commit under test); a count of production prints, of HashMap / HashSet iterations or of ast-grep-ignore
+  # comments above or below its row, a malformed marker, a repository with production Rust code and no row, a row of
+  # a repository no longer public, a failing rule case, an unreadable repository and 0 files read are red. libm calls
+  # are reported, not gated. Private repositories are not read or listed here (each keeps its own row in its own tree). Daily and by hand only.
+  structural-lint:
+    name: Every public ALICE-* repository's structural lint sites only go down
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install the scanner (ast-grep 0.51.0, wheel pinned by hash)
+        run: |
+          printf '%s\n' 'ast-grep-cli==0.51.0 --hash=sha256:17007574681fe872473850780304b3df57ca98ac575d88957972fea8c3810c26' > "$RUNNER_TEMP/ast-grep.txt"
+          python3 -m pip install --only-binary=:all: --require-hashes -r "$RUNNER_TEMP/ast-grep.txt"
+          ast-grep --version
+
+      - name: Test the ratchet
+        run: python3 scripts/test_structural_lint.py
+
+      - name: The public repositories' counts against the baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/structural_lint.py --local "${GITHUB_REPOSITORY#*/}=." --jobs 4
+
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
   # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a

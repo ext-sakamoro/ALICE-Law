@@ -1,0 +1,42 @@
+id: production-print
+invalid:
+  - |
+    #[cfg(any(test, feature = "debug"))]
+    mod dbg_tools {
+        fn g(x: f64) { println!("x"); }
+    }
+  - |
+    #[cfg(feature = "testing")]
+    mod t {
+        fn g(x: f64) { println!("x"); }
+    }
+  - 'fn f() { println!("x"); }'
+  - 'fn f(x: u8) { eprintln!("{x}"); }'
+  - "fn f(x: u8) -> u8 { dbg!(x) }"
+valid:
+  - |
+    #[cfg(all(test, feature = "std"))]
+    mod tests {
+        fn g(x: f64) { println!("x"); }
+    }
+  - |
+    #[test]
+    fn t() { let x = 1.0f64; println!("x"); }
+  - |
+    #[tokio::test]
+    #[ignore]
+    fn t() { let x = 1.0f64; println!("x"); }
+  - 'fn f() -> String { format!("x") }'
+  - 'fn f(w: &mut String) { use std::fmt::Write; write!(w, "x").unwrap(); }'
+  - 'fn f() { log::info!("x"); }'
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn f() { println!("x"); }
+    }
+  - |
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used)]
+    mod tests {
+        fn f() { println!("x"); }
+    }
