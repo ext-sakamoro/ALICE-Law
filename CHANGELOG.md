@@ -181,6 +181,7 @@ workflows are the interface, so changes to what they check are recorded here.
 
 ### Changed
 - `conformance/shared-files.toml`: 非公開になった ALICE-FBX を表から外した (表は公開 repository だけを載せる) `scripts/min_passed.py` と試験の行は ALICE-GameEngine の main を source にし、ALICE-FBX の写しは ALICE-FBX 自身が pin した版の表と比べる (`shared_files_check.py --private`) 写しの数の lock は 1553 から 1548
+- `conformance/shared-files.toml`: text-to-print の `.github/actions/alice-siblings/action.yml` の除外の期限を 2026-11-11 から 2026-11-19 にした (text-to-print がこの action を外す変更を着地させるまで、外れたら除外も消す)
 - **Behavior change:** `scripts/public_text_check.py --range`: `.public-text.toml` を変える commit のうち、設定を狭めるだけのもの (allow の行を消す・`count` を下げる (path・class・why は同じ)、`technical-paths` の path を消す) は finding にせず「only tightens」として出力に名前を出す 判定は前後 2 版の TOML を読み比べる (diff の文字列ではない) 行の追加・`count` の増加・why の書き換え・path の追加・他の key の変更・新規 file・どちらかが読めない版・比べた行が 0 の変更は従来どおり finding (後の commit の `config-sha256` の承認で通る) 狭めと緩めを同じ commit に混ぜても finding
 - `conformance/shared-files.toml`: `scripts/package_integrity.py` と試験・`alice_siblings_check.py`・`id_move_check.py`・`release_baseline.py` の行に ALICE-Auth / ALICE-OS-Keystore / ALICE-MQTT を足した (3 repository は git の main branch から取る依存の package 検査をこの共有 file に移した) ALICE-Auth は持っている他の共有 file (`public-text.yml` / `public_text.sh` / `changed_paths.py` とその試験) の行にも載る 生成し直して、他の行の variant も各 main の今の bytes に合わせた 件数の lock を 1553 に
 - root の `alice-law-integration` (Cargo.toml): core crate 9 個を crates.io の版から git の main branch + main の版に替えた (alice-physics は 4、feature `replay` は main に無いので外した) Cargo.lock は main から解決し直した
