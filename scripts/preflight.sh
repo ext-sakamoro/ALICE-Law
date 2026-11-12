@@ -45,6 +45,7 @@ RUSTUP_TOOLCHAIN=1.98.1 python3 scripts/no_panic_ratchet.py --only ALICE-Law=.
 python3 scripts/test_structural_lint.py
 python3 scripts/structural_lint.py --only ALICE-Law=.
 python3 scripts/test_g1_coverage_live.py
+python3 scripts/test_g1_clippy_block.py
 python3 scripts/g1_coverage_live.py --only ALICE-Law=.
 python3 scripts/test_main_mode.py
 python3 scripts/test_gen_law_status.py
