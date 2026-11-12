@@ -40,6 +40,20 @@ def mac(name: str) -> str:
     return hmac.new(bytes.fromhex(FAKE_NAME_KEY), name.lower().encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+class RosterLimit(unittest.TestCase):
+    def test_a_listing_that_reaches_the_limit_is_refused(self):
+        from unittest import mock
+        rows = [{"name": f"r{i}", "visibility": "PRIVATE"} for i in range(gen.ROSTER_LIMIT)]
+        done = subprocess.CompletedProcess([], 0, stdout=json.dumps(rows), stderr="")
+        with mock.patch.object(gen.subprocess, "run", return_value=done):
+            with self.assertRaises(SystemExit) as c:
+                gen.roster("owner", None)
+        self.assertIn("may be cut", str(c.exception))
+        done = subprocess.CompletedProcess([], 0, stdout=json.dumps(rows[:-1]), stderr="")
+        with mock.patch.object(gen.subprocess, "run", return_value=done):
+            self.assertEqual(len(gen.roster("owner", None)), gen.ROSTER_LIMIT - 1)
+
+
 class Generate(unittest.TestCase):
     def setUp(self):
         d = Path(tempfile.mkdtemp())

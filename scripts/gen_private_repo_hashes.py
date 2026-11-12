@@ -54,14 +54,23 @@ BEGIN = "# >>> " + "generated private repositories >>>"
 END = "# <<< " + "generated private repositories <<<"
 
 
+ROSTER_LIMIT = 5000
+
+
 def roster(owner: str, roster_json: str | None) -> list[dict]:
     if roster_json:
         return json.loads(Path(roster_json).read_text(encoding="utf-8"))
-    r = subprocess.run(["gh", "repo", "list", owner, "--limit", "5000", "--json", "name,visibility"],
+    r = subprocess.run(["gh", "repo", "list", owner, "--limit", str(ROSTER_LIMIT), "--json", "name,visibility"],
                        capture_output=True, text=True, check=False, encoding="utf-8")
     if r.returncode != 0:
         raise SystemExit(f"gen_private_repo_hashes: gh repo list {owner} failed: {r.stderr.strip()[:200]}")
-    return json.loads(r.stdout or "[]")
+    rows = json.loads(r.stdout or "[]")
+    # gh cuts the listing at --limit without saying so: a listing that reaches it may be cut, and a repository
+    # missing from it would drop out of the sets (nothing written)
+    if len(rows) >= ROSTER_LIMIT:
+        raise SystemExit(f"gen_private_repo_hashes: gh repo list returned {len(rows)} rows, the limit: the listing "
+                         f"may be cut (raise ROSTER_LIMIT); nothing written")
+    return rows
 
 
 def hashes(rows: list[dict]) -> tuple[list[str], list[str]]:
