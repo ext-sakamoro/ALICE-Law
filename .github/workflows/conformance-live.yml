@@ -131,6 +131,36 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/runner_pin_live.py --local "${GITHUB_REPOSITORY#*/}=."
 
+  # The no-panic ratchet (scripts/no_panic_ratchet.py, counts from tools/no-panic-scan, baseline in
+  # conformance/no-panic-baseline.toml): every public ALICE-* repository at its default branch (this one at the
+  # commit under test); a count above or below its row, a repository with production Rust code and no row, a row of
+  # a repository no longer public, code that does not parse, an unreadable repository and 0 files read are red.
+  # Private repositories are not read here (their rows are hashed). Daily and by hand only.
+  no-panic:
+    name: Every public ALICE-* repository's production panic sites only go down
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUSTUP_TOOLCHAIN: "1.98.1"
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install the toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal
+
+      - name: Test the ratchet
+        run: python3 scripts/test_no_panic_ratchet.py
+
+      - name: The public repositories' counts against the baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/no_panic_ratchet.py --local "${GITHUB_REPOSITORY#*/}=." --jobs 4
+
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
   # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a

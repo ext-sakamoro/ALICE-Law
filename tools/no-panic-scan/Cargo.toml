@@ -1,0 +1,16 @@
+# Syntax-tree count of the panic sites in a repository's production Rust code, read by
+# scripts/no_panic_ratchet.py (ALICE-Law no-panic ratchet). Its own workspace: not a member of
+# any crate's build, so syn never constrains a library.
+[package]
+name = "no-panic-scan"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "LicenseRef-Proprietary"
+
+[dependencies]
+syn = { version = "2", features = ["full", "visit", "extra-traits"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+
+[workspace]

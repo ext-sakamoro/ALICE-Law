@@ -37,6 +37,10 @@ python3 scripts/test_g11_self_check.py
 python3 scripts/test_subprocess_encoding_check.py
 python3 scripts/subprocess_encoding_check.py
 python3 scripts/test_checker_case.py
+# the no-panic ratchet (.github/workflows/no-panic-ci.yml): the scanner's tests, the ratchet's tests, this repository's row
+RUSTUP_TOOLCHAIN=1.98.1 cargo test -q --locked --manifest-path tools/no-panic-scan/Cargo.toml
+RUSTUP_TOOLCHAIN=1.98.1 python3 scripts/test_no_panic_ratchet.py
+RUSTUP_TOOLCHAIN=1.98.1 python3 scripts/no_panic_ratchet.py --only ALICE-Law=.
 python3 scripts/test_main_mode.py
 python3 scripts/test_gen_law_status.py
 python3 scripts/test_readme_parity_check.py
