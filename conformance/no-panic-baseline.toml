@@ -1591,8 +1591,8 @@ unreachable = 0
 unwrap = 25
 expect = 128
 panic = 31
-todo = 2
-unimplemented = 1
+todo = 0
+unimplemented = 0
 unreachable = 4
 
 [repo."ALICE-LLM-SaaS"]
