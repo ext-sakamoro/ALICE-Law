@@ -1,0 +1,30 @@
+id: production-print
+language: rust
+severity: error
+message: printing from library code; return the value or use the crate's logging, the caller decides what is printed
+rule:
+  all:
+    - pattern: $M!($$$)
+    - not:
+        inside:
+          kind: mod_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'
+            stopBy:
+              not:
+                kind: attribute_item
+
+constraints:
+  M:
+    regex: ^(println|eprintln|print|eprint|dbg)$
+files:
+  - "**/src/**/*.rs"
+ignores:
+  - "**/scripts/**"
+  - "**/src/bin/**"
+  - "**/src/main.rs"
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/examples/**"
