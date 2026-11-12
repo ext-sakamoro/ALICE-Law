@@ -244,6 +244,48 @@ class Legacy(KeyState):
         self.assertFalse(ptc.PRIVATE_NAME_HASHES & ptc.LEGACY_PRIVATE_NAME_SHA256)
 
 
+# a public word the check finds (an agent word), built so this file does not spell it
+PUBLIC_WORD = "wor" + "ker"
+NOTE_LINK = "[" * 2 + "some_note" + "]" * 2
+
+
+class AllowTable(KeyState):
+    def test_keyed_entries_are_used_only_with_the_key(self):
+        saved = ptc.ALLOWED
+        self.addCleanup(lambda: setattr(ptc, "ALLOWED", saved))
+        self.use(KEY_A)
+        keyed = ptc.allow_mac("docs/a.md", "zorblat quux")
+        private_row = "k:" + mac(KEY_A, "ALICE-Hidden")
+        ptc.ALLOWED = {ptc.repo_key("ALICE-Open"): {ptc.allow_hash("docs/a.md", PUBLIC_WORD): 1, keyed: 2},
+                       private_row: {ptc.allow_hash("x.md", PUBLIC_WORD): 3}}
+        self.assertEqual(ptc.allowed_for("ALICE-Open", ptc.load_name_key()),
+                         {ptc.allow_hash("docs/a.md", PUBLIC_WORD): 1, keyed: 2})
+        self.assertEqual(ptc.allowed_for("ALICE-Hidden", ptc.load_name_key()), {ptc.allow_hash("x.md", PUBLIC_WORD): 3})
+        self.use(None)
+        # without the key: the plain entries stay (their checks run), the keyed ones and the keyed row are left out
+        self.assertEqual(ptc.allowed_for("ALICE-Open", None), {ptc.allow_hash("docs/a.md", PUBLIC_WORD): 1})
+        self.assertEqual(ptc.allowed_for("ALICE-Hidden", None), {})
+
+    def test_which_entries_are_keyed(self):
+        saved = ptc.PRIVATE_NAME_HASHES
+        self.addCleanup(lambda: setattr(ptc, "PRIVATE_NAME_HASHES", saved))
+        self.use(KEY_A)
+        ptc.PRIVATE_NAME_HASHES = frozenset({mac(KEY_A, "zorblat quux")})
+        self.assertTrue(ptc.allow_private("Zorblat  Quux"))
+        self.assertTrue(ptc.allow_private(NOTE_LINK))
+        self.assertFalse(ptc.allow_private(PUBLIC_WORD))
+
+    def test_the_note_table_is_keyed(self):
+        saved = ptc.NOTE_BASENAME_HASHES
+        self.addCleanup(lambda: setattr(ptc, "NOTE_BASENAME_HASHES", saved))
+        ptc.NOTE_BASENAME_HASHES = frozenset({mac(KEY_A, "zorb_private_note")})
+        line = "see zorb_private_note.md"
+        self.use(KEY_A)
+        self.assertTrue(ptc.note_tokens(line))
+        self.use(KEY_B)
+        self.assertFalse(ptc.note_tokens(line))
+
+
 class Wiring(unittest.TestCase):
     """ALICE-Law's own runs of the checker pass --require-private-names (a pull request from a fork excepted)"""
 

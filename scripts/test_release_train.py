@@ -6,6 +6,9 @@ read, so a malformed edit to it fails here.
 """
 from __future__ import annotations
 
+import os
+# a made-up name key: the package text check fails closed without one (the real key is never read here)
+os.environ["ALICE_PRIVATE_NAME_HMAC_KEY"] = "4d" * 32
 import contextlib
 import gzip
 import hashlib

@@ -223,10 +223,14 @@ class Vocabulary(unittest.TestCase):
         self.assertTrue(all(len(h) == 64 and int(h, 16) >= 0 for h in ptc.PRIVATE_NAME_HASHES))
 
     def test_the_allow_table_names_no_repository(self):
-        # a key is sha256(<repository name>): a private repository's name in a public table discloses it
+        # a public repository's row is sha256(<its name>); a private repository's row and every entry that
+        # allows a private name or a note link is keyed (k: and HMAC under the name key), so no private name
+        # is recoverable from the table
         self.assertTrue(ptc.ALLOWED)
-        for key in ptc.ALLOWED:
-            self.assertRegex(key, r"^[0-9a-f]{64}$")
+        for key, entries in ptc.ALLOWED.items():
+            self.assertRegex(key, r"^(?:k:)?[0-9a-f]{64}$")
+            for e in entries:
+                self.assertRegex(e, r"^(?:k:)?[0-9a-f]{64}$")
 
     def test_a_repository_key_is_the_hash_of_its_name(self):
         import hashlib as h
@@ -384,9 +388,10 @@ class AllowList(Base):
         return out.getvalue().strip()
 
     def test_the_helper_builds_the_hash_the_matcher_uses(self):
-        self.assertEqual(self.entry("docs/plugin.md"), ptc.allow_hash("docs/plugin.md", MADE_UP))
+        # a private name's entry is keyed (k: and HMAC under the name key)
+        self.assertEqual(self.entry("docs/plugin.md"), ptc.allow_mac("docs/plugin.md", MADE_UP))
         self.assertEqual(self.entry("docs/plugin.md", "  ZORBLAT   Quux "), self.entry("docs/plugin.md"))
-        self.assertRegex(self.entry("docs/plugin.md"), r"^[0-9a-f]{64}$")
+        self.assertRegex(self.entry("docs/plugin.md"), r"^k:[0-9a-f]{64}$")
 
     def test_the_helper_refuses_a_word_the_check_does_not_find(self):
         with contextlib.redirect_stderr(io.StringIO()):
@@ -599,7 +604,7 @@ class Shapes(unittest.TestCase):
     }
 
     def with_note(self, name: str):
-        h = hashlib.sha256(name.encode("utf-8")).hexdigest()
+        h = mac(name)
         saved = ptc.NOTE_BASENAME_HASHES
         ptc.NOTE_BASENAME_HASHES = saved | {h}
         self.addCleanup(setattr, ptc, "NOTE_BASENAME_HASHES", saved)
