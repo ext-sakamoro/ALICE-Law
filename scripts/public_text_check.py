@@ -412,6 +412,13 @@ def private_names(line: str) -> list[str]:
 # check (a new mention under a prefix, a removed one, or a mistyped entry).
 # keyed by repo_key(<repository name>)
 ALLOWED: dict[str, dict[str, int]] = {
+    "38e19ab81bc34c0b638d4f0fa92e95d030e127bb8897517fe70ba91c5227e5b5": {
+        "k:cc090235a548fcfc00389b0e8152eda22c1846bdff8ed4ace6c5e9e838cff0fb": 4,
+    },
+    "853a08873479add5fda50b6b6fe19b02fbd35e2200af2fb0df9caeb08311f234": {
+        # a technical worker / session of the code (a job system's workers, a protocol or training session)
+        "5d453f19b84b8d17468a349ebdb12b9dac5977e334745cd59c9c2a5e6597f44b": 1,
+    },
     "7218f32b0e056930aa0b50b7188ffcded8e75ba4f201971c26a746a5a0661bba": {
         # the model family the crate implements, named in its public function and their tests (src/llama3.rs only)
         "k:718f3a21158e4056c77fd0bd555d13d1c5084615a9badc3cbd05cc0c5cadb299": 219,
