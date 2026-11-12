@@ -1403,8 +1403,9 @@ def baseline_stale(repo: str) -> list[tuple[str, int, int]]:
     """(entry key, lines in the tree, the baseline's count) of each entry the tree is below, an entry whose
     lines are gone included (0). Printed as a note by --tree: the repository cannot lower ALICE-Law's
     baseline, so it is not a finding there; Conformance (live) turns an entry that stays stale past its grace
-    into a finding (public_text_live.py --stale-state), and gen_private_repo_hashes.py --baseline live
-    --check fails on it, so the slack it leaves is closed by lowering the entry"""
+    into a finding (public_text_live.py, which reads when it went stale from the repository's history), and
+    gen_private_repo_hashes.py --baseline live --check fails on it, so the slack it leaves is closed by lowering
+    the entry"""
     base = PRIVATE_REPO_NAME_BASELINE.get(hashlib.sha256(repo.lower().encode("utf-8")).hexdigest(), {})
     got = {repo_name_key(repo, path, name): n for (path, name), n in (REPO_NAME_COUNTS or {}).items()}
     return [(k, got.get(k, 0), want) for k, want in sorted(base.items()) if got.get(k, 0) < want]
