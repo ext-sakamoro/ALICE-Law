@@ -155,7 +155,7 @@ ignores = 0
 
 [repo."ALICE-AutoML"]
 print = 0
-hashmap = 1
+hashmap = 0
 ignores = 0
 
 [repo."ALICE-AutoML-SaaS"]

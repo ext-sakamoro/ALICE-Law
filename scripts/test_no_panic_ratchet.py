@@ -105,6 +105,8 @@ TOKENS = {
     "todo": re.compile(r"(?<![A-Za-z0-9_])todo\s*!"),
     "unimplemented": re.compile(r"(?<![A-Za-z0-9_])unimplemented\s*!"),
     "unreachable": re.compile(r"(?<![A-Za-z0-9_])unreachable\s*!"),
+    # assert!, assert_eq!, assert_ne!; the debug_ forms are not sites (the "_" before them fails the look-behind)
+    "assert": re.compile(r"(?<![A-Za-z0-9_])assert(?:_eq|_ne)?\s*!"),
 }
 CLIPPY = {"unwrap_used": "unwrap", "expect_used": "expect", "panic": "panic", "todo": "todo",
           "unimplemented": "unimplemented", "unreachable": "unreachable"}
@@ -192,7 +194,8 @@ CORPUS = {
                 "#[cfg(test)]\nmod t { fn h() { None::<u8>.unwrap(); todo!(); } }\n"
                 "pub fn k() { assert!(Some(1).expect(\"one\") > 0); }\n"
                 "#[allow(clippy::panic, clippy::module_name_repetitions)]\npub fn p() { panic!(\"p\") }\n"
-                "pub fn q() -> u8 { todo!() }\npub fn r() { unimplemented!() }\n",
+                "pub fn q() -> u8 { todo!() }\npub fn r() { unimplemented!() }\n"
+                "pub fn s(a: u8) { assert_eq!(a, 1); assert_ne!(a, 2); debug_assert!(a > 0); debug_assert_eq!(a, 1); }\n",
     "src/tests.rs": "fn t() { Some(1).unwrap(); }\n",
     "tests/it.rs": "fn t() { Some(1).unwrap(); }\n",
     "crates/m/src/main.rs": "fn main() { std::env::args().nth(1).expect(\"arg\"); }\n",

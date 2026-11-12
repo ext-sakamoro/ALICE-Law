@@ -1285,8 +1285,15 @@ def package_text_problems(body: bytes, name: str, version: str, repo: Path, ref:
     problem = ptc.private_sets_problem()
     if problem:
         return [f"{name} {version}: the package text check: {problem}"], 0
+    # the private-name tables are keyed: a release is checked with the key or not at all (fail closed)
+    try:
+        key = ptc.load_name_key()
+    except ValueError as e:
+        return [f"{name} {version}: the package text check: {e}"], 0
+    if key is None:
+        return [f"{name} {version}: the package text check needs the private name key ({ptc.NAME_KEY_ENV})"], 0
     ptc.CONFIG.update(ptc.load_config(str(repo), ref))
-    ptc.ALLOW_STATE["allowed"] = dict(ptc.ALLOWED.get(repo_name, {})) if repo_name else {}
+    ptc.ALLOW_STATE["allowed"] = ptc.allowed_for(repo_name, key)
     ptc.ALLOW_STATE["repo"] = repo_name
     ptc.ALLOW_STATE["used"] = {}
     ptc.CLASS_USED.clear()

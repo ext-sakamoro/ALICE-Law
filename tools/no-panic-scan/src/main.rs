@@ -20,6 +20,9 @@
 //! * `expect`: a method call `.expect(..)` with one argument
 //! * `panic`, `todo`, `unimplemented`, `unreachable`: an invocation of that macro (the last path
 //!   segment), also inside the arguments of another macro (`assert!(x.unwrap())`, `format!`)
+//! * `assert`: an invocation of `assert!`, `assert_eq!` or `assert_ne!` (they panic in a release
+//!   build when the condition fails, so each one is a panic site of production code); the
+//!   `debug_assert` forms are not counted, since a release build compiles them out
 //! * `allow`: an attribute `allow(..)` or `expect(..)` that names `clippy::unwrap_used`,
 //!   `clippy::expect_used`, `clippy::panic`, `clippy::todo`, `clippy::unimplemented` or
 //!   `clippy::unreachable` — one per lint named, counted under that lint: a deny of the lint is
@@ -41,14 +44,27 @@ use quote::ToTokens;
 use syn::visit::{self, Visit};
 use syn::Attribute;
 
-const LINTS: [&str; 6] = [
+const LINTS: [&str; 7] = [
     "unwrap",
     "expect",
     "panic",
     "todo",
     "unimplemented",
     "unreachable",
+    "assert",
 ];
+
+/// the lint a macro invocation counts under, by the last segment of its path
+fn macro_lint(name: &str) -> Option<&'static str> {
+    match name {
+        "panic" => Some("panic"),
+        "todo" => Some("todo"),
+        "unimplemented" => Some("unimplemented"),
+        "unreachable" => Some("unreachable"),
+        "assert" | "assert_eq" | "assert_ne" => Some("assert"),
+        _ => None,
+    }
+}
 
 /// clippy lint name → counted lint
 const CLIPPY: [(&str, &str); 6] = [
@@ -110,7 +126,7 @@ impl Scan<'_> {
             .last()
             .map(|s| s.ident.to_string())
             .unwrap_or_default();
-        if let Some(lint) = LINTS[2..].iter().find(|l| **l == name) {
+        if let Some(lint) = macro_lint(&name) {
             let line = mac.path.segments[0].ident.span().start().line;
             self.hit(lint, line);
         }
@@ -144,7 +160,7 @@ impl Scan<'_> {
                     } else if dot_before && name == "expect" && paren == Some(false) {
                         self.hit("expect", line);
                     } else if matches!(next, Some(TokenTree::Punct(p)) if p.as_char() == '!') {
-                        if let Some(lint) = LINTS[2..].iter().find(|l| **l == name) {
+                        if let Some(lint) = macro_lint(&name) {
                             self.hit(lint, line);
                         }
                     }
@@ -421,10 +437,22 @@ mod tests {
 
     #[test]
     fn production_sites_are_counted() {
-        let c = count(r#"fn f() { x.unwrap(); y.expect("a"); panic!("b"); todo!(); unimplemented!(); unreachable!(); }"#);
+        let c = count(r#"fn f() { x.unwrap(); y.expect("a"); panic!("b"); todo!(); unimplemented!(); unreachable!(); assert!(z); }"#);
         for l in LINTS {
             assert_eq!(n(&c, l), 1, "{l}");
         }
+    }
+
+    #[test]
+    fn release_asserts_count_and_debug_asserts_do_not() {
+        let c = count(
+            "fn f() { assert!(a); assert_eq!(b, 1); std::assert_ne!(c, 2); debug_assert!(d); \
+             debug_assert_eq!(e, 3); debug_assert_ne!(f, 4); format!(\"{}\", { assert!(g); 1 }); }\n\
+             macro_rules! m { () => { assert_eq!(1, 1) }; }",
+        );
+        // assert!, assert_eq!, std::assert_ne!, the one inside format!'s tokens, the one in a macro_rules! body
+        assert_eq!(n(&c, "assert"), 5);
+        assert_eq!(n(&c, "panic"), 0);
     }
 
     #[test]
