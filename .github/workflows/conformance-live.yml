@@ -221,6 +221,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/structural_lint.py --local "${GITHUB_REPOSITORY#*/}=." --jobs 4
 
+  # G1 over the Law-bearing repositories (scripts/g1_coverage_live.py, baseline in
+  # conformance/g1-coverage-baseline.toml): every public ALICE-* repository at its default branch (this one at
+  # the commit under test); the repositories that define a Law, or compute through one, are derived from the code;
+  # each carries G1's clippy evidence or is listed in `lacking`, which may only shrink. A Law-bearing repository
+  # lacking the evidence and not listed, a listed one that has it or is no longer Law-bearing, definers that differ
+  # from the list, an unreadable repository and nothing read are red. Daily and by hand only.
+  g1-coverage:
+    name: Every Law-bearing public ALICE-* repository carries G1's clippy evidence or is listed
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the checker
+        run: python3 scripts/test_g1_coverage_live.py
+
+      - name: The Law-bearing public repositories against the baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/g1_coverage_live.py --local "${GITHUB_REPOSITORY#*/}=." --jobs 4
+
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
   # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a

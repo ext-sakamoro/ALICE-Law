@@ -48,6 +48,19 @@ unit, so it does not settle real x86_64 hardware.
 
 **Mutant** (turns the evidence red). add `x.sin()` to a library source file, and once more inside a feature-gated module: the CI job fails on both.
 
+**Scope across the repositories.** `scripts/g1_coverage_live.py` requires G1's clippy evidence (the full banned
+list for both widths and a CI clippy run that denies it) of every Law-bearing repository: one whose production
+code defines a Law (a `*SEMANTICS_ID` constant, a `fn law_id`, a use of `LawIdHasher`) or computes through one
+(it lists a defining repository's package under `[dependencies]` and names it in production code). The set is
+derived from the code on every run, never kept by hand. The scope is these repositories because G1 exists for
+one property, that a Law's result is the same bits on every platform: a libm call in a path that defines or
+computes through a Law breaks it, and a repository whose results need not be bit-identical (a UI tool, an LLM
+client, CLI glue) gains nothing from the evidence, so it is reported, not required. Widening the requirement to
+every repository adds cost without the property; narrowing it to a chosen list leaves a Law path where the bits
+can differ. Law-bearing public repositories still without the evidence are listed in
+`conformance/g1-coverage-baseline.toml` (`lacking`, which may only shrink); a private repository keeps its own
+`conformance-own/g1-coverage.toml` and checks it with this script at a pinned commit.
+
 **Look at.** the crate's clippy `disallowed-methods` against the G1 list: every `banned` entry for `f32` and `f64` is there (a missing one is a gap unless the manifest justifies it), and the crate's choice for each `pending` entry is stated; the CI job's feature sets against `[features]` in Cargo.toml (a feature the job does not build is not covered).
 
 **Checked by.** machine

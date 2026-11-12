@@ -1,0 +1,37 @@
+# G1 over the Law-bearing repositories on a ci/ branch: the checker's tests and this repository's own check
+#
+# Conformance (live) reads every public ALICE-* repository daily (scripts/g1_coverage_live.py); a ci/ branch is
+# not red for another repository's state, which it cannot change. Here: scripts/test_g1_coverage_live.py (the
+# Law-bearing derivation, the comparison, the baseline, facts read from git repositories written by the test,
+# the modes) and this repository against conformance/g1-coverage-baseline.toml (0 production files is red).
+
+name: G1 coverage (ci)
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g1-coverage-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  g1-coverage:
+    name: G1 coverage (tests, then this repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the checker
+        run: python3 scripts/test_g1_coverage_live.py
+
+      - name: This repository
+        run: python3 scripts/g1_coverage_live.py --only "${GITHUB_REPOSITORY#*/}=."
