@@ -3,7 +3,9 @@
 
 * the ratchet rules on scans given in memory (a rise, a fall, a missing row, an unparsed file, a repository with no
   production Rust code, 0 files);
-* the row keys (a public name, the SHA-256 of a private lower-case name) and the baseline's round trip and validation;
+* the baseline's round trip and validation (a hashed key is refused: a private repository keeps its own row in its
+  own repository), the committed baseline holding public names only, and the own-file path (--write-own, --only
+  with --baseline);
 * a cross-check of the syntax-tree count against an independent lexical pass written here (comments and literals
   blanked, `cfg(test)` / `cfg(all(test, ..))` / `#[test]` items removed by brace matching) over a corpus of files on
   disk: the two must agree site for site on every file, and the corpus must hold at least one site of every lint.
@@ -12,7 +14,6 @@ Usage: python3 scripts/test_no_panic_ratchet.py (builds tools/no-panic-scan with
 """
 from __future__ import annotations
 
-import hashlib
 import re
 import sys
 import tempfile
@@ -69,13 +70,8 @@ class Rules(unittest.TestCase):
 
 
 class Baseline(unittest.TestCase):
-    def test_keys(self):
-        self.assertEqual(npr.key("ALICE-Law", True), "ALICE-Law")
-        self.assertEqual(npr.key("ALICE-Secret", False),
-                         "sha256:" + hashlib.sha256(b"alice-secret").hexdigest())
-
     def test_round_trip(self):
-        rows = {"ALICE-A": row(unwrap=3), "sha256:" + "0" * 64: row(todo=1)}
+        rows = {"ALICE-A": row(unwrap=3), "ALICE-B": row(todo=1)}
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "b.toml"
             p.write_text(npr.render(rows), encoding="utf-8")
@@ -85,17 +81,19 @@ class Baseline(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "b.toml"
             for body in ('[repo."A"]\nunwrap = -1\n', '[repo."A"]\nunwrap = 1\n',
-                         '[repo."A"]\n' + "".join(f"{lint} = 0\n" for lint in LINTS) + "extra = 1\n"):
+                         '[repo."A"]\n' + "".join(f"{lint} = 0\n" for lint in LINTS) + "extra = 1\n",
+                         f'[repo."sha256:{"0" * 64}"]\n' + "".join(f"{lint} = 0\n" for lint in LINTS)):
                 p.write_text(body, encoding="utf-8")
                 with self.subTest(body=body), self.assertRaises(ValueError):
                     npr.load_baseline(p)
 
-    def test_the_committed_baseline_loads_and_is_not_empty(self):
+    def test_the_committed_baseline_loads_holds_public_names_only_and_is_not_empty(self):
         rows = npr.load_baseline()
         self.assertGreater(len(rows), 0)
-        self.assertTrue(any(k.startswith("sha256:") for k in rows), "private rows are hashed")
+        text = npr.BASELINE.read_text(encoding="utf-8")
+        self.assertNotIn("sha256", text, "no hashed name in the shared baseline")
         for k in rows:
-            self.assertTrue(k.startswith(("ALICE-", "sha256:")), k)
+            self.assertTrue(k.startswith("ALICE-"), k)
 
 
 # ── an independent lexical pass, for the cross-check ────────────────────────────────────────────
@@ -199,6 +197,35 @@ CORPUS = {
     "tests/it.rs": "fn t() { Some(1).unwrap(); }\n",
     "crates/m/src/main.rs": "fn main() { std::env::args().nth(1).expect(\"arg\"); }\n",
 }
+
+
+class OwnFile(unittest.TestCase):
+    """a private repository's own row: written by --write-own, checked by --only with --baseline"""
+
+    @classmethod
+    def setUpClass(cls):
+        npr.scanner()
+
+    def test_write_own_then_only_against_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "repo"
+            (root / "src").mkdir(parents=True)
+            (root / "src" / "lib.rs").write_text("pub fn f(x: Option<u8>) -> u8 { x.unwrap() }\n", encoding="utf-8")
+            own = Path(d) / "own.toml"
+            self.assertEqual(npr.main(["--write-own", f"ALICE-Own={root}", "--baseline", str(own)]), 0)
+            self.assertEqual(npr.load_baseline(own), {"ALICE-Own": row(unwrap=1)})
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={root}", "--baseline", str(own)]), 0)
+            # a new site is red against the own row
+            (root / "src" / "lib.rs").write_text(
+                "pub fn f(x: Option<u8>) -> u8 { x.unwrap() + x.unwrap() }\n", encoding="utf-8")
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={root}", "--baseline", str(own)]), 1)
+            # a repository with no production code compares nothing: exit 2
+            empty = Path(d) / "empty"
+            empty.mkdir()
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={empty}", "--baseline", str(own)]), 2)
+
+    def test_write_own_refuses_the_shared_baseline(self):
+        self.assertEqual(npr.main(["--write-own", "ALICE-Own=."]), 2)
 
 
 class CrossCheck(unittest.TestCase):

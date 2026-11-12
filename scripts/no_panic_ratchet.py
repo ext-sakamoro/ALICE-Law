@@ -2,14 +2,18 @@
 """The no-panic ratchet: every repository's production panic sites may only go down.
 
     no_panic_ratchet.py [--owner NAME] [--local NAME=DIR] [--jobs N]
-    no_panic_ratchet.py --only NAME=DIR
-    no_panic_ratchet.py --write-baseline --roster-json FILE --clone NAME=DIR ...
+    no_panic_ratchet.py --only NAME=DIR [--baseline OWN.toml]
+    no_panic_ratchet.py --write-baseline
+    no_panic_ratchet.py --write-own NAME=DIR --baseline conformance-own/no-panic.toml
 
 The count comes from tools/no-panic-scan (syntax tree, no build of the repository): per repository, the sites of
 `.unwrap()`, `.expect(..)`, `panic!`, `todo!`, `unimplemented!`, `unreachable!` in its production code, and every
 `allow(..)` / `expect(..)` attribute naming the clippy lint of one of them (a deny of the lint is void there, so it
-is a site). conformance/no-panic-baseline.toml holds each repository's counts, keyed by its name when it is public
-and by `sha256:` and the SHA-256 of its lower-case name when it is private (no private name is written here).
+is a site). conformance/no-panic-baseline.toml holds the counts of the public repositories, keyed by name. A private
+repository keeps its own row in its own repository (conformance-own/no-panic.toml, the same format with its one row)
+and checks it in its own CI with `--only NAME=. --baseline conformance-own/no-panic.toml` from a pinned revision of
+this checker: no private name, nor a hash of one (a name of the form ALICE-<word> is recovered from its hash by
+trying words), is written here. A `sha256:` key in the shared baseline is refused.
 
 The rules, on every repository read:
   * a count above the baseline is red (a new site);
@@ -25,23 +29,19 @@ Modes:
                  fetched at depth 1; --local NAME=DIR reads repository NAME from the checkout DIR instead. A public
                  row whose repository is no longer listed as public is red (it was removed or made private: move or
                  drop its row). Private rows are not read here (a CI token sees only public repositories).
-  --only N=DIR   one repository from DIR against its row (the form a repository's own CI runs, private ones by the
-                 hash of N)
+  --only N=DIR   one repository from DIR against its row in --baseline (the form a repository's own CI runs; a
+                 private repository passes its own file)
   --write-baseline
-                 rewrite the baseline: the public rows from the live read above (every public ALICE-* repository
-                 at its default branch), the private rows from local clones (--clone NAME=DIR, each read at
-                 origin/main through `git archive`; a clone of a public repository is not used, the live read is),
-                 with each repository's visibility from --roster-json (`gh repo list <owner> --json
-                 name,visibility`); run it locally with a token that sees private repositories, after a
-                 deliberate change of counts.
+                 rewrite the shared baseline from the live read above (every public ALICE-* repository at its
+                 default branch), after a deliberate change of counts
+  --write-own N=DIR
+                 write the one row of N, read from DIR, to --baseline (a private repository's own file)
 
 Exit 0 when nothing was found, 1 on a finding, 2 when something could not be read or nothing was compared.
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import os
 import shutil
 import subprocess
@@ -60,11 +60,6 @@ BASELINE = ROOT / "conformance" / "no-panic-baseline.toml"
 SCANNER_DIR = ROOT / "tools" / "no-panic-scan"
 LINTS = ("unwrap", "expect", "panic", "todo", "unimplemented", "unreachable")
 GITHUB = "https://github.com/"
-
-
-def key(name: str, public: bool) -> str:
-    """the row key: the name of a public repository, `sha256:<hex>` of a private one's lower-case name"""
-    return name if public else "sha256:" + hashlib.sha256(name.lower().encode()).hexdigest()
 
 
 def scanner() -> Path:
@@ -106,6 +101,9 @@ def load_baseline(path: Path = BASELINE) -> dict[str, dict[str, int]]:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     rows = data.get("repo", {})
     for k, row in rows.items():
+        if k.startswith("sha256:"):
+            raise ValueError(f"{path.name}: row {k!r}: a hashed name (a private repository keeps its own row in "
+                             "its own repository)")
         bad = [lint for lint in LINTS if not isinstance(row.get(lint), int) or row[lint] < 0]
         extra = [f for f in row if f not in LINTS]
         if bad or extra:
@@ -126,7 +124,7 @@ def compare(read: dict[str, dict], baseline: dict[str, dict[str, int]]) -> list[
             continue
         row = baseline.get(k)
         if row is None:
-            out.append(f"{k}: production Rust code and no row in {BASELINE.name}")
+            out.append(f"{k}: production Rust code and no row in the baseline")
             continue
         for lint in LINTS:
             have, base = s[lint], row[lint]
@@ -140,9 +138,9 @@ def compare(read: dict[str, dict], baseline: dict[str, dict[str, int]]) -> list[
 def render(rows: dict[str, dict[str, int]]) -> str:
     head = (
         "# The no-panic ratchet's baseline (scripts/no_panic_ratchet.py): each repository's production panic sites\n"
-        "# counted by tools/no-panic-scan, keyed by the name of a public repository and by sha256:<SHA-256 of the\n"
-        "# lower-case name> of a private one. A count may only go down; lower it in the commit that removes sites.\n"
-        "# Regenerate with `no_panic_ratchet.py --write-baseline` (it needs a token that sees private repositories).\n"
+        "# counted by tools/no-panic-scan, keyed by repository name. A count may only go down; lower it in the commit\n"
+        "# that removes sites. Regenerate with `no_panic_ratchet.py --write-baseline` (public repositories only: a\n"
+        "# private one keeps its own row in its own repository, conformance-own/no-panic.toml).\n"
     )
     body = []
     for k in sorted(rows):
@@ -186,18 +184,8 @@ def read_live(owner: str, local: tuple[str, Path] | None, jobs: int, bin_: Path,
             if err:
                 errors.append(f"{name}: {err}")
             elif s is not None:
-                read[key(name, True)] = s
+                read[name] = s
     return read, errors
-
-
-def archive_scan(bin_: Path, name: str, clone: Path) -> dict:
-    """origin/main of a local clone, extracted with git archive into a temporary directory and scanned"""
-    with tempfile.TemporaryDirectory() as tmp:
-        arch = subprocess.run(["git", "-C", str(clone), "archive", "origin/main"], capture_output=True)
-        if arch.returncode != 0:
-            raise hl.Unreadable(f"{name}: git archive origin/main failed")
-        subprocess.run(["tar", "-x", "-C", tmp], input=arch.stdout, check=True)
-        return scan_dir(bin_, Path(tmp))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -205,25 +193,31 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--owner", default="ext-sakamoro")
     ap.add_argument("--local", help="NAME=DIR: read public repository NAME from the checkout DIR")
     ap.add_argument("--only", help="NAME=DIR: compare only repository NAME, read from DIR")
-    ap.add_argument("--private", action="store_true", help="with --only: NAME is private (its row is the hash)")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--prefix", default="ALICE-", help="only repositories whose name starts with this")
     ap.add_argument("--write-baseline", action="store_true")
-    ap.add_argument("--roster-json", type=Path)
-    ap.add_argument("--clone", action="append", default=[], help="NAME=DIR (with --write-baseline)")
+    ap.add_argument("--write-own", help="NAME=DIR: write the one row of NAME, read from DIR, to --baseline")
     ap.add_argument("--baseline", type=Path, default=BASELINE)
     a = ap.parse_args(argv)
     bin_ = scanner()
 
+    if a.write_own:
+        if a.baseline == BASELINE:
+            print("no_panic_ratchet: --write-own writes a repository's own file: pass --baseline", file=sys.stderr)
+            return 2
+        name, _, d = a.write_own.partition("=")
+        s1 = scan_dir(bin_, Path(d))
+        if s1["unparsed"]:
+            print(f"no_panic_ratchet: {name}: {s1['unparsed']} file(s) do not parse", file=sys.stderr)
+            return 2
+        if not s1["files"]:
+            print(f"no_panic_ratchet: {name}: no production Rust code read", file=sys.stderr)
+            return 2
+        a.baseline.write_text(render({name: {lint: s1[lint] for lint in LINTS}}), encoding="utf-8")
+        print(f"no_panic_ratchet: wrote the row of {name} to {a.baseline}")
+        return 0
+
     if a.write_baseline:
-        if not a.roster_json or not a.clone:
-            print("no_panic_ratchet: --write-baseline needs --roster-json and --clone", file=sys.stderr)
-            return 2
-        vis = {r["name"]: r["visibility"].upper() == "PUBLIC" for r in json.loads(a.roster_json.read_text())}
-        if not any(not v for v in vis.values()):
-            print("no_panic_ratchet: the roster lists no private repository (a token that sees them is needed)",
-                  file=sys.stderr)
-            return 2
         rows: dict[str, dict[str, int]] = {}
         try:
             live, errors = read_live(a.owner, None, a.jobs, bin_, a.prefix)
@@ -234,26 +228,12 @@ def main(argv: list[str] | None = None) -> int:
             for e in errors:
                 print(f"no_panic_ratchet: unreadable: {e}", file=sys.stderr)
             return 2
-        for k, s in live.items():
-            if s["unparsed"]:
-                print(f"no_panic_ratchet: {k}: {s['unparsed']} file(s) do not parse", file=sys.stderr)
+        for k, s1 in live.items():
+            if s1["unparsed"]:
+                print(f"no_panic_ratchet: {k}: {s1['unparsed']} file(s) do not parse", file=sys.stderr)
                 return 2
-            if s["files"]:
-                rows[k] = {lint: s[lint] for lint in LINTS}
-        for spec in a.clone:
-            name, _, d = spec.partition("=")
-            if name not in vis:
-                # a local clone that is not one of the account's repositories (a scratch copy)
-                print(f"no_panic_ratchet: skipped {name}: not in the roster", file=sys.stderr)
-                continue
-            if vis[name]:
-                continue  # public: the live read above is the row
-            s = archive_scan(bin_, name, Path(d))
-            if s["unparsed"]:
-                print(f"no_panic_ratchet: {name}: {s['unparsed']} file(s) do not parse", file=sys.stderr)
-                return 2
-            if s["files"]:
-                rows[key(name, vis[name])] = {lint: s[lint] for lint in LINTS}
+            if s1["files"]:
+                rows[k] = {lint: s1[lint] for lint in LINTS}
         if not rows:
             print("no_panic_ratchet: no repository with production Rust code read", file=sys.stderr)
             return 2
@@ -264,8 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     baseline = load_baseline(a.baseline)
     if a.only:
         name, _, d = a.only.partition("=")
-        k = key(name, not a.private)
-        read = {k: scan_dir(bin_, Path(d))}
+        read = {name: scan_dir(bin_, Path(d))}
         errors: list[str] = []
     else:
         local = None
@@ -282,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     if not a.only:
         listed = set(read)
         for k in sorted(baseline):
-            if not k.startswith("sha256:") and k not in listed:
+            if k not in listed:
                 findings.append(f"{k}: has a row but is not a listed public repository read here (move or drop it)")
     for e in errors:
         print(f"no_panic_ratchet: unreadable: {e}", file=sys.stderr)
