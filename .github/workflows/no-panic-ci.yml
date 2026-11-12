@@ -1,0 +1,45 @@
+# The no-panic ratchet on a ci/ branch: the scanner's and the ratchet's tests, and this repository's own row
+#
+# Conformance (live) reads every public ALICE-* repository daily (scripts/no_panic_ratchet.py); a ci/ branch is not
+# red for another repository's count, which it cannot change. Here: the tests of tools/no-panic-scan (syntax tree)
+# and scripts/test_no_panic_ratchet.py (the rules, the baseline, a cross-check against an independent lexical
+# pass), and this repository against its own row of conformance/no-panic-baseline.toml (0 files read is red).
+
+name: No-panic ratchet (ci)
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: no-panic-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  no-panic:
+    name: No-panic ratchet (tests, then this repository's row)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: "1.98.1"
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install the toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal
+
+      - name: Test the scanner
+        run: cargo test --locked --manifest-path tools/no-panic-scan/Cargo.toml
+
+      - name: Test the ratchet
+        run: python3 scripts/test_no_panic_ratchet.py
+
+      - name: This repository against its row
+        run: python3 scripts/no_panic_ratchet.py --only "${GITHUB_REPOSITORY#*/}=."
