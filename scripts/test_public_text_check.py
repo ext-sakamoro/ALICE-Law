@@ -1298,6 +1298,79 @@ class ConfigApproval(Base):
         self.assertIn("config-sha256 does not match", run(self.repo, "--tree")[1])
 
 
+class ConfigTighten(Base):
+    """a change of the settings that only tightens them (an allow row removed or its count lowered, a
+    technical path removed) is not a finding; any loosening, alone or with a tightening, still is"""
+
+    def settings(self, entries, paths=("tools/", "svc/")) -> str:
+        text = "[public-text]\ntechnical-paths = [" + ", ".join(f'"{p}"' for p in paths) + "]\n" + "".join(
+            f'[[public-text.allow]]\npath = "{p}"\nclass = "{c}"\ncount = {n}\nwhy = "{w}"\n'
+            for p, c, n, w in entries)
+        return commit(self.repo, {".public-text.toml": text})
+
+    ROWS = [("a.rs", "device", 3, "word list"), ("b.rs", "agent process", 2, "argument")]
+
+    def changed(self, entries, paths=("tools/", "svc/")) -> tuple[int, str]:
+        base = self.settings(self.ROWS)
+        self.settings(entries, paths)
+        return run(self.repo, "--range", f"{base}..HEAD")
+
+    def test_removing_a_row_lowering_a_count_or_removing_a_path_passes(self):
+        for entries, paths in (([self.ROWS[0]], ("tools/", "svc/")),
+                               ([("a.rs", "device", 1, "word list"), self.ROWS[1]], ("tools/", "svc/")),
+                               (self.ROWS, ("tools/",)),
+                               ([("a.rs", "device", 2, "word list")], ())):
+            code, out = self.changed(entries, paths)
+            self.assertEqual(code, 0, out)
+            self.assertIn("only tightens", out)
+            self.assertNotIn("policy config changed", out)
+
+    def test_a_loosening_is_a_finding(self):
+        for entries, paths in ((self.ROWS + [("c.rs", "device", 1, "x")], ("tools/", "svc/")),   # a row added
+                               ([("a.rs", "device", 4, "word list"), self.ROWS[1]], ("tools/", "svc/")),  # count up
+                               (self.ROWS, ("tools/", "svc/", "x/")),                              # a path added
+                               ([("a.rs", "device", 3, "other"), self.ROWS[1]], ("tools/", "svc/")),  # why reworded
+                               ([("c.rs", "device", 3, "word list"), self.ROWS[1]], ("tools/", "svc/"))):  # moved
+            code, out = self.changed(entries, paths)
+            self.assertEqual(code, 1, (entries, paths, out))
+            self.assertIn("policy config changed", out)
+
+    def test_a_tightening_with_a_loosening_is_a_finding(self):
+        code, out = self.changed([("a.rs", "device", 1, "word list"), ("c.rs", "device", 1, "x")])
+        self.assertEqual(code, 1, out)
+        self.assertIn("policy config changed", out)
+
+    def test_another_key_a_new_file_or_an_unparsable_side_is_a_finding(self):
+        commit(self.repo, {".public-text.toml": "[public-text]\ntechnical-paths = [\"svc/\"]\n"})  # a new file
+        code, out = run(self.repo, "--range", f"{self.base}..HEAD")
+        self.assertEqual(code, 1, out)
+        base = self.head()
+        commit(self.repo, {".public-text.toml": "[public-text\n"})  # unparsable after
+        self.assertFalse(ptc.config_tightens(str(self.repo), self.head())[0])
+        commit(self.repo, {".public-text.toml": "[public-text]\n"})  # unparsable before
+        self.assertFalse(ptc.config_tightens(str(self.repo), self.head())[0])
+        self.assertTrue(base)
+
+    def test_a_change_that_compares_no_row_is_not_a_tightening(self):
+        commit(self.repo, {".public-text.toml": "[public-text]\n"})
+        commit(self.repo, {".public-text.toml": "[public-text]\n# a comment\n"})
+        self.assertEqual(ptc.config_tightens(str(self.repo), self.head()), (False, 0))
+
+    def test_the_classifier_is_what_lets_a_change_through(self):
+        # a classifier that always says "tightens" lets every loosening through: the loosening cases above
+        # are red only because of it
+        orig = ptc.config_tightens
+        ptc.config_tightens = lambda repo, commit: (True, 1)
+        try:
+            code, out = self.changed(self.ROWS + [("c.rs", "device", 1, "x")])
+            self.assertEqual(code, 0, out)
+        finally:
+            ptc.config_tightens = orig
+
+    def head(self) -> str:
+        return git(self.repo, "rev-parse", "HEAD").strip()
+
+
 class RangeAllow(Base):
     """--range reads the allow entries of the range's base: an added line of an allowed class passes,
     entries added inside the range do not apply to it, and an entry caps the distinct lines added"""
@@ -1367,7 +1440,8 @@ class RangeAllow(Base):
     def test_a_three_dot_range_reads_the_merge_base(self):
         merge_base = self.settings([("shaders/a.metal", "note link", 1)])
         git(self.repo, "checkout", "-q", "-b", "side")
-        side = commit(self.repo, {".public-text.toml": "[public-text]\n"})  # the other side drops the entry
+        # the other side drops the entry and adds a technical path (a loosening, so a finding of its own)
+        side = commit(self.repo, {".public-text.toml": "[public-text]\ntechnical-paths = [\"x/\"]\n"})
         git(self.repo, "checkout", "-q", merge_base)
         commit(self.repo, {"shaders/a.metal": "uint v [[vertex_id]]\n"})
         self.assertEqual(run(self.repo, "--range", f"{side}...HEAD")[0], 1)  # the side's own config change

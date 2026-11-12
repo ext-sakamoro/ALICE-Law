@@ -1429,7 +1429,9 @@ def private_sets_problem() -> str | None:
 # after it (the settings file is one, so a fork always reads at least that). The
 # base must be an ancestor of the scanned commit. In `--range`, a commit that changes this file
 # is a finding ("policy config changed", with the keys that changed), so every change of an
-# exemption is in front of the reviewer.
+# exemption is in front of the reviewer, unless it only tightens the settings (an allow row removed or
+# its count lowered, a technical path removed, compared on both parsed versions: see config_tightens),
+# which is named in the output and is not a finding.
 REPO_CONFIG = ".public-text.toml"
 CONFIG_KEYS = {"upstream-fork", "upstream-fork-why", "upstream-base", "technical-paths", "allow"}
 CONFIG: dict = {"technical-paths": [], "upstream-fork": False, "upstream-base": None, "allow": []}
@@ -1597,6 +1599,43 @@ def config_changes(repo: str, commit: str) -> list[str]:
         after = {"(unreadable)": True}
     before, after = before or {}, after or {}
     return sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
+
+
+def config_tightens(repo: str, commit: str) -> tuple[bool, int]:
+    """(the commit's change of the settings file only tightens them, rows compared), from both parsed
+    versions (not the diff text). Tightening: an allow row removed or its count lowered (path, class and
+    why unchanged), a technical path removed, nothing else. Every other change (a row or path added, a
+    count raised, a why reworded, any other key, a file added or unreadable on either side) is not, nor is
+    a change that compared no row: that change stays a finding until a later commit approves it"""
+    parent = first_parent(repo, commit)
+    if parent is None:
+        return False, 0
+    try:
+        before, after = read_config(repo, parent), read_config(repo, commit)
+    except ValueError:
+        return False, 0
+    if before is None or after is None:
+        return False, 0
+    if any(before.get(k) != after.get(k) for k in (set(before) | set(after)) - {"allow", "technical-paths"}):
+        return False, 0
+    old_paths, new_paths = before.get("technical-paths", []), after.get("technical-paths", [])
+    old_allow, new_allow = before.get("allow", []), after.get("allow", [])
+    if not all(isinstance(x, list) for x in (old_paths, new_paths, old_allow, new_allow)):
+        return False, 0
+    compared = len(set(map(str, old_paths)) | set(map(str, new_paths)))
+    if not set(map(str, new_paths)) <= set(map(str, old_paths)):
+        return False, compared
+    if not all(isinstance(e, dict) for e in old_allow + new_allow):
+        return False, compared
+    old = {(e.get("path"), e.get("class")): e for e in old_allow}
+    compared += len(set(old) | {(e.get("path"), e.get("class")) for e in new_allow})
+    for e in new_allow:
+        o = old.get((e.get("path"), e.get("class")))
+        if (o is None or e.get("why") != o.get("why") or set(e) != set(o)
+                or not isinstance(e.get("count"), int) or not isinstance(o.get("count"), int)
+                or e["count"] > o["count"]):
+            return False, compared
+    return compared > 0, compared
 
 
 def worker_technical(path: str | None, line: str) -> bool:
@@ -2609,7 +2648,12 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                               "--no-renames", "--diff-filter=d", commit))
         if REPO_CONFIG in changed:
             keys = config_changes(repo, commit)
-            if approval_changed(repo, commit):
+            tightens, rows = config_tightens(repo, commit)
+            if tightens and not approval_changed(repo, commit):
+                # removing allowances can not let a finding through: named in the output, not a finding
+                APPROVALS.append(f"config change {short} ({', '.join(keys) or 'file'}) only tightens "
+                                 f"({rows} row(s) compared)")
+            elif approval_changed(repo, commit):
                 findings.append(f"commit {short} {REPO_CONFIG}: policy config changed and approved in the same "
                                 f"commit ({', '.join(keys) or 'file'})")
             elif approver and approver != commit and subprocess.run(
