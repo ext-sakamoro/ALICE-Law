@@ -1,0 +1,19 @@
+# Dependency files that take a published alice-* release on purpose (scripts/branch_main_live.py).
+# Every other alice-* dependency comes from its repository's main branch. A row names one tracked file of one
+# public repository and why a published version is pinned there; the file's findings are then not counted.
+# A row whose file has no finding (or is gone) fails the check: remove it.
+
+[[exempt]]
+repo = "ALICE-Edge"
+path = "scripts/gen_db_fixture/Cargo.toml"
+reason = "frozen fixture writer: builds the stored DB fixture with alice-db 0.3.0 on alice-det-math 0.4.0 (exact =versions) and asserts the 0.4 arithmetic identifier, so the fixture keeps recording that older format"
+
+[[exempt]]
+repo = "ALICE-Zip"
+path = "compat/v0_10_reader/Cargo.toml"
+reason = "compat reader for the 0.10 container format: links the published alice-zip =0.10.0 to read archives written by that release"
+
+[[exempt]]
+repo = "ALICE-Zip"
+path = "compat/v0_10_reader/Cargo.lock"
+reason = "the lock of the 0.10 compat reader: alice-zip 0.10.0 and its alice-det-math 0.5.1 from crates.io, as that release resolved them"
