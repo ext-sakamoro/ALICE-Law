@@ -128,6 +128,13 @@ class Unsafe(unittest.TestCase):
     def test_an_inline_array_is_refused(self):
         self.assert_untouched('disallowed-methods = ["std::time::Instant::now"]\n')
 
+    def test_a_reason_starting_with_f32_is_one_entry(self):
+        # a reason that begins like a path ("f32 is ...") is not a second entry
+        d = tree({"clippy.toml": 'disallowed-methods = [\n    { path = "f32::sin", reason = "f32 is not used here" },\n]\n'})
+        self.assertEqual(run("--write", str(d))[0], 0)
+        p = paths((d / "clippy.toml").read_text(encoding="utf-8"))
+        self.assertEqual(p.count("f32::sin"), 1)
+
     def test_two_entries_on_one_line_are_refused(self):
         self.assert_untouched('disallowed-methods = [\n    "f64::sin", "f64::cos",\n]\n')
 

@@ -121,7 +121,7 @@ def rewrite(text: str, methods: list[tuple[str, str]]) -> str:
             continue
         m = ENTRY_PATH_RE.match(ln)
         if m and f"{m.group(2)}::{m.group(3)}" in g1:
-            if ln.count("path") > 1 or ln.count('"f') > 1:
+            if len(re.findall(r"\bpath\s*=", ln)) > 1 or len(re.findall(r'"(?:(?:core|std)::)?f(?:32|64)::', ln)) > 1:
                 raise Unsafe(f"a line holds more than one entry: {s[:60]}")
             continue  # a G1 entry outside the region: moved into it
         kept.append(ln)
