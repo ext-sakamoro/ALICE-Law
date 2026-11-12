@@ -248,6 +248,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/g1_coverage_live.py --local "${GITHUB_REPOSITORY#*/}=." --jobs 4
 
+  # alice-det-math's added functions (ADDED_FUNCTIONS, outside SEMANTICS_ID): every public ALICE-* repository that
+  # uses alice_det_math and calls one folds its pin (scripts/added_function_pins.py, the calls read as
+  # scripts/fold_set_check.py reads them, the list and table from ALICE-DetMath's default branch). A call without the
+  # pin, an unreadable repository and no consumer read are red. Daily and by hand only.
+  added-function-pins:
+    name: Every caller of an added alice-det-math function folds its pin
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the check
+        run: python3 scripts/test_added_function_pins.py
+
+      - name: The public repositories that call an added function
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/added_function_pins.py --local "${GITHUB_REPOSITORY#*/}=." --jobs 4
+
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
   # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a
