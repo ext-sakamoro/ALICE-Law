@@ -2,6 +2,7 @@
 """The public text check (public_text_check.py --tree) over every public repository of the account, at its default branch.
 
     public_text_live.py [--owner NAME] [--baseline FILE] [--local NAME=DIR] [--write | --shrink] [--jobs N]
+                        [--stale-state FILE [--today YYYY-MM-DD]]
 
 A repository that has no public-text workflow of its own is read here too, so the internal vocabulary
 cannot come back through a repository that never adopted the check. The repositories are the ones the
@@ -17,14 +18,22 @@ is first made). --local NAME=DIR reads repository NAME (the one a CI run tests) 
 HEAD instead of its default branch; NAME must be one of the listed public repositories.
 The output names the repository and the place and kind of each new finding, never the word (the output of
 CI is public too).
+A private repository name baseline entry a repository's tree is below (public_text_check.py prints it as
+`stale: <key> <lines> <entry>`, a note there: the repository can not lower ALICE-Law's entry) leaves slack in
+the ratchet until it is lowered (gen_private_repo_hashes.py --baseline live). With --stale-state FILE the run
+records when each such entry was first seen (a JSON object `"<repository> <key>": "YYYY-MM-DD"`, rewritten on
+every run: an entry no longer stale is dropped) and an entry stale for GRACE_DAYS days or more is a finding;
+without it, stale entries are only listed.
 Exit 0 when every repository was read and nothing differs, 1 on a finding, 2 when a repository could not be
-read, no repository was listed, or no file was compared.
+read, no repository was listed, no file was compared, or the state file could not be read.
 """
 from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import datetime
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -42,6 +51,9 @@ GITHUB = "https://github.com/"
 LINE_RE = re.compile(r":\d+:")
 COMPARED_RE = re.compile(r"^public text: (\d+) findings in (\d+) files at ", re.M)
 ENTRY_RE = re.compile(r'^"([0-9a-f]{64})"\s*=\s*([1-9][0-9]*)\s*$')
+STALE_RE = re.compile(r"^stale: ([0-9a-f]{64}) (\d+) ([1-9][0-9]*)$", re.M)
+# days a private repository name baseline entry may stay stale before it is a finding (time to lower it)
+GRACE_DAYS = 2
 
 
 class Unreadable(Exception):
@@ -57,8 +69,9 @@ def key(repo: str, finding: str) -> str:
     return hashlib.sha256(f"{repo}\0{place(finding)}".encode("utf-8")).hexdigest()
 
 
-def check(g: Path, name: str, ref: str) -> tuple[list[str], int]:
-    """(findings, files compared) of public_text_check.py --tree on the checkout g at ref"""
+def check(g: Path, name: str, ref: str) -> tuple[list[str], int, list[str]]:
+    """(findings, files compared, stale baseline entry keys) of public_text_check.py --tree on the checkout g
+    at ref"""
     r = subprocess.run([sys.executable, str(CHECK), "--repo", str(g), "--repo-name", name, "--tree", ref],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     m = COMPARED_RE.search(r.stdout)
@@ -68,24 +81,59 @@ def check(g: Path, name: str, ref: str) -> tuple[list[str], int]:
     found = [line[len("found: "):] for line in r.stdout.splitlines() if line.startswith("found: ")]
     if len(found) != int(m.group(1)):
         raise Unreadable(f"{name}: {len(found)} findings printed, the summary says {m.group(1)}")
-    return found, int(m.group(2))
+    return found, int(m.group(2)), [k for k, _, _ in STALE_RE.findall(r.stdout)]
 
 
-def read_repo(base: Path, repo: dict) -> tuple[str, list[str] | None, int, str | None]:
-    """(name, findings or None when the repository is empty, files compared, error)"""
+def stale_findings(stale: dict[str, list[str]], state: dict[str, str], today: datetime.date
+                   ) -> tuple[list[str], dict[str, str], int]:
+    """(findings, the new state, entries still in their grace) from the stale entries read (repository ->
+    keys) and the first-seen dates recorded so far: an entry seen for the first time is recorded today, one
+    no longer stale is dropped, and one first seen GRACE_DAYS or more days ago is a finding"""
+    new: dict[str, str] = {}
+    out, grace = [], 0
+    for name in sorted(stale):
+        for k in sorted(set(stale[name])):
+            sk = f"{name} {k}"
+            first = state.get(sk, today.isoformat())
+            new[sk] = first
+            age = (today - datetime.date.fromisoformat(first)).days
+            if age >= GRACE_DAYS:
+                out.append(f"{name}: private repository name baseline entry {k[:12]} stale since {first} "
+                           f"({age} days, the grace is {GRACE_DAYS}): lower it (gen_private_repo_hashes.py --baseline live)")
+            else:
+                grace += 1
+    return out, new, grace
+
+
+def load_state(path: Path) -> dict[str, str]:
+    """the recorded first-seen dates; an absent file is an empty state, anything malformed is refused"""
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not all(
+            isinstance(k, str) and re.fullmatch(r"\S+ [0-9a-f]{64}", k) and isinstance(v, str)
+            and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) for k, v in data.items()):
+        raise Unreadable(f"{path}: needs a JSON object of '<repository> <key>': 'YYYY-MM-DD'")
+    for v in data.values():
+        datetime.date.fromisoformat(v)
+    return data
+
+
+def read_repo(base: Path, repo: dict) -> tuple[str, list[str] | None, int, str | None, list[str]]:
+    """(name, findings or None when the repository is empty, files compared, error, stale baseline keys)"""
     name = repo["name"]
     if repo.get("size", 1) == 0:
-        return name, None, 0, None
+        return name, None, 0, None, []
     g = base / name
     try:
         subprocess.run(["git", "init", "-q", str(g)], check=True, capture_output=True)
         hl.git(g, "remote", "add", "origin", GITHUB + repo["full_name"])
         hl.git(g, "fetch", "-q", "--depth", "1", "--no-tags", "origin",
                f"+refs/heads/{repo['default_branch']}:refs/remotes/origin/main")
-        found, n = check(g, name, "origin/main")
-        return name, found, n, None
+        found, n, stale = check(g, name, "origin/main")
+        return name, found, n, None, stale
     except (Unreadable, hl.Unreadable, subprocess.CalledProcessError) as e:
-        return name, None, 0, str(e)
+        return name, None, 0, str(e), []
     finally:
         # the findings are read: the clone goes now, so the run holds one clone per job, not one per repository
         shutil.rmtree(g, ignore_errors=True)
@@ -155,7 +203,16 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--shrink", action="store_true")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--local", help="NAME=DIR: read repository NAME from the checkout DIR at HEAD")
+    ap.add_argument("--stale-state", help="the first-seen dates of stale baseline entries (read and rewritten)")
+    ap.add_argument("--today", help="the date of the run (YYYY-MM-DD, default today in UTC)")
     a = ap.parse_args(argv)
+    try:
+        today = (datetime.date.fromisoformat(a.today) if a.today
+                 else datetime.datetime.now(datetime.timezone.utc).date())
+        state = load_state(Path(a.stale_state)) if a.stale_state else {}
+    except (ValueError, OSError, json.JSONDecodeError, Unreadable) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     local = None
     if a.local is not None:
         name, sep, d = a.local.partition("=")
@@ -175,26 +232,31 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: --local names {local[0]}, which is not a listed public repository", file=sys.stderr)
         return 2
     read: dict[str, list[str]] = {}
+    stale: dict[str, list[str]] = {}
     errors: list[str] = []
     empty = files = 0
     if local is not None:
         try:
-            found, n = check(local[1], local[0], "HEAD")
+            found, n, stale_keys = check(local[1], local[0], "HEAD")
         except Unreadable as e:
             print(f"error: couldn't read the checkout of {local[0]}: {e}", file=sys.stderr)
             return 2
         print(f"public text live: {local[0]} read from its checkout at HEAD ({n} files)")
         read[local[0]] = found
+        if stale_keys:
+            stale[local[0]] = stale_keys
         files += n
     others = [r for r in repos if local is None or r["name"] != local[0]]
     with tempfile.TemporaryDirectory() as tmp, concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
-        for name, found, n, err in ex.map(lambda r: read_repo(Path(tmp), r), others):
+        for name, found, n, err, stale_keys in ex.map(lambda r: read_repo(Path(tmp), r), others):
             if err:
                 errors.append(err)
             elif found is None:
                 empty += 1
             else:
                 read[name] = found
+                if stale_keys:
+                    stale[name] = stale_keys
                 files += n
     for e in errors:
         print(f"couldn't read: {e}")
@@ -219,6 +281,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"shrank {a.baseline}: {removed} findings removed")
         return 0
     findings = compare(read, baseline)
+    n_stale = sum(len(set(v)) for v in stale.values())
+    if a.stale_state:
+        late, new_state, grace = stale_findings(stale, state, today)
+        findings += late
+        Path(a.stale_state).write_text(json.dumps(new_state, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"public text live: {n_stale} stale private repository name baseline entries, {grace} in their "
+              f"{GRACE_DAYS}-day grace, {len(late)} past it ({a.stale_state} rewritten)")
+    elif n_stale:
+        print(f"public text live: {n_stale} stale private repository name baseline entries (listed only: no --stale-state)")
     for f in findings:
         print(f"found: {f}")
     print(f"public text live: {len(findings)} findings")
