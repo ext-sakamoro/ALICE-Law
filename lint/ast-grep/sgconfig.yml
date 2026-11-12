@@ -1,0 +1,6 @@
+# Structural lint of the ALICE crates (ast-grep): rules match the syntax tree, no build
+# rules/*.yml: one rule per file; rule-tests/*-test.yml: the cases each rule must and must not match
+ruleDirs:
+  - rules
+testConfigs:
+  - testDir: rule-tests

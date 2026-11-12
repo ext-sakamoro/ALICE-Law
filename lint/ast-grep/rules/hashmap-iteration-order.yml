@@ -1,0 +1,67 @@
+id: hashmap-iteration-order
+language: rust
+severity: error
+message: iterating a HashMap / HashSet made in this function; its order is not fixed, use BTreeMap / BTreeSet or sort first
+note: |
+  The iteration order of std's HashMap and HashSet depends on a random seed, so anything built from
+  that order (output bytes, a digest, the order of a list) differs between runs. The rule matches a
+  map or set created in the same function (`let [mut] x = HashMap::new()` / `HashSet::new()` /
+  `with_capacity`, with or without a type annotation) and then iterated; a map that is only looked up
+  is not matched. A map passed in from elsewhere is not seen (the rule has no types): it undercounts.
+rule:
+  all:
+    - any:
+        - pattern: $M.iter()
+        - pattern: $M.iter_mut()
+        - pattern: $M.keys()
+        - pattern: $M.values()
+        - pattern: $M.values_mut()
+        - pattern: $M.into_iter()
+        - pattern: $M.drain()
+        - kind: for_expression
+          has:
+            field: value
+            any:
+              - kind: reference_expression
+                has: { kind: identifier, pattern: $M }
+              - kind: identifier
+                pattern: $M
+      inside:
+        kind: function_item
+        stopBy: end
+        has:
+          stopBy: end
+          kind: let_declaration
+          all:
+            - has:
+                field: pattern
+                any:
+                  - kind: identifier
+                    pattern: $M
+                  - kind: mut_pattern
+                    has: { kind: identifier, pattern: $M }
+            - has:
+                field: value
+                any:
+                  - pattern: HashMap::new()
+                  - pattern: HashSet::new()
+                  - pattern: HashMap::with_capacity($$$)
+                  - pattern: HashSet::with_capacity($$$)
+    - not:
+        inside:
+          kind: mod_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'
+            stopBy:
+              not:
+                kind: attribute_item
+
+files:
+  - "**/src/**/*.rs"
+ignores:
+  - "**/scripts/**"
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/examples/**"

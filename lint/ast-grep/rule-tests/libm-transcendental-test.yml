@@ -1,0 +1,20 @@
+id: libm-transcendental
+invalid:
+  - "fn f(x: f64) -> f64 { x.sin() }"
+  - "fn f(x: f64) -> f64 { f64::exp(x) }"
+  - "fn f(x: f32, y: f32) -> f32 { x.powf(y) }"
+  - "fn f(y: f64, x: f64) -> f64 { y.atan2(x) }"
+  - "fn f(x: f64) -> (f64, f64) { x.sin_cos() }"
+  - "fn f(x: f64) -> f64 { (x * 2.0).ln() }"
+valid:
+  - "fn f(x: f64) -> f64 { alice_det_math::sin(x) }"
+  - "fn f(x: f64) -> f64 { x.sqrt() }"
+  - "fn f(x: f64) -> f64 { x.abs().floor() }"
+  - "fn f(a: f64, b: f64, c: f64) -> f64 { a.mul_add(b, c) }"
+  - "fn f(x: f64) -> f64 { dm::exp64(x) }"
+  - "fn f(v: &mut Vec<u8>) { v.sin_table(); }"
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn f(x: f64) -> f64 { x.sin() }
+    }

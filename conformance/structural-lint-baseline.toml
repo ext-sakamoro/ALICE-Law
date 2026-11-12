@@ -1,0 +1,2109 @@
+# The structural lint ratchet's baseline (scripts/structural_lint.py): a repository's production sites of the
+# ast-grep rules in lint/ast-grep/rules and its ast-grep-ignore comments, keyed by repository name. A count may
+# only go down; lower it in the commit that removes sites. Regenerate with `structural_lint.py --write-baseline`
+# (public repositories) or `--write-own` (one repository's own file).
+
+[repo."ALICE-3D-Print-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ABM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-API"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-API-Gateway-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-API-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-AR-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-AR-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ASR-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ATS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Accessibility-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-AdTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Agent"]
+print = 39
+hashmap = 2
+ignores = 0
+
+[repo."ALICE-Agent-Platform-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Agri-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-AgriIoT-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Analytics"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Analytics-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Animation-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Archive-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-AssetMgmt-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Astro-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Atoms-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Attendance-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Audio"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Audio-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Audit"]
+print = 0
+hashmap = 1
+ignores = 0
+
+[repo."ALICE-Audit-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Auth"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Auth-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-AuthZ-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-AutoML"]
+print = 0
+hashmap = 1
+ignores = 0
+
+[repo."ALICE-AutoML-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Aviation-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-BI-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-BIM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-BLE"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-BLE-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Backoffice-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-BackupCloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Billing-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Bio"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Bio-Platform"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Bio-Platform-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Bio-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-BioSim-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Blockchain-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Booking-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Bridge"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Bridge-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Browser"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Browser-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Browser-Secure"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Browser-Secure-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CDC-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CDN"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CDN-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CDP-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CI-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CLM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CMS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CRM"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CRM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Cache"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Cache-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Cache-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Cache-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Camera"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Camera-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-CareTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Channel"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Chat-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Chemistry"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Chemistry-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Circuit-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Climate"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Climate-Platform"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Climate-Platform-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Climate-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Cloud-Gateway"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Cloud-Gateway-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Codec"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Codec-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Codec-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Codec-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Collab-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Collaboration-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Compiler"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Compiler-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Compliance-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Config-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Consensus-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Construction-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Container"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Container-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Container-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Container-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Content-Platform-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Crypto"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Crypto-KMS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Crypto-KMS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Crypto-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DAM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DB"]
+print = 2
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DB-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DB-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DB-Enterprise-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DB-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DLP"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DLP-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DNS"]
+print = 19
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DNS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DR-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Data-Pipeline-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DataShield"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DataShield-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Debug-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Delivery-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Dental-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DetMath"]
+print = 2
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-DevOps-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Diffusion-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Digital-Twin-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Disaster-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Document-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Drone"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Drone-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-EHR-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ERP"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ERP-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ESG-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ETL-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Eco-System"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Ecommerce-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-EdTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Edge"]
+print = 18
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Edge-AI-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Edge-Firewall-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Edge-IoT-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Edge-Runtime-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Edge-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Email-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Embedding-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Energy"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Energy-Platform"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Energy-Platform-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Energy-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Ephemeris"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Exam-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FIX"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FIX-Gateway"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FIX-Gateway-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FIX-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FileSystem"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FileSystem-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FinCompliance-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FinTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Fishery-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Fluid-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Font"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Font-CDN"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Font-CDN-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Font-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-FoodTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Forestry-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Form-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-GAN"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-GAN-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-GRC-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-GameCloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-GameEngine"]
+print = 1
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-GameEngine-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Genome-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Geo-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Graph-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-HRM"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-HRM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-HTTP"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-HTTP-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Haptic-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-History"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-History-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Hypervisor-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-IP-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-IPO-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-IaC-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Identity"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Identity-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Image-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Inference-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-InsurTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Inventory-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Invoice-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-IoT-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Kinematics"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Kinematics-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Kinematics-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Kinematics-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LB-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LLM"]
+print = 56
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LLM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LMS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LMS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LOL"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Lakehouse-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Law"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Ledger"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Ledger-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Legal"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Legal-AI"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Legal-AI-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Legal-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LegalTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Lint-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LoRa"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LoRa-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LoadBalancer-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Log-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-LogMgmt-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Logistics-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ML"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ML-Platform"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ML-Platform-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ML-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-MQTT"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-MQTT-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Manga-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Map-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Maritime-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-MarketData-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Marketing-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Markup"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Matchmaking-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Media-Pipeline-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Medical-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Metaverse-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Metrics-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Migrate-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Mining-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Mobility-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Monitor"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Monitor-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Motion"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Motion-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Motion-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Motion-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Music-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-NFC"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-NFC-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-NLP-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Navigation"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Navigation-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Neural-Render-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Neural-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-NoCode-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Notify-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-OCR-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-OS-Keystore"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-OTA-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ObjectStore"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ObjectStore-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Observability-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Optics"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Optics-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-PKI-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-PMS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-POS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-PackageRegistry-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Parser"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Parser-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Payment-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-PaymentGateway-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Payroll-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-PetTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Pharmacy-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Physics"]
+print = 13
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Physics-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Physics-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Physics-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-PointCloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-PowerGrid-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Presence"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Presence-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Print-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ProjectMgmt-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-PropTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Proxy"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Proxy-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-QA-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Quant-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Quantum-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Queue"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Queue-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-RAG-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-RAW-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-RL-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-RPA-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-RTOS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-RTOS-BSP"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-RTOS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Railway-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-RateLimit-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Realtime-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Recommend-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Recycle-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Registry"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Registry-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Render-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Revenue-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ReverseProxy-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Risk"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Risk-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Robotics-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SDF"]
+print = 2
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SDF-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SEO-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SIEM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SIMD"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SIMD-Compute"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SIMD-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SLAM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Sandbox-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Scheduler-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Search"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Search-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SecretVault-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Secure-Network-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Security-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Semantic-Telemetry-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Sensor-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Serial"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Serial-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-ServiceMesh-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Settlement"]
+print = 0
+hashmap = 2
+ignores = 0
+
+[repo."ALICE-Settlement-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Shader"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Sign"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Signal"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Signal-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Smart-Grid-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SmartCity-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Space"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Space-Comm"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Space-Comm-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Space-Drone-Bridge"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Space-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SpaceTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SportsTech-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Storage-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Stream-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-StreamProc-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Streaming-Protocol"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Streaming-Protocol-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Subtitle-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-SupplyChain-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Support-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Survey-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Swarm"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Swarm-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Sync"]
+print = 4
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Sync-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Synth"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Synth-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Synth-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Synth-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-TRT"]
+print = 2
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-TRT-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-TTS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Tax-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Telemedicine-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Terraform"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Terraform-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Text"]
+print = 0
+hashmap = 2
+ignores = 0
+
+[repo."ALICE-Text-Compression"]
+print = 0
+hashmap = 1
+ignores = 0
+
+[repo."ALICE-Text-Compression-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Text-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-TextToCAD-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-TimeSeries-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Token"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Token-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Train"]
+print = 23
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Train-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Translation-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Travel-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VCS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VCS-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VM"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VNet-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VR"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VR-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VectorDB-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Video"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Video-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-VideoAnalytics-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-View"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-View-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-View-Studio"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Vision-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Voice"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Voice-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Voice-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Voice-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-WAF"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-WAF-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-WASM-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-WasteMgmt-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-WaterMgmt-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Web3-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-WebSocket"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-WebSocket-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Wellness-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Whiteboard-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Workflow-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Zip"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Zip-Cloud"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Zip-Cloud-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-Zip-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-eSign-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-gRPC"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-gRPC-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0
+
+[repo."ALICE-i18n-SaaS"]
+print = 0
+hashmap = 0
+ignores = 0

@@ -1,0 +1,20 @@
+id: production-print
+invalid:
+  - 'fn f() { println!("x"); }'
+  - 'fn f(x: u8) { eprintln!("{x}"); }'
+  - "fn f(x: u8) -> u8 { dbg!(x) }"
+valid:
+  - 'fn f() -> String { format!("x") }'
+  - 'fn f(w: &mut String) { use std::fmt::Write; write!(w, "x").unwrap(); }'
+  - 'fn f() { log::info!("x"); }'
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn f() { println!("x"); }
+    }
+  - |
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used)]
+    mod tests {
+        fn f() { println!("x"); }
+    }

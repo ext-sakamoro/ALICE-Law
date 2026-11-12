@@ -1,0 +1,37 @@
+id: libm-transcendental
+language: rust
+severity: error
+message: a transcendental function of the platform libm; its last bits differ by platform, use alice-det-math
+note: |
+  `x.sin()`, `f64::exp(x)` and the like call the platform's libm, which is not correctly rounded and
+  differs between platforms in the last bits. A crate that claims bit-exact results takes them from
+  alice-det-math (`alice_det_math::sin(x)`), whose results are the same on every platform.
+  `sqrt`, `abs`, `floor`, `mul_add` are exact by IEEE 754 and are not matched.
+rule:
+  all:
+    - any:
+        - pattern: $X.$F($$$ARGS)
+        - pattern: $T::$F($$$ARGS)
+    - not:
+        inside:
+          kind: mod_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'
+            stopBy:
+              not:
+                kind: attribute_item
+
+constraints:
+  F:
+    regex: ^(sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|exp|exp2|exp_m1|ln|ln_1p|log|log2|log10|powf|powi|hypot|cbrt|sin_cos)$
+  T:
+    regex: ^(f32|f64)$
+files:
+  - "**/src/**/*.rs"
+ignores:
+  - "**/scripts/**"
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/examples/**"
