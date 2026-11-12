@@ -7,9 +7,10 @@
     no_panic_ratchet.py --write-own NAME=DIR --baseline conformance-own/no-panic.toml
 
 The count comes from tools/no-panic-scan (syntax tree, no build of the repository): per repository, the sites of
-`.unwrap()`, `.expect(..)`, `panic!`, `todo!`, `unimplemented!`, `unreachable!` in its production code, and every
-`allow(..)` / `expect(..)` attribute naming the clippy lint of one of them (a deny of the lint is void there, so it
-is a site). conformance/no-panic-baseline.toml holds the counts of the public repositories, keyed by name. A private
+`.unwrap()`, `.expect(..)`, `panic!`, `todo!`, `unimplemented!`, `unreachable!` and `assert!` / `assert_eq!` /
+`assert_ne!` (column `assert`: each panics in a release build when its condition fails) in its production code,
+and every `allow(..)` / `expect(..)` attribute naming the clippy lint of one of them (a deny of the lint is void
+there, so it is a site). `debug_assert!` and its forms are not counted: a release build compiles them out. conformance/no-panic-baseline.toml holds the counts of the public repositories, keyed by name. A private
 repository keeps its own row in its own repository (conformance-own/no-panic.toml, the same format with its one row)
 and checks it in its own CI with `--only NAME=. --baseline conformance-own/no-panic.toml` from a pinned revision of
 this checker: no private name, nor a hash of one (a name of the form ALICE-<word> is recovered from its hash by
@@ -58,7 +59,7 @@ import holder_live as hl  # noqa: E402
 
 BASELINE = ROOT / "conformance" / "no-panic-baseline.toml"
 SCANNER_DIR = ROOT / "tools" / "no-panic-scan"
-LINTS = ("unwrap", "expect", "panic", "todo", "unimplemented", "unreachable")
+LINTS = ("unwrap", "expect", "panic", "todo", "unimplemented", "unreachable", "assert")
 GITHUB = "https://github.com/"
 
 

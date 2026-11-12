@@ -11,6 +11,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# a made-up name key for the checkers these tests start (public_text_live passes --require-private-names, which
+# fails without a key); set here so no test depends on a key file on the machine
+os.environ["ALICE_PRIVATE_NAME_HMAC_KEY"] = "7e" * 32
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import public_text_live as pl  # noqa: E402
 

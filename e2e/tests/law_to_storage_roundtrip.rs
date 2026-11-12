@@ -1090,6 +1090,30 @@ fn check_golden(rel: &str, det_math_version: &str, got: &str) {
     }
 }
 
+/// A superseded golden digest stays superseded: the values digest recorded before alice-zip's identifier
+/// took the causal-law kind tag (alice-zip 5dba613, 65f48962 → 922b2865, carried into alice-analytics
+/// cf16e19 67650b7f, alice-db 6618a43 97d6853c and alice-edge 5de16c5 e0a546aa). Only the law identifier
+/// inside the residual summary changed; every computed value is the same bits. A golden file that
+/// went back to the old line would accept a build on the old identifiers.
+#[test]
+fn a_superseded_values_digest_is_not_the_golden() {
+    const SUPERSEDED: [&str; 1] =
+        ["41138e6a7c3fa4316115f50b43012d77922a50ccc832586926e9294d31a237a6"];
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("golden/values.digest");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert!(
+        !lines.is_empty(),
+        "golden/values.digest has no line (compared nothing)"
+    );
+    for old in SUPERSEDED {
+        assert!(
+            lines.iter().all(|l| !l.contains(old)),
+            "golden/values.digest holds the superseded digest {old}"
+        );
+    }
+}
+
 /// The transitive rule of [`det_math_binding`] on made-up crates.
 #[test]
 fn det_math_binding_takes_only_per_function_pins_and_keeps_the_crate_rule() {
