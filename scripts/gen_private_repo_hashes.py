@@ -4,7 +4,9 @@
 public_text_check.py holds two sets, between the markers of its generated block:
   PRIVATE_REPO_HASHES        every private repository of the owner (a home path into one is a finding)
   PRIVATE_ALICE_REPO_HASHES  the private ALICE-* repositories among them (their name as a whole token is a finding)
-Each entry is the SHA-256 of the lower-case repository name; no name is written anywhere. The sets are read
+Each entry is HMAC-SHA256 of the lower-case repository name under the name key (public_text_check.load_name_key:
+ALICE_PRIVATE_NAME_HMAC_KEY or the key file; a plain hash of a short name could be recovered by trying names);
+without the key nothing is written (exit 2). No name and never the key is written anywhere. The sets are read
 from the repositories' visibility now, so a repository made public drops out on the next generation.
 
     gen_private_repo_hashes.py            rewrite the block from `gh repo list <owner>`
@@ -44,6 +46,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import holder_live as hl  # noqa: E402
+import public_text_check as ptc  # noqa: E402
 
 CHECKER = Path(__file__).resolve().parent / "public_text_check.py"
 GITHUB = "https://github.com/"
@@ -51,14 +54,23 @@ BEGIN = "# >>> " + "generated private repositories >>>"
 END = "# <<< " + "generated private repositories <<<"
 
 
+ROSTER_LIMIT = 5000
+
+
 def roster(owner: str, roster_json: str | None) -> list[dict]:
     if roster_json:
         return json.loads(Path(roster_json).read_text(encoding="utf-8"))
-    r = subprocess.run(["gh", "repo", "list", owner, "--limit", "5000", "--json", "name,visibility"],
+    r = subprocess.run(["gh", "repo", "list", owner, "--limit", str(ROSTER_LIMIT), "--json", "name,visibility"],
                        capture_output=True, text=True, check=False, encoding="utf-8")
     if r.returncode != 0:
         raise SystemExit(f"gen_private_repo_hashes: gh repo list {owner} failed: {r.stderr.strip()[:200]}")
-    return json.loads(r.stdout or "[]")
+    rows = json.loads(r.stdout or "[]")
+    # gh cuts the listing at --limit without saying so: a listing that reaches it may be cut, and a repository
+    # missing from it would drop out of the sets (nothing written)
+    if len(rows) >= ROSTER_LIMIT:
+        raise SystemExit(f"gen_private_repo_hashes: gh repo list returned {len(rows)} rows, the limit: the listing "
+                         f"may be cut (raise ROSTER_LIMIT); nothing written")
+    return rows
 
 
 def hashes(rows: list[dict]) -> tuple[list[str], list[str]]:
@@ -72,7 +84,14 @@ def hashes(rows: list[dict]) -> tuple[list[str], list[str]]:
     alice = [n for n in private if n.startswith("alice-")]
     if not alice:
         raise SystemExit("gen_private_repo_hashes: the listing holds no private ALICE-* repository; nothing written")
-    h = lambda names: sorted(hashlib.sha256(n.encode("utf-8")).hexdigest() for n in names)  # noqa: E731
+    try:
+        key = ptc.load_name_key()
+    except ValueError as e:
+        raise SystemExit(f"gen_private_repo_hashes: {e}") from None
+    if key is None:
+        raise SystemExit(f"gen_private_repo_hashes: the name key is not set ({ptc.NAME_KEY_ENV} or "
+                         f"{ptc.NAME_KEY_FILE}); nothing written")
+    h = lambda names: sorted(ptc.name_mac(n) for n in names)  # noqa: E731
     return h(private), h(alice)
 
 
