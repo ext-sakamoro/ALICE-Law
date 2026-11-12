@@ -1,0 +1,43 @@
+# The branch main check on a ci/ branch: its tests, the exemption table, and this repository's own manifests
+#
+# Conformance (live) reads every public repository daily (scripts/branch_main_live.py); a ci/ branch is not red for
+# another repository's dependency, which it cannot change. Here: the tests of scripts/branch_main_check.py and
+# scripts/branch_main_live.py, conformance/branch-main-exempt.toml (each row with repo, path and a reason, no two
+# rows for one file), and this repository's tracked Cargo.toml / Cargo.lock (an alice-* not from a main branch is
+# red; 0 files read is red).
+
+name: Branch main (ci)
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-main-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  branch-main:
+    name: Branch main check (tests, the exemption table, then this repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the branch main check and its live reader
+        run: |
+          python3 scripts/test_branch_main_check.py
+          python3 scripts/test_branch_main_live.py
+
+      - name: The exemption table
+        run: python3 scripts/branch_main_live.py --check-table
+
+      - name: This repository's manifests and locks
+        run: python3 scripts/branch_main_check.py .

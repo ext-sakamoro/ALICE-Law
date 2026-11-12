@@ -40,6 +40,8 @@ def load_exempt(path: Path = EXEMPT) -> dict[tuple[str, str], str]:
     for r in rows:
         if not (isinstance(r.get("repo"), str) and isinstance(r.get("path"), str) and str(r.get("reason", "")).strip()):
             raise ValueError(f"{path.name}: a row needs repo, path and a reason: {r!r}")
+        if (r["repo"], r["path"]) in out:
+            raise ValueError(f"{path.name}: two rows for {r['repo']}: {r['path']}")
         out[(r["repo"], r["path"])] = r["reason"]
     return out
 
@@ -85,7 +87,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--owner", default="ext-sakamoro")
     ap.add_argument("--local", help="NAME=DIR: read repository NAME from the checkout DIR")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--check-table", action="store_true",
+                    help="only read the exemption table (each row with repo, path and a reason, no two rows for a file)")
     a = ap.parse_args(argv)
+    if a.check_table:
+        try:
+            rows = load_exempt(EXEMPT)
+        except (OSError, ValueError, tomllib.TOMLDecodeError) as e:
+            print(f"branch main live: {e}")
+            return 2
+        print(f"branch main live: {EXEMPT.name}: {len(rows)} row(s), each with a reason")
+        return 0
     try:
         repos = hl.public_repos(a.owner)
     except hl.Unreadable as e:
@@ -107,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         results.append((local_name, [f"{local_name}: {f}" for f in found], n, None))
     found = [f for _, fs, _, _ in results if fs for f in fs]
     try:
-        exempt = load_exempt()
+        exempt = load_exempt(EXEMPT)
     except (OSError, ValueError, tomllib.TOMLDecodeError) as e:
         print(f"branch main live: {e}")
         return 2

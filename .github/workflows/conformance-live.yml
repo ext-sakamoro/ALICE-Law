@@ -129,6 +129,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/runner_pin_live.py --local "${GITHUB_REPOSITORY#*/}=."
 
+  # Every alice-* dependency comes from its repository's main branch (scripts/branch_main_live.py): each public
+  # repository's tracked Cargo.toml (git with branch = "main", no rev / tag, no registry release) and Cargo.lock
+  # (`?branch=main#<commit>`) at its default branch, this one at the commit under test. A file
+  # conformance/branch-main-exempt.toml names (a published version pinned on purpose, with its reason) is not
+  # counted; a row with no finding is red. A finding, an unreadable repository and 0 files read are red. Daily and
+  # by hand only.
+  branch-main:
+    name: Every public repository takes alice-* from main branches
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the branch main check and its live reader
+        run: |
+          python3 scripts/test_branch_main_check.py
+          python3 scripts/test_branch_main_live.py
+
+      - name: The public repositories' manifests and locks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/branch_main_live.py --local "${GITHUB_REPOSITORY#*/}=."
+
   # G11 (c): conformance/shared-files.toml against GitHub. Each uniform entry's source commit
   # is on its repository's main with the entry's bytes; every listed repository's main
   # carries each uniform copy byte for byte (count-locked on the copies of uniform rows: a

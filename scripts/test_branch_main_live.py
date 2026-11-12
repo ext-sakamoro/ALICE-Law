@@ -41,6 +41,22 @@ class Exempt(unittest.TestCase):
         with self.assertRaises(ValueError):
             table('[[exempt]]\nrepo = "ALICE-A"\nreason = "x"\n')
 
+    def test_two_rows_for_one_file_are_refused(self):
+        with self.assertRaises(ValueError):
+            table(ROW + ROW.replace("compat reader of the 0.1 format", "another reason"))
+
+    def test_check_table_reads_only_the_table(self):
+        self.assertEqual(live.main(["--check-table"]), 0)
+        orig = live.EXEMPT
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "t.toml"
+            p.write_text(ROW + ROW)
+            live.EXEMPT = p
+            try:
+                self.assertEqual(live.main(["--check-table"]), 2)
+            finally:
+                live.EXEMPT = orig
+
     def test_the_repository_table_reads(self):
         rows = live.load_exempt()
         self.assertTrue(rows)
