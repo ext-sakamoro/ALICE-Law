@@ -57,7 +57,7 @@ python3 $S followups <crate> --repos-root <dir with every roster checkout>      
 
 1. `next` は順序の中で公開されていない最初の crate を名指す
 2. `cargo publish` は working tree を package にするので、gate は作業中の写しでなく、その commit の clone で走らせる
-3. `publish-gate <crate> --repo <checkout> --ref <sha> [--manifest-path <path>]` はその commit の crate の manifest (と repository の根の `Cargo.toml`) を読み、次の時に拒否する:
+3. `publish-gate <crate> --repo <checkout> --ref <sha> [--manifest-path <path>]` はその commit の crate の manifest (と repository の根の `Cargo.toml`) を読み (package の文章の検査は非公開の名前の鍵を要するので、publish-gate を走らせる CI の job は `ALICE_PRIVATE_NAME_HMAC_KEY` を渡す)、次の時に拒否する:
    - checkout がその commit でない、または追跡している file に変更がある
    - crate が `prepared` でない、または manifest が roster と別の crate か版
    - manifest が `alice-*` crate を上書きする (`[patch.*]`、`[replace]`) か、別の registry から取る

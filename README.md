@@ -57,7 +57,7 @@ Then commit `release-train.toml`, and land the requirement bumps that `followups
 
 1. `next` names the first crate in the order that is not published.
 2. `cargo publish` packages the working tree, so the gate runs on a clone at the commit, not on a working copy.
-3. `publish-gate <crate> --repo <checkout> --ref <sha> [--manifest-path <path>]` reads the crate's manifest (and the repository's root `Cargo.toml`) at that commit, and refuses:
+3. `publish-gate <crate> --repo <checkout> --ref <sha> [--manifest-path <path>]` reads the crate's manifest (and the repository's root `Cargo.toml`) at that commit (its check of the package text needs the private name key, so a CI job that runs publish-gate must map `ALICE_PRIVATE_NAME_HMAC_KEY`), and refuses:
    - when the checkout is not that commit, or has changes to tracked files;
    - when the crate is not `prepared`, or the manifest is another crate or version than the roster's;
    - when a manifest overrides an `alice-*` crate (`[patch.*]`, `[replace]`) or takes one from another registry;
