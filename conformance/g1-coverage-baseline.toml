@@ -89,7 +89,6 @@ lacking = [
     "ALICE-Streaming-Protocol",
     "ALICE-TRT",
     "ALICE-Text",
-    "ALICE-TextToCAD-SaaS",
     "ALICE-Train",
     "ALICE-VCS",
     "ALICE-View",
