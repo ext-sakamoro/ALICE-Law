@@ -214,7 +214,10 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
     if not gates:
         raise InputError(f"ALICE-Law {rev[:12]}: conformance/gates.toml lists no gate")
     return {
-        "version": entry.get("version", "?"), "state": entry.get("state", "?"),
+        "version": entry.get("version", "?"),
+        # a roster that names main commits (2026-11-13 on) shows the commit; an earlier one its release state
+        "state": (f"main {entry['sha'][:12]}" if entry.get("state") == "main" and isinstance(entry.get("sha"), str)
+                  else entry.get("state", "?")),
         "law_dependency": entry.get("law-dependency", True), "det_math": dm, "semantics": sid,
         "roster_det_math": roster_dm,
         "e2e_req": req, "digest": digest, "manifest_path": entry.get("manifest-path", "Cargo.toml"),

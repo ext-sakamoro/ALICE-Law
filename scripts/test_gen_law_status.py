@@ -16,16 +16,17 @@ spec.loader.exec_module(gls)
 
 ROSTER = '''[crate.alpha]
 version = "1.2.0"
-state = "published"
+sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+state = "main"
 order = 1
 repo = "Alpha"
 
 [crate.beta]
 version = "0.3.0"
-state = "planned"
+sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+state = "main"
 order = 0
 repo = "Beta"
-tag = "beta-v{version}"
 
 [crate.law]
 version = "0.0.0"
@@ -73,10 +74,12 @@ class Gen(unittest.TestCase):
         self.assertNotIn("old text", text)
         self.assertTrue(text.startswith("# T\n\n## Status\n\n<!-- law-status:begin -->"))
         self.assertTrue(text.endswith("<!-- law-status:end -->\n\n## License\n"))
-        # order by `order`, the default tag form, a roster tag form, no tag for an exempt crate
-        self.assertLess(text.index("| beta | 0.3.0 | planned | 0 | Beta | beta-v0.3.0 |"),
-                        text.index("| alpha | 1.2.0 | published | 1 | Alpha | v1.2.0 |"))
-        self.assertIn("| law | 0.0.0 | exempt | 2 | Law | (none) |", text)
+        # order by `order`, each crate at its main commit (12 characters), none for an exempt crate
+        self.assertLess(text.index("| beta | 0.3.0 | bbbbbbbbbbbb | 0 | Beta |"),
+                        text.index("| alpha | 1.2.0 | aaaaaaaaaaaa | 1 | Alpha |"))
+        self.assertIn("| law | 0.0.0 | (exempt) | 2 | Law |", text)
+        self.assertIn("| crate | version | main commit | order | repository |", text)
+        self.assertNotIn("published", text)
         self.assertIn("| some-step | beta 0.3.0 | beta is \\| not out |", text)
         self.assertIn("| 0.5.1 | `bbbb` |", text)
         # the per-repository counts are not committed: the section points to the live job's summary
@@ -131,8 +134,8 @@ class Gen(unittest.TestCase):
         (self.d / "README_JP.md").write_text(README, encoding="utf-8")
         self.assertEqual(self.run_main()[0], 0)
         ja = self.readme("README_JP.md")
-        self.assertIn("| crate | 版 | 状態 | 順 | repository | tag |", ja)
-        self.assertIn("| alpha | 1.2.0 | published | 1 | Alpha | v1.2.0 |", ja)
+        self.assertIn("| crate | 版 | main の commit | 順 | repository |", ja)
+        self.assertIn("| alpha | 1.2.0 | aaaaaaaaaaaa | 1 | Alpha |", ja)
         self.assertEqual(self.run_main("--check")[1], "law-status: 2 README(s) compared, 0 differ\n")
         (self.d / "README_JP.md").write_text("# T\n", encoding="utf-8")
         self.assertEqual(self.run_main("--check")[0], 2)
@@ -151,7 +154,7 @@ class Gen(unittest.TestCase):
         (self.d / "conformance/missing-manifests.toml").write_text("", encoding="utf-8")
         (self.d / "release-train.toml").write_text(ROSTER.split("[expected-failure.x]")[0], encoding="utf-8")
         self.run_main()
-        sec = self.readme().split("### Steps expected to fail until a release")[1]
+        sec = self.readme().split("### Steps expected to fail until a version")[1]
         self.assertTrue(sec.lstrip().startswith("None."))
         self.assertTrue(self.readme().split("### Crates whose manifest is not written yet")[1].lstrip()
                         .startswith("None."))

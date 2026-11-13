@@ -230,10 +230,12 @@ class Cli(unittest.TestCase):
         self.assertIn("path", err)
 
 
+# the roster records alice-db at 1.9.0 on main; an entry until 2.0.0 is pending, and stale once the
+# roster records 2.0.0 or later
 ROSTER_BASE = """
 [crate.alice-db]
-version = "2.0.0"
-state = "prepared"
+version = "1.9.0"
+state = "main"
 order = 0
 """
 # alice-zip linked twice, the second copy a commit pin some core crate still names
@@ -272,11 +274,12 @@ class Pending(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("alice-zip 0.7.0 comes from", err)
 
-    def test_a_pending_entry_past_its_release_is_stale(self):
-        roster = ROSTER_BASE.replace('state = "prepared"', 'state = "published"') + PENDING
-        code, _, err = self.run_main(roster, **TWO_ZIP)
-        self.assertEqual(code, 1)
-        self.assertIn("is stale", err)
+    def test_a_pending_entry_past_its_version_is_stale(self):
+        for recorded in ("2.0.0", "2.1.0"):
+            roster = ROSTER_BASE.replace('version = "1.9.0"', f'version = "{recorded}"') + PENDING
+            code, _, err = self.run_main(roster, **TWO_ZIP)
+            self.assertEqual(code, 1, recorded)
+            self.assertIn("is stale", err)
 
     def test_an_item_that_matches_no_problem_fails(self):
         roster = ROSTER_BASE + PENDING.replace('linked = ["alice-zip"]', 'linked = ["alice-zip", "alice-sdf"]')
@@ -293,7 +296,7 @@ class Pending(unittest.TestCase):
         self.assertIn("this repository names alice-lol", err)
 
     def test_malformed_entries_exit_2(self):
-        for bad in (PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-db 9.9.9"'),  # not the roster version
+        for bad in (PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-db 2.x"'),  # not a version
                     PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-nope 1.0.0"'),
                     PENDING.replace('until = "alice-db 2.0.0"', 'until = "alice-db"'),
                     PENDING.replace('linked = ["alice-zip"]', 'linked = ["alice-zip", "alice-zip"]'),
