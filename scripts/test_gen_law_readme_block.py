@@ -8,6 +8,7 @@ import io
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -208,6 +209,30 @@ class Render(Base):
             self.assertIn(want, out)
             self.assertNotIn('= "1"', out)
             self.assertNotIn("crates.io", out)
+
+    def test_the_main_lane_reports_the_measured_det_math_and_shows_a_differing_roster(self):
+        # the main-branch lane measures alice-det-math's main: the roster's release has no digest, the block names
+        # the version the golden records and says the train names another one (the drift stays visible)
+        git(self.law, "rm", "-q", ".github/workflows/e2e.yml", "e2e/golden/run.digest")
+        self.sha = commit(self.law, {"e2e/golden/values.digest": f"0.6.1 {DIGEST}\n",
+                                     ".github/workflows/e2e-main.yml": WORKFLOW})
+        for lang, want in (("en", "alice-det-math 0.6.1 from its main branch"),
+                           ("ja", "main branch の alice-det-math 0.6.1")):
+            rc, out = self.render(lang)
+            self.assertEqual(rc, 0, out)
+            self.assertIn(want, out)
+            self.assertIn("0.5.0", out)
+        rc, out = self.render("en")
+        self.assertIn("the release train names alice-det-math 0.5.0, not the version measured", out)
+
+    def test_the_main_lane_with_the_roster_release_measured_shows_no_drift(self):
+        git(self.law, "rm", "-q", ".github/workflows/e2e.yml", "e2e/golden/run.digest")
+        self.sha = commit(self.law, {"e2e/golden/values.digest": f"0.5.0 {DIGEST}\n0.6.1 {DIGEST}\n",
+                                     ".github/workflows/e2e-main.yml": WORKFLOW})
+        rc, out = self.render("en")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("alice-det-math 0.5.0 from its main branch", out)
+        self.assertNotIn("not the version measured", out)
 
     def test_a_revision_without_any_golden_is_an_error(self):
         git(self.law, "rm", "-q", "e2e/golden/run.digest")
@@ -558,6 +583,34 @@ class Check(Base):
         self.write_and_commit()
         (self.crate / "README.md").write_text(README_EN, encoding="utf-8")  # uncommitted removal
         self.assertEqual(self.check()[0], 0)
+
+
+class DetMathIdentifier(unittest.TestCase):
+    """the roster's alice-det-math identifier is found however the row of KNOWN_SEMANTICS is laid out"""
+    A, B = "a" * 64, "b" * 64
+
+    def test_a_row_spread_over_lines_by_rustfmt(self):
+        text = (f'const KNOWN_SEMANTICS: &[(&str, &str, &str)] = &[\n    (\n        "0.5.0",\n        "{self.A}",\n'
+                f'        "0.5",\n    ),\n    (\n        "0.5.1",\n        "{self.B}",\n        "0.5",\n    ),\n];\n')
+        self.assertEqual(glrb.det_math_identifier(text, "0.5.1"), self.B)
+        self.assertEqual(glrb.det_math_identifier(text, "0.5.0"), self.A)
+
+    def test_a_row_on_one_line_with_two_or_three_fields(self):
+        self.assertEqual(glrb.det_math_identifier(f'    ("0.5.1", "{self.B}"),\n', "0.5.1"), self.B)
+        self.assertEqual(glrb.det_math_identifier(f'    ("0.5.1", "{self.B}", "0.5"),\n', "0.5.1"), self.B)
+
+    def test_a_version_prefix_does_not_match_another_release(self):
+        text = f'    ("0.5.10", "{self.A}", "0.5"),\n'
+        self.assertIsNone(glrb.det_math_identifier(text, "0.5.1"))
+
+    def test_the_earlier_single_hex_form(self):
+        self.assertEqual(glrb.det_math_identifier(f'const SEMANTICS_HEX: &str = "{self.A}";\n', "0.5.1"), self.A)
+
+    def test_the_end_to_end_test_in_this_tree(self):
+        roster = tomllib.loads((HERE.parent / "release-train.toml").read_text(encoding="utf-8"))
+        dm = roster["crate"]["alice-det-math"]["version"]
+        text = (HERE.parent / "e2e" / "tests" / "law_to_storage_roundtrip.rs").read_text(encoding="utf-8")
+        self.assertRegex(glrb.det_math_identifier(text, dm) or "", r"^[0-9a-f]{64}$")
 
 
 if __name__ == "__main__":
