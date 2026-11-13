@@ -615,11 +615,14 @@ def unreadable_base_policy(env: dict[str, str]) -> str:
 
 
 def read_ids(source: Path | str, cfg: Config, target_dir: Path, with_previous: bool = True,
-             is_base: bool = False) -> dict[str, dict | None]:
+             is_base: bool = False, patches: str = "", lock: Path | None = None) -> dict[str, dict | None]:
     """{path: {"id": hex, "previous": [hex] | None} or None when the crate does not have it}, of the
     crate in the tree `source` (a Path) or of the published version `source` (a str) from the
     registry; the previous lists are read only where they are judged (the working tree): the base
-    may predate them; `is_base`: `source` is the base (its package is `base-package`)"""
+    may predate them; `is_base`: `source` is the base (its package is `base-package`); `patches`:
+    `[patch]` sections appended to the probe's manifest (the probe is the workspace root, the only
+    manifest whose patches cargo reads); `lock`: a Cargo.lock the probe starts from (the probe's
+    own lock is the one cargo uses, so a base tree's lock reaches the build only this way)"""
     package = cfg.base_pkg if is_base else cfg.package
     out: dict[str, dict | None] = {}
     for i, spec in enumerate(cfg.ids):
@@ -642,7 +645,9 @@ def read_ids(source: Path | str, cfg: Config, target_dir: Path, with_previous: b
                 f"[dependencies]\n{json.dumps(cfg.package if cfg.base_package is None else cfg.package.replace('-', '_'))} = {dep_toml}\n"
                 # "*" unifies with the package's own requirement, so the probe reads the same version
                 + "".join(f"{json.dumps(d)} = {{ version = \"*\", default-features = false }}\n" for d in cfg.probe_deps)
-                + "\n[workspace]\n", encoding="utf-8")
+                + "\n[workspace]\n" + patches, encoding="utf-8")
+            if lock is not None:
+                shutil.copyfile(lock, probe / "Cargo.lock")
             (probe / "src" / "main.rs").write_text(probe_source(cfg, spec, with_previous), encoding="utf-8")
             env = dict(os.environ, CARGO_TARGET_DIR=str(target_dir), RUSTFLAGS="")
             env.pop("RUSTC_WRAPPER", None)
@@ -908,6 +913,161 @@ def _sibling_at_date(name: str, real: Path, date: str) -> str:
         raise CheckError(f"../{name} has no commit of its origin main committed at or before {date} "
                          f"(the base predates the sibling)")
     return sha
+
+
+_REQ_OP_RE = re.compile(r"^\s*(\^|~|=|>=|<=|>|<)?\s*(\d+)(?:\.(\d+|\*))?(?:\.(\d+|\*))?")
+
+
+def _version_tuple(v: str) -> tuple[int, int, int]:
+    """(major, minor, patch) of a cargo version (pre-release and build metadata left out)"""
+    core = re.split(r"[-+]", v.strip(), maxsplit=1)[0].split(".")
+    nums = [int(x) for x in core[:3]] + [0] * (3 - len(core[:3]))
+    return nums[0], nums[1], nums[2]
+
+
+def version_satisfies(req: str, version: str) -> bool:
+    """whether `version` meets the cargo requirement `req` (comma-separated comparators; a bare
+    version is a caret requirement; `*` matches every version)"""
+    v = _version_tuple(version)
+    for part in req.split(","):
+        part = part.strip()
+        if part in ("", "*"):
+            continue
+        m = _REQ_OP_RE.match(part)
+        if m is None:
+            raise CheckError(f"unreadable version requirement {req!r}")
+        op = m.group(1) or "^"
+        major = int(m.group(2))
+        minor = None if m.group(3) in (None, "*") else int(m.group(3))
+        patch = None if m.group(4) in (None, "*") else int(m.group(4))
+        lo = (major, minor or 0, patch or 0)
+        if op == "^":
+            if major > 0 or minor is None:
+                hi = (major + 1, 0, 0)
+            elif minor > 0 or patch is None:
+                hi = (0, minor + 1, 0)
+            else:
+                hi = (0, 0, patch + 1)
+            ok = lo <= v < hi
+        elif op == "~":
+            hi = (major + 1, 0, 0) if minor is None else (major, minor + 1, 0)
+            ok = lo <= v < hi
+        elif op == "=":
+            ok = v[0] == major and (minor is None or v[1] == minor) and (patch is None or v[2] == patch)
+        elif op == ">=":
+            ok = v >= lo
+        elif op == ">":
+            ok = v > lo
+        elif op == "<=":
+            ok = v <= lo
+        else:
+            ok = v < lo
+        if not ok:
+            return False
+    return True
+
+
+def _git_main_alice_deps(manifest: str) -> list[tuple[str, str, str]]:
+    """(package, git url, version requirement) of every alice-* dependency a manifest takes by git
+    from a branch (`branch = "main"`, or no branch / rev / tag: the default branch); a rev or tag pin
+    is resolved by cargo as written and left alone"""
+    doc = tomllib.loads(manifest)
+    tables = [doc.get(t, {}) for t in ("dependencies", "dev-dependencies", "build-dependencies")]
+    tables.append(doc.get("workspace", {}).get("dependencies", {}))
+    for body in doc.get("target", {}).values():
+        tables += [body.get(t, {}) for t in ("dependencies", "dev-dependencies", "build-dependencies")]
+    out = []
+    for table in tables:
+        for key, spec in table.items():
+            if not isinstance(spec, dict) or "git" not in spec:
+                continue
+            name = spec.get("package", key)
+            if not name.startswith("alice") or "rev" in spec or "tag" in spec:
+                continue
+            if spec.get("branch", "main") != "main":
+                continue
+            out.append((name, spec["git"], str(spec.get("version", "*"))))
+    return out
+
+
+def _package_dirs(tree: Path) -> dict[str, Path]:
+    """{package name: its directory} of every manifest under `tree` that defines a package"""
+    out = {}
+    for m in sorted(tree.rglob("Cargo.toml")):
+        if "target" in m.relative_to(tree).parts:
+            continue
+        try:
+            pkg = tomllib.loads(m.read_text(encoding="utf-8")).get("package", {})
+        except (tomllib.TOMLDecodeError, UnicodeDecodeError):
+            continue
+        if isinstance(pkg.get("name"), str):
+            out.setdefault(pkg["name"], m.parent)
+    return out
+
+
+def base_workspace_lock(tree: Path, manifest: str) -> Path | None:
+    """the Cargo.lock of the base crate's own workspace: next to the crate's manifest, else at the
+    tree's root; None without one (a nested tool's lock elsewhere in the tree is another workspace)"""
+    return next((d / "Cargo.lock" for d in dict.fromkeys([(tree / manifest).parent, tree])
+                 if (d / "Cargo.lock").is_file()), None)
+
+
+def pin_lockless_git_main(tree: Path, manifest: str, work: Path, as_of: str) -> tuple[str, list[str]]:
+    """for a base tree without a Cargo.lock: the `[patch]` sections that hold every alice-* crate
+    the base reaches by git from a branch (directly, or through such a crate) at the newest commit
+    of that repository's main as of `as_of` (the base commit's committer date), checked against
+    each requirement that reaches it, and report lines naming each choice
+
+    Without a lock the probe resolves a branch at today's head, which a consumer's base cannot
+    follow once the upstream has taken a major version (a requirement such as "^2.0.0" against a
+    3.0.0 head). Each pinned commit is written out under `work` and patched in by path (a git patch
+    to the same url is refused by cargo as the same source); the repository and its tree are not
+    changed. A base whose own workspace has a Cargo.lock (at the tree's root or next to `manifest`, the
+    crate's manifest; a nested tool's own workspace and lock elsewhere in the tree do not count)
+    returns no patches (its lock is used instead). CheckError
+    when a repository cannot be cloned, has no commit on main by `as_of`, or its crate there does
+    not meet a requirement that reaches it"""
+    if base_workspace_lock(tree, manifest) is not None:
+        return "", []
+    queue = [m.read_text(encoding="utf-8") for m in dict.fromkeys([tree / "Cargo.toml", tree / manifest])
+             if m.is_file()]
+    pins: dict[str, tuple[str, str, Path, str]] = {}   # url -> (package, sha, crate dir, version)
+    clones: dict[str, Path] = {}
+    report: list[str] = []
+    while queue:
+        for name, url, req in _git_main_alice_deps(queue.pop()):
+            if url not in pins:
+                if url not in clones:
+                    dst = work / f"git-pin-{len(clones)}"
+                    r = subprocess.run(["git", "clone", "--quiet", "--filter=blob:none", "--no-checkout",
+                                        "--single-branch", "--branch", "main", url, str(dst)],
+                                       capture_output=True, text=True)
+                    if r.returncode != 0:
+                        raise CheckError(f"the base tree takes {name} from {url} (branch main) and it cannot be "
+                                         f"cloned to pin it: {r.stderr.strip()[-300:]}")
+                    clones[url] = dst
+                clone = clones[url]
+                sha = git(clone, "log", "-1", "--first-parent", f"--before={as_of}", "--format=%H", "main").strip()
+                if not sha:
+                    raise CheckError(f"the base tree takes {name} from {url} (branch main), which has no commit on "
+                                     f"main by the base's date {as_of}")
+                out = work / f"git-pin-{len(pins)}-{sha[:12]}"
+                archive_rev(clone, sha, out)
+                crate = _package_dirs(out).get(name)
+                if crate is None:
+                    raise CheckError(f"{url} at {sha[:12]} (main as of {as_of}) has no package {name}")
+                version = tomllib.loads((crate / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
+                pins[url] = (name, sha, crate, str(version))
+                report.append(f"{name} at {sha[:12]} ({version}, {url} main as of {as_of}, base has no Cargo.lock)")
+                queue += [m.read_text(encoding="utf-8") for m in sorted(out.rglob("Cargo.toml"))]
+            _, sha, _, version = pins[url]
+            if not version_satisfies(req, version):
+                raise CheckError(f"the base tree requires {name} {req} from {url} (branch main), but main as of the "
+                                 f"base's date {as_of} is {sha[:12]} with version {version}: no commit to pin that "
+                                 f"meets the requirement")
+    patch = "".join(f"\n[patch.{json.dumps(url)}]\n{json.dumps(name)} = {{ path = {json.dumps(str(crate))} }}\n"
+                    for url, (name, _, crate, _) in sorted(pins.items()))
+    return patch, report
 
 
 def materialize_pinned_siblings(tree: Path, real_parent: Path, work: Path,
@@ -1539,7 +1699,13 @@ def check_against(root: Path, base_ref: str | None, kind: str, base_from: str = 
             if r.returncode != 0:
                 raise CheckError(f"git {args[0]} {base_ref}: {r.stderr.strip()}")
         siblings = materialize_pinned_siblings(wt, root.resolve().parent, work, root, base_ref)
-        base = read_ids(wt, cfg, target, with_previous=False, is_base=True)
+        # the base resolves its git dependencies as it did then: with its own Cargo.lock, or, without
+        # one, with each branch pinned to its main as of the base commit (a branch at today's head may
+        # since have taken a major version the base cannot take)
+        base_lock = base_workspace_lock(wt, cfg.manifest)
+        patches, pinned = pin_lockless_git_main(wt, cfg.manifest, work,
+                                                git(root, "show", "-s", "--format=%cI", base_ref).strip())
+        base = read_ids(wt, cfg, target, with_previous=False, is_base=True, patches=patches, lock=base_lock)
         shutil.rmtree(fresh, ignore_errors=True)
         head = read_ids(root, cfg, target)
         problems, report = judge(base_version, head_version, base, head, changelog, cfg,
@@ -1550,6 +1716,7 @@ def check_against(root: Path, base_ref: str | None, kind: str, base_from: str = 
     what = ("the commit before the newest version bump on " + main_ref) if kind == "bump" else "the tag's tree"
     report.insert(0, f"base {base_ref}: {what} ({base_version}), working tree {head_version}")
     report.extend(f"base {base_ref} sibling {line}" for line in siblings)
+    report.extend(f"base {base_ref} git {line}" for line in pinned)
     return problems, report
 
 
