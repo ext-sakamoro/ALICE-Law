@@ -74,6 +74,8 @@ TEXT = {
         "yes": "yes", "no": "no",
         "arith": "Arithmetic", "arith_v": "alice-det-math {dm} in the train, arithmetic identifier `{sid}`; "
                                           "{req_lead}{req}",
+        "arith_main": "alice-det-math {dm} from its main branch, arithmetic identifier `{sid}`{drift}; {req_lead}{req}",
+        "drift": " (the release train names alice-det-math {roster}, not the version measured)",
         "req_none": "no alice-det-math", "req_self": "this crate is alice-det-math", "req_lead": "this crate requires ",
         "e2e": "End to end check", "e2e_in": "covered (`{name} = \"{req}\"`), digest `{digest}`{arches}",
         "e2e_main": "covered (`{name}` {req}, from its main branch), values digest `{digest}`{arches}",
@@ -96,6 +98,8 @@ TEXT = {
         "train": "release train", "train_v": "{crate} {version} ({state})、Law への依存: {dep}",
         "yes": "あり", "no": "なし",
         "arith": "算術", "arith_v": "train の alice-det-math {dm}、算術の識別子 `{sid}` {req_lead}{req}",
+        "arith_main": "main branch の alice-det-math {dm}、算術の識別子 `{sid}`{drift} {req_lead}{req}",
+        "drift": " (release train の alice-det-math は {roster} で、測った版と違う)",
         "req_none": "alice-det-math なし", "req_self": "この crate が alice-det-math", "req_lead": "この crate の要求は ",
         "e2e": "end to end 検査", "e2e_in": "対象 (`{name} = \"{req}\"`)、digest `{digest}`{arches}",
         "e2e_main": "対象 (`{name}` {req}、main branch から)、値の digest `{digest}`{arches}",
@@ -141,6 +145,24 @@ def cell(text: str) -> str:
     return t
 
 
+def golden_versions(golden: str) -> list[str]:
+    """the alice-det-math releases the golden records a digest for ("<version> <digest>" lines)"""
+    return [l.split()[0] for l in golden.splitlines() if len(l.split()) == 2]
+
+
+def version_key(v: str) -> tuple:
+    return tuple(int(x) if x.isdigit() else -1 for x in re.split(r"[.-]", v))
+
+
+def det_math_identifier(e2e_test: str, det_math: str) -> str | None:
+    """the arithmetic identifier of alice-det-math det_math in the end-to-end test: its row of KNOWN_SEMANTICS
+    (`("<version>", "<64 hex>", ...)`, on one line or spread over lines by rustfmt), or the single SEMANTICS_HEX an
+    earlier revision pinned"""
+    m = (re.search(r'\(\s*"' + re.escape(det_math) + r'",\s*"([0-9a-f]{64})"\s*[,)]', e2e_test)
+         or re.search(r'const SEMANTICS_HEX: &str = "([0-9a-f]{64})";', e2e_test))
+    return m.group(1) if m else None
+
+
 def golden_digest(golden: str, det_math: str | None) -> str | None:
     """the golden digest for an alice-det-math release: the line "<version> <digest>" of the golden
     file (an earlier revision held one digest alone)"""
@@ -166,11 +188,17 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
     if crate not in roster:
         raise InputError(f"{crate} is not in release-train.toml at ALICE-Law {rev[:12]}")
     entry = roster[crate]
-    dm = roster.get("alice-det-math", {}).get("version")
-    # the identifier of the roster's alice-det-math release: its row of KNOWN_SEMANTICS (an earlier
-    # revision pinned one hex, SEMANTICS_HEX)
-    sid = (re.search(r'\("' + re.escape(dm or "") + r'", "([0-9a-f]{64})"\)', e2e_test)
-           or re.search(r'const SEMANTICS_HEX: &str = "([0-9a-f]{64})";', e2e_test))
+    roster_dm = roster.get("alice-det-math", {}).get("version")
+    dm = roster_dm
+    if published is None and dm is not None and golden_digest(golden, dm) is None:
+        # the main-branch lane measures alice-det-math's main, not the release the roster names: the block reports
+        # the version measured (the latest the golden records with a KNOWN_SEMANTICS row) and shows the drift
+        measured = [v for v in golden_versions(golden) if det_math_identifier(e2e_test, v) is not None]
+        if measured:
+            dm = max(measured, key=version_key)
+    # the identifier of that alice-det-math release: its row of KNOWN_SEMANTICS (an earlier revision pinned one
+    # hex, SEMANTICS_HEX)
+    sid = det_math_identifier(e2e_test, dm) if dm is not None else None
     if dm is None or sid is None:
         raise InputError(f"ALICE-Law {rev[:12]}: no alice-det-math entry, or no identifier for alice-det-math {dm}")
     digest = golden_digest(golden, dm)
@@ -187,7 +215,8 @@ def law_facts(law: str, rev: str, crate: str) -> dict:
         raise InputError(f"ALICE-Law {rev[:12]}: conformance/gates.toml lists no gate")
     return {
         "version": entry.get("version", "?"), "state": entry.get("state", "?"),
-        "law_dependency": entry.get("law-dependency", True), "det_math": dm, "semantics": sid.group(1),
+        "law_dependency": entry.get("law-dependency", True), "det_math": dm, "semantics": sid,
+        "roster_det_math": roster_dm,
         "e2e_req": req, "digest": digest, "manifest_path": entry.get("manifest-path", "Cargo.toml"),
         "main_only": published is None,
         # the job that requires the two digests to be equal, and both runners named whole
@@ -329,8 +358,10 @@ def render(law: str, law_rev: str, crate: str, repo: str, crate_rev: str, lang: 
            "| | |", "|---|---|",
            f"| {t['train']} | " + t["train_v"].format(crate=crate, version=lf["version"], state=lf["state"],
                                                       dep=t["yes"] if lf["law_dependency"] else t["no"]) + " |",
-           f"| {t['arith']} | " + t["arith_v"].format(dm=lf["det_math"], sid=lf["semantics"], req=req,
-                                                      req_lead="" if crate == "alice-det-math" else t["req_lead"]) + " |",
+           f"| {t['arith']} | " + t["arith_main" if lf["main_only"] else "arith_v"].format(
+               dm=lf["det_math"], sid=lf["semantics"], req=req,
+               drift="" if lf["roster_det_math"] == lf["det_math"] else t["drift"].format(roster=lf["roster_det_math"]),
+               req_lead="" if crate == "alice-det-math" else t["req_lead"]) + " |",
            f"| {t['e2e']} | {e2e} |", "", t["conf"], ""]
     if cf["manifest"] is None:
         out += [t["no_manifest"], ""]
