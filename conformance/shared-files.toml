@@ -593,6 +593,12 @@ source = { repo = "ALICE-Physics", rev = "7885f7cf1a54f3193315538bf6204cb5826971
 repos = ["ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
+path = "scripts/wasm_js_test.sh"
+sha256 = "7eb45cc81e68ef869959cff8af597e1601c5b136f75fe68182e732ed97655026"
+source = { repo = "ALICE-Channel", rev = "3e930b54e1f20f2c8ef22c9670df1e14c0118598" }
+repos = ["ALICE-Channel", "ALICE-Crypto"]
+
+[[file]]
 path = "scripts/workflow_concurrency.py"
 pending = { since = "2026-11-13", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "affb6af8760329bb3ab02fb7b9d557d34ef1a58702fa0289d31bff750d8fea0d", owner = "ALICE-Analytics", planned = "e834cfc809ef95d1bc5e228519cde02e64395d4b", moved_from = { planned = "7ce91fbd3d43f838552d0d182d2d31de944a968b", target = "d3fec07112f6208ae429cdd89f859a318bbbc9aeae8403aec0fa0f83398ceba1" }, variants = { "affb6af8760329bb3ab02fb7b9d557d34ef1a58702fa0289d31bff750d8fea0d" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Zip"], "d3fec07112f6208ae429cdd89f859a318bbbc9aeae8403aec0fa0f83398ceba1" = ["ALICE-Law", "ALICE-SDF"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-SDF", "ALICE-Zip"]
