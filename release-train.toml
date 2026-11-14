@@ -21,21 +21,21 @@ github = "ext-sakamoro"
 
 [crate.alice-det-math]
 version = "0.6.1"
-sha = "d80446ebce73c5c397f7df12435cf574460400bf"
+sha = "6269efc2280a74301c91139117d5d01a5eca60df"
 state = "main"
 order = 0
 repo = "ALICE-DetMath"
 
 [crate.alice-crypto]
 version = "0.7.0"
-sha = "33496b48d145c3008de83bc521eba19cbf95c72e"
+sha = "5ab21f5da59530b6b0cb90728c608b79fb5ca8aa"
 state = "main"
 order = 1
 repo = "ALICE-Crypto"
 
 [crate.alice-zip]
-version = "0.11.0"
-sha = "c498e1769a71532239aed179e918734dd6329d8a"
+version = "0.12.0"
+sha = "95ef35acd5ae33bc1dfceaf4d3b74925c50775a4"
 state = "main"
 order = 2
 repo = "ALICE-Zip"
@@ -43,8 +43,8 @@ repo = "ALICE-Zip"
 [crate.alice-zip-cli]
 # libalice: the CLI / FFI crate in ALICE-Zip/libalice, released with alice-zip
 # (its Python wheel `libalice` follows the same version on PyPI)
-version = "4.0.0"
-sha = "c498e1769a71532239aed179e918734dd6329d8a"
+version = "5.0.0"
+sha = "95ef35acd5ae33bc1dfceaf4d3b74925c50775a4"
 state = "main"
 order = 3
 repo = "ALICE-Zip"
@@ -57,14 +57,14 @@ law-dependency = false
 
 [crate.alice-analytics]
 version = "0.7.0"
-sha = "cf16e1928fae6b73fa3c3e2792aa687175a29267"
+sha = "fd09b3e447107fb9a57750b8077b30fe696f9d6d"
 state = "main"
 order = 4
 repo = "ALICE-Analytics"
 
 [crate.alice-db]
-version = "0.6.0"
-sha = "5db2b15cb148aeed1bd83cb1479a0989ab2a044e"
+version = "0.7.2"
+sha = "f717243f9c4045be8df5748271cb231f948cc972"
 state = "main"
 order = 5
 repo = "ALICE-DB"
@@ -74,7 +74,7 @@ consumer-check-features = [["python"]]
 
 [crate.alice-physics]
 version = "4.0.0"
-sha = "8ea9fb86194670419332c2a4484b84b7dd675f2c"
+sha = "5e23fdf18315958031418d20111779a9faf2170a"
 state = "main"
 order = 10
 repo = "ALICE-Physics"
@@ -85,7 +85,7 @@ consumer-check-features = [["std", "python"]]
 
 [crate.alice-sdf]
 version = "7.0.0"
-sha = "0d5830e3f2c6fece513c5e6aa9fd2e4ea7c76962"
+sha = "24b7fc689d119792aa4855d357b855c0ba03af8a"
 state = "main"
 order = 11
 repo = "ALICE-SDF"
@@ -103,7 +103,7 @@ law-dependency = false
 
 [crate.alice-lol-macro]
 version = "0.4.0"
-sha = "82a015737b945baf4f1b46606de962d3f5387074"
+sha = "f620a63d1a8357a0c99527a18cdf9638e892afd6"
 state = "main"
 order = 7
 repo = "ALICE-LOL"
@@ -111,15 +111,15 @@ manifest-path = "alice-lol-macro/Cargo.toml"
 
 [crate.alice-lol]
 version = "0.5.0"
-sha = "82a015737b945baf4f1b46606de962d3f5387074"
+sha = "f620a63d1a8357a0c99527a18cdf9638e892afd6"
 state = "main"
 order = 14
 repo = "ALICE-LOL"
 manifest-path = "alice-lol/Cargo.toml"
 
 [crate.alice-edge]
-version = "0.4.0"
-sha = "5de16c5a19803578039d949da12f9fd0c6c7be1b"
+version = "0.5.0"
+sha = "f57d5172dac58704d99d2a756dd08d658cfb277b"
 state = "main"
 order = 12
 repo = "ALICE-Edge"
@@ -135,7 +135,7 @@ repo = "ALICE-Law"
 
 [crate.alice-ml]
 version = "0.4.0"
-sha = "f3cccc24e63bff90919e278a41d88b1e41c3383a"
+sha = "5b3d871c1577b6a5db4e41f5c619f1502db7322c"
 state = "main"
 order = 9
 repo = "ALICE-ML"
@@ -152,7 +152,7 @@ law-dependency = false
 
 [crate.alice-sync]
 version = "0.8.0"
-sha = "ef7472614c9d983e3d1811c5d7612dfdbc9a0e95"
+sha = "cb0fbde0836385a7aa3e3248c81ac2168cbfc3a5"
 state = "main"
 order = 18
 repo = "ALICE-Sync"
@@ -174,7 +174,7 @@ law-dependency = false
 
 [crate.alice-channel]
 version = "0.1.0"
-sha = "5f2b92cbd4ef1b0b128556a1c59e42d32ff026b8"
+sha = "e7de79ffae4898169f2ccd5f1af13e86c937fe0e"
 state = "main"
 order = 17
 repo = "ALICE-Channel"
@@ -190,7 +190,7 @@ law-dependency = false
 
 [crate.alice-font]
 version = "0.8.0"
-sha = "00a0193ffd4d454725f896d9303ab53d9a95b89c"
+sha = "696df29e5f917c28e0789ea5c1c2e2d9734a695d"
 state = "main"
 order = 19
 repo = "ALICE-Font"
