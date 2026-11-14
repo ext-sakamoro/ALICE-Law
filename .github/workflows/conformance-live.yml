@@ -190,6 +190,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/no_panic_ratchet.py --local "${GITHUB_REPOSITORY#*/}=." --jobs 4
 
+  # The unanchored-pass ratchet (scripts/pass_anchor_ratchet.py, baseline in conformance/pass-anchor-baseline.toml):
+  # every release-train repository's manifest at its default branch; a count of `pass` cells whose evidence names no
+  # anchor above or below its row, a manifest with no row, a row off the roster, or 0 manifests read is red. The
+  # total is printed on its own line (the number the roster report shows).
+  pass-anchor:
+    name: Every release-train repository's unanchored pass cells only go down
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the ratchet
+        run: python3 scripts/test_pass_anchor_ratchet.py
+
+      - name: The release-train repositories' counts against the baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/pass_anchor_ratchet.py | tee -a "$GITHUB_STEP_SUMMARY"
+
   # The structural lint ratchet (scripts/structural_lint.py, rules in lint/ast-grep, baseline in
   # conformance/structural-lint-baseline.toml): every public ALICE-* repository at its default branch (this one at
   # the commit under test); a count of production prints, of HashMap / HashSet iterations or of ast-grep-ignore
