@@ -9,6 +9,8 @@
 name: Structural lint ratchet (ci)
 
 on:
+  # also on demand, so a run can be had at a commit whose own push did not touch the paths below
+  workflow_dispatch:
   push:
     branches: ["ci/**"]
 

@@ -387,6 +387,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `scripts/gen-law-readme-block.py`: the block of alice-det-math itself says "this crate is alice-det-math" instead of "this crate requires no alice-det-math"
 - `scripts/public_text_check.py`: file names git quotes (non-ASCII) or ends with a tab in a diff header (a space) were skipped in `--range` and stopped `--tree`; the paths now come from NUL-separated listings (`ls-tree -z`, `diff-tree -z`, the root commit included) and each file's added lines from its own diff with a literal pathspec
 - `tools/no-panic-scan`: `#[cfg(all(test, not(..)))]` のように `all` の直下に `test` がある item と file module を試験のものとして数えない (`all` の中に `not(` が 1 つでもあると本番として数えていた) `test` が `not(..)` / `any(..)` の中にしか無い `all` は従来どおり本番 全公開 repository で数え直して finding 0
+- ci/** の 8 workflow (g1-coverage / holder-baseline / crates-conformance / branch-main / public-text-baseline / runner-pin / no-panic / structural-lint) を `workflow_dispatch` でも走らせる path を変えた push の後に別の commit を積むと、最後の commit ではその push の paths に当たらず run が無く、取り込みの受領が得られなかった
 
 ### Security
 - `scripts/public_text_check.py`: 追跡している file の container (zip / tar / gzip / bzip2 / xz / zstd) の member を区切って読み、読んだ bytes が上限 (`CONTAINER_BUDGET`、512 MiB) を超えた所で止める (以前は member を全部展開してから上限と比べていた) member の数も `CONTAINER_MEMBERS` (65536) までにし、超えた container は読めなかった container として報告する
