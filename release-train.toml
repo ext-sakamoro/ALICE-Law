@@ -1,564 +1,206 @@
-# The release train of the core ALICE crates: which version each one is being
-# released at, its place in the order, its state, and where it is.
+# The core ALICE crates at commits of their main branches: for each one, the version its
+# manifest has at that commit, its place in the order and its repository. Nothing is
+# published to crates.io; consumers take each crate from its repository's main branch.
 #
 # state:
-#   published       on crates.io at `version` (scripts/release_train.py checks it)
-#   prepared        the release commit is on a branch of the crate's repository,
-#                   verified and green; it may be published once its upstreams are
-#   prepared-local  the release is built locally against the planned upstreams, not
-#                   pushed yet
-#   planned         the version and requirements are the plan; nothing is built yet
-#   exempt          not published (this repository: it checks the others)
+#   main     the crate at `sha`, a commit of its repository's main branch, whose manifest has
+#            `version` (scripts/release_train.py check)
+#   exempt   not a crate of the train (this repository: it checks the others)
 #
-# What a crate requires of the others is read from its Cargo.toml at the release
-# checkout (`publish-gate --manifest`), not listed here, so there is one source for
-# it. `order` is the order of the train: a crate comes after every crate it requires.
-#
-# The publisher updates `state` here in the same step as the publish, so this file
-# is the plan the next publish is checked against:
-#   python3 scripts/release_train.py next
-#   python3 scripts/release_train.py publish-gate <crate> --manifest <its Cargo.toml>
+# `sha` and `version` are written by `python3 scripts/release_train.py record`, never by
+# hand: a repository the end to end check records (e2e/golden/values.provenance) takes the
+# commit recorded there, the others the head of main. Re-record after the e2e bless.
+# What a crate requires of the others is read from its Cargo.toml at `sha`. `order` is the
+# order of the train: a crate comes after every crate it requires.
+#   python3 scripts/release_train.py check --repos-root <dir of checkouts>
+#   python3 scripts/release_train.py record --repos-root <dir of checkouts>
 
 [train]
-# the crates.io owners every release must have, and no other (publish-verify)
-owners = ["ext-sakamoro"]
-# the GitHub owner of the repositories (required-ci reads the check runs of the commit there)
+# the GitHub owner of the repositories (check reads the main CI runs of each commit there)
 github = "ext-sakamoro"
 
 [crate.alice-det-math]
-# 0.5.1 は max / min / max64 / min64 を足し (算術の識別子が 135c407d… から 85e08846… に変わる)、0.5.0 の
-# 識別子を PREVIOUS_SEMANTICS_IDS に残して check_semantics が検証済みの以前の識別子として受ける版
-# CHANGELOG に日付つきの [0.5.1] - 2026-10-15 を入れた DetMath main e42216e から公開する
-# (その後の main の変更は次の版の [Unreleased])
-version = "0.5.1"
-state = "published"
+version = "0.6.1"
+sha = "d80446ebce73c5c397f7df12435cf574460400bf"
+state = "main"
 order = 0
 repo = "ALICE-DetMath"
-must-contain = ["e42216e669dd7f05ddd1bd40a9af9195365bde02"]
-changelog-has = [
-    "`max` / `min` / `max64` / `min64` を追加",
-    "`PREVIOUS_SEMANTICS_IDS` に残し",
-]
-required-ci = [
-    { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (macos-15-intel)", "Test (ubuntu-latest)", "Test (ubuntu-24.04-arm)", "Test (windows-latest)", "Test (wasm32-wasip1 via wasmtime)"] },
-    { workflow = "CI", job = "Clippy (-D warnings)" },
-    { workflow = "CI", job = "no_std (rlib, thumbv7em-none-eabihf)" },
-    { workflow = "CI", job = "MSRV (rust-version = 1.85)" },
-    { workflow = "CI", job = "Feature powerset (cargo-hack)" },
-    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "actionlint (workflow YAML)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Security & Hygiene", job = "Stub / mock / dbg / libm guard (grep)" },
-    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_simd_parity" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_accuracy" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_round_exact" },
-]
 
 [crate.alice-crypto]
-version = "0.4.1"
-state = "published"
+version = "0.7.0"
+sha = "33496b48d145c3008de83bc521eba19cbf95c72e"
+state = "main"
 order = 1
 repo = "ALICE-Crypto"
 
 [crate.alice-zip]
-version = "0.10.0"
-state = "published"
+version = "0.11.0"
+sha = "c498e1769a71532239aed179e918734dd6329d8a"
+state = "main"
 order = 2
 repo = "ALICE-Zip"
 
 [crate.alice-zip-cli]
 # libalice: the CLI / FFI crate in ALICE-Zip/libalice, released with alice-zip
 # (its Python wheel `libalice` follows the same version on PyPI)
-version = "3.1.0"
-state = "published"
+version = "4.0.0"
+sha = "c498e1769a71532239aed179e918734dd6329d8a"
+state = "main"
 order = 3
 repo = "ALICE-Zip"
 consumer-features = [["cli", "codec"]]
 consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["python"]]
 manifest-path = "libalice/Cargo.toml"
-tag = "alice-zip-cli-v{version}"
 # a CLI / FFI crate: not a library this repository links (scripts/dep_consistency.py CORE)
 law-dependency = false
 
 [crate.alice-analytics]
-version = "0.6.0"
-state = "published"
+version = "0.7.0"
+sha = "cf16e1928fae6b73fa3c3e2792aa687175a29267"
+state = "main"
 order = 4
 repo = "ALICE-Analytics"
-# 0.6.0 は privacy module の時計から seed を取る constructor を外し、RandomizedResponse::new(ε, seed) で seed を
-# 入力にする版 (互換でない) CHANGELOG に日付つきの [0.6.0] - 2026-10-15 を入れ、README の privacy の行を実際に
-# 合わせ、include で package を crate の file に限った Analytics main b1b5031 から公開する
-must-contain = ["b1b5031a4a8b01026c719e36d7ad256a9fc566ce"]
-changelog-has = [
-    "**破壊的変更:** deprecated な `privacy` module から時刻で seed する constructor を削除した",
-    "`alice-det-math` の要求を 0.5.1 に上げた",
-]
-required-ci = [
-    { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-24.04-arm)", "Test (ubuntu-latest)", "Test (windows-latest)"] },
-    { workflow = "CI", job = "Build (no_std, host + thumbv7em-none-eabihf)" },
-    { workflow = "CI", job = "Clippy (pedantic, -D warnings)" },
-    { workflow = "CI", job = "MSRV (rust-version = 1.87)" },
-    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
-    { workflow = "CI", job = "Docs lint", legs = ["Docs lint (macos-latest)", "Docs lint (ubuntu-latest)", "Docs lint (windows-latest)"] },
-    { workflow = "CI", job = "Feature powerset (cargo-hack, depth 2)" },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "actionlint (workflow YAML)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec advisories)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (licenses + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Security & Hygiene", job = "cargo-semver-checks (API compatibility)" },
-    { workflow = "Security & Hygiene", job = "Stub / dbg guard (grep)" },
-    { workflow = "Security & Hygiene", job = "Package integrity (the published .crate builds on its own)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_event_parse" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_metric_aggregate" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_sketch_insert" },
-    { workflow = "Release profile", job = "Golden tests, release profile", legs = ["Golden tests, release profile (macos-latest)", "Golden tests, release profile (ubuntu-latest)"] },
-]
 
 [crate.alice-db]
-# 0.5.1 は analytics feature の alice-analytics の要求を >=0.5, <0.7 に広げ、0.6.0 を受ける版 (公開済みの 0.5.0 は ^0.5
-# のままで、alice-edge 0.3.0 の db feature 経由で link されると alice-analytics が 2 版になる) CHANGELOG に日付つきの
-# [0.5.1] - 2026-10-15 を入れた DB main e9c1729 から公開する
-# 公開済みの 0.5.0 は DB main 153e6fe から (created_at を入力にし、check_semantics で識別子を受ける版)
-version = "0.5.1"
-state = "published"
+version = "0.6.0"
+sha = "5db2b15cb148aeed1bd83cb1479a0989ab2a044e"
+state = "main"
 order = 5
 repo = "ALICE-DB"
-must-contain = ["e9c172940f7111d300ce7062ccdf811d7fac7d92"]
-changelog-has = [
-    "`analytics` feature の `alice-analytics` の要求を `0.5` から `>=0.5, <0.7` に広げ、0.6 も解決できるようにした",
-    "- 版を 0.5.1 にした",
-]
-required-ci = [
-    { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-24.04-arm)", "Test (ubuntu-latest)", "Test (windows-latest)"] },
-    { workflow = "CI", job = "Clippy (pedantic, -D warnings)" },
-    { workflow = "CI", job = "MSRV (rust-version = 1.87)" },
-    { workflow = "CI", job = "Feature powerset (cargo-hack, depth 2)" },
-    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
-    { workflow = "CI", job = "Python (maturin build + README example test)" },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "actionlint (workflow YAML)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec advisories)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (licenses + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Security & Hygiene", job = "Stub / dbg guard (grep)" },
-    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_query_parse" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_serialize_roundtrip" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_index_lookup" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_law_record" },
-    { workflow = "Release profile", job = "Release goldens", legs = ["Release goldens (ubuntu-latest)", "Release goldens (macos-latest)"] },
-]
 consumer-features = [["analytics", "crypto", "ffi", "fs", "open-file-audit", "sdf"]]
 consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["python"]]
 
 [crate.alice-physics]
-version = "3.1.0"
-state = "published"
-order = 6
+version = "4.0.0"
+sha = "8ea9fb86194670419332c2a4484b84b7dd675f2c"
+state = "main"
+order = 10
 repo = "ALICE-Physics"
+manifest-path = "crates/alice-physics/Cargo.toml"
 consumer-features = [["analytics", "ffi", "gpu-solver-bridge", "neural", "parallel", "privacy-crypto", "simd", "std"], ["std", "wasm"]]
 consumer-features-why = "python は std を有効にしない (no_std では compile できない) ので std と組にする wasm と ffi は互いに排他 (src/lib.rs の compile_error) なので別の組にする python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["std", "python"]]
-# 3.1.0 は alice-db の要求を 0.5、alice-analytics の要求を >=0.5, <0.7 にし、公開済みの alice-db 0.5.1 と
-# alice-analytics 0.6.0 を受け、alice-det-math 0.5.1 の算術の識別子を受ける版 (以前の識別子は
-# PREVIOUS_PHYSICS_SEMANTICS_IDS で受理) LawCheck は値を持たない enum のままで、以前の識別子は
-# PhysicsWorld::world_snapshot_ids で読む (cargo semver-checks は 3.0.1 に対して consumer の 5 組で互換でない変更 0 件)
-# CHANGELOG に日付つきの [3.1.0] - 2026-10-16 を入れた Physics main 3f83c86 から公開する Mac Intel の leg は main への
-# push で走る (ci/** の branch では走らない) ので、gate は main の CI が終わってから回す
-# 公開済みの 3.0.1 は 306d8d6f から ([lib] crate-type を rlib だけにした版) 3.0.0 から続く 2 commit と 3.0.1 の 4 commit を
-# patch id (git patch-id --stable) でも持つ
-must-contain = ["3f83c8649f87177bc3dc426b00656454074739c2"]
-must-contain-patch = [
-    "713407beaf620dcc766632eab58d414d13146230",  # fix: 等しいゼロを max / min にかけた時の符号を全 target で揃える
-    "12181a10bfd8ab5d0dfc5003f4bacd151154e79e",  # ci: library の code で f32 / f64 の max と min を使えなくする (wasm / python の lib pass を含む版)
-    "2286e4053e9cdddc986f6bcc294a448af2d72e78",  # fix: no_std の crate から依存として build できるようにする (3.0.1)
-    "12480b7cacb010edfb6f1ad61429af52ae066d55",  # fix: binding を crate type の指定つきで build し、README の手順を CI で実行する
-    "e63c33ec8ab397dd53c0214547c30b07c3c532c7",  # ci: full の preflight で Python の wheel を maturin で作り binding の試験を走らせる
-    "73f6ceb903bd6958138f91b22d1d13e7d89d8205",  # test: no_std の依存 build で比較 0 件を exit 2 にする判定を試験で固定する
-]
-changelog-has = [
-    "- 版を 3.1.0 にした `alice-db` の要求を 0.5、`alice-analytics` の要求を `>=0.5, <0.7` にして",
-    "`world_participant::FieldLayout::Channels { count }`",
-]
-# CI jobs that must be green on the published commit, with every leg named: the tests
-# on every OS and target (x86_64 and aarch64, wasm), clippy with the library gate (no
-# f32 / f64 max and min), the wheel
-required-ci = [
-    { workflow = "CI", job = "Test", legs = [
-        "Test (ubuntu-latest)", "Test (ubuntu-24.04-arm)", "Test (macos-latest)", "Test (macos-15-intel)",
-        "Test (windows-latest)", "Test (WebAssembly binding from JavaScript)", "Test (wasm32-wasip1 via wasmtime)",
-        "Test (neural / replay / analytics via crates.io siblings)",
-    ] },
-    { workflow = "CI", job = "Clippy" },
-    { workflow = "Python binding", job = "Build, install and test the wheel" },
-]
-# 決定論試験の release leg (macos-latest は fma の分かれを見る唯一の leg) は 3.0.1 の commit の後に
-# main に入ったので、次の版の entry で足す
 
 [crate.alice-sdf]
-version = "6.1.0"
-state = "published"
-order = 7
+version = "7.0.0"
+sha = "0d5830e3f2c6fece513c5e6aa9fd2e4ea7c76962"
+state = "main"
+order = 11
 repo = "ALICE-SDF"
 consumer-features = [["aaa", "all-shaders", "asp", "blinkscript", "cli", "codec", "destruction", "ffi", "font", "gi", "glsl", "godot", "gpu", "gpu-mesh", "hlsl", "image", "jit", "msl", "openvdb", "physics", "rust", "sdf-cache", "svo", "svo-gpu", "terrain", "texture-fit", "unity", "unreal", "volume", "wasm"]]
 consumer-features-why = "python は cargo check で見る (PyO3 の extension module で link は maturin が行う、cargo build の cdylib link は -undefined dynamic_lookup が無く macOS で失敗する)"
 consumer-check-features = [["python"]]
-# 6.1.0 は tight_aabb::analytic_aabb が扱う形を広げた版 (追加だけ、cargo semver-checks は 6.0.0 に対して
-# consumer の feature の組すべてで互換でない変更 0 件) CHANGELOG に日付つきの [6.1.0] - 2026-10-16 を入れた
-# SDF b3f02d2 の上の d3a0646 (self-hosted runner の 3 workflow から workflow_dispatch を外した) と 8b0eaed
-# (Cargo.toml のコメントの文言、公開する text の検査器の pin) を経た 8b0eaed から公開する Security & Hygiene
-# は ci/** の branch では走らず、Fuzz は path filter で飛ぶので、main に着地した後に dispatch して gate を回す
-# 6.0.0 の 77bcbaf と 2 周目の max / min の変更は 8b0eaed の祖先にあるので patch id も残す
-must-contain = ["8b0eaed533c83a9c61a2563b4ca15d1a01785bd3", "77bcbaf1d3a318d660b93b9f32468f7d78b1bead"]
-must-contain-patch = [
-    "db667f3fc8beb9916c306c0a1e76709ebe5238a1",  # deps: alice-det-math 0.5、version 6.0.0
-    "662232e39bd46ac984a62e121acb15946f2495e6",  # jit: simd_sincos_det を det-math 0.5 の範囲還元に
-    "c9b523f749dc45163eb379fc1f9ba51319f991d2",  # deps: alice-physics 3、alice-det-math を 1 版に
-    "82d65ad8870621f7f456e6ccf96309d1dd0aed34",  # library の f32 / f64 / f32x8 の max・min を Law / raw に
-    "dd393a4a7d8dcd3c3343754c504457ee81424518",  # prim_table_simd の SIMD max・min を Law に
-    "3af712708a9b776764fbcc03eddb8fd13fbc681f",  # Real::max / min (f32x8) を比較と blend に
-    "05a3b69dcba43e5983b3d04505b9ff7ac073bdef",  # f32x8 の Law min / max の NaN の組
-    "306c6d2ae597a5519cbf3f3f028d9df926f6c574",  # libm の allow の下に残っていた max・min
-    "282a6edf2faea1ee7a7c58c052a3dfc72feb0802",  # ci: library の max・min を禁じる clippy と canary
-    "6c9b1d77801ac9340ebe3077ff7428c6d7e2c6ff",  # ci: raw max/min の manifest を default-deny に
-]
-changelog-has = [
-    "- 版を 6.1.0 にした `tight_aabb::analytic_aabb` が扱う形を広げた",
-    "`tight_aabb::analytic_aabb` が `PolarRepeat` / `Twist` / `Taper` / `IcosahedralSymmetry` / `OctantMirror`",
-]
-required-ci = [
-    { workflow = "CI", job = "Test — Linux (x86_64)" },
-    { workflow = "CI", job = "Test — macOS (ARM64)" },
-    { workflow = "CI", job = "Test — Windows (x86_64)" },
-    { workflow = "CI", job = "Clippy (core strict, -D warnings)" },
-    { workflow = "CI", job = "Wiring guard", legs = ["Wiring guard (ubuntu-latest)", "Wiring guard (macos-latest)", "Wiring guard (windows-latest)"] },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "MSRV (rust-version = 1.85)" },
-    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
-    { workflow = "CI", job = "Bridges (each feature alone, no stubs)" },
-    { workflow = "CI", job = "GPU parity (lavapipe)" },
-    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
-    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_asdf_decode" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_bincode_roundtrip" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_eval_parity" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_sdf_eval" },
-]
 
 [crate.alice-llm]
-# alice-lol 0.4.0 の llm-bridge が使う API (llama3::GrammarGenResult / GrammarPrefix /
-# Llama3Model::generate_grammar_prefixed) を含めて公開する crates.io の 1.6.0 までには無い
-# 1.6.0 との間に互換でない変更があるので 2.0.0 (1.3.0 から 1.6.0 は 2.0.0 の公開後に yank する)
-# この repository は alice-llm を引かない
-version = "2.0.0"
-state = "published"
-order = 8
+version = "5.0.0"
+sha = "be521bda68c5bf70557d51e63b70ed7d21eb3cb2"
+state = "main"
+order = 6
 repo = "ALICE-LLM"
 law-dependency = false
-must-contain = ["b3e94726d69effe1b5e0c1a3e1b39e76e7e4cf3c"]
-changelog-has = [
-    "**Breaking:** code built against 1.x needs a change in these places",
-    "`Llama3Model::generate_grammar_prefixed(",
-]
-required-ci = [
-    { workflow = "CI", job = "Test", legs = ["Test (ubuntu-latest / default)", "Test (ubuntu-latest / simd)", "Test (macos-latest / default)", "Test (macos-latest / simd)"] },
-    { workflow = "CI", job = "Clippy", legs = ["Clippy (-D warnings, default)", "Clippy (-D warnings, simd)", "Clippy (-D warnings, full)"] },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "rustdoc (-D warnings, docs.rs feature set)" },
-    { workflow = "CI", job = "Build (release)" },
-    { workflow = "CI", job = "Examples & server compile" },
-    { workflow = "CI", job = "GPU pipeline creation smoke test", legs = ["GPU pipeline creation smoke test (ubuntu-latest)", "GPU pipeline creation smoke test (macos-latest)"] },
-    { workflow = "CI", job = "Docs lint", legs = ["Docs lint (ubuntu-latest)", "Docs lint (macos-latest)", "Docs lint (windows-latest)"] },
-    { workflow = "CI", job = "actionlint (workflow YAML validation)" },
-    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_gbnf_parse" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_gguf_parse" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_sampling" },
-]
 
 [crate.alice-lol-macro]
-version = "0.3.0"
-state = "published"
-order = 9
+version = "0.4.0"
+sha = "82a015737b945baf4f1b46606de962d3f5387074"
+state = "main"
+order = 7
 repo = "ALICE-LOL"
-tag = "alice-lol-macro-v{version}"
 manifest-path = "alice-lol-macro/Cargo.toml"
-# 0.3.0 は ALICE-LOL の geometry 識別子と G2 の raw max / min の版、alice-llm の要求を "2" に
-# 上げた版 (64a904b) と、CHANGELOG に日付を入れた版 (4c86842 まで) と一緒に公開する
-# ALICE-LOL の workspace は sibling repository を path で引くので、gate と公開は sibling を
-# ALICE-LOL の Cargo.lock の版に合わせた checkout の隣で行う (SDF v6.0.0、Zip v0.10.0、Physics v3.0.0、
-# Kinematics 0.2.0、LLM v2.0.0)
-must-contain = ["4c8684237d764272a4e11cd8384a3f60a9adf6a5"]
-changelog-has = [
-    "`SdfNode::taper(child, factor)` を呼ぶ",
-    "`::alice_lol::Vec2` を生成する",
-    "ライセンスは Apache-2.0 のみ",
-]
-required-ci = [
-    { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-latest physics)", "Test (ubuntu-latest llm-bridge)", "Test (ubuntu-latest backend-parity)", "Test (ubuntu-latest roblox)"] },
-    { workflow = "CI", job = "Clippy" },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "MSRV (rust-version = 1.90)" },
-    { workflow = "CI", job = "Docs gates", legs = ["Docs gates (ubuntu-latest)", "Docs gates (macos-latest)", "Docs gates (windows-latest)"] },
-    { workflow = "CI", job = "Wiring guard", legs = ["Wiring guard (ubuntu-latest)", "Wiring guard (macos-latest)", "Wiring guard (windows-latest)"] },
-    { workflow = "CI", job = "Geometry digests", legs = [
-        "Geometry digests (ubuntu-latest)", "Geometry digests (ubuntu-latest --release)",
-        "Geometry digests (windows-latest)", "Geometry digests (windows-latest --release)",
-        "Geometry digests (macos-latest)", "Geometry digests (macos-latest --release)",
-    ] },
-    { workflow = "CI", job = "Registry consumer" },
-    { workflow = "CI", job = "GPU parity (lavapipe)" },
-    { workflow = "CI", job = "Degenerate-parameter grid (ubuntu)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_lol_parse" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_lol_to_wgsl" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_lol_eval" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_lol_emit_parity" },
-    { workflow = "Conformance", job = "Conformance corpus (score + controls)" },
-    { workflow = "Grid teeth check", job = "Grid teeth check (5 historical-regression mutants)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
-]
 
 [crate.alice-lol]
-version = "0.4.2"
-state = "published"
-order = 10
+version = "0.5.0"
+sha = "82a015737b945baf4f1b46606de962d3f5387074"
+state = "main"
+order = 14
 repo = "ALICE-LOL"
-tag = "alice-lol-v{version}"
 manifest-path = "alice-lol/Cargo.toml"
-# 0.4.2 は LOL_SEMANTICS_ID を build に入った alice-det-math の識別子の表 (LOL_SEMANTICS_BY_DET_MATH) から
-# 選ぶ版 (0.4.1 は alice-det-math 0.5.0 の識別子で畳んだ定数を持ち、alice-det-math 0.5.1 で解決すると自分の
-# pin の fold と一致しない) CHANGELOG に日付つきの [0.4.2] を入れた LOL main b166a75 から公開する
-must-contain = ["b166a75d51cd80cbfc8735bffbe9f1ef39fe595b"]
-changelog-has = [
-    "`LOL_SEMANTICS_ID` が alice-det-math の版に追従していなかった",
-    "`alice-lol` の版を 0.4.2 にし",
-]
-required-ci = [
-    { workflow = "CI", job = "Test", legs = ["Test (macos-latest)", "Test (ubuntu-latest physics)", "Test (ubuntu-latest llm-bridge)", "Test (ubuntu-latest backend-parity)", "Test (ubuntu-latest roblox)"] },
-    { workflow = "CI", job = "Clippy" },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "MSRV (rust-version = 1.90)" },
-    { workflow = "CI", job = "Docs gates", legs = ["Docs gates (ubuntu-latest)", "Docs gates (macos-latest)", "Docs gates (windows-latest)"] },
-    { workflow = "CI", job = "Wiring guard", legs = ["Wiring guard (ubuntu-latest)", "Wiring guard (macos-latest)", "Wiring guard (windows-latest)"] },
-    { workflow = "CI", job = "Geometry digests", legs = [
-        "Geometry digests (ubuntu-latest)", "Geometry digests (ubuntu-latest --release)",
-        "Geometry digests (windows-latest)", "Geometry digests (windows-latest --release)",
-        "Geometry digests (macos-latest)", "Geometry digests (macos-latest --release)",
-    ] },
-    { workflow = "CI", job = "Registry consumer" },
-    { workflow = "CI", job = "GPU parity (lavapipe)" },
-    { workflow = "CI", job = "Degenerate-parameter grid (ubuntu)" },
-    { workflow = "CI", job = "Programs in the documents export (ubuntu, release)" },
-    { workflow = "CI", job = "actionlint (workflow YAML 検証)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_lol_parse" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_lol_to_wgsl" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_lol_eval" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_lol_emit_parity" },
-    { workflow = "Conformance", job = "Conformance corpus (score + controls)" },
-    { workflow = "Grid teeth check", job = "Grid teeth check (5 historical-regression mutants)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
-]
 
 [crate.alice-edge]
 version = "0.4.0"
-state = "planned"
-order = 11
-# tag は v{version} (0.2.0 から正) 旧書式の alice-edge-v0.1.0 (d3506b9) と、v0.2.1 と同じ commit を指す alice-edge-v0.2.1 も remote に残す
-tag = "v{version}"
+sha = "5de16c5a19803578039d949da12f9fd0c6c7be1b"
+state = "main"
+order = 12
 repo = "ALICE-Edge"
 consumer-features = [["asp", "codec", "dashboard", "db", "depth-camera", "edge-pipeline", "ffi", "law", "ml", "mqtt", "pyo3", "sdf", "sensors", "serde-raw", "std", "zip"]]
 consumer-features-why = "外す feature: sensors-hw (rppal は特定の Linux board の GPIO 専用で他の target では build できない)"
 exclude-features = { sensors-hw = "rppal は特定の Linux board の GPIO 専用で、他の target では build できない" }
-# 0.4.0 は保存形式と wire に semantics 識別子を持たせる版 (重み file の header、MQTT の binary payload 62 byte、
-# JSON / OTA の semantics_id、C / C# / Python の評価関数の識別子の引数) 互換でない変更 CoefficientPayload の
-# serde 実装は opt-in の feature serde-raw に移した (consumer の組に足した) 公開済みの 0.3.0 は Edge main 2ddf8be から
-# 公開する commit は Edge main で日付つきの [0.4.0] を入れて決め、prepared にする must-contain は今の Edge main 6bbc0ed
-must-contain = ["6bbc0ed26f6a593a5258bb6d2bef1517b0159111"]
-required-ci = [
-    { workflow = "CI", job = "Test", legs = ["Test (ubuntu-latest)", "Test (macos-latest)", "Test (windows-latest)", "Test (ubuntu-24.04-arm)"] },
-    { workflow = "CI", job = "MSRV (rust-version = 1.87)" },
-    { workflow = "CI", job = "no_std cross-compile (thumbv7em)" },
-    { workflow = "CI", job = "Clippy (-D warnings)" },
-    { workflow = "CI", job = "Feature powerset (cargo-hack, depth 2)" },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
-    { workflow = "CI", job = "actionlint (workflow YAML)" },
-    { workflow = "CI", job = "Docs lint", legs = ["Docs lint (ubuntu-latest)", "Docs lint (macos-latest)", "Docs lint (windows-latest)"] },
-    { workflow = "CI", job = "Python (maturin build + binding tests)" },
-    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
-    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_delta_roundtrip" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_fit_linear" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_piecewise" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_polyfit" },
-]
 
 [crate.alice-law-integration]
 version = "0.0.0"
 state = "exempt"
-order = 12
+order = 8
 repo = "ALICE-Law"
 
 [crate.alice-ml]
-# alice-edge 0.2.0 の ml feature は公開済みの alice-ml 0.2.0 (alice-* は optional の alice-db だけ、
-# alice-edge は使わない) を引く ML の main は alice-det-math 0.4 / alice-db 0.2.0-beta.2 を要求するので、
-# 次の版をここで prepared にすると publish-gate が拒否する (最新でない版を受ける要求) det-math 0.5 /
-# db 0.4 に上げてから次の版にする
-version = "0.2.0"
-state = "published"
-order = 13
+version = "0.4.0"
+sha = "f3cccc24e63bff90919e278a41d88b1e41c3383a"
+state = "main"
+order = 9
 repo = "ALICE-ML"
 # この repository は alice-ml を引かない (scripts/dep_consistency.py CORE の外)
 law-dependency = false
 
 [crate.alice-kinematics]
-# 0.2.1 は lol feature の alice-lol の要求を 0.4 に上げ (0.2.0、未公開)、配布 package を crate 本体に
-# 限り、stable の toolchain で build できない rerun-viz feature を非公開の example crate に移した版
-# (1cc1b09 まで) 公開済みの 0.1.0 は alice-lol ^0.3 を要求するので、alice-lol 0.3.0 の yank の前に
-# 公開する この repository は alice-kinematics を引かない
-version = "0.2.1"
-state = "published"
-order = 14
+version = "0.4.0"
+sha = "6919b0feddc48c2000cb840f162c33dca5f9b54c"
+state = "main"
+order = 15
 repo = "ALICE-Kinematics"
-tag = "alice-kinematics-v{version}"
 law-dependency = false
-must-contain = ["1cc1b09e085a2ff76f75fc3a49edb33a14d200cf"]
-changelog-has = [
-    "`include` allowlist を Cargo.toml に追加し、配布 package を crate 本体に限定",
-    "`rerun-viz` feature と optional な `rerun` 依存をライブラリから削除",
-]
-required-ci = [
-    { workflow = "CI", job = "test" },
-    { workflow = "CI", job = "clippy" },
-    { workflow = "CI", job = "fmt" },
-    { workflow = "CI", job = "doc" },
-    { workflow = "CI", job = "actionlint (workflow YAML 検証)" },
-    { workflow = "rerun-viz example", job = "build-example" },
-]
 
 [crate.alice-sync]
-# Law に早く載せる crate (README の ALICE-Law 統合の節を置くため) 0.6.1 は公開済み (tag v0.6.1 = 4e15f2e)
-# license は crate 側の宣言に従う (この repository は alice-sync を引かないので、license の向きの問題は無い)
-# alice-det-math を直接は引かず、physics feature の alice-physics を通す 公開済みの 0.6.1 は alice-physics ^1.4 を
-# 要求し、main (a3305fd) は "3.0" (最新の 3 系) を要求するので、次の版は main から prepared にできる
-# (publish-gate は最新でない版を受ける要求を拒否する) この repository は alice-sync を引かない
-# 次の 0.7.0 は G7 / G8 で既に互換でない版で、`Discovery::register_peer` の metadata 引数も
-# `HashMap<String, String>` から `impl IntoIterator<Item = (String, String)>` に変わる (Sync の
-# ci/20261018-sync-g13 96703776、mDNS の TXT は key の順) `HashMap` を渡す呼び出しは通るが、型を推論に
-# 任せる呼び出し (`….collect()` / `Default::default()`) は E0283 で型注釈が要る 外部の呼び出しは 0 件
-# (ext-sakamoro の全 repository の code search で register_peer は ALICE-Sync の中だけ) 同じ 0.7.0 で
-# `Discovery::set_metadata` は `Result<(), MetadataError>` を返す (大文字小文字だけが違う key を拒否する)
-# 旧来の `()` を捨てる呼び出しは unused_must_use になり、-D warnings では error RFC 6763 の TXT の key で
-# ないもの (空、印字可能な US-ASCII 0x20-0x7E の外、'=' を含む) も `MetadataError::InvalidKey` で拒否する
-# `MetadataError` は crate の root から再 export される 自分の metadata は mDNS の
-# TXT record に key の順で並ぶ (wire で見える) 0.7.0 を planned にする時に、これらを changelog-has に
-# 破壊的変更の行として載せる
-version = "0.6.1"
-state = "published"
-order = 15
+version = "0.8.0"
+sha = "ef7472614c9d983e3d1811c5d7612dfdbc9a0e95"
+state = "main"
+order = 18
 repo = "ALICE-Sync"
 law-dependency = false
-required-ci = [
-    { workflow = "CI", job = "Test", legs = ["Test — ubuntu-latest", "Test — macos-latest", "Test — windows-latest"] },
-    { workflow = "CI", job = "Format" },
-    { workflow = "CI", job = "Clippy (-D warnings)" },
-    { workflow = "CI", job = "MSRV (rust-version = 1.88 実 compile)" },
-    { workflow = "CI", job = "Doc (RUSTDOCFLAGS=-Dwarnings)" },
-    { workflow = "CI", job = "Feature powerset (cargo-hack, depth 2)" },
-    { workflow = "CI", job = "actionlint (workflow YAML 検証)" },
-    { workflow = "Security & Hygiene", job = "cargo audit (RustSec CVE scan)" },
-    { workflow = "Security & Hygiene", job = "cargo-deny (license + advisories + bans + sources)" },
-    { workflow = "Security & Hygiene", job = "cargo-machete (unused dependencies)" },
-    { workflow = "Security & Hygiene", job = "Stub / mock / dbg guard (grep)" },
-    { workflow = "Security & Hygiene", job = "Package integrity (publish される .crate が build できるか)" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_packet_decode" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_codec_bridge" },
-    { workflow = "Fuzz", job = "Fuzz — fuzz_crdt_merge" },
-]
-
-# The Actions secrets of each repository in the train, by name, with what they are for:
-# publish-gate reads the repository's secrets and refuses a secret that is not listed here, a
-# publishing credential outside an environment with required reviewers, and a job that receives
-# a publishing secret on a release / tag / dispatch / schedule trigger outside such an
-# environment. An environment secret is listed as "<environment>:<name>".
-[secrets."ALICE-SDF"]
-UNITY_LICENSE = { purpose = "the Unity licence of the Unity package build and tests", publishing = false }
-
-# The Actions variables of each repository, by name, with what they are for (a variable is plain
-# text and never holds a credential); an environment variable is listed as "<environment>:<name>".
-# A job on a self-hosted runner that runs on a release / tag / dispatch / schedule trigger outside
-# an environment with required reviewers is listed under [self-hosted."<repository>"] as
-# "<workflow file>:<job>" with registry-credentials-on-host = false, which says the host holds no
-# registry credential (a claim reviewed with the entry).
-[variables."ALICE-SDF"]
-UE5_RUNNER = { purpose = "turns the Unreal Engine job on (\"true\") when the Windows runner with the engine is online" }
-UE5_ENGINE_ROOTS = { purpose = "the engine install folders (a JSON list) the Unreal Engine job builds against" }
 
 # Problems of the dependency consistency check (scripts/dep_consistency.py --roster)
-# that a release still to come removes. Each entry names the release (`until`); once
-# the roster marks it published, the entry is stale and the check fails until the
-# entry is removed (and the requirements that release lets this repository raise are
-# raised). An item that matches no problem fails the check too.
+# that a change still to come removes. Each entry names the version that removes it
+# (`until = "<crate> <version>"`); once the roster records that crate at that version or
+# later, the entry is stale and the check fails until the entry is removed. An item that
+# matches no problem fails the check too.
 
 [crate.alice-identity]
-version = "1.2.0"
-state = "planned"
+version = "3.0.0"
+sha = "0e1809b95fdb93fa14ff7dda4ae692ea76d2a665"
+state = "main"
 order = 16
 repo = "ALICE-Identity"
 law-dependency = false
 
 [crate.alice-channel]
 version = "0.1.0"
-state = "planned"
+sha = "5f2b92cbd4ef1b0b128556a1c59e42d32ff026b8"
+state = "main"
 order = 17
 repo = "ALICE-Channel"
 law-dependency = false
 
 [crate.alice-sign]
 version = "0.1.0"
-state = "planned"
-order = 18
+sha = "41b19c231f362f7da8877295ceb9291553d24bdf"
+state = "main"
+order = 13
 repo = "ALICE-Sign"
 law-dependency = false
 
 [crate.alice-font]
-version = "0.7.6"
-state = "planned"
+version = "0.8.0"
+sha = "00a0193ffd4d454725f896d9303ab53d9a95b89c"
+state = "main"
 order = 19
 repo = "ALICE-Font"
 law-dependency = false
 
 [crate.alice-os-keystore]
 version = "0.2.0"
-state = "planned"
+sha = "99ac2a4e2df0f1059bd84528d1bb0b9373cef0db"
+state = "main"
 order = 20
 repo = "ALICE-OS-Keystore"
 law-dependency = false
-
-# CI steps that fail until a release (scripts/expected_failure.py, wrapped around the
-# step): reported as expected and the steps that need them skipped. A step listed here
-# that passes, or still fails after its release, or fails another way, is red.
 

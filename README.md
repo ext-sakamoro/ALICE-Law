@@ -9,9 +9,9 @@ No path dependencies. Two kinds of check:
 - dependency consistency (in place, from the core crates' main branches): every `alice-*` crate resolves to exactly one version in `Cargo.lock`, every crate `scripts/dep_consistency.py`'s own `CORE` list names is present, and every `alice-*` package of the lock file comes from its repository's main branch
 - end to end (from the core crates' main branches): read a law, compute, save, restore, and compare every value bit for bit
 
-It also holds the release train of the core crates (the plan, and the scripts run before and after each publish: [runbook](#runbook-one-crate)) and the checks of the text this repository publishes.
+It also holds the roster of the core crates at their main commits (and the scripts that record and check it: [runbook](#runbook-record-and-check)) and the checks of the text this repository publishes.
 
-Contents: [Dependency consistency](#dependency-consistency) · [Release train](#release-train) · [Public text](#public-text) · [Conformance](#conformance) · [End to end](#end-to-end) · [Steps that fail until a release](#steps-that-fail-until-a-release) · [Status](#status) · [License](#license)
+Contents: [Dependency consistency](#dependency-consistency) · [Release train](#release-train) · [Public text](#public-text) · [Conformance](#conformance) · [End to end](#end-to-end) · [Steps that fail until a version](#steps-that-fail-until-a-version) · [Status](#status) · [License](#license)
 
 ## Dependency consistency
 
@@ -38,52 +38,24 @@ CI (`.github/workflows/dependency-consistency.yml`) runs the tests, the comparis
 
 ## Release train
 
-`release-train.toml` is the plan for releasing the core crates together: for each crate, the version it is being released at, its place in the order (a crate comes after everything it requires), its state (`planned`, `prepared-local`, `prepared`, `published`, or `exempt` for this repository), its repository and, where the repository holds more than one crate, its manifest path and tag name (`tag`, default `v{version}`). `[train] owners` lists the crates.io owners every release must have. What a crate requires of the others is not listed there: it is read from the crate's own `Cargo.toml` at the release checkout, so there is one source for it. A crate can also list `must-contain` (commits the published commit must include), `changelog-has` (lines its `## [<version>]` CHANGELOG section must contain) `must-contain-patch` (`git patch-id --stable` ids of changes the published commit must carry, as the change or a rebased copy, among its last 2000 non-merge commits) and `required-ci` (`{ workflow, job, legs, since }`; an entry with `since` applies from that version of the crate on: in the latest GitHub Actions run of that workflow on the published commit, the job's legs `<job>` / `<job> (...)` must be exactly the expected ones, a count or the exact names, and all completed with success; a missing or extra leg, or one running, skipped or failed, refuses, and a CI that cannot be read is a refusal too).
+`release-train.toml` names each core crate at a commit of its repository's main branch: for each crate, `sha` (that commit), `version` (the version its manifest has there), its place in the order (a crate comes after every roster crate its manifest depends on), its state (`main`, or `exempt` for this repository) and its repository, with the manifest path where the repository holds more than one crate. Nothing is published to crates.io: the consumers take each crate from its repository's main branch. What a crate requires of the others is read from its own `Cargo.toml` at `sha`, so there is one source for it. `sha` and `version` are written by `record`, never by hand.
 
-### Runbook: one crate
+### Runbook: record and check
 
 ```sh
 S=scripts/release_train.py
-python3 $S next                                                      # 1. the crate to publish now
-git clone <its repository> /tmp/rel && git -C /tmp/rel checkout <sha> # 2. a clean checkout of the release commit
-python3 $S publish-gate <crate> --repo /tmp/rel --ref <sha>          # 3. exit 0 = go; prints the .crate sha256 and the publish command
-(cd /tmp/rel && cargo publish --locked --manifest-path Cargo.toml)    # 4. the command the gate printed, run by a person
-git -C /tmp/rel tag -a <tag> <sha> -m "<crate> <version>" && git -C /tmp/rel push origin <tag>   # 5. the tag at the published commit
-python3 $S roster-mark published <crate> --repo /tmp/rel --ref <sha> --expect-sha256 <from 3>   # 6. verify, then mark the roster
-python3 $S followups <crate> --repos-root <dir with every roster checkout>                      # 7. who has to raise a requirement
+python3 $S record --repos-root <dir with every roster checkout>     # 1. write sha and version (refuses a commit whose main CI is not green)
+python3 $S check --repos-root <dir with every roster checkout>      # 2. exit 0 = every row is at a green main commit
+python3 $S followups <crate> --repos-root <dir with every roster checkout>   # 3. who has to raise a requirement
 ```
 
-Then commit `release-train.toml`, and land the requirement bumps that `followups` lists (the next crate in the order is one of them).
+Then commit `release-train.toml`, after the e2e bless when `e2e/golden/values.provenance` changed (`record` takes the provenance commit for the repositories it records).
 
-1. `next` names the first crate in the order that is not published.
-2. `cargo publish` packages the working tree, so the gate runs on a clone at the commit, not on a working copy.
-3. `publish-gate <crate> --repo <checkout> --ref <sha> [--manifest-path <path>]` reads the crate's manifest (and the repository's root `Cargo.toml`) at that commit (its check of the package text needs the private name key, so a CI job that runs publish-gate must map `ALICE_PRIVATE_NAME_HMAC_KEY`), and refuses:
-   - when the checkout is not that commit, or has changes to tracked files;
-   - when the crate is not `prepared`, or the manifest is another crate or version than the roster's;
-   - when a manifest overrides an `alice-*` crate (`[patch.*]`, `[replace]`) or takes one from another registry;
-   - when that version is already on crates.io;
-   - when an `alice-*` dependency of the manifest (normal or build, optional or not, any target, renamed or not, `-` or `_` in the name) has no crates.io version requirement, or names a crate that is not `published` in the roster, is missing or yanked on crates.io, or is not accepted by the requirement (Cargo's rules: `"0.4"` does not accept 0.5.0). A dependency outside the roster is checked against its latest release;
-   - when a `must-contain` commit is not an ancestor of the commit, or the CHANGELOG has no `## [<version>] - YYYY-MM-DD` release heading (a real date, not later than tomorrow; checked for every crate) or its section lacks a `changelog-has` line;
-   - when no recent commit carries a `must-contain-patch` patch;
-   - when a `required-ci` job does not have exactly its expected legs in the latest run of its workflow on the commit, or a leg is not completed with success;
-   - when the repository's Actions secrets (repository and environments, read from GitHub; reading nothing refuses) include a name the roster's `[secrets."<repository>"]` does not declare with its purpose (or the roster declares one the repository does not have), or a publishing credential outside an environment with required reviewers; when a job receives a secret (`secrets.<name>` other than `GITHUB_TOKEN`, `secrets: inherit`, an OIDC token) on a release, tag, dispatch or schedule trigger outside such an environment, unless every secret it receives is declared as not publishing; `secrets: inherit` only into a local workflow, which is read too; the repository's Actions variables (repository and environments) must be declared in `[variables."<repository>"]` with their purpose (a variable never holds a credential), Dependabot secrets in `[secrets]` as `dependabot:<name>`, and every list is read page by page and must hold as many names as GitHub counts; a job that may run on a self-hosted runner (a runner group, a label that is not one of the exact GitHub-hosted image labels, a label of a runner registered to the repository (read from GitHub), or an expression other than a matrix value whose literal values, or the literal lists an expression chooses between, are all GitHub-hosted images) on a release, tag, dispatch or schedule trigger runs under an environment with required reviewers or is declared in `[self-hosted."<repository>"]` (`"<workflow>:<job>"`, `registry-credentials-on-host = false`);
-   - when a workflow of the repository at the commit can publish outside this gate (a tag push would publish without it): read by job, comments removed and continued lines joined, a crates.io credential (a crates.io token as a secret or in `CARGO_REGISTRY_TOKEN` / `CARGO_REGISTRIES_<name>_TOKEN`, the crates.io auth action, an OIDC token in a job that runs cargo) or a crates.io publish command (any `cargo … publish` without `--dry-run`, release-plz, publish-crates) anywhere; a PyPI / npm token, OIDC token or publish command in a job whose `environment` has no required reviewers (read from GitHub); reading no workflow compares nothing;
-   - when the package (`cargo package --list`) carries files under `.github/`, `scripts/`, `docs/` or `logs/`, or private notes (file and directory names held as sha256 in the script): the repository's tools and notes, not the crate. Set `include` in the manifest.
+1. `record --repos-root <dir> [--provenance <file>] [--no-ci]` sets each row's `sha` to the commit `e2e/golden/values.provenance` records for its repository, or to `origin/main` of the checkout for the others, and `version` to its manifest's version there; the rest of the file is kept. It writes nothing when a commit's push runs on main are not all green.
+2. `check --repos-root <dir> [--provenance <file>] [--no-ci]` refuses a row whose commit is not on main (not an ancestor of `origin/main`, so fetch the history first), whose manifest there is another crate or version, whose repository the provenance records at another commit, that comes before a roster crate its manifest depends on, whose workflows at the commit can publish to a registry (a crates.io credential or publish command anywhere; a PyPI / npm one without an environment that has required reviewers), or whose push runs on main are not all completed with success. A red scheduled or dispatched run is printed as a note (its own gate tracks it); no push run at all is a refusal unless every workflow of the commit is filtered out for its change, which is printed. A private repository is refused (its CI is not readable here).
+3. `followups <crate> --repos-root <dir> [--at origin/main]` reads every `Cargo.toml` at `--at` in the checkouts of every roster repository (fetch first) and lists each requirement on the crate (normal, dev, build, target, workspace) that does not accept its roster version, and each one without a version outside the crate's own repository. Exit 1 while there is one to raise.
 
-   On go it runs `cargo package` (which builds the packaged crate as `cargo publish` does, `--locked` when a `Cargo.lock` is committed) and prints the commit, the sha256 of the `.crate` and the exact `cargo publish` command. After packaging it reads every file of the package with `scripts/public_text_check.py` (paths taken back to the repository, with its `.public-text.toml` and allow-list; a package that carries internal text is refused, one with no file compares nothing) and it checks the checkout again (`cargo publish` packages the working tree, so packaging must not have changed a tracked file, such as a lock rewritten because a sibling checkout has another version). Before go it also builds that `.crate` as a crates.io consumer does: unpacked into a fresh directory with no `Cargo.lock`, `Cargo.toml` or `.cargo/config` above it, with an empty `CARGO_HOME` (its registry cache is the gate's own directory) and a minimal environment (no `RUSTFLAGS`, `RUSTC_WRAPPER` or `CARGO_*` of the machine), as the path dependency of an empty crate, once with the default features, once with none, and once with every feature (features that cannot all be on together are refused, unless the roster names the sets to build in `consumer-features`; a feature whose library another tool links, such as a Python extension, is compiled with `cargo check` from `consumer-check-features`; `consumer-features-why` gives the reason, and a known failure of one set is listed in `consumer-expected-failure` with the error it must show (`expect = {code, file, text, count, label?, message?}`: every error of the crate itself in cargo's JSON diagnostics must have that code, file, highlighted source text and, when given, the primary span's label ("expected `…`, found `…`"), and there must be exactly `count` of them, so another error next to it, another error with the same code in the same file, one more of the same, or the code only in a comment is refused) and the release it is fixed by, after which it is refused) (with `consumer-features-why`, the features left out and why: features built by another tool, such as a Python extension, or for one platform's hardware); a crate with no library is built on its own, from a directory outside it; a `.crate` carrying a Cargo configuration (`.cargo/config`, `.cargo/config.toml`) is refused. A failed build, or one that compiled no library (or binary) of the crate, is refused (`cargo package` verifies inside the repository, where a build script reading a lock above the crate still finds the repository's). With a committed `Cargo.lock` the `.crate` is the same bytes as the one `cargo publish` uploads; without one, cargo resolves the lock it puts in the package at that moment, so publish right after the gate.
-4. Publishing is the one step the scripts do not take.
-5. `publish-verify` reads the tag from the remote (`--remote`, default `origin`).
-6. `roster-mark published` runs `publish-verify` and changes the crate's `state = "prepared"` line to `published` only when every check passed. `publish-verify` (the same checks without the edit) refuses:
-   - when the version is not on crates.io, or is yanked;
-   - when its checksum is not the sha256 the gate printed;
-   - when its license is not the manifest's, or its owners are not `[train] owners`;
-   - when the downloaded `.crate` does not hash to that checksum, or its `.cargo_vcs_info.json` names another commit, a dirty checkout or another directory;
-   - when the tag is missing on the remote or names another commit.
-
-   It also prints the docs.rs build status, as information (docs.rs builds after the publish).
-7. `followups <crate> --repos-root <dir> [--at origin/main]` reads every `Cargo.toml` at `--at` in the checkouts of every roster repository (fetch first) and lists each requirement on the crate (normal, dev, build, target, workspace) that does not accept its roster version, and each one without a version outside the crate's own repository. Exit 1 while there is one to raise.
-
-Only an HTTP 404 counts as "not on crates.io"; any other answer (an error body, another version than the one asked for, a broken connection) stops a command with exit 2, as does a command that compared nothing (no roster crate, no package file, no manifest read, no `[train] owners`). The requirement matching is the one in `scripts/dep_consistency.py`. CI runs the tests (`scripts/test_release_train.py`, crates.io, cargo and the remote replaced by fixtures) and prints `next`.
+A command that compared nothing (no roster crate, no manifest read) exits 2. The crates.io publish gate (`publish-gate`, `publish-verify`, `roster-mark`, `next`) was removed on 2026-11-13 and is in this file's history. CI runs the tests (`scripts/test_release_train.py`, `scripts/test_release_train_main.py`, checkouts and GitHub replaced by fixtures) and `check` on fresh checkouts of every roster repository.
 
 ## Public text
 
@@ -128,9 +100,9 @@ In CI (`e2e-main.yml`) the repositories are checked out side by side and `script
 
 `scripts/e2e_teeth.py` (the teeth job of `e2e-main.yml`) changes one line at a time in the checkouts and requires the test to fail with the expected message: a law coefficient decoded one ulp off, an f64 saved through f32, a restore that returns nothing, a flipped digest byte, `exp` from the platform libm, a slightly longer thermal step, a different arithmetic identifier, a residual one ulp off, and a second version of alice-zip in the build.
 
-## Steps that fail until a release
+## Steps that fail until a version
 
-A CI step that cannot pass before a release (for example the main branches patched in together while one of them still requires the previous major of another) is wrapped in `scripts/expected_failure.py <step> -- <command>` and listed in `release-train.toml` under `[expected-failure.<name>]` with the release it waits for (`until`), the text of the error lines its failure has (`expect`) and why (`why`). The failure is read from its own error lines (after terminal colour codes are removed, a line starting with `error` in any case followed by `:`, `[...]`, a space or the end of the line, `fatal:`, or a Rust panic; an entry can also name the exit status with `exit`): every one must contain an `expect` text and every `expect` text must be in one, so a second, unrelated error or a log line that only quotes the text does not pass. It is then reported as expected and the steps that need it are skipped; every run lists the active entries (step, until, why) in the job summary, and `expected_failure.py --check` fails on an entry no workflow runs and on an entry wrapping a `cargo` command without `exit = 101`. The step is red when it fails another way, when it still fails after its release is `published` in the roster, and when it passes while it is still listed (remove the entry). So a red run is a problem to fix.
+A CI step that cannot pass before a version is on main (for example the main branches patched in together while one of them still requires the previous major of another) is wrapped in `scripts/expected_failure.py <step> -- <command>` and listed in `release-train.toml` under `[expected-failure.<name>]` with the version it waits for (`until`, a roster crate and its version), the text of the error lines its failure has (`expect`) and why (`why`). The failure is read from its own error lines (after terminal colour codes are removed, a line starting with `error` in any case followed by `:`, `[...]`, a space or the end of the line, `fatal:`, or a Rust panic; an entry can also name the exit status with `exit`): every one must contain an `expect` text and every `expect` text must be in one, so a second, unrelated error or a log line that only quotes the text does not pass. It is then reported as expected and the steps that need it are skipped; every run lists the active entries (step, until, why) in the job summary, and `expected_failure.py --check` fails on an entry no workflow runs and on an entry wrapping a `cargo` command without `exit = 101`. The step is red when it fails another way, when it still fails once the roster records that version or a later one, and when it passes while it is still listed (remove the entry). So a red run is a problem to fix.
 
 ## Status
 
@@ -138,33 +110,33 @@ A CI step that cannot pass before a release (for example the main branches patch
 
 Generated by `scripts/gen_law_status.py` from `release-train.toml`, `e2e/golden/values.digest` and `conformance/` (do not edit by hand; CI fails when it differs). The CI results are the workflows' runs.
 
-### Release train
+### Crates at main commits
 
-| crate | version | state | order | repository | tag |
-|---|---|---|---|---|---|
-| alice-det-math | 0.5.1 | published | 0 | ALICE-DetMath | v0.5.1 |
-| alice-crypto | 0.4.1 | published | 1 | ALICE-Crypto | v0.4.1 |
-| alice-zip | 0.10.0 | published | 2 | ALICE-Zip | v0.10.0 |
-| alice-zip-cli | 3.1.0 | published | 3 | ALICE-Zip | alice-zip-cli-v3.1.0 |
-| alice-analytics | 0.6.0 | published | 4 | ALICE-Analytics | v0.6.0 |
-| alice-db | 0.5.1 | published | 5 | ALICE-DB | v0.5.1 |
-| alice-physics | 3.1.0 | published | 6 | ALICE-Physics | v3.1.0 |
-| alice-sdf | 6.1.0 | published | 7 | ALICE-SDF | v6.1.0 |
-| alice-llm | 2.0.0 | published | 8 | ALICE-LLM | v2.0.0 |
-| alice-lol-macro | 0.3.0 | published | 9 | ALICE-LOL | alice-lol-macro-v0.3.0 |
-| alice-lol | 0.4.2 | published | 10 | ALICE-LOL | alice-lol-v0.4.2 |
-| alice-edge | 0.4.0 | planned | 11 | ALICE-Edge | v0.4.0 |
-| alice-law-integration | 0.0.0 | exempt | 12 | ALICE-Law | (none) |
-| alice-ml | 0.2.0 | published | 13 | ALICE-ML | v0.2.0 |
-| alice-kinematics | 0.2.1 | published | 14 | ALICE-Kinematics | alice-kinematics-v0.2.1 |
-| alice-sync | 0.6.1 | published | 15 | ALICE-Sync | v0.6.1 |
-| alice-identity | 1.2.0 | planned | 16 | ALICE-Identity | v1.2.0 |
-| alice-channel | 0.1.0 | planned | 17 | ALICE-Channel | v0.1.0 |
-| alice-sign | 0.1.0 | planned | 18 | ALICE-Sign | v0.1.0 |
-| alice-font | 0.7.6 | planned | 19 | ALICE-Font | v0.7.6 |
-| alice-os-keystore | 0.2.0 | planned | 20 | ALICE-OS-Keystore | v0.2.0 |
+| crate | version | main commit | order | repository |
+|---|---|---|---|---|
+| alice-det-math | 0.6.1 | d80446ebce73 | 0 | ALICE-DetMath |
+| alice-crypto | 0.7.0 | 33496b48d145 | 1 | ALICE-Crypto |
+| alice-zip | 0.11.0 | c498e1769a71 | 2 | ALICE-Zip |
+| alice-zip-cli | 4.0.0 | c498e1769a71 | 3 | ALICE-Zip |
+| alice-analytics | 0.7.0 | cf16e1928fae | 4 | ALICE-Analytics |
+| alice-db | 0.6.0 | 5db2b15cb148 | 5 | ALICE-DB |
+| alice-llm | 5.0.0 | be521bda68c5 | 6 | ALICE-LLM |
+| alice-lol-macro | 0.4.0 | 82a015737b94 | 7 | ALICE-LOL |
+| alice-law-integration | 0.0.0 | (exempt) | 8 | ALICE-Law |
+| alice-ml | 0.4.0 | f3cccc24e63b | 9 | ALICE-ML |
+| alice-physics | 4.0.0 | 8ea9fb861946 | 10 | ALICE-Physics |
+| alice-sdf | 7.0.0 | 0d5830e3f2c6 | 11 | ALICE-SDF |
+| alice-edge | 0.4.0 | 5de16c5a1980 | 12 | ALICE-Edge |
+| alice-sign | 0.1.0 | 41b19c231f36 | 13 | ALICE-Sign |
+| alice-lol | 0.5.0 | 82a015737b94 | 14 | ALICE-LOL |
+| alice-kinematics | 0.4.0 | 6919b0feddc4 | 15 | ALICE-Kinematics |
+| alice-identity | 3.0.0 | 0e1809b95fdb | 16 | ALICE-Identity |
+| alice-channel | 0.1.0 | 5f2b92cbd4ef | 17 | ALICE-Channel |
+| alice-sync | 0.8.0 | ef7472614c9d | 18 | ALICE-Sync |
+| alice-font | 0.8.0 | 00a0193ffd4d | 19 | ALICE-Font |
+| alice-os-keystore | 0.2.0 | 99ac2a4e2df0 | 20 | ALICE-OS-Keystore |
 
-### Steps expected to fail until a release
+### Steps expected to fail until a version
 
 None.
 

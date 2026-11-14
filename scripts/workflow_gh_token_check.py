@@ -36,7 +36,7 @@ PY_IMPORT = re.compile(r"^\s*(?:import\s+([\w, ]+)|from\s+(\w+)\s+import)", re.M
 # flag anywhere on the line); add a form here only when that code path makes no gh call
 GH_FREE = {
     "conformance_roster_check.py": ("--internal", "--check-manifest"),
-    "release_train.py": ("next", "feature-coverage", "semver-config-drift"),
+    "release_train.py": ("feature-coverage", "semver-config-drift", "--no-ci"),
 }
 
 

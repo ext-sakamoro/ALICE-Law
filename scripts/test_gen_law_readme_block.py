@@ -234,6 +234,21 @@ class Render(Base):
         self.assertIn("alice-det-math 0.5.0 from its main branch", out)
         self.assertNotIn("not the version measured", out)
 
+    def test_a_main_commit_roster_names_the_commit(self):
+        # since 2026-11-13 the roster names each crate at a commit of its main branch (no published state)
+        sha = "c" * 40
+        roster = ROSTER.replace('state = "published"', f'state = "main"\nsha = "{sha}"')
+        git(self.law, "rm", "-q", ".github/workflows/e2e.yml", "e2e/golden/run.digest")
+        self.sha = commit(self.law, {"release-train.toml": roster, "e2e/golden/values.digest": f"0.5.0 {DIGEST}\n",
+                                     ".github/workflows/e2e-main.yml": WORKFLOW})
+        for lang, want in (("en", f"| Release train | alice-foo 1.2.0 (main {sha[:12]}), law dependency: yes |"),
+                           ("ja", f"alice-foo 1.2.0 (main {sha[:12]})")):
+            rc, out = self.render(lang)
+            self.assertEqual(rc, 0, out)
+            self.assertIn(want, out)
+            self.assertNotIn("published", out)
+            self.assertNotIn("not the version measured", out)
+
     def test_a_revision_without_any_golden_is_an_error(self):
         git(self.law, "rm", "-q", "e2e/golden/run.digest")
         self.sha = commit(self.law, {"e2e/golden/other": "x\n"})

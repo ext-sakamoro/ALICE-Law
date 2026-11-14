@@ -12,6 +12,7 @@ echo "== tests of the scripts"
 python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 'python 3.11 or later is needed (tomllib)')"
 python3 scripts/test_dep_consistency.py
 python3 scripts/test_release_train.py
+python3 scripts/test_release_train_main.py
 python3 scripts/test_semver_gate.py
 python3 scripts/test_release_baseline.py
 python3 scripts/test_expected_failure.py
