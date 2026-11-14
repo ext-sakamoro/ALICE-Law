@@ -2817,7 +2817,7 @@ expect = 92
 panic = 21
 todo = 0
 unimplemented = 0
-unreachable = 15
+unreachable = 10
 assert = 37
 
 [repo."ALICE-SDF-SaaS"]

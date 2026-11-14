@@ -19,6 +19,7 @@ definers = [
     "ALICE-Serial",
     "ALICE-Sign",
     "ALICE-Sync",
+    "ALICE-TRT",
     "ALICE-Text",
     "ALICE-Zip",
 ]
@@ -57,6 +58,7 @@ definer_packages = [
     "alice-sign",
     "alice-sync",
     "alice-text",
+    "alice-trt",
     "alice-world-auditor",
     "alice-world-auditor-types",
     "alice-zip",
