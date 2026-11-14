@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/pass_anchor_ratchet.py` (試験 `scripts/test_pass_anchor_ratchet.py`): release-train の各 repository の alice-law-conformance.toml で、evidence に anchor (`path#token`、roster check が 1 か所に解決する) を 1 つも持たない `pass` の cell を数え、`conformance/pass-anchor-baseline.toml` の行と突き合わせる 増えたら red、減ったら同じ commit で行を下げるまで red、行の無い manifest・roster に無い行・読んだ manifest 0 件も red、0 の行はその repository の anchor の無い pass を一切通さない 合計を独立の行に出す Conformance (live) の `pass-anchor` job (毎日と手動)、試験は preflight 初回: 17 manifest、合計 95 (0 は ALICE-Channel / ALICE-Identity / ALICE-Sign)
 - e2e: `golden/values.previous` に以前の値の digest (`0.6.1 66b99010…`) と、それを今も計算する main の commit の組を残す 試験 `the_previous_values_digests_are_kept` は残すべき行 (`KEPT_PREVIOUS`) が無い・今の digest と同じ・SHA-256 でない・KNOWN_SEMANTICS に無い版を拒む (行を消すと red を確認)
 - `scripts/structural_lint.py`: ast-grep の版を CI が入れる 0.51.0 と照合し、違う版では入れる版を示して exit 2 (0.51.2 は production-print の当たる例を報告せず、規則の試験が落ちたように見えていた) 試験は別の版 / 読めない版 / 固定の版 / workflow が入れる版と一致の 4 本
 - `conformance/shared-files.toml`: `scripts/upstream_previous_ids_check.py` と試験の行 (18 を超える main で bytes が一致)、`scripts/wasm_js_test.sh` の行 (ALICE-Channel / ALICE-Crypto)、`scripts/package_integrity.py` と試験は全 copy が target に揃い uniform、その planned の bytes 2 つを外す 数の固定は 1588

@@ -1,0 +1,41 @@
+# The unanchored-pass ratchet on a ci/ branch: the ratchet's tests and the baseline's own form
+#
+# Conformance (live) compares every release-train repository's count with conformance/pass-anchor-baseline.toml
+# (scripts/pass_anchor_ratchet.py); a ci/ branch is not red for another repository's count, which it cannot change.
+# Here: scripts/test_pass_anchor_ratchet.py (what counts as unanchored, the rules both ways, --only on a git tree) and
+# the baseline read with --check-baseline (each row a count, 0 or more, and every row a repository of the roster).
+
+name: Pass anchor ratchet (ci)
+
+on:
+  # also on demand, so a run can be had at a commit whose own push did not touch the paths below
+  workflow_dispatch:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pass-anchor-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  pass-anchor:
+    name: Pass anchor ratchet (tests, then the baseline's form)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the ratchet
+        run: python3 scripts/test_pass_anchor_ratchet.py
+
+      - name: The baseline's form and rows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/pass_anchor_ratchet.py --check-baseline
