@@ -18,10 +18,11 @@ ef = importlib.util.module_from_spec(spec)
 sys.modules["ef"] = ef
 spec.loader.exec_module(ef)
 
+# the roster records alice-lol at 0.3.0 on main; the entry waits for 0.4.0
 ROSTER = """
 [crate.alice-lol]
-version = "0.4.0"
-state = "planned"
+version = "0.3.0"
+state = "main"
 order = 0
 """
 ENTRY = """
@@ -87,7 +88,7 @@ class ExpectedFailure(unittest.TestCase):
         self.assertEqual((rc, "expected=false" in gout), (0, True))
 
     def test_after_the_release_the_entry_is_stale(self):
-        rc, out, gout, _ = self.run_step(ROSTER.replace('"planned"', '"published"') + ENTRY, 101, FAILS)
+        rc, out, gout, _ = self.run_step(ROSTER.replace('version = "0.3.0"', 'version = "0.4.0"') + ENTRY, 101, FAILS)
         self.assertEqual(rc, 1)
         self.assertIn("is stale", out)
         self.assertNotIn("expected=true", gout)
@@ -222,7 +223,8 @@ class ExpectedFailure(unittest.TestCase):
             self.assertEqual(self.run_step(ROSTER + ENTRY + bad, 101, FAILS)[0], 2, bad)
 
     def test_malformed_entries_exit_2(self):
-        for bad in (ENTRY.replace('until = "alice-lol 0.4.0"', 'until = "alice-lol 9.9.9"'),
+        for bad in (ENTRY.replace('until = "alice-lol 0.4.0"', 'until = "alice-lol 9.x"'),
+                    ENTRY.replace('until = "alice-lol 0.4.0"', 'until = "alice-nope 1.0.0"'),
                     ENTRY.replace('until = "alice-lol 0.4.0"', 'until = "alice-lol"'),
                     ENTRY.replace('expect = ["failed to select a version", "alice-lol = \\"^0.4\\""]', "expect = []"),
                     ENTRY.replace('why = "alice-lol 0.4 is not on crates.io yet"', ""),

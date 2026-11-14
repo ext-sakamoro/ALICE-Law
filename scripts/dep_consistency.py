@@ -16,11 +16,11 @@ when it compared nothing:
 
 A problem that a change still to come will remove can be listed in the roster
 (`--roster release-train.toml`) under `[pending.<name>]`, with the release that
-removes it (`until = "<crate> <version>"`, a roster crate at its roster version):
+removes it (`until = "<crate> <version>"`, a roster crate and the version that removes it):
 `linked = ["<crate>", ...]` (linked at two or more versions) and
 `source = ["<crate>", ...]` (a locked package not from its main branch). Such a problem
 is reported as expected and counted. It is still a problem when it is not listed, when
-the release its entry waits for is `published` in the roster (the entry is stale), and
+the roster records that crate at that version or later (the entry is stale), and
 a listed item that matches no problem is one too (the entry is out of date). This
 repository's own dependencies and a missing core crate cannot be listed.
 
@@ -333,8 +333,8 @@ class PendingError(ValueError):
 
 
 def load_pending(roster_text: str) -> list[dict]:
-    """the `[pending.<name>]` entries of the roster, each with its keys and whether the
-    release it waits for is already published"""
+    """the `[pending.<name>]` entries of the roster, each with its keys and whether the roster already
+    records the crate it waits for at that version or later (`past`: the entry is stale)"""
     data = tomllib.loads(roster_text)
     crates = data.get("crate", {})
     out = []
@@ -343,8 +343,12 @@ def load_pending(roster_text: str) -> list[dict]:
         if not isinstance(until, str) or len(until.split()) != 2:
             raise PendingError(f"pending.{name}: `until` must be \"<crate> <version>\"")
         crate, version = until.split()
-        if crate not in crates or crates[crate].get("version") != version:
-            raise PendingError(f"pending.{name}: until {until!r} is not a roster crate at its roster version")
+        if crate not in crates:
+            raise PendingError(f"pending.{name}: until {until!r} does not name a roster crate")
+        try:
+            past = Version(crates[crate]["version"]) >= Version(version)
+        except (KeyError, ValueError):
+            raise PendingError(f"pending.{name}: until {until!r} is not \"<crate> <version>\"") from None
         keys = []
         for item in entry.get("linked", []):
             keys.append(("linked", item))
@@ -358,7 +362,7 @@ def load_pending(roster_text: str) -> list[dict]:
         if unknown:
             raise PendingError(f"pending.{name}: unknown keys {sorted(unknown)}")
         out.append({"name": name, "until": until, "keys": keys,
-                    "past": crates[crate].get("state") == "published"})
+                    "past": past})
     seen: dict[tuple, str] = {}
     for e in out:
         for k in e["keys"]:
@@ -381,7 +385,7 @@ def apply_pending(problems: list[Problem], pending: list[dict]) -> tuple[list[st
             continue
         used.add(p.key)
         if e["past"]:
-            remaining.append(f"{p} (listed as pending until {e['until']}, which is published: the entry "
+            remaining.append(f"{p} (listed as pending until {e['until']}, which the roster has reached: the entry "
                              f"pending.{e['name']} is stale)")
         else:
             expected[e["name"]] += 1
@@ -419,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
     if pending:
         print("## Expected until a release\n\n| pending | until | expected |\n|---|---|---|")
         for e in pending:
-            print(f"| {e['name']} | {e['until']}{' (published: stale)' if e['past'] else ''} | {expected[e['name']]} |")
+            print(f"| {e['name']} | {e['until']}{' (reached: stale)' if e['past'] else ''} | {expected[e['name']]} |")
         print()
     print("| check | comparisons |\n|---|---|")
     for name, n in tally.items():

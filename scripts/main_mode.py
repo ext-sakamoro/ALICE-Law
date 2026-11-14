@@ -24,7 +24,7 @@ entry.
 versions of the checkouts and stops (exit 1, nothing written) when one does not accept
 main: the manifest is behind (a new major on main), and the commit that takes the major
 raises it. A consumer that does not accept a new major is reported before the push by the
-pre-push wiring check and before publishing by `scripts/release_train.py publish-gate`.
+pre-push wiring check and by `scripts/release_train.py followups`.
 
 `verify` reads the resolved graph of e2e/ and fails unless every crate below came
 from its checkout, each at least once, and every written entry was used (a requirement

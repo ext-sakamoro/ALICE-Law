@@ -6,8 +6,8 @@
 The roster lists such steps under `[expected-failure.<name>]`:
 
     step   = "<step>"                   the name a workflow passes here
-    until  = "<crate> <version>"        a roster crate at its roster version: the release
-                                        after which the step must pass
+    until  = "<crate> <version>"        a roster crate and the version from which the
+                                        step must pass (on main)
     expect = ["<text>", ...]            text of the error lines the failure must have
     why    = "..."                      one line for the job summary
     exit   = <status>                   optional: the exit status the failure must have
@@ -18,8 +18,8 @@ The command runs with its output shown as it comes. Then:
     passed, no entry                      exit 0
     passed, an entry                      exit 1: the entry is out of date, remove it
     failed, no entry                      exit with the command's status
-    failed, an entry, `until` published   exit 1: the entry is stale (the release is out
-                                          and the step still fails)
+    failed, an entry, `until` reached     exit 1: the entry is stale (the roster records
+                                          that version and the step still fails)
     failed, an entry, and the error       exit 1: it failed for another reason, or for
       lines do not match `expect`         this reason and another one too
     failed as the entry expects           exit 0, `expected=true` in $GITHUB_OUTPUT (the
@@ -54,6 +54,13 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+import importlib.util
+
+_dc_spec = importlib.util.spec_from_file_location("dep_consistency", Path(__file__).resolve().parent / "dep_consistency.py")
+dc = sys.modules.get("dep_consistency") or importlib.util.module_from_spec(_dc_spec)
+if "dep_consistency" not in sys.modules:
+    sys.modules["dep_consistency"] = dc
+    _dc_spec.loader.exec_module(dc)
 
 DEFAULT_ROSTER = Path(__file__).resolve().parent.parent / "release-train.toml"
 DEFAULT_WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
@@ -68,7 +75,8 @@ class EntryError(ValueError):
 
 
 def load_entries(text: str) -> dict[str, dict]:
-    """{step: entry} of the roster's [expected-failure.*], with `past` (until is published)"""
+    """{step: entry} of the roster's [expected-failure.*], with `past` (the roster records the crate at the
+    `until` version or later)"""
     data = tomllib.loads(text)
     crates = data.get("crate", {})
     out: dict[str, dict] = {}
@@ -82,8 +90,12 @@ def load_entries(text: str) -> dict[str, dict]:
         if not isinstance(until, str) or len(until.split()) != 2:
             raise EntryError(f"expected-failure.{name}: `until` must be \"<crate> <version>\"")
         crate, version = until.split()
-        if crate not in crates or crates[crate].get("version") != version:
-            raise EntryError(f"expected-failure.{name}: until {until!r} is not a roster crate at its roster version")
+        if crate not in crates:
+            raise EntryError(f"expected-failure.{name}: until {until!r} does not name a roster crate")
+        try:
+            past = dc.Version(crates[crate]["version"]) >= dc.Version(version)
+        except (KeyError, ValueError):
+            raise EntryError(f"expected-failure.{name}: until {until!r} is not \"<crate> <version>\"") from None
         if not isinstance(expect, list) or not expect or not all(isinstance(x, str) and x for x in expect):
             raise EntryError(f"expected-failure.{name}: `expect` must be a non-empty list of texts")
         if not isinstance(why, str) or not why:
@@ -94,7 +106,7 @@ def load_entries(text: str) -> dict[str, dict]:
         if step in out:
             raise EntryError(f"expected-failure.{name}: step {step!r} is listed twice")
         out[step] = {"name": name, "until": until, "expect": expect, "why": why, "exit": status,
-                     "past": crates[crate].get("state") == "published"}
+                     "past": past}
     return out
 
 
@@ -209,7 +221,7 @@ def main(argv: list[str] | None = None, runner=run) -> int:
     if entry is None:
         return code
     if entry["past"]:
-        print(f"expected failure: {a.step} still fails after {entry['until']} is published: "
+        print(f"expected failure: {a.step} still fails at {entry['until']} (the roster has reached it): "
               f"expected-failure.{entry['name']} is stale")
         return 1
     why_not = explain(entry, output, code)

@@ -226,13 +226,13 @@ jobs:
           rustup toolchain install 1.98.1 --profile minimal
           RUSTUP_TOOLCHAIN=1.98.1 cargo semver-checks --version
 
-      # the release train (release-train.toml): its tests, and what the roster says
-      # is next (informational here; the publisher runs `publish-gate <crate>` right
-      # before each `cargo publish`)
-      - name: Test the release train
+      # the roster (release-train.toml): each crate at a commit of its repository's main; its tests
+      - name: Test the roster tools
         env:
           RUSTUP_TOOLCHAIN: "1.98.1"
-        run: python3 scripts/test_release_train.py
+        run: |
+          python3 scripts/test_release_train.py
+          python3 scripts/test_release_train_main.py
 
       - name: Test the semver gate (scripts/semver_gate.py, shared with the crates' CI)
         env:
@@ -250,8 +250,17 @@ jobs:
       - name: Every expected failure is a step a workflow runs
         run: python3 scripts/expected_failure.py --check
 
-      - name: Release train, next crate (informational)
-        run: python3 scripts/release_train.py next || true
+      # every row at a commit of its repository's main whose push CI is green (blobless clones keep the
+      # history the ancestry check needs)
+      - name: Every roster row is at a green main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/roster"
+          for r in $(python3 -c "import tomllib; print(' '.join(sorted({c['repo'] for c in tomllib.load(open('release-train.toml', 'rb'))['crate'].values() if c.get('state') == 'main'})))"); do
+            git clone --quiet --filter=blob:none --no-checkout "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/roster/$r"
+          done
+          python3 scripts/release_train.py check --repos-root "$RUNNER_TEMP/roster" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Compare the requirement matching with the semver crate
         run: python3 scripts/semver_differential.py

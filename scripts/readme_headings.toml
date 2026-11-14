@@ -20,8 +20,8 @@ ja = "Release train"
 
 [[heading]]
 level = 3
-en = "Runbook: one crate"
-ja = "Runbook: crate ごと"
+en = "Runbook: record and check"
+ja = "Runbook: record と check"
 
 [[heading]]
 level = 2
@@ -40,8 +40,8 @@ ja = "End to end"
 
 [[heading]]
 level = 2
-en = "Steps that fail until a release"
-ja = "公開まで失敗する step"
+en = "Steps that fail until a version"
+ja = "版まで失敗する step"
 
 [[heading]]
 level = 2
@@ -50,13 +50,13 @@ ja = "状態"
 
 [[heading]]
 level = 3
-en = "Release train"
-ja = "Release train"
+en = "Crates at main commits"
+ja = "main の commit の crate"
 
 [[heading]]
 level = 3
-en = "Steps expected to fail until a release"
-ja = "公開まで失敗を予期する step"
+en = "Steps expected to fail until a version"
+ja = "版まで失敗を予期する step"
 
 [[heading]]
 level = 3

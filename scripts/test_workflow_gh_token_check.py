@@ -84,11 +84,12 @@ class GhToken(unittest.TestCase):
         scripts = {"conformance_roster_check.py": CALLER, "release_train.py": CALLER}
         for run in ("python3 scripts/conformance_roster_check.py --internal",
                     "python3 scripts/conformance_roster_check.py --check-manifest . --ref HEAD",
-                    "python3 scripts/release_train.py next"):
+                    "python3 scripts/release_train.py feature-coverage --repos-root x",
+                    "python3 scripts/release_train.py check --repos-root x --no-ci"):
             with self.subTest(run=run):
                 self.assertEqual(self.check(workflow(run), scripts)[0], 0)
         for run in ("python3 scripts/conformance_roster_check.py", "python3 scripts/conformance_roster_check.py --strict",
-                    "python3 scripts/release_train.py publish-gate alice-x"):
+                    "python3 scripts/release_train.py check --repos-root x"):
             with self.subTest(run=run):
                 self.assertEqual(self.check(workflow(run), scripts)[0], 1)
 
@@ -104,7 +105,7 @@ class GhToken(unittest.TestCase):
                 self.assertEqual(self.check(workflow(run, step_env=True))[0], 0)
         # a module that is not a gh caller, a mode that does not reach gh, and a module of another package
         scripts = {"caller.py": CALLER, "quiet.py": QUIET, "release_train.py": CALLER}
-        for run in ("cd scripts && python3 -m quiet", "cd scripts && python3 -m release_train next",
+        for run in ("cd scripts && python3 -m quiet", "cd scripts && python3 -m release_train feature-coverage",
                     "python3 -m pip install x", "python3 -m other.caller", "python3 -m caller.tools",
                     "python3 -c caller"):
             with self.subTest(run=run):

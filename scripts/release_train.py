@@ -1,8 +1,32 @@
 #!/usr/bin/env python3
-"""The release train of the core ALICE crates (release-train.toml), checked against crates.io.
+"""The core ALICE crates at commits of their main branches (release-train.toml), checked against those commits.
 
-    next                                 the crate to publish now: the first in `order`
-                                         that is not published (or exempt)
+Nothing is published to crates.io: each row names a commit of its repository's main branch (`sha`) and
+the version the crate's manifest has there. Until 2026-11-13 this script was the crates.io publish gate
+(`next`, `publish-gate`, `publish-verify`, `roster-mark`, with the package / consumer build / semver /
+secrets / owners checks they ran); restore them from the history of this file if a registry release is
+ever wanted again.
+
+    check --repos-root DIR [--provenance P] [--no-ci]
+                                         every row that is not exempt: its commit is on main (an
+                                         ancestor of origin/main in DIR/<repo>), the manifest there
+                                         (`manifest-path`, default Cargo.toml) is the crate at the
+                                         row's version, a repository the e2e records (P, default
+                                         e2e/golden/values.provenance) is at that commit, the crate
+                                         comes after the roster crates its manifest depends on, no
+                                         workflow at the commit can publish to a registry, and every
+                                         push run of the commit on main is green (a red scheduled or
+                                         dispatched run is a note; no push run is a problem unless every
+                                         workflow is filtered out for the commit's change); no crate
+                                         compared exits 2
+    record --repos-root DIR [--provenance P] [--no-ci]
+                                         writes each row's `sha` (the provenance commit for the
+                                         repositories the e2e records, else origin/main) and `version`
+                                         (the manifest's there), keeping the rest of the file; refuses,
+                                         writing nothing, when a commit's push CI is not green
+    followups <crate> --repos-root DIR [--at REF]
+                                         the consumers whose requirement does not accept the crate's
+                                         roster version
     feature-coverage --repos-root DIR
                                          every crate that declares consumer feature sets:
                                          each feature Cargo has for it (cargo metadata of the
@@ -20,95 +44,20 @@
                                          --manifest (none where the roster declares none);
                                          every roster repository must be checked out; no
                                          run compared exits 2
-    publish-gate <crate> --repo DIR --ref SHA [--manifest-path P] [--repos-root DIR] [--consumers-at REF]
-                                         run right before `cargo publish` of <crate> from
-                                         the checkout DIR; the manifest (P, default
-                                         Cargo.toml) and the repository's root Cargo.toml
-                                         are read at SHA; refuses when
-      - DIR is not checked out at SHA, or has changes to tracked files (cargo publish
-        packages the working tree, so it must be the commit that was checked)
-      - <crate> is not in the roster, or its state is not `prepared`
-      - the manifest is not <crate> at its roster version
-      - the manifest or the root manifest overrides an `alice-*` crate ([patch.*],
-        [replace]) or names one with another registry (`registry`, `registry-index`)
-      - <crate> is already on crates.io at that version
-      - a consumer requires <crate> from the registry (a version, neither `path` nor `git`) with a
-        requirement that does not accept the roster version: every Cargo.toml (workspace members too)
-        at --consumers-at (default origin/main; fetch first) of every git checkout directly under
-        --repos-root (default the parent of DIR), one per remote; a repository of the roster with no
-        checkout there, or no manifest read at all, is refused too (path and git dependencies build
-        against the repository's state and are checked when that state is sent, not here)
-      - an `alice-*` dependency of the manifest (normal or build, optional or not, any
-        target; read from the manifest itself, so the roster cannot list a different
-        set) has no crates.io version requirement, or
-          - is a roster crate that is not `published` in the roster, is missing or yanked
-            on crates.io at its roster version, or whose roster version the requirement
-            does not accept (Cargo's rules: "0.4" does not accept 0.5.0)
-          - is not a roster crate and its latest release on crates.io is missing, yanked
-            or not accepted by the requirement
-      - the roster lists `must-contain` commits for <crate> and one of them is not an
-        ancestor of SHA (or is not in the repository)
-      - the roster lists `must-contain-patch` patch ids (`git patch-id --stable`) for
-        <crate> and none of the last PATCH_DEPTH non-merge commits of SHA has that patch
-        (a rebased or cherry-picked copy of a change counts; a conflict-resolved one does not)
-      - the roster lists `changelog-has` lines for <crate> and the CHANGELOG.md next to
-        the manifest (else the repository's) at SHA has no `## [<version>]` section, or
-        the section does not contain each of them
-      - the roster lists `required-ci` jobs for <crate> ({workflow, job, legs, since}; an
-        entry with `since` applies from that version of the crate on) and, in
-        the latest GitHub Actions run of that workflow on SHA, the job does not have
-        exactly the expected legs (a count of "<job>" / "<job> (...)" names, or the exact
-        names), or one leg is not completed with success (skipped is not success)
-      - a workflow of the repository at SHA publishes to crates.io (a `cargo publish` step
-        without --dry-run, or a publish action): a tag push would publish outside this gate
-      - the package (`cargo package --list` of the manifest) carries a file under
-        .github/, scripts/, docs/ or logs/, or a file or directory of private notes (named by
-        hash in PRIVATE_NAME_SHA256): the repository's own tooling and notes, not the
-        crate; a package that lists no file exits 2
-      - the roster declares consumer feature sets for <crate> and a feature Cargo has for it
-        at SHA (cargo metadata of DIR, the implicit feature of an optional dependency
-        included) is enabled by none of them, directly or through another feature, nor in
-        `exclude-features`, or a set names a feature it does not have (a declared set does
-        not grow with the manifest: a feature added later would be neither built nor
-        semver-checked); cargo metadata failing exits 2
-      - after those pass, the crate `cargo package` built is unpacked into a fresh
-        directory with no Cargo.lock or Cargo.toml above it and built as a dependency of
-        an empty crate there, as a crates.io consumer builds it (`cargo package` verifies
-        inside the repository, where a build script that reads a Cargo.lock above the
-        crate still finds the repository's); a failed build, or one that did not compile
-        the crate's library, is refused
-      - then `cargo semver-checks` compares the checkout with the latest release on
-        crates.io, once per feature set of the consumer build (default features, none,
-        and the roster's sets or every feature): refused when it finds a change the
-        version step does not allow (a minor version with a breaking change), when a
-        minor or patch step compared 0 checks, when the step it reports is not the one
-        the two versions make, or when it did not run; a major step is not compared
-        (any change is allowed), and a crate with no release yet has nothing to compare
-
-usage: release_train.py [--roster release-train.toml] {next | publish-gate <crate> --repo DIR --ref SHA [--manifest-path P]}
-Exit 0 when the answer is "go" (next: a crate was found), 1 when it is "no", 2 when the
-roster or the manifest is unreadable, nothing was compared, or crates.io could not be
-read or answered something other than the version asked for.
+Exit 0 when the answer is "go", 1 when it is "no", 2 when the roster, a manifest or the provenance is
+unreadable or nothing was compared.
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
 import importlib.util
-import io
 import json
 import re
 import shlex
-import shutil
 import subprocess
 import sys
-import tarfile
-import tempfile
-import time
 import tomllib
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -120,62 +69,23 @@ _sg_spec = importlib.util.spec_from_file_location("semver_gate", HERE / "semver_
 sg = importlib.util.module_from_spec(_sg_spec)
 sys.modules["semver_gate"] = sg
 _sg_spec.loader.exec_module(sg)
-# the feature sets and the semver step are shared with the crates' own CI (scripts/semver_gate.py,
-# byte-identical in each repository): one definition, read here under the same names
-feature_specs = sg.feature_specs
-ANSI = sg.ANSI
-version_step = sg.version_step
-version_precedence = sg.version_precedence
-semver_feature_args = sg.semver_feature_args
-run_semver_checks = sg.run_semver_checks
-semver_verdict = sg.semver_verdict
-previous_release = sg.previous_release
-semver_problems = sg.semver_problems
 
-# what the published package must not carry: the repository's CI, tools and notes
-PACKAGE_EXCLUDED_DIRS = (".github/", "scripts/", "docs/", "logs/")
-# file / directory names of private notes, anywhere in the package: the sha256 of the
-# lower-case name (the names themselves are not written in this public repository)
-PRIVATE_NAME_SHA256 = frozenset({
-    "e026f56c08dcdea441a2aa620ab410ce91162062609b2430f5a13bc9b7cf93f1",
-    "bccc86317c281a19e56f3f941077ea61b3fb37d5bd527c518b92b188c4461251",
-})
-
-STATES = ("planned", "prepared-local", "prepared", "published", "exempt")
+STATES = ("main", "exempt")
 DEFAULT_ROSTER = HERE.parent / "release-train.toml"
+DEFAULT_PROVENANCE = HERE.parent / "e2e" / "golden" / "values.provenance"
 
 
 class RosterError(ValueError):
     pass
 
 
-class RegistryError(RuntimeError):
-    """crates.io answered, but not with the version asked for"""
-
-
-def load_roster(text: str) -> dict[str, dict]:
+def load_roster(text: str, need_sha: bool = True) -> dict[str, dict]:
+    """the crates of the roster, validated; `need_sha=False` lets `record` read a row it has not written yet"""
     data = tomllib.loads(text)
-    for repo_name, table in data.get("variables", {}).items():
-        if not isinstance(table, dict) or not all(
-                isinstance(d, dict) and set(d) == {"purpose"} and isinstance(d["purpose"], str) and d["purpose"].strip()
-                for d in table.values()):
-            raise RosterError(f"[variables.{repo_name}] entries must be {{ purpose = \"...\" }} (a variable is never "
-                              f"a credential)")
-    for repo_name, table in data.get("self-hosted", {}).items():
-        if not isinstance(table, dict) or not all(
-                isinstance(d, dict) and set(d) == {"purpose", "registry-credentials-on-host"}
-                and isinstance(d["purpose"], str) and d["purpose"].strip() and d["registry-credentials-on-host"] is False
-                and re.fullmatch(r"[A-Za-z0-9_.\-]+\.ya?ml:[A-Za-z0-9_.\-]+", key)
-                for key, d in table.items()):
-            raise RosterError(f"[self-hosted.{repo_name}] entries must be \"<workflow file>:<job>\" = {{ purpose = "
-                              f"\"...\", registry-credentials-on-host = false }}")
-    for repo_name, table in data.get("secrets", {}).items():
-        if not isinstance(table, dict):
-            raise RosterError(f"[secrets.{repo_name}] must be a table of secret names")
-        for key, d in table.items():
-            if (not isinstance(d, dict) or set(d) != {"purpose", "publishing"} or not isinstance(d["purpose"], str)
-                    or not d["purpose"].strip() or not isinstance(d["publishing"], bool)):
-                raise RosterError(f"[secrets.{repo_name}] {key} must be {{ purpose = \"...\", publishing = true|false }}")
+    for gone in ("variables", "self-hosted", "secrets"):
+        if gone in data:
+            raise RosterError(f"[{gone}.*] belonged to the publish gate (the repositories' Actions secrets); nothing "
+                              f"is published, and check refuses a workflow that could publish")
     crates = data.get("crate", {})
     if not crates:
         raise RosterError("the roster lists no crate (compared nothing)")
@@ -188,27 +98,12 @@ def load_roster(text: str) -> dict[str, dict]:
             raise RosterError(f"{name}: `requires` is read from the crate's Cargo.toml, not the roster")
         if "law-dependency" in c and not isinstance(c["law-dependency"], bool):
             raise RosterError(f"{name}: `law-dependency` must be true or false")
-        for key in ("must-contain", "must-contain-patch", "changelog-has"):
-            if key in c and (not isinstance(c[key], list) or not c[key]
-                             or not all(isinstance(x, str) and x.strip() for x in c[key])):
-                raise RosterError(f"{name}: `{key}` must be a non-empty list of non-empty strings")
+        for key in REMOVED_KEYS:
+            if key in c:
+                raise RosterError(f"{name}: `{key}` belonged to the crates.io release train; the roster names a "
+                                  f"main commit (`sha`) instead")
         if "required-ci" in c:
-            jobs = c["required-ci"]
-            if not isinstance(jobs, list) or not jobs:
-                raise RosterError(f"{name}: `required-ci` must be a non-empty list of {{workflow, job, legs}}")
-            for j in jobs:
-                legs = j.get("legs", 1) if isinstance(j, dict) else None
-                since = j.get("since") if isinstance(j, dict) else None
-                if since is not None:
-                    if not isinstance(since, str):
-                        raise RosterError(f"{name}: required-ci `since` must be a version string")
-                    dc.Version(since)  # raises on a malformed version
-                if (not isinstance(j, dict) or set(j) - {"workflow", "job", "legs", "since"}
-                        or not all(isinstance(j.get(k), str) and j[k].strip() for k in ("workflow", "job"))
-                        or not ((isinstance(legs, int) and not isinstance(legs, bool) and legs > 0)
-                                or (isinstance(legs, list) and legs and all(isinstance(x, str) and x for x in legs)))):
-                    raise RosterError(f"{name}: required-ci entry {j!r} is not {{workflow, job, legs (a count > 0 "
-                                      f"or the exact leg names)}}")
+            raise RosterError(f"{name}: `required-ci` is gone: check reads every workflow run of the commit on main")
         for key in ("consumer-features", "consumer-check-features"):
             if key in c:
                 fs = c[key]
@@ -260,7 +155,12 @@ def load_roster(text: str) -> dict[str, dict]:
                                       f"<version>\", why, command?}}")
                 dc.Version(e["until"].split()[1])
         if c["state"] not in STATES:
-            raise RosterError(f"{name}: state {c['state']!r} is not one of {STATES}")
+            raise RosterError(f"{name}: state {c['state']!r} is not one of {STATES} (the roster names main "
+                              f"commits; nothing is published)")
+        if c["state"] == "main":
+            if (need_sha or "sha" in c) and (not isinstance(c.get("sha"), str) or not SHA_RE.fullmatch(c["sha"])):
+                raise RosterError(f"{name}: a `main` row needs `sha`, the full commit of its repository's main "
+                                  f"(`release_train.py record` writes it)")
         dc.Version(c["version"])  # raises on a malformed version
         if c["order"] in orders:
             raise RosterError(f"{name}: order {c['order']} is used twice")
@@ -268,70 +168,11 @@ def load_roster(text: str) -> dict[str, dict]:
     return crates
 
 
-def manifest_alice_requirements(text: str) -> tuple[str, str, dict[str, str]]:
-    """(package name, package version, {alice crate: requirement}) of a Cargo.toml
-
-    Every table cargo resolves at publish time is read: `[dependencies]` and
-    `[build-dependencies]`, also under `[target.<cfg>]`; optional dependencies
-    included; a renamed dependency (`package = "alice-…"`) under its crate name.
-    A dependency without a version requirement (path only, git, workspace) is an
-    error: crates.io would refuse it or resolve it from somewhere this cannot see.
-    """
-    data = tomllib.loads(text)
-    pkg = data.get("package", {})
-    tables = [data.get("dependencies", {}), data.get("build-dependencies", {})]
-    for target in data.get("target", {}).values():
-        tables += [target.get("dependencies", {}), target.get("build-dependencies", {})]
-    out: dict[str, str] = {}
-    for deps in tables:
-        for key, spec in deps.items():
-            name = alice_name(spec.get("package", key) if isinstance(spec, dict) else key)
-            if name is None:
-                continue
-            if isinstance(spec, str):
-                req = spec
-            elif spec.get("workspace") or "git" in spec or not spec.get("version"):
-                raise ValueError(f"{name}: no crates.io version requirement in the manifest: {spec!r}")
-            elif "registry" in spec or "registry-index" in spec:
-                raise ValueError(f"{name}: comes from another registry: {spec!r}")
-            else:
-                req = spec["version"]
-            dc.parse_requirement(req)
-            if name in out and out[name] != req:
-                raise ValueError(f"{name}: two different requirements ({out[name]!r}, {req!r})")
-            out[name] = req
-    return pkg.get("name", ""), pkg.get("version", ""), out
-
-
 def alice_name(name: str) -> str | None:
     """`name` as a crates.io crate name if it is an ALICE crate (crates.io treats `-` and
     `_` as the same name), else None"""
     n = name.replace("_", "-")
     return n if n.startswith("alice-") else None
-
-
-def alice_overrides(text: str) -> list[str]:
-    """`alice-*` crates a manifest overrides with [patch.<source>] or [replace]"""
-    data = tomllib.loads(text)
-    found = []
-    for source, entries in data.get("patch", {}).items():
-        for key, spec in entries.items():
-            name = alice_name(spec.get("package", key) if isinstance(spec, dict) else key)
-            if name:
-                found.append(f"[patch.{source}] {name}")
-    for key in data.get("replace", {}):
-        name = alice_name(key.split(":")[0])
-        if name:
-            found.append(f"[replace] {key}")
-    return found
-
-
-def latest(fetch: dc.Fetch, crate: str) -> str:
-    """the latest release of a crate; a body without it is a RegistryError"""
-    try:
-        return dc.latest_release(fetch, crate)
-    except (KeyError, TypeError) as e:
-        raise RegistryError(f"{crate}: crates.io answered without a latest release ({e!r})") from None
 
 
 # the gate only reads the repository: no optional locks (git status would otherwise
@@ -342,96 +183,6 @@ GIT_ENV = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
 def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
                           env=GIT_ENV, encoding="utf-8").stdout
-
-
-def checkout_problems(repo: Path, ref: str) -> list[str]:
-    """the checkout must be the commit `ref`, with no change to a tracked file"""
-    problems = []
-    head = git(repo, "rev-parse", "HEAD").strip()
-    want = git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").strip()
-    if head != want:
-        problems.append(f"the checkout is at {head[:12]}, not {ref} ({want[:12]})")
-    dirty = git(repo, "status", "--porcelain", "--untracked-files=no").strip()
-    if dirty:
-        problems.append(f"the checkout has changes to tracked files: {dirty.splitlines()[0]} ...")
-    return problems
-
-
-def cargo_package_list(repo: Path, manifest_path: str) -> list[str]:
-    """the files `cargo package` puts in the crate, relative to the package root"""
-    out = subprocess.run(["cargo", "package", "--list", "--manifest-path", str(repo / manifest_path)],
-                         cwd=repo, check=True, capture_output=True, text=True, encoding="utf-8").stdout
-    return [line.strip() for line in out.splitlines() if line.strip()]
-
-
-def package_problems(crate: str, files: list[str]) -> list[str]:
-    """the files of the package that belong to the repository, not the crate; an empty
-    list is a ValueError (nothing was compared)"""
-    if not files:
-        raise ValueError(f"{crate}: cargo package --list listed no file")
-    leaked: dict[str, int] = {}
-    for f in files:
-        f = f.replace("\\", "/")
-        top = next((d for d in PACKAGE_EXCLUDED_DIRS if f.startswith(d)), None)
-        if top is None:
-            parts = f.split("/")
-            for i, part in enumerate(parts):
-                if hashlib.sha256(part.lower().encode()).hexdigest() in PRIVATE_NAME_SHA256:
-                    top = "/".join(parts[:i + 1]) + ("/" if i + 1 < len(parts) else "")
-                    break
-        if top is not None:
-            leaked[top] = leaked.get(top, 0) + 1
-    if not leaked:
-        return []
-    listed = ", ".join(f"{k} ({n})" for k, n in sorted(leaked.items()))
-    return [f"{crate}: the package carries {sum(leaked.values())} of {len(files)} files that are "
-            f"not the crate's: {listed}; set `include` (or `exclude`) in the manifest"]
-
-
-def changelog_section(text: str, version: str) -> str | None:
-    """the body of the `## [version]` section of a Keep a Changelog file, or None"""
-    lines = text.splitlines()
-    head = f"## [{version}]"
-    for i, line in enumerate(lines):
-        if line.startswith(head):
-            body = []
-            for rest in lines[i + 1:]:
-                if rest.startswith("## "):
-                    break
-                body.append(rest)
-            return "\n".join(body)
-    return None
-
-
-def release_heading_problem(text: str, version: str) -> str | None:
-    """why the `## [version]` heading is not a release heading (`## [version] - YYYY-MM-DD`
-    with a real date, not after tomorrow in UTC), or None"""
-    import datetime
-    for line in text.splitlines():
-        if line.startswith(f"## [{version}]"):
-            m = re.fullmatch(rf"## \[{re.escape(version)}\] - (\d{{4}}-\d{{2}}-\d{{2}})\s*", line)
-            if not m:
-                return f"the CHANGELOG.md heading {line!r} is not `## [{version}] - YYYY-MM-DD`"
-            try:
-                day = datetime.date.fromisoformat(m.group(1))
-            except ValueError:
-                return f"the CHANGELOG.md heading {line!r} has no real date"
-            if day > datetime.datetime.now(datetime.timezone.utc).date() + datetime.timedelta(days=1):
-                return f"the CHANGELOG.md heading {line!r} is dated in the future"
-            return None
-    return f"CHANGELOG.md has no [{version}] heading"
-
-
-PATCH_DEPTH = 2000
-
-
-def patch_ids(repo: Path, ref: str) -> set[str]:
-    """the stable patch ids of the last PATCH_DEPTH non-merge commits of ref"""
-    log = subprocess.run(["git", "-C", str(repo), "log", "-p", "--no-merges", "-n", str(PATCH_DEPTH), ref],
-                         check=True, capture_output=True, env=GIT_ENV).stdout
-    out = subprocess.run(["git", "-C", str(repo), "patch-id", "--stable"], input=log, check=True,
-                         capture_output=True, env=GIT_ENV).stdout.decode()
-    return {line.split()[0] for line in out.splitlines() if line.strip()}
 
 
 # A job can publish only with a credential, so the credential is the first signal and the
@@ -488,9 +239,7 @@ def environment_reviewers(owner_repo: str, name: str) -> int:
 
 
 def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str | None = None,
-                              reviewers=environment_reviewers, declared: dict | None = None,
-                              env_reviewers: dict | None = None, hosts: dict | None = None,
-                              runner_labels: list[set] | None = None) -> tuple[list[str], int]:
+                              reviewers=environment_reviewers) -> tuple[list[str], int]:
     """a workflow of the repository at ref that can publish outside this gate: a crates.io signal
     anywhere, or another registry's signal in a job whose environment has no required reviewers
     (a tag push would publish without the gate); (problems, workflow files read)"""
@@ -501,7 +250,6 @@ def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str 
         names = []
     problems = []
     texts = {n: git(repo, "show", f"{ref}:.github/workflows/{n}") for n in names}
-    local = {n: workflow_text(t.splitlines()) for n, t in texts.items()}
     for n in names:
         lines = texts[n].splitlines()
         jobs_at = next((k for k, l in enumerate(lines) if l.rstrip() == "jobs:"), len(lines))
@@ -510,13 +258,8 @@ def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str 
             (JOB_RE.match(lines[a]).group(1), lines[a:b]) for a, b in zip(starts, starts[1:] + [len(lines)])]
         preamble = workflow_text(lines[:jobs_at + 1])
         workflow_id_token = bool(ID_TOKEN_RE.search(preamble))
-        release_trigger = bool(RELEASE_TRIGGER_RE.search(preamble))
         for job, block in blocks:
             text = workflow_text(block)
-            if job != "(workflow)" and declared is not None:
-                problems += job_secret_problems(crate, n, job, text + ("\nid-token: write" if workflow_id_token else ""),
-                                                release_trigger, job_environment(block), declared,
-                                                env_reviewers or {}, local, hosts, runner_labels)
             id_token = workflow_id_token or bool(ID_TOKEN_RE.search(text))
             runs_cargo = bool(re.search(r"\bcargo\b", text))
             if CRATES_SIGNAL_RE.search(text) or (job != "(workflow)" and id_token and runs_cargo):
@@ -535,1041 +278,12 @@ def workflow_publish_problems(repo: Path, ref: str, crate: str, owner_repo: str 
     return problems, len(names)
 
 
-RELEASE_TRIGGER_RE = re.compile(r"\brelease\b|\btags\s*:|workflow_dispatch|\bschedule\b")
-SECRET_REF_RE = re.compile(r"secrets\.([A-Za-z_][A-Za-z0-9_]*)")
-
-
-def secret_inventory(owner_repo: str) -> dict:
-    """the repository's Actions secrets and variables by name: {"repo": [secret names],
-    "environments": {env: [secret names]}, "reviewers": {env: n}, "dependabot": [secret names],
-    "variables": [names], "env_variables": {env: [names]}}; every list is read page by page and
-    must hold as many names as GitHub counts; raises RuntimeError when GitHub cannot be read (a
-    gate that read nothing must not pass)"""
-    if not owner_repo:
-        raise RuntimeError("no [train] github / repo in the roster, so the secrets cannot be read")
-
-    def api(path):
-        r = subprocess.run(["gh", "api", path], capture_output=True, text=True, encoding="utf-8")
-        if r.returncode != 0:
-            raise RuntimeError(f"gh api {path}: {r.stderr.strip()[:200]}")
-        return json.loads(r.stdout)
-
-    def listed(path, key):
-        names, page = [], 1
-        while True:
-            data = api(f"{path}?per_page=100&page={page}")
-            items = data.get(key, [])
-            names += [x["name"] for x in items]
-            total = data.get("total_count", len(names))
-            if len(names) >= total or not items:
-                break
-            page += 1
-        if len(names) != total:
-            raise RuntimeError(f"gh api {path}: read {len(names)} of {total}")
-        return names
-
-    base = f"repos/{owner_repo}"
-    out = {"repo": listed(f"{base}/actions/secrets", "secrets"), "environments": {}, "reviewers": {},
-           "dependabot": listed(f"{base}/dependabot/secrets", "secrets"),
-           "variables": listed(f"{base}/actions/variables", "variables"), "env_variables": {}, "runners": []}
-    page = 1
-    while True:
-        data = api(f"{base}/actions/runners?per_page=100&page={page}")
-        out["runners"] += [[lab["name"] for lab in r.get("labels", [])] for r in data.get("runners", [])]
-        if len(out["runners"]) >= data.get("total_count", 0) or not data.get("runners"):
-            break
-        page += 1
-    if len(out["runners"]) != data.get("total_count", len(out["runners"])):
-        raise RuntimeError(f"gh api {base}/actions/runners: read {len(out['runners'])} of {data.get('total_count')}")
-    envs = api(f"{base}/environments?per_page=100")
-    if len(envs.get("environments", [])) != envs.get("total_count", len(envs.get("environments", []))):
-        raise RuntimeError(f"gh api {base}/environments: more environments than one page")
-    for env in envs.get("environments", []):
-        name = env["name"]
-        out["environments"][name] = listed(f"{base}/environments/{name}/secrets", "secrets")
-        out["env_variables"][name] = listed(f"{base}/environments/{name}/variables", "variables")
-        out["reviewers"][name] = sum(len(rule.get("reviewers", [])) for rule in env.get("protection_rules", [])
-                                     if rule.get("type") == "required_reviewers")
-    return out
-
-
-def variable_problems(crate: str, repo_name: str, declared: dict, inventory: dict) -> list[str]:
-    """every Actions variable of the repository and its environments is declared in the roster with
-    its purpose (a variable is plain text and never holds a credential)"""
-    present = set(inventory.get("variables", [])) | {f"{e}:{n}" for e, ns in inventory.get("env_variables", {}).items()
-                                                     for n in ns}
-    problems = [f"{crate}: the variable {key} of {repo_name} is not declared in the roster "
-                f"([variables.\"{repo_name}\"] {key} = {{ purpose }})" for key in sorted(present - set(declared))]
-    problems += [f"{crate}: the roster declares the variable {key} of {repo_name}, which the repository does not have "
-                 f"(remove the declaration)" for key in sorted(set(declared) - present)]
-    return problems
-
-
-def secret_problems(crate: str, repo_name: str, declared: dict, inventory: dict) -> list[str]:
-    """every secret of the repository and its environments is declared in the roster with its
-    purpose; a publishing secret may exist only in an environment with required reviewers"""
-    problems = []
-    present = (set(inventory["repo"]) | {f"{e}:{n}" for e, ns in inventory["environments"].items() for n in ns}
-               | {f"dependabot:{n}" for n in inventory.get("dependabot", [])})
-    for key in sorted(set(declared) - present):
-        problems.append(f"{crate}: the roster declares the secret {key} of {repo_name}, which the repository does not "
-                        f"have (remove the declaration)")
-    for where, names in ([("repository", inventory["repo"])] + [(f"environment {e}", n)
-                                                                 for e, n in inventory["environments"].items()]
-                         + [("dependabot", inventory.get("dependabot", []))]):
-        for name in names:
-            key = (name if where == "repository" else f"dependabot:{name}" if where == "dependabot"
-                   else f"{where.split(' ', 1)[1]}:{name}")
-            d = declared.get(key)
-            if d is None:
-                problems.append(f"{crate}: the {where} secret {name} of {repo_name} is not declared in the roster "
-                                f"([secrets.\"{repo_name}\"] {key} = {{ purpose, publishing }})")
-            elif d["publishing"] and (where in ("repository", "dependabot")
-                                      or inventory["reviewers"].get(key.split(":")[0], 0) < 1):
-                problems.append(f"{crate}: the {where} secret {name} of {repo_name} is a publishing credential outside "
-                                f"an environment with required reviewers: a workflow could publish without this gate")
-    return problems
-
-
-# the GitHub-hosted runner images by their exact labels; any other label (a custom label of a
-# registered runner such as "windows-unity", or an unknown one) is a self-hosted runner
-GITHUB_HOSTED = {
-    "ubuntu-latest", "ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "ubuntu-slim",
-    "windows-latest", "windows-2025", "windows-2022", "windows-11-arm",
-    "macos-latest", "macos-26", "macos-15", "macos-14", "macos-13", "macos-15-intel", "macos-13-intel",
-    "macos-latest-large", "macos-15-large", "macos-14-large", "macos-13-large",
-    "macos-latest-xlarge", "macos-15-xlarge", "macos-14-xlarge", "macos-13-xlarge",
-}
-
-
-def runs_on_value(text: str) -> list[str] | None:
-    """the labels of the job's runs-on (a label, a list on one line or below it, or a mapping with
-    `labels:`); None for a runner group (`group:`) or nothing found"""
-    lines = text.splitlines()
-    for k, line in enumerate(lines):
-        m = re.match(r"^(\s*)runs-on:\s*(.*)$", line)
-        if not m:
-            continue
-        indent, value = len(m.group(1)), m.group(2).strip()
-        if value:
-            if value.startswith("{"):
-                if "group:" in value:
-                    return None
-                lab = re.search(r"labels:\s*\[?([^\]}]*)", value)
-                value = lab.group(1) if lab else ""
-            return [x.strip(" '\"") for x in value.strip("[]").split(",") if x.strip(" '\"")]
-        labels = []
-        for nxt in lines[k + 1:]:
-            if not nxt.strip():
-                continue
-            if len(nxt) - len(nxt.lstrip()) <= indent:
-                break
-            item = nxt.strip()
-            if item.startswith("group:"):
-                return None
-            if item.startswith("labels:"):
-                rest = item[len("labels:"):].strip()
-                if rest:
-                    labels += [x.strip(" '\"") for x in rest.strip("[]").split(",") if x.strip(" '\"")]
-                continue
-            labels.append(item.lstrip("- ").strip(" '\""))
-        return labels
-    return []
-
-
-def matrix_values(text: str, key: str) -> list[str] | None:
-    """the literal values of matrix.<key> written in the job (a list, a block list, or include
-    entries); None when it cannot be read literally"""
-    values = []
-    lines = text.splitlines()
-    for k, line in enumerate(lines):
-        flow = re.match(r"^\s*-\s*\{(.*)\}\s*$", line)
-        if flow:  # an include entry written as a flow mapping: `- { os: ubuntu-latest, target: x }`
-            fm = re.search(rf"(?:^|,)\s*{re.escape(key)}:\s*([^,]+)", flow.group(1))
-            if fm:
-                values.append(fm.group(1).strip(" '\""))
-            continue
-        m = re.match(rf"^(\s*)(?:-\s*)?{re.escape(key)}:\s*(.*)$", line)
-        if not m:
-            continue
-        value = m.group(2).strip()
-        if value.startswith("${{"):
-            # an expression that only chooses between literal JSON lists (by event or a needs output)
-            # resolves to the labels of those lists; one that can take a value from inputs, vars or
-            # env, or has no literal list, cannot be read
-            if re.search(r"\b(?:inputs|vars|env)\.|github\.event\.inputs", value):
-                return None
-            lists = re.findall(r"'\[([^\]']*)\]'", value)
-            if not lists:
-                return None
-            values += [x.strip(' "') for lst in lists for x in lst.split(",") if x.strip(' "')]
-        elif value.startswith("["):
-            values += [x.strip(" '\"") for x in value.strip("[]").split(",") if x.strip(" '\"")]
-        elif value:
-            values.append(value.strip(" '\""))
-        else:
-            for nxt in lines[k + 1:]:
-                if not nxt.strip().startswith("-"):
-                    break
-                values.append(nxt.strip()[1:].strip(" '\""))
-    if not values or any("${{" in v for v in values):
-        return None
-    return values
-
-
-def self_hosted(text: str, runner_labels: list[set] | None = None) -> bool:
-    """the job may run on a runner that is not GitHub-hosted: a runner group, a label that is not a
-    GitHub-hosted image (a custom label of a registered runner included), or an expression other
-    than a matrix value written literally in the job whose values are all GitHub-hosted images"""
-    if "runs-on:" not in text:
-        return False
-    labels = runs_on_value(text)
-    if labels is None:
-        return True
-    resolved = []
-    for label in labels or ["(none)"]:
-        exprs = re.findall(r"\$\{\{\s*([^}]*?)\s*\}\}", label)
-        if not exprs:
-            resolved.append(label)
-            continue
-        m = re.fullmatch(r"matrix\.([A-Za-z0-9_-]+)", exprs[0]) if len(exprs) == 1 and label.strip().startswith("${{") else None
-        values = matrix_values(text, m.group(1)) if m else None
-        if values is None:
-            return True
-        resolved += values
-    if any(set(resolved) <= rl for rl in (runner_labels or []) if resolved):
-        return True
-    return any(x not in GITHUB_HOSTED for x in resolved)
-
-
-def job_secret_problems(crate: str, n: str, job: str, text: str, release_trigger: bool, env: str | None,
-                        declared: dict, reviewers: dict, local_workflows: dict,
-                        hosts: dict | None = None, runner_labels: list[set] | None = None) -> list[str]:
-    """a job that receives a secret (a `secrets.<name>` other than GITHUB_TOKEN, `secrets: inherit`,
-    an OIDC token) on a release / tag / dispatch / schedule trigger runs under an environment with
-    required reviewers, unless every secret it receives is declared as not publishing"""
-    names = {m for m in SECRET_REF_RE.findall(text) if m != "GITHUB_TOKEN"}
-    inherit = bool(re.search(r"secrets:\s*inherit", text))
-    oidc = bool(ID_TOKEN_RE.search(text))
-    problems = []
-    if inherit:
-        called = re.search(r"uses:\s*(\S+)", text)
-        target = called.group(1) if called else ""
-        if not target.startswith("./.github/workflows/") or target[len("./.github/workflows/"):] not in local_workflows:
-            problems.append(f"{crate}: .github/workflows/{n} job {job} passes `secrets: inherit` to {target or 'a call'}, "
-                            f"which is not a local workflow this gate reads")
-        else:
-            inner = local_workflows[target[len("./.github/workflows/"):]]
-            names |= {m for m in SECRET_REF_RE.findall(inner) if m != "GITHUB_TOKEN"}
-            oidc = oidc or bool(ID_TOKEN_RE.search(inner))
-    protected = env is not None and reviewers.get(env, 0) >= 1
-    if release_trigger and self_hosted(text, runner_labels) and not protected and f"{n}:{job}" not in (hosts or {}):
-        problems.append(f"{crate}: .github/workflows/{n} job {job} runs on a self-hosted runner on a release / tag / "
-                        f"dispatch / schedule trigger outside an environment with required reviewers (the host can "
-                        f"hold credentials; or declare it in [self-hosted.\"<repository>\"] \"{n}:{job}\")")
-    if not release_trigger or not (names or inherit or oidc):
-        return problems
-    env_key = lambda nm: f"{env}:{nm}" if env else nm
-    harmless = names and all((declared.get(env_key(nm)) or declared.get(nm) or {}).get("publishing") is False
-                             for nm in names) and not oidc
-    if not protected and not harmless:
-        what = ", ".join(sorted(names)) + (" (an OIDC token)" if oidc else "") + (" (inherited)" if inherit else "")
-        problems.append(f"{crate}: .github/workflows/{n} job {job} receives {what} on a release / tag / dispatch / "
-                        f"schedule trigger outside an environment with required reviewers")
-    return problems
-
-
-def history_problems(repo: Path, ref: str, crate: str, c: dict, manifest_path: str) -> tuple[list[str], int]:
-    """(problems, compared) for the roster's `must-contain` commits and `changelog-has`
-    lines of `crate`, read at `ref`"""
-    problems: list[str] = []
-    compared = 0
-    for commit in c.get("must-contain", []):
-        compared += 1
-        known = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{commit}^{{commit}}"],
-                               capture_output=True, env=GIT_ENV).returncode == 0
-        if not known:
-            problems.append(f"{crate}: must contain {commit}, which is not in the repository")
-            continue
-        r = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, ref],
-                           capture_output=True, text=True, env=GIT_ENV, encoding="utf-8")
-        if r.returncode == 1:
-            problems.append(f"{crate}: {ref} does not contain {commit}")
-        elif r.returncode != 0:
-            raise subprocess.CalledProcessError(r.returncode, ["git", "merge-base"], stderr=r.stderr)
-    if c.get("must-contain-patch"):
-        have = patch_ids(repo, ref)
-        for pid in c["must-contain-patch"]:
-            compared += 1
-            if pid not in have:
-                problems.append(f"{crate}: no commit in the last {PATCH_DEPTH} of {ref} has the patch {pid}")
-    wanted = c.get("changelog-has", [])
-    if True:  # the release heading is checked for every crate; `changelog-has` adds lines
-        here = str(Path(manifest_path).parent).replace("\\", "/")
-        candidates = ([f"{here}/CHANGELOG.md"] if here not in ("", ".") else []) + ["CHANGELOG.md"]
-        text = None
-        for path in candidates:
-            try:
-                text = git(repo, "show", f"{ref}:{path}")
-                break
-            except subprocess.CalledProcessError:
-                continue
-        if text is None:
-            return problems + [f"{crate}: no CHANGELOG.md at {ref}"], compared + 1
-        section = changelog_section(text, c["version"])
-        if section is None:
-            return problems + [f"{crate}: CHANGELOG.md has no [{c['version']}] section"], compared + 1
-        compared += 1
-        heading = release_heading_problem(text, c["version"])
-        if heading:
-            problems.append(f"{crate}: {heading}")
-        for line in wanted:
-            compared += 1
-            if line not in section:
-                problems.append(f"{crate}: the [{c['version']}] section of CHANGELOG.md does not contain {line!r}")
-    return problems, compared
-
-
-def gh_json_lines(path: str, jq: str) -> list[dict]:
-    out = subprocess.run(["gh", "api", "--paginate", path, "--jq", jq], check=True, capture_output=True, text=True, encoding="utf-8").stdout
-    return [json.loads(line) for line in out.splitlines() if line.strip()]
-
-
-def github_actions_jobs(owner_repo: str, sha: str) -> dict[str, list[dict]]:
-    """{workflow name: the jobs (name, status, conclusion, and the event of the run) of its latest
-    run on the commit} from the GitHub Actions API (a job of another workflow or app cannot stand in)"""
-    runs = gh_json_lines(f"repos/{owner_repo}/actions/runs?head_sha={sha}&per_page=100",
-                         ".workflow_runs[] | {id, name, created_at, event}")
-    latest: dict[str, dict] = {}
-    for r in runs:
-        if r["name"] not in latest or r["created_at"] > latest[r["name"]]["created_at"]:
-            latest[r["name"]] = r
-    return {name: [{**j, "event": r.get("event")}
-                   for j in gh_json_lines(f"repos/{owner_repo}/actions/runs/{r['id']}/jobs?per_page=100",
-                                          ".jobs[] | {name, status, conclusion}")]
-            for name, r in latest.items()}
-
-
-def ci_problems(crate: str, c: dict, owner_repo: str, commit: str, actions,
-                dispatched: list[str] | None = None) -> tuple[list[str], int]:
-    """(problems, compared) for the roster's `required-ci` jobs of `crate` on `commit`. A required
-    job the run skipped (a path filter that the commit did not match, which also leaves a matrix
-    unexpanded: `Fuzz — ${{ matrix.target }}`) is never green: it is refused with the workflow to
-    dispatch on the commit. The green jobs that came from a dispatched run are added to
-    `dispatched` ("<workflow>: <job>"), for the gate's record"""
-    wanted = [w for w in c.get("required-ci", [])
-              if "since" not in w or dc.Version(c["version"]) >= dc.Version(w["since"])]
-    if not wanted:
-        return [], 0
-    try:
-        by_workflow = actions(owner_repo, commit)
-    except subprocess.CalledProcessError as e:
-        return [f"{crate}: the CI jobs of {commit[:12]} could not be read: {(e.stderr or '').strip()[:200]}"], 1
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        return [f"{crate}: the CI jobs of {commit[:12]} could not be read: {e!r}"[:300]], 1
-    problems: list[str] = []
-    compared = 0
-    for w in wanted:
-        workflow, job, legs = w["workflow"], w["job"], w.get("legs", 1)
-        compared += 1
-        where = f"{crate}: required CI job {job!r} of workflow {workflow!r} on {commit[:12]}"
-        if workflow not in by_workflow:
-            problems.append(f"{where}: the workflow has no run")
-            continue
-        mine = [j for j in by_workflow[workflow]
-                if j.get("name") == job or str(j.get("name", "")).startswith(job + " (")]
-        names = sorted({str(j.get("name")) for j in mine})
-        unexpanded = [j for j in by_workflow[workflow]
-                      if "${{" in str(j.get("name", "")) and j.get("conclusion") == "skipped"]
-        if (mine and all(j.get("conclusion") == "skipped" for j in mine)) or (not mine and unexpanded):
-            problems.append(f"{where}: skipped by the run (not green): dispatch {workflow} on {commit}")
-            continue
-        if isinstance(legs, int):
-            if len(names) != legs:
-                problems.append(f"{where}: {len(names)} legs ran, the roster expects {legs}: {names}")
-        else:
-            missing = sorted(set(legs) - set(names))
-            extra = sorted(set(names) - set(legs))
-            if missing or extra:
-                problems.append(f"{where}: legs missing {missing}, not in the roster {extra}")
-        bad = sorted({f"{j.get('name')}: {j.get('status')}/{j.get('conclusion')}" for j in mine
-                      if j.get("status") != "completed" or j.get("conclusion") != "success"})
-        if bad:
-            problems.append(f"{where}: not green: {'; '.join(bad)}")
-        elif dispatched is not None and mine and all(j.get("event") == "workflow_dispatch" for j in mine):
-            dispatched.append(f"{workflow}: {job} ({len(names)} legs)")
-    return problems, compared
-
-
-def release_state(fetch: dc.Fetch, crate: str, version: str) -> str:
-    """'missing' (HTTP 404), 'yanked' or 'present' for one version on crates.io; anything
-    else crates.io answers is a RegistryError"""
-    try:
-        data = fetch(f"{crate}/{version}")
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return "missing"
-        raise
-    v = data.get("version") if isinstance(data, dict) else None
-    if not isinstance(v, dict) or "num" not in v:
-        raise RegistryError(f"{crate}/{version}: crates.io answered without a version: {str(data)[:200]}")
-    if v["num"] != version:
-        raise RegistryError(f"{crate}/{version}: crates.io answered version {v['num']}")
-    return "yanked" if v.get("yanked") else "present"
-
-
-def library_crates(roster: dict[str, dict]) -> list[str]:
-    """the crates this repository links (scripts/dep_consistency.py CORE): every roster crate
-    that is not exempt and not marked `law-dependency = false`"""
-    return sorted(n for n, c in roster.items() if c["state"] != "exempt" and c.get("law-dependency", True))
-
-
-def next_crate(roster: dict[str, dict]) -> tuple[str | None, int]:
-    """(crate, unpublished count): the first crate in `order` that is not published / exempt
-    (the publish-gate refuses it while an upstream is not published yet)"""
-    pending = [(c["order"], n) for n, c in roster.items() if c["state"] not in ("published", "exempt")]
-    if not pending:
-        return None, 0
-    return min(pending)[1], len(pending)
-
-
-def shared_files_strict() -> tuple[list[str], int]:
-    """(problems, compared) of `shared_files_check.py --live --strict` on this repository's table (ALICE-Law G11 (c)):
-    a release is cut only while the shared-file table matches every listed main, with no unlisted holder (the live
-    job lets a rollout land before the table is regenerated; a publish does not)"""
-    here = Path(__file__).resolve().parent
-    r = subprocess.run([sys.executable, str(here / "shared_files_check.py"), "--table",
-                        str(here.parent / "conformance" / "shared-files.toml"), "--live", "--strict"],
-                       capture_output=True, text=True, encoding="utf-8")
-    if r.returncode == 0:
-        return [], 1
-    lines = [ln.removeprefix("shared_files_check: ") for ln in r.stderr.splitlines() if ln.strip()]
-    return [f"shared files (G11 (c), --live --strict): {ln}" for ln in lines] or [
-        f"shared files (G11 (c), --live --strict): exit {r.returncode}"], 1
-
-
-def publish_gate(roster: dict[str, dict], crate: str, manifest_text: str,
-                 fetch: dc.Fetch, root_text: str | None = None) -> tuple[list[str], int]:
-    """(problems, compared) for publishing `crate` now from the given manifest (and the
-    repository's root manifest, when it is another file)"""
-    if crate not in roster:
-        return [f"{crate} is not in the roster"], 1
-    c = roster[crate]
-    problems: list[str] = []
-    compared = 1
-    name, version, requires = manifest_alice_requirements(manifest_text)
-    for text in (manifest_text,) if root_text is None else (manifest_text, root_text):
-        for o in alice_overrides(text):
-            problems.append(f"{crate}: the manifest overrides an ALICE crate: {o}")
-    if name != crate or version != c["version"]:
-        problems.append(f"the manifest is {name or '?'} {version or '?'}, the roster has {crate} {c['version']}")
-    if c["state"] != "prepared":
-        problems.append(f"{crate}: state is {c['state']!r}, a publish needs 'prepared'")
-    own = release_state(fetch, crate, c["version"])
-    if own != "missing":
-        problems.append(f"{crate} {c['version']} is already on crates.io ({own})")
-    for dep, req in sorted(requires.items()):
-        compared += 1
-        if dep in roster:
-            d = roster[dep]
-            if d["state"] != "published":
-                problems.append(f"{crate} requires {dep} {req!r}: {dep} {d['version']} is {d['state']!r}, not published")
-                continue
-            target = d["version"]
-        else:
-            target = latest(fetch, dep)
-        state = release_state(fetch, dep, target)
-        if state != "present":
-            problems.append(f"{crate} requires {dep} {req!r}: {dep} {target} is {state} on crates.io")
-            continue
-        if not dc.matches(req, target):
-            problems.append(f"{crate} requires {dep} {req!r}, which does not accept the published {target}")
-    return problems, compared
-
-
 # ---------------------------------------------------------------- after the gate: package, verify, mark
-
-DOCS_RS = "https://docs.rs/crate"
-STATIC_CRATES = "https://static.crates.io/crates"
-
-
-def http_get(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": dc.USER_AGENT})
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                body = r.read()
-            time.sleep(1)  # crates.io asks for at most one request per second
-            return body
-        except urllib.error.HTTPError:
-            raise
-        except (urllib.error.URLError, TimeoutError, OSError):
-            if attempt == 2:
-                raise
-            time.sleep(2 * (attempt + 1))
-    raise AssertionError("unreachable")
-
-
-def docs_rs_status(crate: str, version: str) -> dict:
-    return json.loads(http_get(f"{DOCS_RS}/{crate}/{version}/status.json"))
-
-
-def lock_tracked(repo: Path, manifest_path: str) -> bool:
-    """a Cargo.lock is committed next to the manifest or at the repository root"""
-    here = Path(manifest_path).parent
-    for p in {str(here / "Cargo.lock"), "Cargo.lock"}:
-        r = subprocess.run(["git", "-C", str(repo), "ls-files", "--error-unmatch", p], capture_output=True, env=GIT_ENV)
-        if r.returncode == 0:
-            return True
-    return False
-
-
-def cargo_package(repo: Path, manifest_path: str, name: str, version: str, target_dir: Path) -> Path:
-    """`cargo package` (which builds the packaged crate, as `cargo publish` does) into
-    target_dir; the .crate it wrote"""
-    cmd = ["cargo", "package", "--manifest-path", str(repo / manifest_path), "--target-dir", str(target_dir)]
-    if lock_tracked(repo, manifest_path):
-        cmd.append("--locked")
-    subprocess.run(cmd, cwd=repo, check=True, capture_output=True, text=True, encoding="utf-8")
-    return target_dir / "package" / f"{name}-{version}.crate"
-
-
-CONSUMER_MANIFEST = """[package]
-name = "release-gate-consumer"
-version = "0.0.0"
-edition = "2021"
-publish = false
-
-[dependencies]
-{name} = {{ path = "../pkg/{name}-{version}"{spec} }}
-
-[workspace]
-"""
-LIB_KINDS = ("lib", "rlib", "proc-macro", "dylib", "cdylib", "staticlib")
-# the only variables the consumer build inherits: where the toolchain is, and how the
-# system finds programs and temporary files; no RUSTFLAGS, RUSTC_WRAPPER, CARGO_* or
-# configuration of the machine the gate runs on reaches it
-CONSUMER_ENV_KEEP = ("PATH", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "TMPDIR", "TEMP", "TMP",
-                     "SYSTEMROOT", "LANG", "LC_ALL")
-
-
-def manifests_above(path: Path) -> list[Path]:
-    """files in the ancestors of path that Cargo or a build script would read from outside
-    the crate: Cargo.lock / Cargo.toml (a lock above the crate, a workspace) and Cargo
-    configuration (.cargo/config, .cargo/config.toml)"""
-    names = ("Cargo.lock", "Cargo.toml", ".cargo/config", ".cargo/config.toml")
-    return [d / f for d in path.resolve().parents for f in names if (d / f).exists()]
-
-
-def compiled_lib(stdout: str, name: str, version: str, kinds=LIB_KINDS) -> bool:
-    """the JSON messages of a cargo build carry a compiler artifact of the crate's library
-    (or, with kinds=("bin",), of its binary)"""
-    for line in stdout.splitlines():
-        try:
-            msg = json.loads(line)
-        except ValueError:
-            continue
-        if msg.get("reason") != "compiler-artifact":
-            continue
-        pid = msg.get("package_id", "")
-        got = msg.get("target", {}).get("kind", [])
-        if (pid.endswith(f"#{name}@{version}") or pid.startswith(f"{name} {version} ")) and \
-                any(k in kinds for k in got):
-            return True
-    return False
-
-
-def consumer_env(home: Path, registry: Path) -> dict[str, str]:
-    """a minimal environment with an empty CARGO_HOME (its registry cache is the gate's own
-    directory, which holds no configuration) and HOME in the build directory"""
-    cargo_home = home / "cargo-home"
-    cargo_home.mkdir(parents=True, exist_ok=True)
-    registry.mkdir(parents=True, exist_ok=True)
-    (cargo_home / "registry").symlink_to(registry, target_is_directory=True)
-    env = {k: os.environ[k] for k in CONSUMER_ENV_KEEP if k in os.environ}
-    if "RUSTUP_HOME" not in env:  # rustup finds its toolchains under the real HOME
-        real = Path(os.environ.get("HOME", str(Path.home()))) / ".rustup"
-        if real.is_dir():
-            env["RUSTUP_HOME"] = str(real)
-    env["HOME"] = str(home)
-    env["CARGO_HOME"] = str(cargo_home)
-    return env
-
-
-def expected_failure(entry: dict | None, name: str, version: str, features: list[str] | None,
-                     cmd: str) -> dict | None:
-    """the roster's `consumer-expected-failure` entry for this feature set (and command, when
-    the entry names one), if any"""
-    for e in (entry or {}).get("consumer-expected-failure", []):
-        if features is not None and sorted(e["features"]) == sorted(features) and e.get("command", cmd) == cmd:
-            return e
-    return None
-
-
-def crate_errors(stdout: str, name: str, version: str) -> list[dict]:
-    """the error diagnostics of the crate itself in cargo's JSON messages (`--message-format=json`):
-    {code, file (of the primary span), message}; the closing "aborting due to" count is not one"""
-    out = []
-    for line in stdout.splitlines():
-        try:
-            msg = json.loads(line)
-        except ValueError:
-            continue
-        pid = msg.get("package_id", "")
-        if msg.get("reason") != "compiler-message" or not (pid.endswith(f"#{name}@{version}")
-                                                          or pid.startswith(f"{name} {version} ")):
-            continue
-        m = msg.get("message", {})
-        if m.get("level") != "error" or (not m.get("spans") and m.get("message", "").startswith("aborting due to")):
-            continue
-        primary = [sp for sp in m.get("spans", []) if sp.get("is_primary")]
-        out.append({"code": (m.get("code") or {}).get("code"),
-                    "file": primary[0].get("file_name", "") if primary else None,
-                    "text": span_text(primary[0]) if primary else "",
-                    "label": (primary[0].get("label") or "") if primary else "",
-                    "message": m.get("message", "")})
-    return out
-
-
-def span_text(span: dict) -> str:
-    """the source text a span highlights (its lines joined by newlines), not its line number"""
-    lines = span.get("text") or []
-    parts = []
-    for i, t in enumerate(lines):
-        start = t.get("highlight_start", 1) - 1
-        end = t.get("highlight_end", len(t.get("text", "")) + 1) - 1
-        parts.append(t.get("text", "")[start:end] if len(lines) == 1 else
-                     t.get("text", "")[start:] if i == 0 else t.get("text", "")[:end] if i == len(lines) - 1
-                     else t.get("text", ""))
-    return "\n".join(parts)
-
-
-def matches_expected(err: dict, expect: dict) -> bool:
-    """the error has the expected code, in the expected file (the path inside the crate), on the
-    expected source text (what its primary span highlights), with the primary span's label
-    ("expected `…`, found `…`") and the message fragment when the entry names them"""
-    f = (err["file"] or "").replace("\\", "/")
-    return (err["code"] == expect["code"] and (f == expect["file"] or f.endswith("/" + expect["file"]))
-            and err.get("text") == expect["text"] and expect.get("message", "") in err["message"]
-            and ("label" not in expect or err.get("label") == expect["label"]))
-
-
-def first_errors(r) -> str:
-    """the first error messages of a failed build, for the report"""
-    msgs = []
-    for line in r.stdout.splitlines():
-        try:
-            msg = json.loads(line)
-        except ValueError:
-            continue
-        m = msg.get("message", {}) if msg.get("reason") == "compiler-message" else {}
-        if m.get("level") == "error":
-            msgs.append(((m.get("code") or {}).get("code") or "") + " " + m.get("message", ""))
-    tail = [l.strip() for l in r.stderr.strip().splitlines()[-2:]]
-    return "; ".join([x.strip() for x in msgs[:2]] + tail)
-
-
-def consumer_build(body: bytes, name: str, version: str, target_dir: Path | None,
-                   entry: dict | None = None, universe: list[str] | None = None) -> list[str]:
-    """build the packaged crate the way a crates.io consumer does: unpacked into a fresh
-    directory with no Cargo.lock, Cargo.toml or Cargo configuration above it, with an empty
-    CARGO_HOME and a minimal environment, as the path dependency of an empty crate, once per
-    feature set (feature_specs); a crate with no library is built on its own, from a
-    directory outside it, and must produce its binary; a .crate carrying a Cargo configuration
-    (.cargo/config, .cargo/config.toml) is refused. The problems: none when every build compiled the crate"""
-    root = Path(tempfile.mkdtemp(prefix="release-gate-consumer-"))
-    try:
-        above = manifests_above(root / "consumer")
-        if above:
-            return [f"{name} {version}: the consumer build directory {root} has {above[0]} above it"]
-        with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as t:
-            t.extractall(root / "pkg", filter="data")
-        pkg = root / "pkg" / f"{name}-{version}"
-        if not (pkg / "Cargo.toml").is_file():
-            return [f"{name} {version}: the .crate has no {name}-{version}/Cargo.toml"]
-        shipped = [c for c in (".cargo/config", ".cargo/config.toml") if (pkg / c).exists()]
-        if shipped:
-            return [f"{name} {version}: the .crate carries {shipped[0]} (Cargo configuration of the repository, "
-                    f"which a consumer never reads; set `include` or `exclude`)"]
-        manifest = tomllib.loads((pkg / "Cargo.toml").read_text(encoding="utf-8"))
-        if universe is None and not ((entry or {}).get("consumer-features") or (entry or {}).get("consumer-check-features")):
-            # the every-feature set of the package as Cargo defines it (implicit features included)
-            universe = sg.feature_universe(pkg / "Cargo.toml")
-        has_lib = "lib" in manifest or (pkg / "src" / "lib.rs").is_file()
-        cache = (target_dir or root) / "consumer-cache"
-        env = consumer_env(root / "home", cache / "registry")
-        target = ["--target-dir", str(cache / "target")]
-        problems, built = [], 0
-        if has_lib:
-            consumer = root / "consumer"
-            (consumer / "src").mkdir(parents=True)
-            (consumer / "src" / "lib.rs").write_text("", encoding="utf-8")
-
-            def build(spec: str, cmd: str):
-                (consumer / "Cargo.toml").write_text(
-                    CONSUMER_MANIFEST.format(name=name, version=version, spec=spec), encoding="utf-8")
-                return subprocess.run(["cargo", cmd, "--message-format=json", *target],
-                                      cwd=consumer, capture_output=True, text=True, encoding="utf-8",
-                                      errors="replace", env=env)
-
-            # every feature at once fails when some features cannot be on together: that is
-            # a refusal (a consumer enabling them breaks) unless the roster names the feature
-            # sets to build instead (`consumer-features`, with the reason)
-            runs = [(label, build(spec, cmd), fs, cmd) for label, spec, fs, cmd in feature_specs(manifest, entry, universe)]
-        else:
-            # from a directory outside the package: Cargo reads configuration from the working
-            # directory up, and `cargo install` of a published crate does not start inside it
-            outside = root / "bin"
-            outside.mkdir()
-            runs = [("its binary", subprocess.run(
-                ["cargo", "build", "--message-format=json", "--manifest-path",
-                 str(pkg / "Cargo.toml"), *target], cwd=outside,
-                capture_output=True, text=True, encoding="utf-8", errors="replace", env=env), None, "build")]
-        for label, r, fs, cmd in runs:
-            ef = expected_failure(entry, name, version, fs, cmd)
-            if ef is not None:
-                until_crate, until_version = ef["until"].split()
-                if until_crate == name and dc.Version(version) >= dc.Version(until_version):
-                    problems.append(f"{name} {version}: the expected failure of {label} was until {ef['until']} "
-                                    f"(remove the entry; the build must pass)")
-                elif r.returncode == 0:
-                    problems.append(f"{name} {version}: {label} is listed as an expected failure but builds "
-                                    f"(remove the entry)")
-                else:
-                    errors = crate_errors(r.stdout, name, version)
-                    other = [e for e in errors if not matches_expected(e, ef["expect"])]
-                    held = len(errors) - len(other)
-                    if not other and held != ef["expect"]["count"]:
-                        problems.append(f"{name} {version}: {label} fails with {held} of the expected "
-                                        f"{ef['expect']['code']} in {ef['expect']['file']}, the entry's count is "
-                                        f"{ef['expect']['count']}")
-                    elif not errors or other:
-                        shown = other[0] if other else None
-                        problems.append(f"{name} {version}: {label} fails, but not only with the expected "
-                                        f"{ef['expect']['code']} in {ef['expect']['file']} ("
-                                        + (f"{shown['code']} in {shown['file']}: {shown['message']}" if shown
-                                           else f"no error of the crate itself: {first_errors(r)}") + ")")
-                    else:
-                        built += 1  # failed as the roster says, until its release
-                continue
-            if r.returncode != 0:
-                tail = first_errors(r)
-                problems.append(f"{name} {version}: the unpacked .crate does not build ({label}) as a crates.io "
-                                f"consumer builds it, with no Cargo.lock or configuration above it ({tail})")
-            elif not compiled_lib(r.stdout, name, version, LIB_KINDS if has_lib else ("bin",)):
-                problems.append(f"{name} {version}: the consumer build ({label}) compiled no "
-                                f"{'library' if has_lib else 'binary'} of {name} {version}")
-            else:
-                built += 1
-        if built == 0 and not problems:
-            problems.append(f"{name} {version}: the consumer build ran no build (compared nothing)")
-        return problems
-    finally:
-        shutil.rmtree(root, ignore_errors=True)
-
-
-def load_public_text():
-    spec = importlib.util.spec_from_file_location("public_text_check", HERE / "public_text_check.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def package_text_problems(body: bytes, name: str, version: str, repo: Path, ref: str, repo_name: str | None,
-                          manifest_dir: str) -> tuple[list[str], int]:
-    """the published text of the package read by scripts/public_text_check.py (each file's path
-    and text, binary files by their printable runs and the build paths in them), with the source
-    repository's settings and allow-list (paths taken back to the repository: <manifest dir>/<path
-    in the crate>); (problems, files read)"""
-    ptc = load_public_text()
-    problem = ptc.private_sets_problem()
-    if problem:
-        return [f"{name} {version}: the package text check: {problem}"], 0
-    # the private-name tables are keyed: a release is checked with the key or not at all (fail closed)
-    try:
-        key = ptc.load_name_key()
-    except ValueError as e:
-        return [f"{name} {version}: the package text check: {e}"], 0
-    if key is None:
-        return [f"{name} {version}: the package text check needs the private name key ({ptc.NAME_KEY_ENV})"], 0
-    ptc.CONFIG.update(ptc.load_config(str(repo), ref))
-    ptc.ALLOW_STATE["allowed"] = ptc.allowed_for(repo_name, key)
-    ptc.ALLOW_STATE["repo"] = repo_name
-    ptc.ALLOW_STATE["used"] = {}
-    ptc.CLASS_USED.clear()
-    problems, files = [], 0
-    prefix = f"{name}-{version}/"
-    with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as t:
-        for m in t.getmembers():
-            if not m.isfile() or not m.name.startswith(prefix):
-                continue
-            inner = m.name[len(prefix):]
-            if inner == ".cargo_vcs_info.json":
-                continue
-            files += 1
-            path = f"{manifest_dir}/{inner}" if manifest_dir else inner
-            data = t.extractfile(m).read()
-            found = ptc.scan_text(path, inner, path) + ptc.scan_text(path, ptc.text_of(data), path)
-            # a compiled file, a container or an LFS pointer in the package: its build paths, or unscanned
-            found += ptc.file_findings(path, data, path)
-            for f in found:
-                problems.append(f"{name} {version}: the package carries internal text: {f}")
-    if files == 0:
-        problems.append(f"{name} {version}: the package text check read no file (compared nothing)")
-    return problems, files
-
-
-def publish_command(repo: Path, manifest_path: str, locked: bool) -> str:
-    return (f"(cd {repo} && cargo publish{' --locked' if locked else ''} --manifest-path {manifest_path})")
-
-
-def crate_files(data: bytes) -> list[str]:
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
-        return [m.name for m in t.getmembers() if m.isfile()]
-
-
-def vcs_info(data: bytes, name: str, version: str) -> dict | None:
-    """the .cargo_vcs_info.json cargo writes into a .crate (the commit it was packaged from)"""
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
-        try:
-            f = t.extractfile(f"{name}-{version}/.cargo_vcs_info.json")
-        except KeyError:
-            return None
-        return json.load(f) if f else None
-
-
-def remote_tag_commit(repo: Path, remote: str, tag: str) -> str | None:
-    """the commit the tag names on the remote (an annotated tag is peeled), or None"""
-    out = git(repo, "ls-remote", remote, f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}")
-    direct = peeled = None
-    for line in out.splitlines():
-        sha, ref = line.split("\t")
-        if ref.endswith("^{}"):
-            peeled = sha
-        else:
-            direct = sha
-    return peeled or direct
-
-
-def tag_name(c: dict) -> str:
-    return c.get("tag", "v{version}").replace("{version}", c["version"])
-
-
-def publish_verify(roster: dict[str, dict], owners: list[str], crate: str, commit: str,
-                   manifest_text: str, manifest_dir: str, expect_sha256: str, fetch: dc.Fetch,
-                   download, tag_commit) -> tuple[list[str], int]:
-    """(problems, compared) for the release of `crate` at its roster version, read back
-    from crates.io and the repository after `cargo publish`"""
-    if crate not in roster:
-        return [f"{crate} is not in the roster"], 1
-    c = roster[crate]
-    version = c["version"]
-    problems: list[str] = []
-    compared = 1
-    try:
-        data = fetch(f"{crate}/{version}")
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return [f"{crate} {version} is not on crates.io"], compared
-        raise
-    v = data.get("version") if isinstance(data, dict) else None
-    if not isinstance(v, dict) or v.get("num") != version:
-        raise RegistryError(f"{crate}/{version}: crates.io answered {str(data)[:200]}")
-    if v.get("yanked"):
-        problems.append(f"{crate} {version} is yanked")
-    checksum = v.get("checksum")
-    compared += 1
-    if not checksum or checksum != expect_sha256:
-        problems.append(f"{crate} {version}: crates.io has checksum {checksum}, the gate packaged {expect_sha256}")
-    compared += 1
-    package = tomllib.loads(manifest_text).get("package", {})
-    license_here = package.get("license")
-    if v.get("license") != license_here:
-        manifest_version = package.get("version")
-        # a published version keeps the licence it was published with: when the manifest at the
-        # ref is already a later version (relicensed since), the difference is reported, not refused
-        if isinstance(manifest_version, str) and dc.Version(manifest_version) > dc.Version(version):
-            print(f"note: {crate} {version} keeps its published licence {v.get('license')!r} "
-                  f"(the manifest is {manifest_version} under {license_here!r})")
-        else:
-            problems.append(f"{crate} {version}: crates.io has license {v.get('license')!r}, the manifest {license_here!r}")
-    compared += 1
-    users = fetch(f"{crate}/owners").get("users")
-    if not isinstance(users, list):
-        raise RegistryError(f"{crate}/owners: crates.io answered without users")
-    found = sorted(u.get("login", "?") for u in users)
-    if found != sorted(owners):
-        problems.append(f"{crate}: crates.io owners are {found}, the roster has {sorted(owners)}")
-    compared += 1
-    body = download(f"{STATIC_CRATES}/{crate}/{crate}-{version}.crate")
-    got = hashlib.sha256(body).hexdigest()
-    if got != checksum:
-        problems.append(f"{crate} {version}: the downloaded .crate has sha256 {got}, crates.io lists {checksum}")
-    else:
-        info = vcs_info(body, crate, version)
-        compared += 1
-        if info is None:
-            problems.append(f"{crate} {version}: the .crate has no .cargo_vcs_info.json (packaged outside git)")
-        else:
-            sha1 = info.get("git", {}).get("sha1")
-            if sha1 != commit:
-                problems.append(f"{crate} {version}: the .crate was packaged from {sha1}, not {commit}")
-            if info.get("git", {}).get("dirty"):
-                problems.append(f"{crate} {version}: the .crate was packaged from a dirty checkout")
-            if info.get("path_in_vcs", "") != manifest_dir:
-                problems.append(f"{crate} {version}: the .crate was packaged from {info.get('path_in_vcs')!r}, "
-                                f"not {manifest_dir!r}")
-    compared += 1
-    tag = tag_name(c)
-    at = tag_commit(tag)
-    if at is None:
-        problems.append(f"{crate}: tag {tag} is not on the remote")
-    elif at != commit:
-        problems.append(f"{crate}: tag {tag} names {at}, not {commit}")
-    return problems, compared
-
-
-def mark_published(text: str, crate: str) -> str:
-    """the roster text with `crate`'s state changed from prepared to published"""
-    head = f"[crate.{crate}]"
-    lines = text.splitlines(keepends=True)
-    block = False
-    changed = 0
-    for i, line in enumerate(lines):
-        s = line.strip()
-        if s.startswith("["):
-            block = s == head
-            continue
-        if block and re.fullmatch(r'state\s*=\s*"prepared"\s*(#.*)?', s):
-            lines[i] = line.replace('"prepared"', '"published"', 1)
-            changed += 1
-    if changed != 1:
-        raise RosterError(f"{crate}: the roster has no single `state = \"prepared\"` line to mark")
-    new = "".join(lines)
-    if load_roster(new)[crate]["state"] != "published":
-        raise RosterError(f"{crate}: marking it published did not take")
-    return new
 
 
 # ---------------------------------------------------------------- after the publish: who has to follow
 
 DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
-
-
-def registry_requirements_on(text: str, crate: str) -> list[tuple[str, str]]:
-    """(table, requirement) of every dependency of a manifest on `crate` that cargo resolves from the
-    registry: a version with neither `path` nor `git` (a path or git dependency builds against the
-    repository's state, which the push gate of that repository checks; it is not decided by a publish)"""
-    data = tomllib.loads(text)
-    tables = [(t, data.get(t, {})) for t in DEP_TABLES]
-    for cfg, target in data.get("target", {}).items():
-        tables += [(f"target.{cfg}.{t}", target.get(t, {})) for t in DEP_TABLES]
-    tables.append(("workspace.dependencies", data.get("workspace", {}).get("dependencies", {})))
-    out = []
-    for table, deps in tables:
-        for key, spec in deps.items():
-            name = alice_name(spec.get("package", key) if isinstance(spec, dict) else key)
-            if name != crate:
-                continue
-            if isinstance(spec, str):
-                out.append((table, spec))
-            elif spec.get("workspace") or "path" in spec or "git" in spec:
-                continue  # the workspace's own entry is read in its table; path / git: not the registry
-            elif spec.get("version"):
-                out.append((table, spec["version"]))
-    return out
-
-
-def _consumer_ref(repo: Path, at: str) -> str | None:
-    """the commit to read in a consumer checkout: `at`; when `at` is the default origin/main and the checkout
-    has none, the remote's default branch (origin/HEAD: a repository whose default branch is master); a
-    checkout that has neither is fetched once and asked again; None when it still has no such commit"""
-    def resolve() -> str | None:
-        for ref in [at] + (["origin/HEAD"] if at == "origin/main" else []):
-            try:
-                return git(repo, "rev-parse", "--verify", "-q", f"{ref}^{{commit}}").strip() or None
-            except subprocess.CalledProcessError:
-                continue
-        return None
-
-    found = resolve()
-    if found is None:
-        try:
-            subprocess.run(["git", "-C", str(repo), "fetch", "--quiet", "origin"], capture_output=True,
-                           timeout=60, env=GIT_ENV, check=False)
-            subprocess.run(["git", "-C", str(repo), "remote", "set-head", "origin", "--auto"], capture_output=True,
-                           timeout=60, env=GIT_ENV, check=False)
-        except (OSError, subprocess.SubprocessError):
-            return None
-        found = resolve()
-    return found
-
-
-def registry_consumer_problems(roster: dict[str, dict], crate: str, version: str, repos_root: Path,
-                               at: str) -> tuple[list[str], int]:
-    """(problems, manifests read): every Cargo.toml at `at` of every git checkout directly under
-    `repos_root` (one per remote; workspace members included) that requires `crate` from the registry with a
-    requirement `version` does not satisfy. Publishing then would leave that consumer unable to take the
-    release until its requirement is widened (the publish-wave widening), so the publish is refused.
-    Every repository of the roster must be read: a missing checkout, a checkout with no commit to read (no
-    `at`, no default branch, even after a fetch) or one with no Cargo.toml is a refusal naming it, else the
-    read would silently cover less than the train. Another checkout with no commit to read is skipped and
-    listed. No manifest read at all is a refusal too (a scan that compared nothing)"""
-    problems: list[str] = []
-    roster_repos = sorted({c["repo"] for c in roster.values() if "repo" in c})
-    missing = [r for r in roster_repos if not (repos_root / r / ".git").exists()]
-    if missing:
-        problems.append(f"{crate}: no checkout of {', '.join(missing)} under {repos_root} "
-                        "(the consumer read must cover every repository of the train; give --repos-root)")
-    read = 0
-    seen: set[str] = set()
-    covered: list[str] = []
-    skipped: list[str] = []
-    checkouts = sorted(d for d in repos_root.iterdir() if (d / ".git").exists())
-    # the roster's own checkouts first, so a second clone of the same remote never stands in for them
-    checkouts.sort(key=lambda d: d.name not in roster_repos)
-    for repo in checkouts:
-        in_roster = repo.name in roster_repos
-        try:
-            remote = git(repo, "remote", "get-url", "origin").strip().lower().removesuffix(".git")
-        except subprocess.CalledProcessError:
-            remote = str(repo.resolve())
-        if remote in seen:
-            continue  # another clone of the same repository
-        seen.add(remote)
-        ref = _consumer_ref(repo, at)
-        if ref is None:
-            if in_roster:
-                problems.append(f"{repo.name}: no commit to read at {at} (nor its default branch, after a fetch): "
-                                "a repository of the train was not read")
-            else:
-                skipped.append(repo.name)
-            continue
-        names = git(repo, "ls-tree", "-r", "--name-only", ref).splitlines()
-        manifests = sorted(n for n in names if n == "Cargo.toml" or n.endswith("/Cargo.toml"))
-        if in_roster and not manifests:
-            problems.append(f"{repo.name}: no Cargo.toml at {ref[:12]}: a repository of the train was not read")
-        if in_roster and manifests:
-            covered.append(repo.name)
-        for path in manifests:
-            text = git(repo, "show", f"{ref}:{path}")
-            read += 1
-            try:
-                if tomllib.loads(text).get("package", {}).get("name") == crate:
-                    continue
-                reqs = registry_requirements_on(text, crate)
-            except tomllib.TOMLDecodeError as e:
-                problems.append(f"{repo.name}/{path}: not readable TOML ({e})")
-                continue
-            for table, req in reqs:
-                if not dc.matches(req, version):
-                    problems.append(f"{repo.name}/{path} [{table}] {crate} = {req!r} does not accept {version} "
-                                    "(registry consumer: widen it before publishing)")
-    print(f"consumers: {len(covered)} of {len(roster_repos)} roster repositories read"
-          + (f"; skipped (no commit to read): {', '.join(skipped)}" if skipped else ""))
-    if read == 0:
-        problems.append(f"{crate}: no Cargo.toml was read under {repos_root} at {at} (the consumer read compared nothing)")
-    return problems, read
 
 
 def requirements_on(text: str, crate: str) -> list[tuple[str, str | None]]:
@@ -2197,36 +911,274 @@ def followups(roster: dict[str, dict], crate: str, repos_root: Path, at: str) ->
 
 # ---------------------------------------------------------------- command line
 
-def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
-         lister=cargo_package_list, packager=cargo_package, download=http_get,
-         docs=docs_rs_status, tags=remote_tag_commit, actions=github_actions_jobs, consumer=None,
-         reviewers=environment_reviewers, inventory=secret_inventory, semver=semver_problems,
-         metadata=sg.cargo_metadata, consumers=registry_consumer_problems, shared_files=None) -> int:
+# ---------------------------------------------------------------- the main-commit roster (check / record)
+
+SHA_RE = re.compile(r"[0-9a-f]{40}")
+# keys of the crates.io release train the main-commit roster no longer has (scripts/release_train.py before
+# 2026-11-13 held publish-gate / publish-verify / roster-mark / next on them; restore from that history if needed)
+REMOVED_KEYS = ("must-contain", "must-contain-patch", "changelog-has", "tag")
+
+
+def read_provenance(text: str) -> dict[str, tuple[str, dict[str, str]]]:
+    """{repository: (commit, {crate: version})} of e2e/golden/values.provenance ("<repository> <commit>
+    <crate> <version>[, <crate> <version>]..." per line, `#` comments)"""
+    out: dict[str, tuple[str, dict[str, str]]] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 2)
+        if len(parts) != 3 or not SHA_RE.fullmatch(parts[1]):
+            raise ValueError(f"values.provenance: {line!r} is not \"<repository> <commit> <crate> <version>, ...\"")
+        crates = {}
+        for item in parts[2].split(","):
+            cv = item.split()
+            if len(cv) != 2:
+                raise ValueError(f"values.provenance: {item.strip()!r} is not \"<crate> <version>\"")
+            crates[cv[0]] = cv[1]
+        out[parts[0]] = (parts[1], crates)
+    return out
+
+
+def manifest_alice_names(text: str) -> set[str]:
+    """the `alice-*` crates a Cargo.toml depends on (normal and build, any target, renamed ones under their
+    crate name), whatever their source"""
+    data = tomllib.loads(text)
+    tables = [data.get("dependencies", {}), data.get("build-dependencies", {})]
+    for target in data.get("target", {}).values():
+        tables += [target.get("dependencies", {}), target.get("build-dependencies", {})]
+    names = set()
+    for deps in tables:
+        for key, spec in deps.items():
+            name = alice_name(spec.get("package", key) if isinstance(spec, dict) else key)
+            if name:
+                names.add(name)
+    return names
+
+
+def gh_glob_re(pattern: str) -> re.Pattern:
+    """a GitHub Actions filter pattern (`**` any path, `*` within a segment, `?` one character) as a regex"""
+    out, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**", i):
+            out += ".*"
+            i += 2
+        elif pattern[i] == "*":
+            out += "[^/]*"
+            i += 1
+        elif pattern[i] == "?":
+            out += "[^/]"
+            i += 1
+        else:
+            out += re.escape(pattern[i])
+            i += 1
+    return re.compile(out + r"\Z")
+
+
+def filter_matches(patterns: list[str], path: str) -> bool:
+    """whether `path` is selected by a GitHub filter list (later patterns win; `!` negates)"""
+    hit = False
+    for p in patterns:
+        neg = p.startswith("!")
+        if gh_glob_re(p[1:] if neg else p).match(path):
+            hit = not neg
+    return hit
+
+
+def push_runs_for(text: str, changed: list[str]) -> bool | None:
+    """whether a workflow (its YAML text) runs on a push to main that changes `changed`: None when it has no
+    push trigger for main, else True / False by its branches, paths and paths-ignore filters"""
+    lines = text.splitlines()
+    sec = on_section(lines)
+    if sec is None:
+        m = next((re.match(r"^(?:on|'on'|\"on\"|true):\s*(\S.*)$", l) for l in lines
+                  if re.match(r"^(?:on|'on'|\"on\"|true):\s*\S", l)), None)
+        if m and "push" in re.findall(r"[\w-]+", m.group(1)):
+            return True
+        return None
+    a, b = sec
+    keys = block_keys(lines, a + 1, b, 2)
+    if "push" not in keys:
+        return None
+    value, at = keys["push"]
+    end = next((j for j in range(at + 1, b) if lines[j].strip() and not lines[j].lstrip().startswith("#")
+                and indent_of(lines[j]) <= 2), b)
+    sub = block_keys(lines, at + 1, end, 4)
+    if "branches" in sub and not filter_matches(list_value(lines, *sub["branches"]), "main"):
+        return None
+    if "branches-ignore" in sub and filter_matches(list_value(lines, *sub["branches-ignore"]), "main"):
+        return None
+    if "paths" in sub:
+        pats = list_value(lines, *sub["paths"])
+        return any(filter_matches(pats, f) for f in changed)
+    if "paths-ignore" in sub:
+        pats = list_value(lines, *sub["paths-ignore"])
+        return any(not filter_matches(pats, f) for f in changed)
+    return True
+
+
+def gh_main_runs(owner_repo: str, sha: str) -> list[dict]:
+    """the GitHub Actions runs of `sha` on branch main (workflowName, databaseId, event, status, conclusion);
+    a private repository answers one entry {"private": True} instead"""
+    private = subprocess.run(["gh", "api", f"repos/{owner_repo}", "--jq", ".private"], check=True,
+                             capture_output=True, text=True, encoding="utf-8").stdout.strip()
+    if private != "false":
+        return [{"private": True}]
+    out = subprocess.run(["gh", "run", "list", "--repo", owner_repo, "--commit", sha, "--branch", "main",
+                          "--limit", "100", "--json",
+                          "workflowName,databaseId,status,conclusion,headSha,headBranch,event"],
+                         check=True, capture_output=True, text=True, encoding="utf-8").stdout
+    return [r for r in json.loads(out) if r.get("headSha") == sha and r.get("headBranch") == "main"]
+
+
+def main_ci_problems(name: str, repo: Path, owner_repo: str, sha: str, runs=gh_main_runs) -> list[str]:
+    """the main CI of `sha`: every push run of it on main completed with success (the jobs a run skipped
+    inside are its own decision); no push run at all is a problem unless every workflow of the commit is
+    filtered out for its change, which is said; a red scheduled / dispatched run is a note, not a problem
+    (it takes whatever head main has then, and its own gate tracks it)"""
+    where = f"{name} ({owner_repo} {sha[:12]})"
+    try:
+        found = runs(owner_repo, sha)
+    except subprocess.CalledProcessError as e:
+        return [f"{where}: the runs of the commit could not be read: {(e.stderr or '').strip()[:200]}"]
+    except (OSError, ValueError) as e:
+        return [f"{where}: the runs of the commit could not be read: {e!r}"[:300]]
+    if any(r.get("private") for r in found):
+        return [f"{where}: the repository is private: the roster takes public repositories (their main CI is "
+                f"read here)"]
+    pushed = [r for r in found if r.get("event") == "push"]
+    for r in found:
+        if r.get("event") != "push" and (r.get("status") != "completed" or r.get("conclusion") != "success"):
+            # a scheduled / dispatched run takes whatever head main has then; its own gate tracks it
+            print(f"note: {where}: {r.get('event')} run {r.get('workflowName')} {r.get('databaseId', '')} is "
+                  f"{r.get('status')}/{r.get('conclusion')} (not blocking)")
+    if pushed:
+        bad = sorted(f"{r.get('workflowName')}: {r.get('status')}/{r.get('conclusion')}" for r in pushed
+                     if r.get("status") != "completed" or r.get("conclusion") != "success")
+        return [f"{where}: the main CI of the commit (its push runs) is not green: {'; '.join(bad)}"] if bad else []
+    parents = git(repo, "rev-list", "--parents", "-n", "1", sha).split()[1:]
+    changed = git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", *(parents[:1] or []), sha
+                  ).split() if parents else git(repo, "ls-tree", "-r", "--name-only", sha).split()
+    try:
+        names = [n for n in git(repo, "ls-tree", "--name-only", f"{sha}:.github/workflows").splitlines()
+                 if n.endswith((".yml", ".yaml"))]
+    except subprocess.CalledProcessError:
+        names = []
+    would = [n for n in names if push_runs_for(git(repo, "show", f"{sha}:.github/workflows/{n}"), changed)]
+    if would:
+        return [f"{where}: no workflow run on main for the commit, but {', '.join(would)} run on its change: "
+                f"record another commit, or wait for its CI"]
+    print(f"note: {where}: no workflow runs on main for the change of the commit ({len(changed)} file(s), "
+          f"{len(names)} workflow(s) filtered out)")
+    return []
+
+
+def check_problems(roster: dict[str, dict], repos_root: Path, provenance_text: str, runs=gh_main_runs,
+                   github: str = "ext-sakamoro") -> tuple[list[str], int]:
+    """(problems, crates compared): every row that is not exempt names a commit of its repository's main
+    branch (an ancestor of origin/main in repos_root/<repo>) whose manifest is the crate at the row's version;
+    a repository the e2e records (values.provenance) is at that commit; a crate comes after the roster crates
+    its manifest depends on; no workflow at the commit can publish to a registry; the main CI of the commit is
+    green (main_ci_problems, when `runs` reads it)"""
+    prov = read_provenance(provenance_text)
+    problems: list[str] = []
+    compared = 0
+    for name, c in sorted(roster.items(), key=lambda kv: kv[1]["order"]):
+        if c["state"] == "exempt":
+            continue
+        repo_name, sha = c.get("repo"), c["sha"]
+        where = f"{name} {c['version']} ({repo_name} {sha[:12]})"
+        repo = repos_root / repo_name if repo_name else None
+        if repo is None:
+            problems.append(f"{where}: the row names no `repo`")
+            continue
+        if not (repo / ".git").exists():
+            problems.append(f"{where}: no checkout of {repo_name} under {repos_root}")
+            continue
+        try:
+            git(repo, "cat-file", "-e", f"{sha}^{{commit}}")
+        except subprocess.CalledProcessError:
+            problems.append(f"{where}: the commit is not in the checkout (fetch the full history of main)")
+            continue
+        compared += 1
+        if subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", sha, "origin/main"],
+                          capture_output=True, env=GIT_ENV).returncode != 0:
+            problems.append(f"{where}: the commit is not on main (not an ancestor of origin/main)")
+        mpath = c.get("manifest-path", "Cargo.toml")
+        try:
+            text = git(repo, "show", f"{sha}:{mpath}")
+            pkg = tomllib.loads(text).get("package", {})
+        except (subprocess.CalledProcessError, tomllib.TOMLDecodeError) as e:
+            problems.append(f"{where}: {mpath} cannot be read at the commit ({type(e).__name__})")
+            continue
+        if pkg.get("name") != name:
+            problems.append(f"{where}: {mpath} at the commit is the package {pkg.get('name')!r}, not {name}")
+        if pkg.get("version") != c["version"]:
+            problems.append(f"{where}: {mpath} at the commit has version {pkg.get('version')!r}, the roster "
+                            f"{c['version']}: run `release_train.py record`")
+        if repo_name in prov:
+            psha, pcrates = prov[repo_name]
+            if psha != sha:
+                problems.append(f"{where}: the e2e provenance records {repo_name} at {psha[:12]}, the roster at "
+                                f"{sha[:12]} (re-record both: `release_train.py record` after the e2e bless)")
+            if name in pcrates and pcrates[name] != c["version"]:
+                problems.append(f"{where}: the e2e provenance records {name} {pcrates[name]}, the roster "
+                                f"{c['version']}")
+        for dep in sorted(manifest_alice_names(text)):
+            if dep in roster and dep != name and roster[dep]["order"] >= c["order"]:
+                problems.append(f"{where}: depends on {dep} (order {roster[dep]['order']}), which is not before it "
+                                f"in order ({c['order']})")
+        wf, _ = workflow_publish_problems(repo, sha, name)
+        problems += [p.replace(" outside this gate", "").replace(" without it): remove it",
+                                                                     "): nothing is published, remove it")
+                     for p in wf]
+        if runs is not None:
+            problems += main_ci_problems(name, repo, f"{github}/{repo_name}", sha, runs)
+    return problems, compared
+
+
+def record_text(text: str, roster: dict[str, dict], repos_root: Path, provenance_text: str) -> tuple[str, list[str]]:
+    """the roster text with each non-exempt row's `sha` set to its repository's commit (the e2e provenance
+    for the repositories it records, else origin/main of repos_root/<repo>) and `version` to the version
+    the manifest has there; the rest of the text (comments, other keys) is kept; (text, changes)"""
+    prov = read_provenance(provenance_text)
+    lines = text.splitlines(keepends=True)
+    changes = []
+    for name, c in roster.items():
+        if c["state"] == "exempt":
+            continue
+        repo_name = c["repo"]
+        repo = repos_root / repo_name
+        sha = prov[repo_name][0] if repo_name in prov else git(repo, "rev-parse", "origin/main").strip()
+        version = tomllib.loads(git(repo, "show", f"{sha}:{c.get('manifest-path', 'Cargo.toml')}"))["package"]["version"]
+        head = next(i for i, line in enumerate(lines) if line.strip() == f"[crate.{name}]")
+        end = next((i for i in range(head + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines))
+        seen = set()
+        for i in range(head + 1, end):
+            for key, value in (("version", version), ("sha", sha)):
+                if re.match(rf"{key}\s*=", lines[i]):
+                    lines[i] = f'{key} = "{value}"\n'
+                    seen.add(key)
+        if "sha" not in seen:
+            at = next(i for i in range(head + 1, end) if re.match(r"version\s*=", lines[i]))
+            lines.insert(at + 1, f'sha = "{sha}"\n')
+        if (c["version"], c.get("sha")) != (version, sha):
+            changes.append(f"{name}: {c['version']} {str(c.get('sha'))[:12]} -> {version} {sha[:12]}")
+    return "".join(lines), changes
+
+
+def main(argv: list[str] | None = None, runs=gh_main_runs, metadata=sg.cargo_metadata) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--roster", type=Path, default=DEFAULT_ROSTER)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("next")
-
-    def release_args(p, verify: bool):
-        p.add_argument("crate")
-        p.add_argument("--repo", type=Path, required=True, help="the release checkout")
-        p.add_argument("--ref", required=True, help="the commit being (or that was) published")
-        p.add_argument("--manifest-path", default="Cargo.toml", help="the crate's manifest, relative to the repository")
-        if verify:
-            p.add_argument("--expect-sha256", required=True, help="the .crate sha256 the gate printed")
-            p.add_argument("--remote", default="origin", help="where the tag is read")
-
-    g = sub.add_parser("publish-gate")
-    release_args(g, False)
-    g.add_argument("--repos-root", type=Path,
-                   help="the directory holding a checkout of every consumer repository (default: the parent of --repo)")
-    g.add_argument("--consumers-at", default="origin/main",
-                   help="the commit read in each consumer checkout (fetch first)")
-    g.add_argument("--target-dir", type=Path, help="where cargo package builds (default: a temporary directory)")
-    release_args(sub.add_parser("publish-verify"), True)
-    m = sub.add_parser("roster-mark")
-    m.add_argument("state", choices=["published"])
-    release_args(m, True)
+    for cmd in ("check", "record"):
+        p = sub.add_parser(cmd)
+        p.add_argument("--repos-root", type=Path, required=True,
+                       help="the directory holding a checkout of every roster repository (origin/main fetched, "
+                            "with the history back to each row's commit)")
+        p.add_argument("--provenance", type=Path, default=DEFAULT_PROVENANCE,
+                       help="the main commits the e2e golden was recorded from")
+        p.add_argument("--no-ci", action="store_true", help="do not read the main CI of each commit from GitHub")
     f = sub.add_parser("followups")
     f.add_argument("crate")
     f.add_argument("--repos-root", type=Path, required=True, help="the directory holding a checkout of every roster repository")
@@ -2242,17 +1194,42 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
     a = ap.parse_args(argv)
     try:
         roster_text = a.roster.read_text(encoding="utf-8")
-        roster = load_roster(roster_text)
+        roster = load_roster(roster_text, need_sha=a.cmd != "record")
     except (OSError, ValueError) as e:
         print(f"error: {a.roster}: {e}", file=sys.stderr)
         return 2
-    if a.cmd == "next":
-        name, pending = next_crate(roster)
-        if name is None:
-            print("nothing to publish: every crate in the roster is published or exempt")
-            return 1
-        print(f"next: {name} {roster[name]['version']} (state {roster[name]['state']}, {pending} unpublished)")
-        return 0
+    if a.cmd in ("check", "record"):
+        try:
+            provenance_text = a.provenance.read_text(encoding="utf-8")
+            github = tomllib.loads(roster_text).get("train", {}).get("github", "ext-sakamoro")
+            if a.cmd == "record":
+                text, changes = record_text(roster_text, roster, a.repos_root, provenance_text)
+                recorded = load_roster(text)
+                refused = [] if a.no_ci else [
+                    p for n, c in recorded.items() if c["state"] == "main"
+                    for p in main_ci_problems(n, a.repos_root / c["repo"], f"{github}/{c['repo']}", c["sha"], runs)]
+                if refused:
+                    for p in refused:
+                        print(f"refused: {p}")
+                    print("record: nothing written (a commit to record has no green main CI)")
+                    return 1
+                a.roster.write_text(text, encoding="utf-8")
+                for line in changes:
+                    print(f"recorded: {line}")
+                print(f"record: {len(changes)} row(s) changed; commit {a.roster}")
+                return 0
+            problems, compared = check_problems(roster, a.repos_root, provenance_text,
+                                                None if a.no_ci else runs, github)
+        except (OSError, ValueError, StopIteration, KeyError, subprocess.CalledProcessError) as e:
+            print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
+            return 2
+        for p in problems:
+            print(f"refused: {p}")
+        print(f"check: {compared} crate(s) compared at their main commits, {len(problems)} problem(s)")
+        if compared == 0:
+            print("error: no crate was compared", file=sys.stderr)
+            return 2
+        return 1 if problems else 0
     if a.cmd == "feature-coverage":
         try:
             problems, ok, compared = feature_coverage(roster, a.repos_root, metadata)
@@ -2283,176 +1260,25 @@ def main(argv: list[str] | None = None, fetch: dc.Fetch = dc.http_fetch,
             print(f"error: no workflow runs scripts/semver_gate.py at {a.at}: nothing was compared", file=sys.stderr)
             return 2
         return 1 if problems else 0
-    if a.cmd != "followups" and a.crate not in roster:
-        print(f"refused: {a.crate} is not in the roster")
-        return 1
-    try:
-        if a.cmd == "followups":
-            if a.crate not in roster:
-                print(f"error: {a.crate} is not in the roster", file=sys.stderr)
-                return 2
-            bump, ok, read = followups(roster, a.crate, a.repos_root, a.at)
-            if read == 0:
-                print("error: no Cargo.toml was read", file=sys.stderr)
-                return 2
-            for line in bump:
-                print(f"bump: {line}")
-            for line in ok:
-                print(f"ok:   {line}")
-            print(f"followups for {a.crate} {roster[a.crate]['version']}: {len(bump)} to bump, "
-                  f"{len(ok)} accept it ({read} manifests at {a.at})")
-            return 1 if bump else 0
-        problems = checkout_problems(a.repo, a.ref)
-        commit = git(a.repo, "rev-parse", "--verify", f"{a.ref}^{{commit}}").strip()
-        manifest_text = git(a.repo, "show", f"{a.ref}:{a.manifest_path}")
-        manifest_dir = str(Path(a.manifest_path).parent).replace("\\", "/")
-        manifest_dir = "" if manifest_dir == "." else manifest_dir
-        if a.cmd == "publish-gate":
-            root_text = None
-            if manifest_dir:
-                root_text = git(a.repo, "show", f"{a.ref}:Cargo.toml")
-            gate_problems, compared = publish_gate(roster, a.crate, manifest_text, fetch, root_text)
-            problems += gate_problems
-            hist, n = history_problems(a.repo, a.ref, a.crate, roster[a.crate], a.manifest_path)
-            problems += hist
-            compared += n
-            root = a.repos_root or a.repo.resolve().parent
-            reg, n = consumers(roster, a.crate, roster[a.crate]["version"], root, a.consumers_at)
-            problems += reg
-            compared += n
-            print(f"consumers: {n} manifests read under {root} at {a.consumers_at}")
-            sf, n = (shared_files or shared_files_strict)()
-            problems += sf
-            compared += n
-            print(f"shared files: {'the table matches every listed main' if not sf else f'{len(sf)} problem(s)'}")
-            github = tomllib.loads(roster_text).get("train", {}).get("github")
-            owner_repo = f"{github}/{roster[a.crate]['repo']}" if github and roster[a.crate].get("repo") else None
-            declared_all = tomllib.loads(roster_text).get("secrets", {})
-            repo_name = roster[a.crate].get("repo")
-            declared = {k: v for k, v in declared_all.get(repo_name, {}).items()} if repo_name else {}
-            try:
-                inv = inventory(owner_repo)
-            except RuntimeError as e:
-                inv = None
-                problems.append(f"{a.crate}: the secrets of the repository could not be read ({e})")
-            roster_data = tomllib.loads(roster_text)
-            declared_vars = roster_data.get("variables", {}).get(repo_name, {}) if repo_name else {}
-            hosts = roster_data.get("self-hosted", {}).get(repo_name, {}) if repo_name else {}
-            if inv is not None:
-                problems += secret_problems(a.crate, repo_name, declared, inv)
-                problems += variable_problems(a.crate, repo_name, declared_vars, inv)
-                compared += 2
-            wf, n = workflow_publish_problems(a.repo, a.ref, a.crate, owner_repo, reviewers, declared,
-                                              (inv or {}).get("reviewers", {}), hosts,
-                                              [set(x) for x in (inv or {}).get("runners", [])])
-            problems += wf
-            compared += n
-            dispatched: list[str] = []
-            if roster[a.crate].get("required-ci"):
-                github = tomllib.loads(roster_text).get("train", {}).get("github")
-                if not isinstance(github, str) or not github or "repo" not in roster[a.crate]:
-                    print(f"error: {a.roster}: required-ci needs [train] github (the owner) and the crate's repo",
-                          file=sys.stderr)
-                    return 2
-                ci, n = ci_problems(a.crate, roster[a.crate], f"{github}/{roster[a.crate]['repo']}", commit, actions,
-                                    dispatched)
-                problems += ci
-                compared += n
-            problems += package_problems(a.crate, lister(a.repo, a.manifest_path))
-            compared += 1
-            features = package_features(metadata, a.repo, a.manifest_path, a.crate)
-            universe = sg.universe_from_features(features)
-            cov, n = feature_coverage_problems(a.crate, roster[a.crate], features)
-            problems += cov
-            compared += n
-            for p in problems:
-                print(f"refused: {p}")
-            if problems:
-                return 1
-            version = roster[a.crate]["version"]
-            with tempfile.TemporaryDirectory() as tmp:
-                crate_path = packager(a.repo, a.manifest_path, a.crate, version, a.target_dir or Path(tmp))
-                body = crate_path.read_bytes()
-            # `cargo publish` packages the working tree: packaging must leave it as it was (a lock
-            # rewritten because a sibling checkout has another version would not be what was gated)
-            after = checkout_problems(a.repo, a.ref)
-            if after:
-                for p in after:
-                    print(f"refused: after cargo package: {p}")
-                return 1
-            text_problems, _ = package_text_problems(body, a.crate, version, a.repo, a.ref,
-                                                     roster[a.crate].get("repo"), manifest_dir)
-            if text_problems:
-                for p in text_problems:
-                    print(f"refused: {p}")
-                return 1
-            compared += 1
-            consumer_problems = (consumer or consumer_build)(body, a.crate, version, a.target_dir, roster[a.crate],
-                                                             universe=universe)
-            for p in consumer_problems:
-                print(f"refused: {p}")
-            if consumer_problems:
-                return 1
-            compared += 1
-            semver_found, n, semver_note = semver(a.repo, a.manifest_path, a.crate, version,
-                                                  tomllib.loads(manifest_text), roster[a.crate], fetch,
-                                                  universe=universe)
-            for p in semver_found:
-                print(f"refused: {p}")
-            if semver_found:
-                return 1
-            compared += n
-            digest = hashlib.sha256(body).hexdigest()
-            print(f"publish-gate: go for {a.crate} {version} ({compared} checks)")
-            print(f"  commit:        {commit}")
-            print(f"  .crate sha256: {digest} ({len(crate_files(body))} files, built by cargo package)")
-            if dispatched:
-                print(f"  dispatched:    required CI from a dispatched run: {'; '.join(dispatched)}")
-            print("  text:          every file of the package read by scripts/public_text_check.py")
-            print("  consumer:      the unpacked .crate built as a crates.io consumer builds it (empty CARGO_HOME, "
-                  "minimal environment, no Cargo.lock or configuration above it, each feature set)")
-            print(f"  semver:        {semver_note}")
-            print(f"  publish:       {publish_command(a.repo, a.manifest_path, lock_tracked(a.repo, a.manifest_path))}")
-            print(f"  then:          python3 scripts/release_train.py roster-mark published {a.crate} "
-                  f"--repo {a.repo} --ref {commit} --expect-sha256 {digest}"
-                  + (f" --manifest-path {a.manifest_path}" if manifest_dir else ""))
-            return 0
-        # publish-verify / roster-mark
-        owners = tomllib.loads(roster_text).get("train", {}).get("owners")
-        if not isinstance(owners, list) or not owners:
-            print(f"error: {a.roster}: [train] owners (the crates.io owners every release must have) is missing",
-                  file=sys.stderr)
-            return 2
-        verify_problems, compared = publish_verify(
-            roster, owners, a.crate, commit, manifest_text, manifest_dir, a.expect_sha256, fetch, download,
-            lambda tag: tags(a.repo, a.remote, tag))
-        problems += verify_problems
-        version = roster[a.crate]["version"]
-        try:
-            d = docs(a.crate, version)
-            print(f"docs.rs: {a.crate} {version} doc_status={d.get('doc_status')} (information, not a check)")
-        except (OSError, ValueError, urllib.error.URLError) as e:
-            print(f"docs.rs: {a.crate} {version} status not read ({e}) (information, not a check)")
-    except subprocess.CalledProcessError as e:
-        print(f"error: {Path(str(e.cmd[0])).name}: {(e.stderr or '').strip()}", file=sys.stderr)
+    # followups
+    if a.crate not in roster:
+        print(f"error: {a.crate} is not in the roster", file=sys.stderr)
         return 2
-    except (OSError, ValueError, RegistryError, sg.RegistryError, sg.MetadataError, urllib.error.URLError, TimeoutError, json.JSONDecodeError,
-            tarfile.TarError) as e:
-        # OSError covers a reset connection and a missing checkout; ValueError covers a
-        # malformed manifest, requirement or version, and an unreadable JSON body
+    try:
+        bump, ok, read = followups(roster, a.crate, a.repos_root, a.at)
+    except (OSError, ValueError, subprocess.CalledProcessError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    for p in problems:
-        print(f"refused: {p}")
-    if problems:
-        return 1
-    if a.cmd == "publish-verify":
-        print(f"publish-verify: {a.crate} {version} is the release of {commit} ({compared} checks)")
-        return 0
-    a.roster.write_text(mark_published(roster_text, a.crate), encoding="utf-8")
-    print(f"roster-mark: {a.crate} {version} is published (verified, {compared} checks); commit {a.roster}")
-    return 0
-
+    if read == 0:
+        print("error: no Cargo.toml was read", file=sys.stderr)
+        return 2
+    for line in bump:
+        print(f"bump: {line}")
+    for line in ok:
+        print(f"ok:   {line}")
+    print(f"followups for {a.crate} {roster[a.crate]['version']}: {len(bump)} to bump, "
+          f"{len(ok)} accept it ({read} manifests at {a.at})")
+    return 1 if bump else 0
 
 if __name__ == "__main__":
     sys.exit(main())

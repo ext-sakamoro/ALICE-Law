@@ -9,9 +9,9 @@ path 依存を使わない 検査は 2 種類:
 - 依存の整合 (この場で、core crate の main branch から): すべての `alice-*` crate が `Cargo.lock` でちょうど 1 つの版に解決され、`scripts/dep_consistency.py` 自身の `CORE` 一覧が挙げる crate がすべてあり、lock file のすべての `alice-*` の package がその repository の main branch から来る
 - end to end (core crate の main branch から): law を読み、計算し、保存し、復元し、すべての値を bit で比べる
 
-core crate の release train (計画と、各公開の前後に走らせる script: [runbook](#runbook-crate-ごと)) と、この repository が公開する text の検査も持つ
+main の commit での core crate の roster (それを記録し検査する script: [runbook](#runbook-record-と-check)) と、この repository が公開する text の検査も持つ
 
-目次: [依存の整合](#依存の整合) · [Release train](#release-train) · [公開する text](#公開する-text) · [Conformance](#conformance) · [End to end](#end-to-end) · [公開まで失敗する step](#公開まで失敗する-step) · [状態](#状態) · [ライセンス](#ライセンス)
+目次: [依存の整合](#依存の整合) · [Release train](#release-train) · [公開する text](#公開する-text) · [Conformance](#conformance) · [End to end](#end-to-end) · [版まで失敗する step](#版まで失敗する-step) · [状態](#状態) · [ライセンス](#ライセンス)
 
 ## 依存の整合
 
@@ -38,52 +38,24 @@ CI (`.github/workflows/dependency-consistency.yml`) は試験、semver crate と
 
 ## Release train
 
-`release-train.toml` は core crate をまとめて公開する計画: crate ごとに、公開する版、順序の中の位置 (crate は自分が要求するものすべての後)、状態 (`planned`、`prepared-local`、`prepared`、`published`、この repository は `exempt`)、repository、repository に crate が 2 つ以上ある時は manifest の path と tag の名前 (`tag`、既定は `v{version}`) を持つ `[train] owners` はすべての公開に必要な crates.io の owner を挙げる crate が他に何を要求するかはここに書かない: 公開する checkout の crate 自身の `Cargo.toml` から読むので、出所は 1 つ crate は `must-contain` (公開する commit が含むべき commit)、`changelog-has` (CHANGELOG の `## [<version>]` の節が含むべき行)、`must-contain-patch` (公開する commit が、直近の merge でない 2000 commit の中に、変更そのものか rebase した写しとして持つべき変更の `git patch-id --stable` の id)、`required-ci` (`{ workflow, job, legs, since }`; `since` のある entry はその crate のその版から効く: 公開する commit に対するその workflow の最新の GitHub Actions run で、job の leg `<job>` / `<job> (...)` が、期待どおり (件数か正確な名前) で、すべて success で完了していること 欠けた leg、余分な leg、実行中・skip・失敗の leg は拒否、CI が読めないのも拒否) も持てる
+`release-train.toml` は core crate それぞれを、その repository の main branch の commit で名指す: crate ごとに、`sha` (その commit)、`version` (そこでの manifest の版)、順序の中の位置 (crate は自分の manifest が依存する roster の crate すべての後)、状態 (`main`、この repository は `exempt`)、repository、repository に crate が 2 つ以上ある時は manifest の path を持つ crates.io には何も公開しない: 利用側はそれぞれの crate をその repository の main branch から取る crate が他に何を要求するかは `sha` での crate 自身の `Cargo.toml` から読むので、出所は 1 つ `sha` と `version` は `record` が書き、手では書かない
 
-### Runbook: crate ごと
+### Runbook: record と check
 
 ```sh
 S=scripts/release_train.py
-python3 $S next                                                      # 1. the crate to publish now
-git clone <its repository> /tmp/rel && git -C /tmp/rel checkout <sha> # 2. a clean checkout of the release commit
-python3 $S publish-gate <crate> --repo /tmp/rel --ref <sha>          # 3. exit 0 = go; prints the .crate sha256 and the publish command
-(cd /tmp/rel && cargo publish --locked --manifest-path Cargo.toml)    # 4. the command the gate printed, run by a person
-git -C /tmp/rel tag -a <tag> <sha> -m "<crate> <version>" && git -C /tmp/rel push origin <tag>   # 5. the tag at the published commit
-python3 $S roster-mark published <crate> --repo /tmp/rel --ref <sha> --expect-sha256 <from 3>   # 6. verify, then mark the roster
-python3 $S followups <crate> --repos-root <dir with every roster checkout>                      # 7. who has to raise a requirement
+python3 $S record --repos-root <dir with every roster checkout>     # 1. write sha and version (refuses a commit whose main CI is not green)
+python3 $S check --repos-root <dir with every roster checkout>      # 2. exit 0 = every row is at a green main commit
+python3 $S followups <crate> --repos-root <dir with every roster checkout>   # 3. who has to raise a requirement
 ```
 
-その後 `release-train.toml` を commit し、`followups` が挙げる要求の引き上げを取り込む (順序の次の crate はその 1 つ)
+それから `release-train.toml` を commit する `e2e/golden/values.provenance` が変わった時は e2e の bless の後に (`record` は provenance が記録する repository ではその commit を取る)
 
-1. `next` は順序の中で公開されていない最初の crate を名指す
-2. `cargo publish` は working tree を package にするので、gate は作業中の写しでなく、その commit の clone で走らせる
-3. `publish-gate <crate> --repo <checkout> --ref <sha> [--manifest-path <path>]` はその commit の crate の manifest (と repository の根の `Cargo.toml`) を読み (package の文章の検査は非公開の名前の鍵を要するので、publish-gate を走らせる CI の job は `ALICE_PRIVATE_NAME_HMAC_KEY` を渡す)、次の時に拒否する:
-   - checkout がその commit でない、または追跡している file に変更がある
-   - crate が `prepared` でない、または manifest が roster と別の crate か版
-   - manifest が `alice-*` crate を上書きする (`[patch.*]`、`[replace]`) か、別の registry から取る
-   - その版がすでに crates.io にある
-   - manifest の `alice-*` 依存 (normal か build、optional か否か、どの target か、改名の有無、名前の `-` / `_` を問わず) に crates.io の版の要求が無い、または roster で `published` でない crate を名指す、crates.io に無いか yank されている、要求に受けられない (Cargo の規則: `"0.4"` は 0.5.0 を受けない) roster の外の依存はその最新の公開版と照らす
-   - `must-contain` の commit がその commit の祖先でない、CHANGELOG に `## [<version>] - YYYY-MM-DD` の公開の見出し (実在する日付で、明日より後でない; すべての crate で確かめる) が無い、その節に `changelog-has` の行が無い
-   - 直近の commit のどれも `must-contain-patch` の patch を持たない
-   - `required-ci` の job が、その commit に対する workflow の最新の run で期待どおりの leg を持たない、または leg が success で完了していない
-   - repository の Actions secrets (repository と environment、GitHub から読む; 何も読めなければ拒否) に、roster の `[secrets."<repository>"]` が用途とともに宣言していない名前がある (または roster が宣言した名前が repository に無い)、または公開の credential が必須の reviewer を持つ environment の外にある; release、tag、dispatch、schedule の trigger で、そのような environment の外で job が secret (`GITHUB_TOKEN` 以外の `secrets.<name>`、`secrets: inherit`、OIDC token) を受ける (受ける secret がすべて公開に使わないと宣言されている時を除く); `secrets: inherit` は local の workflow にだけ渡せ、その workflow も読む; repository の Actions variables (repository と environment) は `[variables."<repository>"]` に用途とともに宣言する (variable は credential を持たない)、Dependabot の secret は `[secrets]` に `dependabot:<name>` として宣言する、どの一覧も page ごとに読み、GitHub が数える件数と同じ数の名前を持つこと; release、tag、dispatch、schedule の trigger で self-hosted runner で走りうる job (runner group、GitHub-hosted の image の正確な label でない label、repository に登録された runner の label (GitHub から読む)、literal の値がすべて GitHub-hosted の image である matrix の値以外の式、または式が選ぶ literal の一覧がすべてそうでない式) は、必須の reviewer を持つ environment の下で走るか、`[self-hosted."<repository>"]` に宣言する (`"<workflow>:<job>"`、`registry-credentials-on-host = false`)
-   - その commit の repository の workflow が、この gate の外で公開できる (tag の push で gate を通らず公開されうる): job ごとに、comment を除き継続行をつないで読み、crates.io の credential (secret として、または `CARGO_REGISTRY_TOKEN` / `CARGO_REGISTRIES_<name>_TOKEN` にある crates.io の token、crates.io の auth action、cargo を走らせる job の OIDC token) か crates.io の公開の command (`--dry-run` の無い `cargo … publish`、release-plz、publish-crates) がどこかにある; `environment` に必須の reviewer の無い job に PyPI / npm の token、OIDC token、公開の command がある (GitHub から読む); workflow を 1 つも読まなければ何も比べていない
-   - package (`cargo package --list`) が `.github/`、`scripts/`、`docs/`、`logs/` の下の file や、非公開のメモ (file と directory の名前を script の中で sha256 として持つ) を含む: repository の道具とメモであって crate ではない manifest に `include` を置く
+1. `record --repos-root <dir> [--provenance <file>] [--no-ci]` は各行の `sha` を、`e2e/golden/values.provenance` がその repository に記録する commit、それ以外は checkout の `origin/main` にし、`version` をそこでの manifest の版にする file の他の部分はそのまま残す main での push の run がすべて green でない commit があれば何も書かない
+2. `check --repos-root <dir> [--provenance <file>] [--no-ci]` は、commit が main に無い (`origin/main` の祖先でない、先に履歴を fetch する)、そこでの manifest が別の crate か版、provenance がその repository を別の commit で記録している、manifest が依存する roster の crate より前にある、その commit の workflow が registry に公開できる (crates.io の credential か公開の command がどこかにある; PyPI / npm のものが required reviewers のある environment の外にある)、main での push の run がすべて success で完了していない、のどれかに当たる行を拒否する schedule や dispatch の run が red なのは note として表示する (それ自身の gate が追う) push の run が 1 つも無いのは、その commit のすべての workflow がその変更で filter されて走らない場合を除いて拒否 (その場合は表示する) private の repository は拒否する (ここから CI が読めない)
+3. `followups <crate> --repos-root <dir> [--at origin/main]` は、roster のすべての repository の checkout (先に fetch する) で `--at` のすべての `Cargo.toml` を読み、その crate への要求 (normal、dev、build、target、workspace) のうち roster の版を受けないものと、crate 自身の repository の外にある版の無いものを挙げる 上げるべきものがある間は exit 1
 
-   go の時は `cargo package` (`cargo publish` と同じく package にした crate を build し、`Cargo.lock` が commit されていれば `--locked`) を走らせ、commit、`.crate` の sha256、正確な `cargo publish` の command を表示する package にした後、package のすべての file を `scripts/public_text_check.py` で読み (path は repository の path に戻し、その `.public-text.toml` と許可の一覧を使う; 内部の text を含む package は拒否、file が 1 つも無ければ何も比べていない)、checkout をもう一度確かめる (`cargo publish` は working tree を package にするので、package を作ることで追跡している file が変わってはならない: たとえば sibling の checkout が別の版を持つために lock が書き換わる場合) go の前に、その `.crate` を crates.io の利用者と同じように build もする: 上に `Cargo.lock`、`Cargo.toml`、`.cargo/config` の無い新しい directory に展開し、空の `CARGO_HOME` (registry の cache は gate 自身の directory) と最小の環境 (機械の `RUSTFLAGS`、`RUSTC_WRAPPER`、`CARGO_*` を持ち込まない) で、空の crate の path 依存として、既定の feature で 1 回、feature 無しで 1 回、すべての feature で 1 回 (同時に有効にできない feature は拒否する、ただし roster が `consumer-features` で build する組を挙げた時を除く; Python extension のように別の道具が link する library の feature は `consumer-check-features` から `cargo check` で compile する; `consumer-features-why` に理由を書き、ある組の既知の失敗は `consumer-expected-failure` に、それが示すべき error (`expect = {code, file, text, count, label?, message?}`: cargo の JSON 診断にある crate 自身のすべての error がその code、file、強調された source の text と、与えた時は主 span の label ("expected `…`, found `…`") を持ち、ちょうど `count` 件あること なので隣の別の error、同じ file の同じ code の別の error、同じものがもう 1 件、comment の中にだけある code は拒否する) と、それを直す公開とともに載せ、その後は拒否する) (`consumer-features-why` に、外した feature と理由: Python extension のように別の道具が build する feature、ある platform の hardware のための feature) library の無い crate はそれだけを、その外の directory から build する; Cargo の設定 (`.cargo/config`、`.cargo/config.toml`) を含む `.crate` は拒否する build の失敗、または crate の library (か binary) を 1 つも compile しなかった build は拒否する (`cargo package` は repository の中で検証するので、crate の上の lock を読む build script は repository の lock を見つけてしまう) `Cargo.lock` が commit されていれば、`.crate` は `cargo publish` が upload するものと同じ byte になる; 無ければ cargo はその時点で package に入れる lock を解決するので、gate の直後に公開する
-4. 公開は script が行わない唯一の段
-5. `publish-verify` は remote (`--remote`、既定は `origin`) から tag を読む
-6. `roster-mark published` は `publish-verify` を走らせ、すべての検査が通った時だけ crate の `state = "prepared"` の行を `published` に変える `publish-verify` (書き換えをしない同じ検査) は次の時に拒否する:
-   - その版が crates.io に無い、または yank されている
-   - その checksum が gate の表示した sha256 でない
-   - その license が manifest のものでない、または owner が `[train] owners` でない
-   - download した `.crate` の hash がその checksum にならない、またはその `.cargo_vcs_info.json` が別の commit、dirty な checkout、別の directory を名指す
-   - tag が remote に無い、または別の commit を名指す
-
-   docs.rs の build の状態も情報として表示する (docs.rs は公開の後に build する)
-7. `followups <crate> --repos-root <dir> [--at origin/main]` は、roster のすべての repository の checkout (先に fetch する) で `--at` のすべての `Cargo.toml` を読み、その crate への要求 (normal、dev、build、target、workspace) のうち roster の版を受けないものと、crate 自身の repository の外にある版の無いものを挙げる 上げるべきものがある間は exit 1
-
-「crates.io に無い」と数えるのは HTTP 404 だけ; それ以外の応答 (error の本文、頼んだのと別の版、切れた接続) は command を exit 2 で止める 何も比べなかった command (roster の crate が無い、package の file が無い、manifest を読めない、`[train] owners` が無い) も同じ 要求の照合は `scripts/dep_consistency.py` のものを使う CI は試験 (`scripts/test_release_train.py`、crates.io、cargo、remote は fixture に置き換える) を走らせ、`next` を表示する
+何も比べなかった command (roster の crate が無い、manifest を読めない) は exit 2 crates.io の公開の gate (`publish-gate`、`publish-verify`、`roster-mark`、`next`) は 2026-11-13 に外した、この file の履歴にある CI は試験 (`scripts/test_release_train.py`、`scripts/test_release_train_main.py`、checkout と GitHub は fixture に置き換える) と、roster のすべての repository を新しく checkout しての `check` を走らせる
 
 ## 公開する text
 
@@ -128,9 +100,9 @@ CI (`e2e-main.yml`) では repository を並べて checkout し、`scripts/main_
 
 `scripts/e2e_teeth.py` (`e2e-main.yml` の teeth の job) は checkout の 1 行ずつを変え、試験が期待した message で失敗することを求める: 1 ulp ずれて decode した law の係数、f32 を通して保存した f64、何も返さない復元、反転した digest の byte、platform の libm の `exp`、わずかに長い熱の step、別の算術の識別子、1 ulp ずれた残差、build に入った 2 つ目の alice-zip の版
 
-## 公開まで失敗する step
+## 版まで失敗する step
 
-公開の前に通れない CI の step (たとえば、一方がまだ他方の 1 つ前の major を要求している main の branch を一緒に差し込む場合) は `scripts/expected_failure.py <step> -- <command>` で包み、`release-train.toml` の `[expected-failure.<name>]` に、待つ公開 (`until`)、その失敗が持つ error の行の text (`expect`)、理由 (`why`) とともに載せる 失敗はそれ自身の error の行から読む (端末の色の code を除いた後、大文字小文字を問わず `error` で始まり `:`、`[...]`、空白、行末が続く行、`fatal:`、Rust の panic; entry は `exit` で終了の status も名指せる): どの行も `expect` の text を含み、どの `expect` の text もどれかの行にあること なので 2 つ目の無関係な error や、text を引用するだけの log の行は通らない するとそれは予期したものとして報告され、それを要する step は飛ばされる; どの run も有効な entry (step、until、why) を job summary に挙げ、`expected_failure.py --check` はどの workflow も走らせない entry と、`exit = 101` 無しで `cargo` の command を包む entry で失敗する step は、別の形で失敗した時、roster で公開が `published` になった後も失敗する時、まだ載っているのに通った時 (entry を外す) に red になる したがって red の run は直すべき問題
+版が main に載る前に通れない CI の step (たとえば、一方がまだ他方の 1 つ前の major を要求している main の branch を一緒に差し込む場合) は `scripts/expected_failure.py <step> -- <command>` で包み、`release-train.toml` の `[expected-failure.<name>]` に、待つ版 (`until`、roster の crate とその版)、その失敗が持つ error の行の text (`expect`)、理由 (`why`) とともに載せる 失敗はそれ自身の error の行から読む (端末の色の code を除いた後、大文字小文字を問わず `error` で始まり `:`、`[...]`、空白、行末が続く行、`fatal:`、Rust の panic; entry は `exit` で終了の status も名指せる): どの行も `expect` の text を含み、どの `expect` の text もどれかの行にあること なので 2 つ目の無関係な error や、text を引用するだけの log の行は通らない するとそれは予期したものとして報告され、それを要する step は飛ばされる; どの run も有効な entry (step、until、why) を job summary に挙げ、`expected_failure.py --check` はどの workflow も走らせない entry と、`exit = 101` 無しで `cargo` の command を包む entry で失敗する step は、別の形で失敗した時、roster がその版かそれより後を記録した後も失敗する時、まだ載っているのに通った時 (entry を外す) に red になる したがって red の run は直すべき問題
 
 ## 状態
 
@@ -138,33 +110,33 @@ CI (`e2e-main.yml`) では repository を並べて checkout し、`scripts/main_
 
 `scripts/gen_law_status.py` が `release-train.toml`・`e2e/golden/values.digest`・`conformance/` から生成する (手で編集しない、生成結果と違えば CI が失敗する) CI の結果は各 workflow の run を見る
 
-### Release train
+### main の commit の crate
 
-| crate | 版 | 状態 | 順 | repository | tag |
-|---|---|---|---|---|---|
-| alice-det-math | 0.5.1 | published | 0 | ALICE-DetMath | v0.5.1 |
-| alice-crypto | 0.4.1 | published | 1 | ALICE-Crypto | v0.4.1 |
-| alice-zip | 0.10.0 | published | 2 | ALICE-Zip | v0.10.0 |
-| alice-zip-cli | 3.1.0 | published | 3 | ALICE-Zip | alice-zip-cli-v3.1.0 |
-| alice-analytics | 0.6.0 | published | 4 | ALICE-Analytics | v0.6.0 |
-| alice-db | 0.5.1 | published | 5 | ALICE-DB | v0.5.1 |
-| alice-physics | 3.1.0 | published | 6 | ALICE-Physics | v3.1.0 |
-| alice-sdf | 6.1.0 | published | 7 | ALICE-SDF | v6.1.0 |
-| alice-llm | 2.0.0 | published | 8 | ALICE-LLM | v2.0.0 |
-| alice-lol-macro | 0.3.0 | published | 9 | ALICE-LOL | alice-lol-macro-v0.3.0 |
-| alice-lol | 0.4.2 | published | 10 | ALICE-LOL | alice-lol-v0.4.2 |
-| alice-edge | 0.4.0 | planned | 11 | ALICE-Edge | v0.4.0 |
-| alice-law-integration | 0.0.0 | exempt | 12 | ALICE-Law | (なし) |
-| alice-ml | 0.2.0 | published | 13 | ALICE-ML | v0.2.0 |
-| alice-kinematics | 0.2.1 | published | 14 | ALICE-Kinematics | alice-kinematics-v0.2.1 |
-| alice-sync | 0.6.1 | published | 15 | ALICE-Sync | v0.6.1 |
-| alice-identity | 1.2.0 | planned | 16 | ALICE-Identity | v1.2.0 |
-| alice-channel | 0.1.0 | planned | 17 | ALICE-Channel | v0.1.0 |
-| alice-sign | 0.1.0 | planned | 18 | ALICE-Sign | v0.1.0 |
-| alice-font | 0.7.6 | planned | 19 | ALICE-Font | v0.7.6 |
-| alice-os-keystore | 0.2.0 | planned | 20 | ALICE-OS-Keystore | v0.2.0 |
+| crate | 版 | main の commit | 順 | repository |
+|---|---|---|---|---|
+| alice-det-math | 0.6.1 | d80446ebce73 | 0 | ALICE-DetMath |
+| alice-crypto | 0.7.0 | 33496b48d145 | 1 | ALICE-Crypto |
+| alice-zip | 0.11.0 | c498e1769a71 | 2 | ALICE-Zip |
+| alice-zip-cli | 4.0.0 | c498e1769a71 | 3 | ALICE-Zip |
+| alice-analytics | 0.7.0 | cf16e1928fae | 4 | ALICE-Analytics |
+| alice-db | 0.6.0 | 5db2b15cb148 | 5 | ALICE-DB |
+| alice-llm | 5.0.0 | be521bda68c5 | 6 | ALICE-LLM |
+| alice-lol-macro | 0.4.0 | 82a015737b94 | 7 | ALICE-LOL |
+| alice-law-integration | 0.0.0 | (対象外) | 8 | ALICE-Law |
+| alice-ml | 0.4.0 | f3cccc24e63b | 9 | ALICE-ML |
+| alice-physics | 4.0.0 | 8ea9fb861946 | 10 | ALICE-Physics |
+| alice-sdf | 7.0.0 | 0d5830e3f2c6 | 11 | ALICE-SDF |
+| alice-edge | 0.4.0 | 5de16c5a1980 | 12 | ALICE-Edge |
+| alice-sign | 0.1.0 | 41b19c231f36 | 13 | ALICE-Sign |
+| alice-lol | 0.5.0 | 82a015737b94 | 14 | ALICE-LOL |
+| alice-kinematics | 0.4.0 | 6919b0feddc4 | 15 | ALICE-Kinematics |
+| alice-identity | 3.0.0 | 0e1809b95fdb | 16 | ALICE-Identity |
+| alice-channel | 0.1.0 | 5f2b92cbd4ef | 17 | ALICE-Channel |
+| alice-sync | 0.8.0 | ef7472614c9d | 18 | ALICE-Sync |
+| alice-font | 0.8.0 | 00a0193ffd4d | 19 | ALICE-Font |
+| alice-os-keystore | 0.2.0 | 99ac2a4e2df0 | 20 | ALICE-OS-Keystore |
 
-### 公開まで失敗を予期する step
+### 版まで失敗を予期する step
 
 なし
 
