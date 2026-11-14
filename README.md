@@ -152,9 +152,7 @@ The status counts of each repository's manifest at main are computed from the ma
 
 ### Crates whose manifest is not written yet
 
-| crate | added in | why |
-|---|---|---|
-| alice-os-keystore | ALICE-OS-Keystore | the manifest has not been written yet |
+None.
 
 <!-- law-status:end -->
 
