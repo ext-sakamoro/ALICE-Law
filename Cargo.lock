@@ -46,7 +46,7 @@ dependencies = [
 [[package]]
 name = "alice-analytics"
 version = "0.7.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Analytics?branch=main#6ef41bc5abd923ec2fdd47618f8f2ac7d6b7b707"
+source = "git+https://github.com/ext-sakamoro/ALICE-Analytics?branch=main#fd09b3e447107fb9a57750b8077b30fe696f9d6d"
 dependencies = [
  "alice-det-math",
  "alice-zip",
@@ -56,7 +56,7 @@ dependencies = [
 [[package]]
 name = "alice-crypto"
 version = "0.7.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Crypto?branch=main#497e1703eb77a01d5615f4f334f886dbcab4818f"
+source = "git+https://github.com/ext-sakamoro/ALICE-Crypto?branch=main#9a6457390aeff4ae8a86e3e97110993eaa71bb31"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -73,8 +73,8 @@ dependencies = [
 
 [[package]]
 name = "alice-db"
-version = "0.6.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-DB?branch=main#06cc2af6d2ed1c3722a906ec8169cdecb41beef0"
+version = "0.7.2"
+source = "git+https://github.com/ext-sakamoro/ALICE-DB?branch=main#f717243f9c4045be8df5748271cb231f948cc972"
 dependencies = [
  "alice-analytics",
  "alice-crypto",
@@ -98,7 +98,7 @@ dependencies = [
 [[package]]
 name = "alice-det-math"
 version = "0.6.1"
-source = "git+https://github.com/ext-sakamoro/ALICE-DetMath?branch=main#d80446ebce73c5c397f7df12435cf574460400bf"
+source = "git+https://github.com/ext-sakamoro/ALICE-DetMath?branch=main#6269efc2280a74301c91139117d5d01a5eca60df"
 dependencies = [
  "bytemuck",
  "wide",
@@ -106,8 +106,8 @@ dependencies = [
 
 [[package]]
 name = "alice-edge"
-version = "0.4.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Edge?branch=main#43343e4b04fb45a3a7e8cf21defee7df44b947c0"
+version = "0.5.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Edge?branch=main#f57d5172dac58704d99d2a756dd08d658cfb277b"
 dependencies = [
  "alice-analytics",
  "alice-db",
@@ -134,7 +134,7 @@ dependencies = [
 [[package]]
 name = "alice-lol"
 version = "0.5.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#dadd426a09ab857c3734ed2ea34b06e623da9f05"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#f620a63d1a8357a0c99527a18cdf9638e892afd6"
 dependencies = [
  "alice-det-math",
  "alice-lol-layout",
@@ -150,7 +150,7 @@ dependencies = [
 [[package]]
 name = "alice-lol-layout"
 version = "0.1.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#dadd426a09ab857c3734ed2ea34b06e623da9f05"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#f620a63d1a8357a0c99527a18cdf9638e892afd6"
 dependencies = [
  "sha2",
 ]
@@ -158,7 +158,7 @@ dependencies = [
 [[package]]
 name = "alice-lol-macro"
 version = "0.4.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#dadd426a09ab857c3734ed2ea34b06e623da9f05"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#f620a63d1a8357a0c99527a18cdf9638e892afd6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -168,7 +168,7 @@ dependencies = [
 [[package]]
 name = "alice-physics"
 version = "4.0.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#45b6d569a90625ec3ac433c2f681c4396f680505"
+source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#ef9217caee6593ea0296a2192e09b77c85d214b1"
 dependencies = [
  "alice-physics-core",
 ]
@@ -176,7 +176,7 @@ dependencies = [
 [[package]]
 name = "alice-physics-core"
 version = "4.0.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#45b6d569a90625ec3ac433c2f681c4396f680505"
+source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#ef9217caee6593ea0296a2192e09b77c85d214b1"
 dependencies = [
  "alice-analytics",
  "alice-det-math",
@@ -186,7 +186,7 @@ dependencies = [
 [[package]]
 name = "alice-sdf"
 version = "7.0.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-SDF?branch=main#7be08e776412575de0fa291734afb806701f3cf0"
+source = "git+https://github.com/ext-sakamoro/ALICE-SDF?branch=main#bed9d564b6ff6c22b5568f7122f8af80b23b3f99"
 dependencies = [
  "alice-det-math",
  "alice-physics",
@@ -207,12 +207,12 @@ dependencies = [
 [[package]]
 name = "alice-serial"
 version = "0.2.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Serial?branch=main#16b34ebcaf3a195fe6500defb4d1e6002cb3d09d"
+source = "git+https://github.com/ext-sakamoro/ALICE-Serial?branch=main#38f306c2a4fc49d2b89f61494a16f1d0b07dc609"
 
 [[package]]
 name = "alice-zip"
-version = "0.11.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Zip?branch=main#f1aa51dada9048753bfea387ce4c6f07863d6070"
+version = "0.12.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Zip?branch=main#95ef35acd5ae33bc1dfceaf4d3b74925c50775a4"
 dependencies = [
  "alice-det-math",
  "flate2",

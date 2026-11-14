@@ -14,10 +14,10 @@ alice-lol = { git = "https://github.com/ext-sakamoro/ALICE-LOL", branch = "main"
 alice-det-math = { git = "https://github.com/ext-sakamoro/ALICE-DetMath", branch = "main", version = "0.6" }
 alice-sdf = { git = "https://github.com/ext-sakamoro/ALICE-SDF", branch = "main", version = "7", features = ["physics"] }
 alice-physics = { git = "https://github.com/ext-sakamoro/ALICE-Physics", branch = "main", version = "4", features = ["analytics"] }
-alice-db = { git = "https://github.com/ext-sakamoro/ALICE-DB", branch = "main", version = "0.6", features = ["analytics", "crypto"] }
-alice-zip = { git = "https://github.com/ext-sakamoro/ALICE-Zip", branch = "main", version = "0.11" }
+alice-db = { git = "https://github.com/ext-sakamoro/ALICE-DB", branch = "main", version = "0.7", features = ["analytics", "crypto"] }
+alice-zip = { git = "https://github.com/ext-sakamoro/ALICE-Zip", branch = "main", version = "0.12" }
 alice-crypto = { git = "https://github.com/ext-sakamoro/ALICE-Crypto", branch = "main", version = "0.7" }
 alice-analytics = { git = "https://github.com/ext-sakamoro/ALICE-Analytics", branch = "main", version = "0.7", features = ["law"] }
-alice-edge = { git = "https://github.com/ext-sakamoro/ALICE-Edge", branch = "main", version = "0.4", features = ["sdf", "db", "dashboard"] }
+alice-edge = { git = "https://github.com/ext-sakamoro/ALICE-Edge", branch = "main", version = "0.5", features = ["sdf", "db", "dashboard"] }
 
 [workspace]
