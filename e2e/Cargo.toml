@@ -26,3 +26,6 @@ alice-edge = { git = "https://github.com/ext-sakamoro/ALICE-Edge", branch = "mai
 sha2 = "0.10"
 
 [workspace]
+
+[package.metadata.alice]
+surfaces = ["rust"]

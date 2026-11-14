@@ -30,7 +30,7 @@
 "undeclared" = 4
 
 [repository."ALICE-Font"]
-"ci-not-built" = 2
+"ci-not-built" = 1
 "ci-not-run" = 1
 "readme" = 1
 "undeclared" = 4
@@ -41,7 +41,7 @@
 
 [repository."ALICE-Kinematics"]
 "readme" = 1
-"undeclared" = 4
+"undeclared" = 3
 
 [repository."ALICE-LLM"]
 "readme" = 2
@@ -49,11 +49,10 @@
 
 [repository."ALICE-LOL"]
 "readme" = 2
-"undeclared" = 11
+"undeclared" = 10
 
 [repository."ALICE-Law"]
 "readme" = 2
-"undeclared" = 3
 
 [repository."ALICE-ML"]
 "ci-not-built" = 2
@@ -63,11 +62,11 @@
 
 [repository."ALICE-OS-Keystore"]
 "readme" = 1
-"undeclared" = 3
+"undeclared" = 2
 
 [repository."ALICE-Physics"]
 "readme" = 2
-"undeclared" = 8
+"undeclared" = 5
 
 [repository."ALICE-SDF"]
 "ci-not-run" = 2

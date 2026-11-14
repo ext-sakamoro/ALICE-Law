@@ -11,3 +11,6 @@ license = "LicenseRef-Proprietary"
 semver = "1"
 
 [workspace]
+
+[package.metadata.alice]
+surfaces = []

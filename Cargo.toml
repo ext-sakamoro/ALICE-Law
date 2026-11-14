@@ -21,3 +21,6 @@ alice-analytics = { git = "https://github.com/ext-sakamoro/ALICE-Analytics", bra
 alice-edge = { git = "https://github.com/ext-sakamoro/ALICE-Edge", branch = "main", version = "0.5", features = ["sdf", "db", "dashboard"] }
 
 [workspace]
+
+[package.metadata.alice]
+surfaces = ["rust"]
