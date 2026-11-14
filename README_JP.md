@@ -152,9 +152,7 @@ CI (`e2e-main.yml`) では repository を並べて checkout し、`scripts/main_
 
 ### manifest がまだ無い crate
 
-| crate | 追加する repository | 理由 |
-|---|---|---|
-| alice-os-keystore | ALICE-OS-Keystore | the manifest has not been written yet |
+なし
 
 <!-- law-status:end -->
 
