@@ -1240,3 +1240,50 @@ fn a_release_is_built_with_the_row_it_started_at() {
 fn a_pre_release_is_refused() {
     let _ = release("0.6.0-rc.1");
 }
+
+/// The values digests a re-record replaced, each still computed by the main commits named under it in
+/// golden/values.previous (the record of what moved, ALICE-Law G8): dropping one is refused
+const KEPT_PREVIOUS: &[(&str, &str)] = &[(
+    "0.6.1",
+    "66b99010e871b2bc099ad5a4dd0f7c34cc5d6731f1c2a0459c0dd58284b081d7",
+)];
+
+#[test]
+fn the_previous_values_digests_are_kept() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("golden");
+    let previous =
+        std::fs::read_to_string(dir.join("values.previous")).expect("golden/values.previous");
+    let entries: Vec<(&str, &str)> = previous
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .map(|l| {
+            l.split_once(' ')
+                .expect("golden/values.previous: \"<version> <digest>\" per line")
+        })
+        .collect();
+    assert!(
+        !entries.is_empty(),
+        "golden/values.previous lists no digest"
+    );
+    for kept in KEPT_PREVIOUS {
+        assert!(
+            entries.contains(kept),
+            "golden/values.previous no longer lists {kept:?}"
+        );
+    }
+    let current = std::fs::read_to_string(dir.join("values.digest")).expect("golden/values.digest");
+    for (version, digest) in &entries {
+        assert!(
+            KNOWN_SEMANTICS.iter().any(|(known, _, _)| known == version),
+            "golden/values.previous names alice-det-math {version}, which KNOWN_SEMANTICS does not list"
+        );
+        assert!(
+            digest.len() == 64 && digest.bytes().all(|b| b.is_ascii_hexdigit()),
+            "golden/values.previous: {digest} is not a SHA-256 digest"
+        );
+        assert!(
+            !current.lines().any(|l| l == format!("{version} {digest}")),
+            "golden/values.previous: {version} {digest} is the current digest, not a previous one"
+        );
+    }
+}

@@ -1,0 +1,12 @@
+# Values digests golden/values.digest held before a re-record, each still computed by the main commits
+# named under it (tests/law_to_storage_roundtrip.rs `the_previous_values_digests_are_kept` fails if a line goes).
+# <alice-det-math version> <digest>, then `#` lines: the move that replaced it and the commits that reproduce it
+
+0.6.1 66b99010e871b2bc099ad5a4dd0f7c34cc5d6731f1c2a0459c0dd58284b081d7
+# replaced 2026-11-14 by ALICE-Physics 8ea9fb86..5e23fdf1 (1f9eb099: the Fix128 product rounds to nearest-even,
+# and the contact rework; PHYSICS_SEMANTICS_ID 9b356707 -> 6edd67f6 -> 07035121): only the world positions
+# move, 38 of 720 values, each by 1 ulp
+# computed by: ALICE-Analytics cf16e192 / ALICE-Crypto 33496b48 / ALICE-DB 5db2b15c / ALICE-DetMath d80446eb /
+# ALICE-Edge 5de16c5a / ALICE-LLM 0e31e189 / ALICE-LOL 82a01573 / ALICE-Physics 8ea9fb86 / ALICE-SDF 0d5830e3 /
+# ALICE-Serial 16b34ebc / ALICE-Zip c498e176 (the commits of the previous provenance), and as well by the
+# commits of golden/values.provenance with ALICE-Physics at 8ea9fb86

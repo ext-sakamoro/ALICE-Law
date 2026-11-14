@@ -1,14 +1,20 @@
-# The main commits golden/values.digest was recorded from (2026-11-13, `cargo test --release` in e2e/
+# The main commits golden/values.digest was recorded from (2026-11-14, `cargo test --release` in e2e/
 # with e2e/Cargo.toml as committed, toolchain of e2e/rust-toolchain.toml, aarch64; the two architectures
 # are compared by e2e-main.yml). One line per repository: <repository> <commit> <crates at that commit>
 # Re-record both files together (ALICE_LAW_E2E_BLESS=1) when a main changes what is computed.
-ALICE-Analytics cf16e1928fae6b73fa3c3e2792aa687175a29267 alice-analytics 0.7.0
-ALICE-Crypto 33496b48d145c3008de83bc521eba19cbf95c72e alice-crypto 0.7.0
-ALICE-DB 5db2b15cb148aeed1bd83cb1479a0989ab2a044e alice-db 0.6.0
-ALICE-DetMath d80446ebce73c5c397f7df12435cf574460400bf alice-det-math 0.6.1
-ALICE-Edge 5de16c5a19803578039d949da12f9fd0c6c7be1b alice-edge 0.4.0
-ALICE-LOL 82a015737b945baf4f1b46606de962d3f5387074 alice-lol 0.5.0, alice-lol-layout 0.1.0, alice-lol-macro 0.4.0
-ALICE-Physics 8ea9fb86194670419332c2a4484b84b7dd675f2c alice-physics 4.0.0, alice-physics-core 4.0.0
-ALICE-SDF 0d5830e3f2c6fece513c5e6aa9fd2e4ea7c76962 alice-sdf 7.0.0
-ALICE-Serial 16b34ebcaf3a195fe6500defb4d1e6002cb3d09d alice-serial 0.2.0
-ALICE-Zip c498e1769a71532239aed179e918734dd6329d8a alice-zip 0.11.0
+# 2026-11-14 re-record: only the world positions moved (38 of 720 values, each by 1 ulp; cooling, thermal,
+# rod, ties, the alice-edge fit and the residual summary are the same bits). The cause is ALICE-Physics
+# 8ea9fb86..5e23fdf1 alone: with every other repository at the commits below and ALICE-Physics at 8ea9fb86
+# the run computes the previous digest again. That range has 1f9eb099 (the Fix128 product rounds to
+# nearest-even) and the contact rework, PHYSICS_SEMANTICS_ID 9b356707 -> 6edd67f6 -> 07035121. The previous
+# digest and the commits that compute it are in golden/values.previous.
+ALICE-Analytics fd09b3e447107fb9a57750b8077b30fe696f9d6d alice-analytics 0.7.0
+ALICE-Crypto 5ab21f5da59530b6b0cb90728c608b79fb5ca8aa alice-crypto 0.7.0
+ALICE-DB f717243f9c4045be8df5748271cb231f948cc972 alice-db 0.7.2
+ALICE-DetMath 6269efc2280a74301c91139117d5d01a5eca60df alice-det-math 0.6.1
+ALICE-Edge f57d5172dac58704d99d2a756dd08d658cfb277b alice-edge 0.5.0
+ALICE-LOL f620a63d1a8357a0c99527a18cdf9638e892afd6 alice-lol 0.5.0, alice-lol-layout 0.1.0, alice-lol-macro 0.4.0
+ALICE-Physics 5e23fdf18315958031418d20111779a9faf2170a alice-physics 4.0.0, alice-physics-core 4.0.0
+ALICE-SDF 24b7fc689d119792aa4855d357b855c0ba03af8a alice-sdf 7.0.0
+ALICE-Serial 38f306c2a4fc49d2b89f61494a16f1d0b07dc609 alice-serial 0.2.0
+ALICE-Zip 95ef35acd5ae33bc1dfceaf4d3b74925c50775a4 alice-zip 0.12.0
