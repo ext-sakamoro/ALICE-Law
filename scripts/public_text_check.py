@@ -2372,6 +2372,7 @@ CONTAINER_EXTS = (".zip", ".apk", ".aar", ".jar", ".war", ".whl", ".nupkg", ".cr
                   ".xz", ".zst", ".7z", ".rar", ".tar", ".ipa", ".xcframework.zip")
 CONTAINER_DEPTH = 4
 CONTAINER_BUDGET = 512 << 20  # bytes read out of one tracked file
+CONTAINER_MEMBERS = 1 << 16  # members read out of one container
 LFS_POINTER = b"version https://git-lfs.github.com/spec/v1\n"
 
 
@@ -2425,26 +2426,50 @@ def container_kind(data: bytes, path: str = "") -> str | None:
     return None
 
 
-def _members(data: bytes, kind: str) -> list[tuple[str, bytes]]:
+class OverBudget(Exception):
+    """a container's members read past the budget left, or past CONTAINER_MEMBERS members"""
+
+
+def _members(data: bytes, kind: str, limit: int) -> list[tuple[str, bytes]]:
+    """the members of a container, each read in chunks so that no more than `limit` bytes in all
+    are ever inflated (a member that inflates past it raises OverBudget before it is held whole)"""
     import bz2, gzip, io, lzma, tarfile, zipfile
+    left = [limit]
+
+    def read(f) -> bytes:
+        out = []
+        while chunk := f.read(STREAM_CHUNK):
+            left[0] -= len(chunk)
+            if left[0] < 0:
+                raise OverBudget(f"over {CONTAINER_BUDGET >> 20} MiB")
+            out.append(chunk)
+        return b"".join(out)
+
+    def counted(items: list) -> list:
+        if len(items) > CONTAINER_MEMBERS:
+            raise OverBudget(f"over {CONTAINER_MEMBERS} members")
+        return items
+
     if kind == "zip":
         with zipfile.ZipFile(io.BytesIO(data)) as z:
-            return [(i.filename, z.read(i)) for i in z.infolist() if not i.is_dir()]
+            out = []
+            for i in counted([i for i in z.infolist() if not i.is_dir()]):
+                with z.open(i) as f:
+                    out.append((i.filename, read(f)))
+            return out
     if kind == "tar":
-        with tarfile.open(fileobj=io.BytesIO(data)) as t:
-            return [(m.name, t.extractfile(m).read()) for m in t.getmembers() if m.isfile()]
-    if kind == "gzip":
-        return [("", gzip.decompress(data))]
-    if kind == "bzip2":
-        return [("", bz2.decompress(data))]
-    if kind == "xz":
-        return [("", lzma.decompress(data))]
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as t:
+            return [(m.name, read(t.extractfile(m))) for m in counted([m for m in t.getmembers() if m.isfile()])]
+    if kind == "zstd" and not zstd_available():
+        raise LookupError("zstd unavailable before Python 3.14")
+    opener = {"gzip": lambda b: gzip.GzipFile(fileobj=b), "bzip2": bz2.BZ2File, "xz": lzma.LZMAFile}.get(kind)
     if kind == "zstd":
-        if not zstd_available():
-            raise LookupError("zstd unavailable before Python 3.14")
         from compression import zstd
-        return [("", zstd.decompress(data))]
-    raise ValueError(kind)
+        opener = zstd.ZstdFile
+    if opener is None:
+        raise ValueError(kind)
+    with opener(io.BytesIO(data)) as f:
+        return [("", read(f))]
 
 
 ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
@@ -2533,7 +2558,9 @@ def build_paths(data: bytes, path: str = "", depth: int = 0, budget: list | None
         if depth >= CONTAINER_DEPTH:
             return set(), [f"{kind}, nested too deep"]
         try:
-            members = _members(data, kind)
+            members = _members(data, kind, budget[0])
+        except OverBudget as e:  # a container that inflates past the budget: reported before it is held
+            return set(), [f"{kind}, {e.args[0]}"]
         except LookupError as e:  # a reader this Python does not have
             return set(), [f"{kind}, {e.args[0]}"]
         except Exception:  # an unknown, damaged, encrypted or unsupported container: reported, never passed

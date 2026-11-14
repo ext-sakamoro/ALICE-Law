@@ -1140,6 +1140,66 @@ class BinaryBuildPaths(Base):
         self.add({"big.bin": b"\0\x01" + zlib.compress(b"x" * (2 << 20))})
         self.assertIn("big.bin: zlib stream, over 1 MiB: unscanned container", run(self.repo, "--tree")[1])
 
+    def bombs(self, size: int) -> dict[str, bytes]:
+        """containers whose one member inflates to `size` zero bytes (a few KiB stored)"""
+        import bz2, gzip, lzma, zipfile
+        zeros = b"\0" * size
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("a.bin", zeros)
+        out = {"bomb.zip": buf.getvalue(), "bomb.gz": gzip.compress(zeros), "bomb.bz2": bz2.compress(zeros),
+               "bomb.xz": lzma.compress(zeros)}
+        if ptc.zstd_available():
+            from compression import zstd
+            out["bomb.zst"] = zstd.compress(zeros)
+        return out
+
+    def test_a_container_member_is_read_no_further_than_the_budget(self):
+        # a contributor's container whose member inflates past the budget: reported, and never inflated whole
+        import tracemalloc
+        saved = ptc.CONTAINER_BUDGET
+        self.addCleanup(lambda: setattr(ptc, "CONTAINER_BUDGET", saved))
+        ptc.CONTAINER_BUDGET = 1 << 20
+        bombs = self.bombs(64 << 20)
+        self.assertGreaterEqual(len(bombs), 4)
+        for name, data in bombs.items():
+            with self.subTest(name):
+                tracemalloc.start()
+                try:
+                    found, unscanned = ptc.build_paths(data, name)
+                    peak = tracemalloc.get_traced_memory()[1]
+                finally:
+                    tracemalloc.stop()
+                self.assertEqual(found, set())
+                self.assertEqual(len(unscanned), 1, unscanned)
+                self.assertRegex(unscanned[0], r", over 1 MiB$")
+                self.assertLess(peak, 16 << 20, f"{name}: {peak >> 20} MiB held while reading")
+        del bombs
+        self.add({"bomb.gz": __import__("gzip").compress(b"\0" * (2 << 20))})
+        self.assertIn("bomb.gz: gzip, over 1 MiB: unscanned container", run(self.repo, "--tree")[1])
+
+    def test_a_tar_member_over_the_budget_and_many_small_members_are_unscanned(self):
+        import tarfile, zipfile
+        saved = ptc.CONTAINER_BUDGET, ptc.CONTAINER_MEMBERS
+        self.addCleanup(lambda: (setattr(ptc, "CONTAINER_BUDGET", saved[0]), setattr(ptc, "CONTAINER_MEMBERS", saved[1])))
+        ptc.CONTAINER_BUDGET, ptc.CONTAINER_MEMBERS = 1 << 20, 8
+        tbuf = io.BytesIO()
+        with tarfile.open(fileobj=tbuf, mode="w") as t:
+            info = tarfile.TarInfo("big.bin")
+            info.size = 2 << 20
+            t.addfile(info, io.BytesIO(b"\0" * info.size))
+        self.assertEqual(ptc.build_paths(tbuf.getvalue(), "x.tar"), (set(), ["tar, over 1 MiB"]))
+        many = io.BytesIO()
+        with zipfile.ZipFile(many, "w") as z:
+            for i in range(9):
+                z.writestr(f"e{i}", b"")
+        self.assertEqual(ptc.build_paths(many.getvalue(), "m.zip"), (set(), ["zip, over 8 members"]))
+        few = io.BytesIO()
+        with zipfile.ZipFile(few, "w") as z:
+            for i in range(8):
+                z.writestr(f"e{i}", USERS + b"ys/proj/src/lib.rs" if i == 7 else b"")
+        self.assertEqual(ptc.build_paths(few.getvalue(), "f.zip")[1], [])
+
     def zipped(self, data: bytes) -> bytes:
         import zipfile
         buf = io.BytesIO()
