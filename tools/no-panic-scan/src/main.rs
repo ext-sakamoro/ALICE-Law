@@ -76,7 +76,8 @@ const CLIPPY: [(&str, &str); 6] = [
     ("unreachable", "unreachable"),
 ];
 
-/// `#[cfg(test)]` or `#[cfg(all(test, ..))]`; `cfg(any(test, ..))` and `not(test)` are not
+/// `#[cfg(test)]` or `#[cfg(all(test, ..))]` (`test` a term of the `all` itself, whatever its other terms); `cfg(any(test, ..))`,
+/// `not(test)` and an `all` whose `test` is only inside a `not(..)` or `any(..)` term are not
 fn is_cfg_test(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|a| {
         if !a.path().is_ident("cfg") {
@@ -89,11 +90,32 @@ fn is_cfg_test(attrs: &[Attribute]) -> bool {
         if inner == "test" {
             return true;
         }
-        inner.starts_with("all(")
-            && !inner.contains("not(")
-            && !inner.contains("any(")
-            && inner[4..inner.len() - 1].split(',').any(|p| p == "test")
+        inner
+            .strip_prefix("all(")
+            .and_then(|x| x.strip_suffix(')'))
+            .is_some_and(|terms| top_level_terms(terms).any(|p| p == "test"))
     })
+}
+
+/// The comma-separated terms of a cfg predicate list at its own level (a `not(..)` or `any(..)` term stays whole),
+/// so `all(test, not(x))` has the terms `test` and `not(x)`, and `all(not(test), x)` has no `test` term
+fn top_level_terms(list: &str) -> impl Iterator<Item = &str> {
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    let mut out = Vec::new();
+    for (i, c) in list.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                out.push(&list[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&list[start..]);
+    out.into_iter()
 }
 
 /// `#[test]` (also `#[tokio::test]` and friends: a path whose last segment is `test`)
@@ -463,6 +485,27 @@ mod tests {
         );
         assert_eq!(n(&c, "unwrap"), 1);
         assert_eq!(n(&c, "panic"), 0);
+    }
+
+    #[test]
+    fn cfg_all_test_with_a_negated_other_predicate_is_test() {
+        // `all` needs `test`, whatever else it says: a `not(..)` of another predicate keeps it test-only
+        let c = count(
+            "fn f() { a.unwrap(); }\n#[cfg(all(test, not(target_arch = \"wasm32\")))]\nfn g() { b.unwrap(); panic!(); }\n\
+             #[cfg(all(not(target_os = \"windows\"), test))]\nfn h() { c.unwrap(); }",
+        );
+        assert_eq!(n(&c, "unwrap"), 1);
+        assert_eq!(n(&c, "panic"), 0);
+    }
+
+    #[test]
+    fn cfg_all_without_a_top_level_test_is_production() {
+        // `test` only inside a `not(..)` or an `any(..)` of the `all`: compiled without test too
+        let c = count(
+            "#[cfg(all(not(test), feature = \"x\"))]\nfn f() { a.unwrap(); }\n\
+             #[cfg(all(feature = \"x\", any(test, feature = \"y\")))]\nfn g() { b.unwrap(); }",
+        );
+        assert_eq!(n(&c, "unwrap"), 2);
     }
 
     #[test]
