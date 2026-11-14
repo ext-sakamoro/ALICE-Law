@@ -14,11 +14,14 @@ Usage: python3 scripts/test_structural_lint.py (the scanner from AST_GREP, else 
 """
 from __future__ import annotations
 
+import io
+import os
 import re
 import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
@@ -261,6 +264,49 @@ class WriteOwn(unittest.TestCase):
             with mock.patch.object(sl, "BASELINE", fake):
                 self.assertEqual(sl.main(["--write-own", f"ALICE-Law={HERE.parent}"]), 2)
             self.assertEqual(fake.read_text(encoding="utf-8"), "")
+
+
+class ScannerVersion(unittest.TestCase):
+    """the rules and their cases are written against one ast-grep version, the one CI installs: another version can
+    match differently (0.51.2 reports nothing on a case 0.51.0 matches) and must stop the run with the version to
+    install, not with a rule test that seems to fail"""
+
+    def fake(self, d: Path, version: str) -> Path:
+        exe = Path(d) / "ast-grep"
+        exe.write_text(f'#!/bin/sh\necho "$@" >> "{d}/calls"\n[ "$1" = --version ] && echo "ast-grep {version}"\nexit 0\n',
+                       encoding="utf-8")
+        exe.chmod(0o755)
+        return exe
+
+    def test_another_version_is_exit_2_with_the_version_to_install_and_no_rule_test(self):
+        with tempfile.TemporaryDirectory() as d:
+            exe = self.fake(d, "0.51.2")
+            err = io.StringIO()
+            with mock.patch.dict(os.environ, {"AST_GREP": str(exe)}), redirect_stderr(err):
+                self.assertEqual(sl.main(["--only", f"ALICE-Law={HERE.parent}"]), 2)
+            self.assertIn("0.51.2", err.getvalue())
+            self.assertIn(f"install ast-grep {sl.AST_GREP_VERSION}", err.getvalue())
+            self.assertNotIn("test", (Path(d) / "calls").read_text(encoding="utf-8"))
+
+    def test_an_unreadable_version_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            exe = self.fake(d, "")
+            with mock.patch.dict(os.environ, {"AST_GREP": str(exe)}):
+                with self.assertRaises(sl.hl.Unreadable):
+                    sl.scanner()
+
+    def test_the_pinned_version_passes(self):
+        with tempfile.TemporaryDirectory() as d:
+            exe = self.fake(d, sl.AST_GREP_VERSION)
+            with mock.patch.dict(os.environ, {"AST_GREP": str(exe)}):
+                self.assertEqual(sl.scanner(), str(exe))
+
+    def test_the_pin_is_the_version_every_workflow_installs(self):
+        pins = [(p.name, m) for p in (HERE.parent / ".github" / "workflows").glob("*.yml")
+                for m in re.findall(r"ast-grep-cli==([0-9.]+)", p.read_text(encoding="utf-8"))]
+        self.assertGreater(len(pins), 0, "no workflow installs ast-grep: nothing compared")
+        for name, v in pins:
+            self.assertEqual(v, sl.AST_GREP_VERSION, name)
 
 
 class Exits(unittest.TestCase):

@@ -44,7 +44,8 @@ Modes:
   --write-own N=DIR --baseline FILE
                  write the one row of repository N, read from DIR, to FILE (a private repository's own file)
 
-The scanner is `ast-grep` (AST_GREP, else on PATH). Exit 0 when nothing was found, 1 on a finding, 2 when
+The scanner is `ast-grep` (AST_GREP, else on PATH) at AST_GREP_VERSION, the version CI installs; another version stops
+the run (exit 2) with the version to install. Exit 0 when nothing was found, 1 on a finding, 2 when
 something could not be read, a rule test failed, or nothing was compared.
 """
 from __future__ import annotations
@@ -68,6 +69,8 @@ import holder_live as hl  # noqa: E402
 
 BASELINE = ROOT / "conformance" / "structural-lint-baseline.toml"
 CONFIG = ROOT / "lint" / "ast-grep" / "sgconfig.yml"
+# the scanner version the rules are written against: the one the workflows install (a test keeps them equal)
+AST_GREP_VERSION = "0.51.0"
 GITHUB = "https://github.com/"
 # rule id -> baseline field; the gated rules
 GATED = {"production-print": "print", "hashmap-iteration-order": "hashmap"}
@@ -79,9 +82,22 @@ GOOD_MARKER_RE = re.compile(r"//\s*ast-grep-ignore:\s*([a-z0-9-]+(?:\s*,\s*[a-z0
 
 
 def scanner() -> str:
+    """the ast-grep to run, at AST_GREP_VERSION: another version can match the rules differently, so its verdict is
+    not this lint's (0.51.2 reports nothing on a case of production-print that 0.51.0 matches)"""
     exe = os.environ.get("AST_GREP") or shutil.which("ast-grep")
     if not exe:
-        raise hl.Unreadable("ast-grep not found (set AST_GREP or put it on PATH)")
+        raise hl.Unreadable(f"ast-grep not found (install ast-grep {AST_GREP_VERSION}; set AST_GREP or put it on PATH)")
+    try:
+        out = subprocess.run([exe, "--version"], capture_output=True, text=True, encoding="utf-8", timeout=30).stdout
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise hl.Unreadable(f"{exe} --version did not answer ({type(e).__name__})") from e
+    m = re.search(r"\bast-grep\s+(\d+\.\d+\.\d+)\b", out)
+    if not m:
+        raise hl.Unreadable(f"{exe} --version gave no version: {out.strip()[:80]!r}")
+    if m.group(1) != AST_GREP_VERSION:
+        raise hl.Unreadable(f"{exe} is ast-grep {m.group(1)}; the rules and their tests are written against "
+                            f"{AST_GREP_VERSION}, the version CI installs: install ast-grep {AST_GREP_VERSION} "
+                            f"(pip install ast-grep-cli=={AST_GREP_VERSION}) and put it on PATH or in AST_GREP")
     return exe
 
 
