@@ -37,6 +37,9 @@ unanchored = 12
 [repository."ALICE-ML"]
 unanchored = 8
 
+[repository."ALICE-OS-Keystore"]
+unanchored = 0
+
 [repository."ALICE-Physics"]
 unanchored = 9
 
