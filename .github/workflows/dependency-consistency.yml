@@ -253,6 +253,7 @@ jobs:
       # every row at a commit of its repository's main whose push CI is green (blobless clones keep the
       # history the ancestry check needs)
       - name: Every roster row is at a green main commit
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

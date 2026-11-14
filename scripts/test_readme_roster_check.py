@@ -16,7 +16,7 @@ spec.loader.exec_module(rrc)
 
 def roster(*entries: tuple[str, str]) -> str:
     return "".join(
-        f'[crate.{name}]\nversion = "1.0.0"\nstate = "published"\norder = {i}\nrepo = "{repo}"\n\n'
+        f'[crate.{name}]\nversion = "1.0.0"\nstate = "main"\nsha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"\norder = {i}\nrepo = "{repo}"\n\n'
         for i, (name, repo) in enumerate(entries, start=1))
 
 
@@ -27,7 +27,7 @@ class ReposFromRoster(unittest.TestCase):
         self.assertEqual(rrc.repos_from_roster(text), ["ALICE-LOL", "ALICE-Zip"])
 
     def test_entry_with_no_repo_is_skipped(self):
-        text = '[crate.x]\nversion = "1.0.0"\nstate = "planned"\norder = 1\n'
+        text = '[crate.x]\nversion = "1.0.0"\nstate = "main"\nsha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"\norder = 1\n'
         self.assertEqual(rrc.repos_from_roster(text), [])
 
     def test_empty_roster_raises(self):
@@ -79,7 +79,7 @@ class Check(unittest.TestCase):
 
     def test_no_repositories_in_roster_raises(self):
         with self.assertRaises(rrc.rt.RosterError):
-            rrc.check('[crate.x]\nversion = "1.0.0"\nstate = "planned"\norder = 1\n', "# X\n\nanything\n")
+            rrc.check('[crate.x]\nversion = "1.0.0"\nstate = "main"\nsha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"\norder = 1\n', "# X\n\nanything\n")
 
 
 class Main(unittest.TestCase):
@@ -120,7 +120,7 @@ class Main(unittest.TestCase):
     def test_exit_2_when_roster_lists_no_repo(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
-            r, d = self.write(Path(t), '[crate.x]\nversion = "1.0.0"\nstate = "planned"\norder = 1\n', "x")
+            r, d = self.write(Path(t), '[crate.x]\nversion = "1.0.0"\nstate = "main"\nsha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"\norder = 1\n', "x")
             self.assertEqual(rrc.main(["--roster", str(r), "--readme", str(d)]), 2)
 
 
