@@ -8,7 +8,8 @@ count of each is (the latest scheduled or dispatched run). On other events it wr
 
   live_scope_note.py --event EVENT [--workflow PATH] [--summary PATH]
 
-A workflow with no job skipped on push, or one this reader can not read, is exit 2 (the reader is then wrong, not
+A workflow with no job skipped on push, a job-level `if` naming the event in any other form (compound or not
+read here), or a file this reader can not read, is exit 2 (the reader is then wrong, not
 the workflow quiet): 0 compared is not a pass.
 """
 from __future__ import annotations
@@ -21,7 +22,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 WORKFLOW = HERE.parent / ".github" / "workflows" / "conformance-live.yml"
-SKIP_ON_PUSH = re.compile(r"""^\s{4}if:\s*github\.event_name\s*!=\s*['"]push['"]\s*$""")
+SKIP_ON_PUSH = re.compile(r"""^\s{4}if:\s*(?:\$\{\{\s*)?github\.event_name\s*!=\s*['"]push['"]\s*(?:\}\})?\s*$""")
+JOB_IF = re.compile(r"^\s{4}if:")
+
+
+class Unreadable(Exception):
+    pass
 JOB = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 NAME = re.compile(r"^\s{4}name:\s*(.+?)\s*$")
 
@@ -57,6 +63,10 @@ def skipped_on_push(text: str) -> list[str]:
             name = m.group(1).strip("'\"")
         elif SKIP_ON_PUSH.match(line):
             skip = True
+        elif JOB_IF.match(line) and "event_name" in line:
+            # another condition on the event (compound, or a form this reader does not know) would be dropped
+            # silently: refuse instead of guessing whether the job runs on push
+            raise Unreadable(f"job {job}: an event condition this reader does not read: {line.strip()}")
     close()
     return out
 
@@ -80,7 +90,11 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as e:
         print(f"error: {a.workflow}: {e}", file=sys.stderr)
         return 2
-    names = skipped_on_push(text)
+    try:
+        names = skipped_on_push(text)
+    except Unreadable as e:
+        print(f"error: {a.workflow}: {e}", file=sys.stderr)
+        return 2
     if not names:
         print(f"error: {a.workflow}: no job is skipped on push (0 read): the reader, not the workflow, is wrong",
               file=sys.stderr)
