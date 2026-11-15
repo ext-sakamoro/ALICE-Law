@@ -290,6 +290,65 @@ class MergeCommits(Base):
         self.assertIn("in 2 commits", out)  # the side's commit and the merge
 
 
+class NewSince(Base):
+    """--new-since REF...: the commits HEAD publishes beyond what the REFs already have (a push of a new branch
+    reads its own commits, not main's history; a repository's first push, with no REF, reads from the root)"""
+
+    def test_a_branch_from_main_reads_only_its_new_commit(self):
+        # main's history already holds the name (published); the branch's own commit is clean
+        main = commit(self.repo, {"old.md": f"{MADE_UP}\n"})
+        git(self.repo, "checkout", "-q", "-b", "side")
+        commit(self.repo, {"b.txt": "b\n"})
+        code, out = run(self.repo, "--new-since", main)
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 commits", out)
+        self.assertNotIn("private name", out)
+
+    def test_a_new_commit_with_the_name_is_found(self):
+        main = git(self.repo, "rev-parse", "HEAD").strip()
+        git(self.repo, "checkout", "-q", "-b", "side")
+        top = commit(self.repo, {"b.txt": f"{MADE_UP}\n"})
+        code, out = run(self.repo, "--new-since", main)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"commit {top[:12]} b.txt:1: private name", out)
+
+    def test_a_first_push_with_no_ref_reads_from_the_root(self):
+        root = git(self.repo, "rev-list", "--max-parents=0", "HEAD").strip()
+        git(self.repo, "commit", "-q", "--amend", "-m", f"start {MADE_UP}")  # the root itself carries the name
+        root = git(self.repo, "rev-parse", "HEAD").strip()
+        commit(self.repo, {"b.txt": "b\n"})
+        code, out = run(self.repo, "--new-since")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"commit {root[:12]} message", out)
+        self.assertIn("2 commits", out)
+
+    def test_merges_in_what_is_published_are_read(self):
+        main = git(self.repo, "rev-parse", "HEAD").strip()
+        git(self.repo, "checkout", "-q", "-b", "side")
+        side = commit(self.repo, {"b.txt": "b\n"})
+        git(self.repo, "checkout", "-q", "-b", "topic", main)
+        commit(self.repo, {"c.txt": "c\n"})
+        git(self.repo, "merge", "-q", "--no-ff", "-m", f"merge the {MADE_UP} branch", side)
+        code, out = run(self.repo, "--new-since", main)
+        self.assertEqual(code, 1, out)
+        self.assertIn("message", out)
+        self.assertIn("3 commits", out)  # the side's commit, the topic's commit and the merge
+
+    def test_the_allow_base_is_the_newest_first_parent_commit_a_ref_has(self):
+        main = commit(self.repo, {"a.txt": "a\n"})
+        git(self.repo, "checkout", "-q", "-b", "side")
+        commit(self.repo, {"b.txt": "b\n"})
+        args, base = ptc.new_since(str(self.repo), [main])
+        self.assertEqual((args, base), (["HEAD", "--not", main], main))
+        self.assertEqual(ptc.new_since(str(self.repo), []), (["HEAD"], None))
+
+    def test_nothing_new_compares_nothing(self):
+        main = git(self.repo, "rev-parse", "HEAD").strip()
+        code, out = run(self.repo, "--new-since", main)
+        self.assertEqual(code, 2, out)
+        self.assertIn("nothing was compared", out)
+
+
 class Vocabulary(unittest.TestCase):
     def test_every_hash_is_a_sha256(self):
         self.assertTrue(ptc.PRIVATE_NAME_HASHES)
