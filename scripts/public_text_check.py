@@ -448,6 +448,15 @@ ALLOWED: dict[str, dict[str, int]] = {
         # the model family the crate implements, named in its public function and their tests (src/llama3.rs only)
         "k:718f3a21158e4056c77fd0bd555d13d1c5084615a9badc3cbd05cc0c5cadb299": 219,
         "k:76d25801587f8527f7dcc0f1cb140cee14559a365a3e6912e14b350d96a80f98": 1,
+        # the same model family in the other source files, the examples and the changelog (the supported
+        # architectures are product documentation); commit messages are not allowed
+        "k:00766575d81d1ab3d1534c8a7047f9e0a9da388d7a7dc5ec0085a2e1788156ec": 16,
+        "k:4562aaeb8c4faf015b9b4ac78724802cb21dc574f02e06146aead1c9ec64550a": 10,
+        "k:2450b3f2e03a85508f6ec773e0e296364ce3df68480997e5ba57dd76d37a1caf": 12,
+        # the HTTP API the inference server is compatible with (its endpoints, request and stream format), in the
+        # server and the changelog line that describes it; one file at a time
+        "k:cf1fd98df86df66c968bafef78b77ae2dbd9b8fd80ef247f9bbc48c93f5c48f7": 8,
+        "k:53c1b87af06a1cb22782da365021045b976953f99b1349668a7e8cfbb07ae302": 1,
     },
     "598c241b2b948aea419169192b86735dffc29164943d415426dd18992f2b4192": {
         # the Agent Skills format word in the product's own skill (each file of skills/lol-sdf/, per word,
