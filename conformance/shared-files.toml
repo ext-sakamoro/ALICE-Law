@@ -30,7 +30,7 @@ exempt = { "ALICE-Law" = "runs its own scripts/public_text_check.py in place; th
 
 [[file]]
 path = "scripts/advisory_hold_guard.py"
-pending = { since = "2026-11-11", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "2a510ca3a3c4a1f05aed59e85bbe4c88de0ea10837ea7ba8ae6d3ce80f5d469e", owner = "ALICE-Cloud-Gateway", planned = "9bc452629276bfed3278bd8a59b0d99bb50bc328", moved_from = { planned = "ab7eee30d7a9c80a7e569ff7012e7e4b8f76dd4d", target = "8f3d2176b764a0b2ef06f67d6457960b185d381f33bed607c017c17443b58b31" }, variants = { "8f3d2176b764a0b2ef06f67d6457960b185d381f33bed607c017c17443b58b31" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-OS-Keystore"], "e76f84d08796a2665af470bff3492060063fdd8190c95bc30dc01a407a6f1329" = ["ALICE-Kinematics", "ALICE-Queue", "text-to-print"] } }
+pending = { since = "2026-11-11", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "2a510ca3a3c4a1f05aed59e85bbe4c88de0ea10837ea7ba8ae6d3ce80f5d469e", owner = "ALICE-Cloud-Gateway", planned = "9bc452629276bfed3278bd8a59b0d99bb50bc328", variants = { "2a510ca3a3c4a1f05aed59e85bbe4c88de0ea10837ea7ba8ae6d3ce80f5d469e" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-OS-Keystore"], "e76f84d08796a2665af470bff3492060063fdd8190c95bc30dc01a407a6f1329" = ["ALICE-Kinematics", "ALICE-Queue", "text-to-print"] } }
 repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-OS-Keystore", "ALICE-Queue", "text-to-print"]
 
 [[file]]
@@ -308,7 +308,7 @@ repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-Edge", "ALICE-SIMD", "ALICE-Text"
 
 [[file]]
 path = "scripts/test_advisory_hold_guard.py"
-pending = { since = "2026-11-11", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e5c4273ac113916f82c58bd98b0c3c0a077743da660059ae4ea046daf46b1675", owner = "ALICE-Cloud-Gateway", planned = "1ef9bcfd9ebdc40eb165501622317a3846806c6e", moved_from = { planned = "53f030fecff5c65b88b4e3aaf78cc77245e006ee", target = "025837dbbc9ba9c2d6a36b6595b573ddd6494b5c4c4545e19fa247c1cad168e8" }, variants = { "025837dbbc9ba9c2d6a36b6595b573ddd6494b5c4c4545e19fa247c1cad168e8" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-OS-Keystore"], "e7a6fd22e92ed6cacbd02f829934ebae6d0d7cc02fe72fec1240802cdd90d1be" = ["ALICE-Kinematics", "ALICE-Queue", "text-to-print"] } }
+pending = { since = "2026-11-11", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e5c4273ac113916f82c58bd98b0c3c0a077743da660059ae4ea046daf46b1675", owner = "ALICE-Cloud-Gateway", planned = "1ef9bcfd9ebdc40eb165501622317a3846806c6e", variants = { "e5c4273ac113916f82c58bd98b0c3c0a077743da660059ae4ea046daf46b1675" = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-OS-Keystore"], "e7a6fd22e92ed6cacbd02f829934ebae6d0d7cc02fe72fec1240802cdd90d1be" = ["ALICE-Kinematics", "ALICE-Queue", "text-to-print"] } }
 repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-OS-Keystore", "ALICE-Queue", "text-to-print"]
 
 [[file]]
