@@ -11,6 +11,9 @@
 #
 # The pin moves only in a commit of its own that passes this check at the new
 # revision; a change in ALICE-Law never changes this repository's result by itself.
+# This script's `new` needs a pin at ALICE-Law a5824065 or later (the checker's
+# --new-since): taking these bytes moves the pin in the same commit, and an older pin
+# exits 2 naming the revision.
 #
 # A commit that changes .public-text.toml is always a finding in the commit range
 # (every change of an exemption is shown to a reviewer): it lands alone, and the
@@ -94,6 +97,15 @@ got=$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "r
   "$tmp/public_text_check.py")
 if [[ "$got" != "$sum" ]]; then
   echo "public_text_check.py at $rev has sha256 $got, $pin says $sum" >&2
+  exit 2
+fi
+
+# the pinned checker must read what this script asks of it: `new` asks --new-since, which ALICE-Law's checker has
+# from a5824065 on. These bytes and a pin at that revision or later land in one commit
+checker_help=$(python3 "$tmp/public_text_check.py" --help 2>/dev/null || true)
+if [[ "$base" == new && "$checker_help" != *--new-since* ]]; then
+  echo "$pin names ALICE-Law $rev, whose public_text_check.py has no --new-since (this script's \`new\`): move $pin" \
+    "to ALICE-Law a5824065c35f161c07d5a158f21198fb198494ee or later, in the same commit as these bytes" >&2
   exit 2
 fi
 

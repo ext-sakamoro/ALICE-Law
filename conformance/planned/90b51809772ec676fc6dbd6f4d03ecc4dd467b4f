@@ -88,6 +88,9 @@ LINK = "[" * 2 + "x_y" + "]" * 2
 # SHA-256: the script must fetch the revision the pin names, not a branch
 EARLIER_PIN = ("rev 779fa443f95bc0caca5ca2d5bdb9156051fd6143\n"
                "sha256 e439fdd7495e45486b67d57d227f828426b703c0224b8a00d2e8a1c2f1e66594\n")
+# the first ALICE-Law revision whose checker reads --new-since (what `new` asks of it)
+NEW_SINCE_PIN = ("rev a5824065c35f161c07d5a158f21198fb198494ee\n"
+                 "sha256 8ee9743011aaae3d684d6ea5b95fd6ae84fd55918f3ccf9881f006469130ef36\n")
 
 
 def plant_repo(source: Path, r: Path, settings: bool) -> None:
@@ -174,6 +177,30 @@ class Planted(unittest.TestCase):
         self.assertRegex(p.stderr, r"public_text_check\.py at [0-9a-f]{40} has sha256 [0-9a-f]{64}, "
                                    r"\.github/public-text-pin says 0{64}")
         self.assertNotIn("findings", p.stdout)
+
+    def run_new(self, pin: str) -> subprocess.CompletedProcess:
+        """`new` on a branch with one commit of its own beyond a fetched remote ref, at `pin`"""
+        (self.r / ".github" / "public-text-pin").write_text(pin)
+        self.commit("base")
+        git("update-ref", "refs/remotes/origin/main", "HEAD", cwd=self.r)
+        (self.r / "f.txt").write_text("f\n")
+        self.commit("feature")
+        env = dict(self.env, PUBLIC_TEXT_BRANCH="feature")
+        return subprocess.run(["bash", "scripts/public_text.sh", "new"], cwd=self.r, capture_output=True, text=True,
+                              env=env, timeout=300)
+
+    def test_new_with_a_pin_before_new_since_names_the_pin_move(self) -> None:
+        # the pinned checker has no --new-since: not an argparse error, but the revision the pin must move to
+        p = self.run_new(EARLIER_PIN)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("has no --new-since", p.stderr)
+        self.assertIn("move .github/public-text-pin to ALICE-Law a5824065c35f161c07d5a158f21198fb198494ee", p.stderr)
+        self.assertNotIn("usage:", p.stderr)
+
+    def test_new_with_a_pin_that_has_new_since_reads_its_commit(self) -> None:
+        p = self.run_new(NEW_SINCE_PIN)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertRegex(p.stdout, r"in 1 commits")
 
     def test_the_named_revision_is_fetched(self) -> None:
         (self.r / ".github" / "public-text-pin").write_text(EARLIER_PIN)

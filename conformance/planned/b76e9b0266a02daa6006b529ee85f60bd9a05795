@@ -43,13 +43,10 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
-          TOKEN: ${{ github.token }}
         run: |
-          # git reads the token from the environment (the checkout keeps no credentials): every branch of the
-          # remote is fetched, so a push with no previous head reads only the commits it publishes
-          # (scripts/public_text.sh new), and the script can ask the remote which branches it has
-          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: bearer $TOKEN"
-          git fetch -q --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          # the checkout (fetch-depth: 0) fetched every branch of the remote into refs/remotes/origin/*, so a push
+          # with no previous head reads only the commits it publishes (scripts/public_text.sh new); when the remote
+          # has no other branch the script lists the public remote's heads itself (no credentials needed)
           base=""
           if [ -n "${PR_BASE:-}" ]; then
             base="$PR_BASE"
