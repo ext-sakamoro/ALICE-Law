@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-24.04
   other:
     name: Some other condition
-    if: github.event_name == 'schedule'
+    if: always()
 """
 
 
@@ -76,6 +76,19 @@ class LiveScopeNote(unittest.TestCase):
             p = run("--event", "schedule", wf=WF, summary=s2)
             self.assertEqual(p.returncode, 0, p.stderr)
             self.assertFalse(s2.exists())
+
+    def test_the_expression_form_reads_and_other_event_conditions_refuse(self):
+        wf = "jobs:\n  a:\n    name: A\n    if: ${{ github.event_name != 'push' }}\n"
+        self.assertEqual(lsn.skipped_on_push(wf), ["A"])
+        for cond in ("github.event_name != 'push' && always()", "${{ github.event_name == 'schedule' || x }}",
+                     "github.event_name != 'pull_request'"):
+            with self.assertRaises(lsn.Unreadable, msg=cond):
+                lsn.skipped_on_push(WF + f"  b:\n    if: {cond}\n")
+        with tempfile.TemporaryDirectory() as d:
+            p = run("--event", "push", wf=WF + "  b:\n    if: github.event_name != 'push' && x\n",
+                    summary=Path(d, "s.md"))
+            self.assertEqual(p.returncode, 2)
+            self.assertIn("event condition", p.stderr)
 
     def test_none_read_is_exit_2(self):
         with tempfile.TemporaryDirectory() as d:
