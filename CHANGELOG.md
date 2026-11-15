@@ -8,6 +8,8 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/public_text_check.py`: ALICE-LLM の許可を足す (鍵付き、範囲と数を固定): 実装する model の系統の名前を `src/` (16)・`examples/` (10)・`CHANGELOG.md` (12) で、互換の HTTP API の名前を `src/bin/server.rs` (8)・`CHANGELOG.md` (1) で commit message は許さない 他の repository の同じ file の同じ語は finding のまま (試験) `conformance/public-text-baseline.toml` の ALICE-LLM の 10 行を下げる (47 件)
+- `conformance/public-text-commit-ack.toml`: `[reviewed]` に 25 行 (語の技術的な使い方と読んだ過去の commit の場所、各行がその日付を引く)
 - `scripts/public_text_commits_live.py`: 別の branch に残った設定の変更 (rebase 前の写し) で、変更後の `.public-text.toml` が既定 branch で承認された設定 (pin の config-sha256、別の commit で設定) と byte で同じものは hit にしない 内容が違うもの、既定 branch に承認が無いものは従来どおり hit
 - `scripts/public_text_commits_live.py`: 鍵付きの id を場所ごとにする (HMAC(鍵, repository NUL commit 12 桁 NUL 種類 NUL 場所)、場所は message の行・file の行・path) 1 つの行が同じ commit の同じ種類の別の使い方を隠さない `conformance/public-text-commit-ack.toml` を 2 つの表にする: `[acknowledged]` (持ち主が歴史の中の項目を受け入れる判断、その日付) と `[reviewed]` (語の技術的な使い方と読んだ hit、その日付と、同じ使い方をその範囲 (path と語) で許す commit) 表の外の行・知らない表・両方の表にある id は読み込みで拒否
 - `scripts/live_scope_note.py` (試験 `scripts/test_live_scope_note.py`): Conformance (live) の push の run は全公開 repository を読む job (`if: github.event_name != 'push'`) を飛ばし、run は緑になる push の run で、飛ばした job の名前を workflow の file から読んで job summary と log に書く (その job の最後の数え上げは最後の日次か手動の run) 飛ばす job を 1 つも読めない時と、job の `if` が event を別の形 (複合の条件など) で名指す時は exit 2 (黙って落とさない、`${{ }}` で囲んだ形は読む) ci/ branch では Dependency consistency と preflight で走る
