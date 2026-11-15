@@ -88,7 +88,6 @@ lacking = [
     "ALICE-Legal",
     "ALICE-Risk",
     "ALICE-Settlement",
-    "ALICE-Streaming-Protocol",
     "ALICE-Text",
     "ALICE-Train",
     "ALICE-VCS",
