@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `conformance/shared-files.toml`: ALICE-Ephemeris と ALICE-Audit を public text の 3 行 (`.github/workflows/public-text.yml` / `scripts/public_text.sh` / `scripts/test_public_text.py`、移行先の bytes) に足し、表を作り直す 2 つが表のどの行にも無かったので、同じく持っている他の共有 file (eol / changed_paths / lock_sources_check / upstream_previous_ids_check と試験) の持ち主にも入った ALICE-SDF も upstream_previous_ids_check と試験の持ち主に入った (156 file、1808 copy、pending 22)
 - `scripts/public_text_check.py`: ALICE-LLM の許可を足す (鍵付き、範囲と数を固定): 実装する model の系統の名前を `src/` (16)・`examples/` (10)・`CHANGELOG.md` (12) で、互換の HTTP API の名前を `src/bin/server.rs` (8)・`CHANGELOG.md` (1) で commit message は許さない 他の repository の同じ file の同じ語は finding のまま (試験) `conformance/public-text-baseline.toml` の ALICE-LLM の 10 行を下げる (47 件)
 - `conformance/public-text-commit-ack.toml`: `[reviewed]` に 22 行 (共通の語の技術的な使い方と読んだ過去の commit の場所、各行が使い方と日付を引く)
 - `scripts/public_text_commits_live.py`: 別の branch に残った設定の変更 (rebase 前の写し) で、変更後の `.public-text.toml` が既定 branch で承認された設定 (pin の config-sha256、別の commit で設定) と byte で同じものは hit にしない 承認は既定 branch の履歴で pin をその設定にした commit で、設定の file 自体を変えない別の commit であること (同じ commit で設定と承認を変えた写しは hit) 内容が違うもの、既定 branch に承認が無いものは従来どおり hit
