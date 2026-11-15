@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -322,6 +323,39 @@ class CommitsLive(unittest.TestCase):
         p = self.run_live("--last-success", "none")
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertIn("2 hits, 1 acknowledged, 1 new", p.stdout)
+
+    def test_an_approved_settings_change_copied_on_a_branch_is_not_a_hit(self):
+        import hashlib
+        cfg = '[public-text]\ntechnical-paths = ["page.html"]\n'
+        git(self.repo, "checkout", "-q", "-b", "side")
+        (self.repo / ".public-text.toml").write_text(cfg, encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "settings", date="2026-11-28T00:00:00Z")
+        git(self.repo, "checkout", "-q", "main")
+        (self.repo / ".public-text.toml").write_text(cfg, encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "settings", date="2026-11-29T00:00:00Z")
+        # the same content at the tip but not approved there: the branch copy is a hit too
+        p = self.run_live("--last-success", "none")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertEqual(len(re.findall(r"(?m)^found: policy config changed", p.stdout)), 2, p.stdout)
+        (self.repo / ".github").mkdir()
+        (self.repo / ".github" / "public-text-pin").write_text(
+            f"config-sha256 {hashlib.sha256(cfg.encode()).hexdigest()}\n", encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "approve the settings", date="2026-11-30T00:00:00Z")
+        p = self.run_live("--last-success", "none")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("0 hits", p.stdout)
+        # the same change with other content on the branch stays a hit
+        git(self.repo, "checkout", "-q", "side")
+        (self.repo / ".public-text.toml").write_text(cfg.replace("page.html", "other.html"), encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "settings 2", date="2026-11-30T01:00:00Z")
+        git(self.repo, "checkout", "-q", "main")
+        p = self.run_live("--last-success", "none")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertRegex(p.stdout, r"(?m)^found: policy config changed")
 
     def test_both_tables_are_read_and_nothing_else(self):
         a, b = "a" * 64, "b" * 64

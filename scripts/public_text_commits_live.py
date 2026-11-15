@@ -164,9 +164,25 @@ def check_commits(g: Path, name: str, commits: list[str], tip: str) -> tuple[lis
         lines = FOUND_RE.findall(r.stdout)
         if len(lines) != int(m.group(1)):
             raise Unreadable(f"{name}: {len(lines)} findings printed, the summary says {m.group(1)}")
-        found += lines
+        found += [f for f in lines if not approved_copy(g, f, tip)]
         read += int(m.group(2))
     return found, read
+
+
+POLICY_RE = re.compile(r"^commit ([0-9a-f]{12}) \.public-text\.toml: policy config changed \(")
+
+
+def approved_copy(g: Path, finding: str, tip: str) -> bool:
+    """a settings change on another branch whose resulting file is byte for byte the settings approved at the tip
+    (the pin's config-sha256, set in a commit of its own): the copy of a reviewed change left on a rebased branch,
+    not a finding; any other content, or a tip without an approval, stays a finding"""
+    m = POLICY_RE.match(finding)
+    if m is None:
+        return False
+    commit = hl.git(g, "rev-parse", m.group(1)).strip()
+    have = ptc.config_hash(str(g), commit)
+    return have is not None and have == ptc.config_hash(str(g), tip) and \
+        ptc.config_approver(str(g), tip) is not None
 
 
 def prefetch_blobs(g: Path, commits: list[str]) -> int:
