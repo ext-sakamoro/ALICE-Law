@@ -1,0 +1,14 @@
+# Acknowledged hits of scripts/public_text_commits_live.py (the keyed public text check over every public
+# repository's new commits). A hit is a private name in a public repository's history; it can not be removed by a
+# later commit, so the daily run stays red on it until it is acknowledged here.
+#
+# Each row is a hit's keyed id: HMAC-SHA256 under the name key of "<repository> NUL <commit, 12 hex> NUL <kind>"
+# (64 hex). Only a holder of the key can map a row to a commit (public_text_commits_live.py --resolve on that
+# machine): the file names no repository and no commit.
+#
+# Who may add a row: accepting a private name in public history is the user's decision, not a session's.
+#   1. the handling session resolves the id on a machine with the key and reports it to the coordinator;
+#   2. the coordinator puts "accept" or "rewrite the history" to the user;
+#   3. on "accept", a reviewed commit adds the row, its value citing that decision (who decided, when).
+# On "rewrite", no row is added: the hit leaves the window once the history no longer holds the commit.
+[acknowledged]

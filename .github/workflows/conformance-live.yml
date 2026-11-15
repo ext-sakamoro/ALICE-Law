@@ -108,6 +108,18 @@ jobs:
         # this repository at the commit under test (its own tree), every other one at its default branch
         run: python3 scripts/public_text_live.py --local "${GITHUB_REPOSITORY#*/}=."
 
+      - name: Test the new-commit reader
+        run: python3 scripts/test_public_text_commits_live.py
+
+      # the keyed half over every public repository's new commits (a repository's own CI has no key): the window is
+      # the last 7 days, a gap since the previous successful scheduled run is red, and a hit prints only its kind
+      # and keyed id (conformance/public-text-commit-ack.toml acknowledges one, by the user's decision)
+      - name: The public repositories' new commits, keyed
+        env:
+          ALICE_PRIVATE_NAME_HMAC_KEY: ${{ secrets.ALICE_PRIVATE_NAME_HMAC_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/public_text_commits_live.py
+
   # Jobs that must not run on ubuntu-latest (scripts/runner_pin_live.py, patterns in conformance/runner-pin.toml):
   # ubuntu-latest moved to 26.04, where Mesa's lavapipe crashes and Playwright installs no Chromium, so a job that
   # uses either names a fixed image. Every public repository at its default branch (this one at the commit under
