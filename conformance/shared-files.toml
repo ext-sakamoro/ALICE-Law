@@ -83,7 +83,7 @@ repos = ["ALICE-LOL", "ALICE-TRT"]
 path = "scripts/changed_paths.py"
 sha256 = "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7"
 source = { repo = "ALICE-API", rev = "b6675c55a35c0798826eefa2449e10e8c2cf73a5" }
-repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Audit", "ALICE-Auth", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Compiler", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Eco-System", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Presence", "ALICE-SDF", "ALICE-SIMD", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-TRT", "ALICE-Text", "ALICE-View", "ALICE-Voice", "ALICE-WebSocket", "ALICE-Zip", "text-to-print"]
+repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Audit", "ALICE-Auth", "ALICE-BLE", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Compiler", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Eco-System", "ALICE-Edge", "ALICE-Font", "ALICE-HTTP", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-LoRa", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Presence", "ALICE-SDF", "ALICE-SIMD", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-TRT", "ALICE-Text", "ALICE-View", "ALICE-Voice", "ALICE-WebSocket", "ALICE-Zip", "ALICE-gRPC", "text-to-print"]
 
 [[file]]
 path = "scripts/changed_paths_yaml_oracle.py"
