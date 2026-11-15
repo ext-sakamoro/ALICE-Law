@@ -357,6 +357,127 @@ class CommitsLive(unittest.TestCase):
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertRegex(p.stdout, r"(?m)^found: policy config changed")
 
+    def test_a_reviewed_row_clears_only_a_common_word_kind(self):
+        hid = "e" * 64
+        hits = Path(self.tmp.name, "hits.txt")
+        for kind in ("private name", "private repository name", "private path", "private address"):
+            hits.write_text(f"{kind}\t{hid}\n", encoding="utf-8")
+            self.ack.write_text(f'[acknowledged]\n\n[reviewed]\n"{hid}" = "a technical use, reviewed 2026-12-01"\n',
+                                encoding="utf-8")
+            p = self.run_live("--judge", str(hits), key=False)
+            self.assertEqual(p.returncode, 1, kind + p.stdout + p.stderr)
+            self.assertIn(f"a [reviewed] row can not clear a {kind} hit", p.stdout)
+            self.ack.write_text(f'[acknowledged]\n"{hid}" = "accepted by the owner on 2026-12-01"\n\n[reviewed]\n',
+                                encoding="utf-8")
+            p = self.run_live("--judge", str(hits), key=False)
+            self.assertEqual(p.returncode, 0, kind + p.stdout + p.stderr)
+        for kind in sorted(pcl.REVIEWABLE):
+            hits.write_text(f"{kind}\t{hid}\n", encoding="utf-8")
+            self.ack.write_text(f'[acknowledged]\n\n[reviewed]\n"{hid}" = "a technical use, reviewed 2026-12-01"\n',
+                                encoding="utf-8")
+            p = self.run_live("--judge", str(hits), key=False)
+            self.assertEqual(p.returncode, 0, kind + p.stdout + p.stderr)
+        self.assertEqual(pcl.REVIEWABLE, {"agent process", "device", "internal tracker"})
+
+    def test_a_reviewed_row_does_not_stop_a_name_from_being_carried(self):
+        prev = Path(self.tmp.name, "prev.txt")
+        hid = "f" * 64
+        prev.write_text(f"private name\t{hid}\n", encoding="utf-8")
+        self.ack.write_text(f'[acknowledged]\n\n[reviewed]\n"{hid}" = "a technical use, reviewed 2026-12-01"\n',
+                            encoding="utf-8")
+        out = Path(self.tmp.name, "hits.txt")
+        p = self.run_live("--last-success", "2026-11-30", "--previous", str(prev), "--read-out", str(out))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn(hid, out.read_text(encoding="utf-8"))
+
+    # a commit is never judged by its own settings: each case below hid lines when it was (e4's A1-A4)
+    BOARD = "Rasp" + "berry Pi 5"   # a device word, built here so this file does not hold it
+    TABLE = "[" + "[public-text.allow]" + "]"
+
+    def settings(self, path: str, pin: bool = True, extra: str = "") -> None:
+        import hashlib
+        cfg = (f'[public-text]\n\n{self.TABLE}\npath = "{path}"\nclass = "device"\n' + extra) if path else \
+            "[public-text]\n"
+        (self.repo / ".public-text.toml").write_text(cfg, encoding="utf-8")
+        if pin:
+            (self.repo / ".github").mkdir(exist_ok=True)
+            (self.repo / ".github" / "public-text-pin").write_text(
+                f"config-sha256 {hashlib.sha256(cfg.encode()).hexdigest()}\n", encoding="utf-8")
+
+    def save(self, msg: str, date: str) -> None:
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", msg, date=date)
+
+    def device_hits(self) -> int:
+        p = self.run_live("--last-success", "none")
+        return len(re.findall(r"(?m)^found: device ", p.stdout))
+
+    def test_a1_a_line_with_its_own_allow_and_pin_in_one_commit_is_a_hit(self):
+        git(self.repo, "checkout", "-q", "-b", "side")
+        self.settings("presets.json", extra='count = 1\nwhy = "x"\n')
+        (self.repo / "presets.json").write_text(f"{self.BOARD}\n", encoding="utf-8")
+        self.save("all at once", "2026-11-28T00:00:00Z")
+        git(self.repo, "checkout", "-q", "main")
+        p = self.run_live("--last-success", "none")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("2 hits", p.stdout)   # the settings change and the line
+
+    def test_a2_settings_approved_before_the_window_do_not_allow_a_new_line(self):
+        git(self.repo, "checkout", "-q", "-b", "side")
+        self.settings("presets.json", extra='count = 1\nwhy = "x"\n')
+        self.save("settings", "2026-11-01T00:00:00Z")
+        (self.repo / "presets.json").write_text(f"{self.BOARD}\n", encoding="utf-8")
+        self.save("a preset", "2026-11-28T00:00:00Z")
+        git(self.repo, "checkout", "-q", "main")
+        self.assertEqual(self.device_hits(), 1)
+
+    def test_a3_a_revoked_allow_does_not_reach_back_through_an_older_branch(self):
+        self.settings("presets.json", pin=False, extra='count = 3\nwhy = "x"\n')
+        self.save("settings", "2026-11-20T00:00:00Z")
+        self.settings("presets.json", extra='count = 3\nwhy = "x"\n')
+        self.save("approve", "2026-11-21T00:00:00Z")
+        git(self.repo, "branch", "side")
+        self.settings("", pin=False)
+        self.save("tighten", "2026-11-22T00:00:00Z")
+        self.settings("")
+        self.save("approve the tightening", "2026-11-23T00:00:00Z")
+        git(self.repo, "checkout", "-q", "side")
+        (self.repo / "presets.json").write_text(f"{self.BOARD} a\n{self.BOARD} b\n{self.BOARD} c\n", encoding="utf-8")
+        self.save("three presets", "2026-11-28T00:00:00Z")
+        git(self.repo, "checkout", "-q", "main")
+        self.assertEqual(self.device_hits(), 3)
+
+    def test_a4_an_unvalidated_directory_allow_for_a_file_only_class_allows_nothing(self):
+        git(self.repo, "checkout", "-q", "-b", "side")
+        self.settings("src/")   # no count, no why, a directory for a file-only class
+        self.save("settings", "2026-11-01T00:00:00Z")
+        (self.repo / "src").mkdir()
+        (self.repo / "src" / "a.json").write_text(f"{self.BOARD}\n", encoding="utf-8")
+        self.save("a preset", "2026-11-28T00:00:00Z")
+        git(self.repo, "checkout", "-q", "main")
+        self.assertEqual(self.device_hits(), 1)
+
+    def test_a_copy_of_settings_approved_in_their_own_commit_stays_a_hit(self):
+        # the tip approves its settings in the same commit that changes them: no separate approval, so a copy of
+        # those settings on a branch is still a settings change for a person to read
+        cfg = '[public-text]\ntechnical-paths = ["page.html"]\n'
+        import hashlib
+        git(self.repo, "checkout", "-q", "-b", "side")
+        (self.repo / ".public-text.toml").write_text(cfg, encoding="utf-8")
+        self.save("settings", "2026-11-28T00:00:00Z")
+        git(self.repo, "checkout", "-q", "main")
+        (self.repo / ".public-text.toml").write_text(cfg, encoding="utf-8")
+        (self.repo / ".github").mkdir()
+        (self.repo / ".github" / "public-text-pin").write_text(
+            f"config-sha256 {hashlib.sha256(cfg.encode()).hexdigest()}\n", encoding="utf-8")
+        self.save("settings and their approval at once", "2026-11-29T00:00:00Z")
+        p = self.run_live("--last-success", "none")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertGreaterEqual(len(re.findall(r"(?m)^found: policy config changed", p.stdout)), 1, p.stdout)
+        sha = git(self.repo, "rev-parse", "side").strip()
+        self.assertFalse(pcl.approved_copy(self.repo, f"commit {sha[:12]} .public-text.toml: policy config changed "
+                                                      f"(technical-paths)", "main"))
+
     def test_both_tables_are_read_and_nothing_else(self):
         a, b = "a" * 64, "b" * 64
         rows = pcl.load_ack(f'[acknowledged]\n"{a}" = "accepted 2026-12-01"\n[reviewed]\n"{b}" = "x 2026-12-01"\n')

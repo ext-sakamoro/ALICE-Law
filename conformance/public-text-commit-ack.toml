@@ -9,9 +9,11 @@
 # [acknowledged]: the repository owner's decision to accept the entry in the history; the value cites the date of
 # that decision (YYYY-MM-DD). When the owner decides to rewrite the history instead, no row is added: the hit
 # leaves the window once the history no longer holds the commit.
-# [reviewed]: a hit read as a technical use of the word, not a name (an API identifier, a test fixture, a product
-# label); the value says which use and cites the date of the reading. The same use in later commits is allowed
-# only by a scoped entry (a path and the word, or a class for one file), never by removing the word.
+# [reviewed]: a hit of a common word read as a technical use (an API identifier, a product label); the value says
+# which use and cites the date of the reading. It clears only the word-list kinds (agent process, device, internal
+# tracker): a name, a repository, a path or an address stays a finding until an [acknowledged] row records the
+# owner's decision. The same use in later commits is allowed only by a scoped entry (a path and the word, or a class
+# for one file), never by removing the word.
 [acknowledged]
 
 [reviewed]
@@ -27,14 +29,11 @@
 "6533ff116508c749b05701d6c4bf4271c5b29151a5622f3415faf77b02e468fa" = "a product preset's enclosure label, reviewed 2026-11-16"
 "6777c8e76b03e81dde6e6dc83bfa4f7c6329cc30d0055818f038ea75ca6d0dee" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
 "69af366c6d4e6d9529151797bd7f16e14237db2946778a046094c6416197c53f" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
-"722290c82e43efda8faf919c6b79b7029a1601748b7ba1e383e321be3d84e323" = "a private network address inside a test fixture, reviewed 2026-11-16"
 "7508e5674018188ce19bbd40dc14bc3223f7c84eedd3f8a635f157687e9f3678" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
 "958f443812b6d52c13328b55f2fa598184cbef5e249c496f0aaeb138b6f0d6ad" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
-"994bd590863fad1c6f04d606743ebcb97f32d613abb040aa4ee4123625e12e74" = "a supported model family's name in a commit message, reviewed 2026-11-16"
 "b1d8cc7d79caf03fa8a6c3cf026dd0d784d1124a7f0b74d366c25cc29e370ec6" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
 "b5dc306c74892c44c80ea16e0fff138dcd932a03b1f4eee97909de9bbeae9111" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
 "bbbca991f4128a3b723e097485f371237b29bba5e269e193b728e64bf9e20292" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
-"bf1c0438c500f0f055d6be4d4b0f10b881b589f0437cc17e9934bb077df7f8a7" = "a private network address inside a test fixture, reviewed 2026-11-16"
 "ca04072d9c5ad192d32669a9892ca97120fcfc5c28d1e83515e6a40899af4d85" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
 "d90f56062f292d3c5e2be12b34bf089c1ca379425a46ea6ddd9205be77aa2d7c" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
 "e00eec49d08ed7a8863efa70e5d2752fe627cc8add52788d21e6a7995c177597" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
