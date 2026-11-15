@@ -357,6 +357,49 @@ class CommitsLive(unittest.TestCase):
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertRegex(p.stdout, r"(?m)^found: policy config changed")
 
+    def test_a_line_allowed_by_the_approved_settings_of_its_commit_stays_allowed(self):
+        import hashlib
+        board = "Rasp" + "berry Pi 5"   # a device word, built here so this file does not hold it
+        table = "[" + "[public-text.allow]" + "]"   # a TOML array of tables, built so the line reads as no link
+        cfg = (f'[public-text]\n\n{table}\npath = "presets.json"\nclass = "device"\ncount = 1\n'
+               'why = "a product preset"\n')
+        (self.repo / ".public-text.toml").write_text(cfg, encoding="utf-8")
+        (self.repo / ".github").mkdir()
+        (self.repo / ".github" / "public-text-pin").write_text(
+            f"config-sha256 {hashlib.sha256(cfg.encode()).hexdigest()}\n", encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "settings", date="2026-11-27T00:00:00Z")
+        (self.repo / "presets.json").write_text(f'{{"label": "{board} case"}}\n', encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "a preset", date="2026-11-28T00:00:00Z")
+        # the file moves and the allow goes with it: the tip no longer allows presets.json
+        git(self.repo, "mv", "presets.json", "moved.json")
+        cfg2 = cfg.replace("presets.json", "moved.json")
+        (self.repo / ".public-text.toml").write_text(cfg2, encoding="utf-8")
+        (self.repo / ".github" / "public-text-pin").write_text(
+            f"config-sha256 {hashlib.sha256(cfg2.encode()).hexdigest()}\n", encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "move the presets", date="2026-11-29T00:00:00Z")
+        p = self.run_live("--last-success", "none")
+        self.assertNotRegex(p.stdout, r"(?m)^found: device ", p.stdout + p.stderr)
+        # the same commit under settings its pin did not approve stays a hit
+        sha = git(self.repo, "rev-parse", "HEAD~1").strip()
+        f = f"commit {sha[:12]} presets.json:1: device"
+        self.assertTrue(pcl.allowed_at_its_commit(self.repo, f))
+        # a commit whose own pin does not approve its settings (here: no pin at all)
+        g2 = Path(self.tmp.name, "g2")
+        g2.mkdir()
+        git(g2, "init", "-q", "-b", "main")
+        (g2 / ".public-text.toml").write_text(cfg, encoding="utf-8")
+        (g2 / "presets.json").write_text(f'{{"label": "{board} case"}}\n', encoding="utf-8")
+        git(g2, "add", "-A")
+        git(g2, "commit", "-q", "-m", "unapproved", date="2026-11-28T00:00:00Z")
+        sha2 = git(g2, "rev-parse", "HEAD").strip()
+        self.assertFalse(pcl.allowed_at_its_commit(g2, f"commit {sha2[:12]} presets.json:1: device"))
+        # another file or another class under the approved settings stays a hit
+        self.assertFalse(pcl.allowed_at_its_commit(self.repo, f"commit {sha[:12]} other.json:1: device"))
+        self.assertFalse(pcl.allowed_at_its_commit(self.repo, f"commit {sha[:12]} presets.json:1: private address"))
+
     def test_both_tables_are_read_and_nothing_else(self):
         a, b = "a" * 64, "b" * 64
         rows = pcl.load_ack(f'[acknowledged]\n"{a}" = "accepted 2026-12-01"\n[reviewed]\n"{b}" = "x 2026-12-01"\n')

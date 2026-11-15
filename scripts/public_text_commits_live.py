@@ -164,9 +164,31 @@ def check_commits(g: Path, name: str, commits: list[str], tip: str) -> tuple[lis
         lines = FOUND_RE.findall(r.stdout)
         if len(lines) != int(m.group(1)):
             raise Unreadable(f"{name}: {len(lines)} findings printed, the summary says {m.group(1)}")
-        found += [f for f in lines if not approved_copy(g, f, tip)]
+        found += [f for f in lines if not approved_copy(g, f, tip) and not allowed_at_its_commit(g, f)]
         read += int(m.group(2))
     return found, read
+
+
+FILE_HIT_RE = re.compile(r"^commit ([0-9a-f]{12}) (?!message:)(?!path )(.+?):\d+: (.+)$")
+
+
+def allowed_at_its_commit(g: Path, finding: str) -> bool:
+    """a line of a file allowed by the class allows of the settings at that commit, when the pin at that commit
+    approves those settings (config-sha256 equals the file): the commit was written under a reviewed allow for
+    that file and class, which a later move of the file (the check reads the allows at the tip) does not undo"""
+    m = FILE_HIT_RE.match(finding)
+    if m is None or m.group(3) not in ptc.CLASS_ALLOWABLE:
+        return False
+    commit = hl.git(g, "rev-parse", m.group(1)).strip()
+    have = ptc.config_hash(str(g), commit)
+    if have is None or have != ptc.pin_config_hash(str(g), commit):
+        return False
+    try:
+        cfg = ptc.read_config(str(g), commit) or {}
+    except ValueError:
+        return False
+    return any(isinstance(e, dict) and e.get("class") == m.group(3) and e.get("path") in ptc.scopes(m.group(2))
+               for e in cfg.get("allow") or [])
 
 
 POLICY_RE = re.compile(r"^commit ([0-9a-f]{12}) \.public-text\.toml: policy config changed \(")
