@@ -119,11 +119,17 @@ def parse_hit(finding: str) -> tuple[str, str, str]:
 ACK_TABLES = ("[acknowledged]", "[reviewed]")
 
 
-def load_ack(text: str) -> dict[str, str]:
-    """the rows of both tables, id -> value: [acknowledged] (the owner's decision to accept the entry) and
-    [reviewed] (a hit read as a technical use of the word, not a name, with its scoped allow); a row outside a
-    table, an id in both, or a value without a date is unreadable"""
-    out: dict[str, str] = {}
+# the kinds a [reviewed] row may clear: the unkeyed word-list kinds, a use of a common word that a reader can judge
+# from the line; a keyed kind (a private name, repository or path) and an address are cleared only by the owner's
+# decision ([acknowledged]), whatever a [reviewed] row says
+REVIEWABLE = frozenset({"agent process", "device", "internal tracker"})
+
+
+def load_ack(text: str) -> dict[str, tuple[str, str]]:
+    """the rows of both tables, id -> (table, value): [acknowledged] (the owner's decision to accept the entry) and
+    [reviewed] (a hit read as a technical use of a common word); a row outside a table, an id in both, or a value
+    without a date is unreadable"""
+    out: dict[str, tuple[str, str]] = {}
     table = None
     for n, line in enumerate(text.splitlines(), 1):
         s = line.strip()
@@ -140,8 +146,16 @@ def load_ack(text: str) -> dict[str, str]:
         if m is None or m.group(1) in out:
             raise Unreadable(f"ack line {n}: needs one '\"<64 hex keyed id>\" = \"<the decision it cites, with its "
                              f"date YYYY-MM-DD>\"' per hit")
-        out[m.group(1)] = m.group(2)
+        out[m.group(1)] = (table, m.group(2))
     return out
+
+
+def clears(ack: dict[str, tuple[str, str]], kind: str, hid: str) -> bool:
+    """an [acknowledged] row clears its hit; a [reviewed] row only a hit of a kind in REVIEWABLE"""
+    row = ack.get(hid)
+    if row is None:
+        return False
+    return row[0] == "[acknowledged]" or kind in REVIEWABLE
 
 
 def window_commits(g: Path, start: datetime.date) -> list[str]:
@@ -181,8 +195,13 @@ def approved_copy(g: Path, finding: str, tip: str) -> bool:
         return False
     commit = hl.git(g, "rev-parse", m.group(1)).strip()
     have = ptc.config_hash(str(g), commit)
-    return have is not None and have == ptc.config_hash(str(g), tip) and \
-        ptc.config_approver(str(g), tip) is not None
+    if have is None or have != ptc.config_hash(str(g), tip):
+        return False
+    # the approval: the commit on the tip's history that set the pin to this config, and a commit of its own (it
+    # does not change the settings file itself), so no commit approves its own change
+    approver = ptc.config_approver(str(g), tip)
+    return approver is not None and ptc.REPO_CONFIG not in ptc.paths_z(hl.git(
+        g, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only", "--no-renames", approver))
 
 
 def prefetch_blobs(g: Path, commits: list[str]) -> int:
@@ -408,14 +427,18 @@ def load_hits(text: str) -> tuple[list[tuple[str, str]], tuple[str, int] | None]
     return out, gap
 
 
-def judge(hits: list[tuple[str, str]], ack: dict[str, str], gap: tuple[str, int] | None = None, dropped: int = 0
-          ) -> int:
-    """red on a hit not in `ack` or on a gap; `dropped` = acknowledged hits already left out of `hits`"""
+def judge(hits: list[tuple[str, str]], ack: dict[str, tuple[str, str]], gap: tuple[str, int] | None = None,
+          dropped: int = 0) -> int:
+    """red on a hit no row clears, or on a gap; `dropped` = cleared hits already left out of `hits`"""
     if gap:
         print(f"error: the previous complete read was {gap[0]}, {gap[1]} days before this one: the commits of the gap "
               f"were read now (the window reached back), and this run is red once so the gap is seen",
               file=sys.stderr)
-    new = [(kind, hid) for kind, hid in hits if hid not in ack]
+    new = [(kind, hid) for kind, hid in hits if not clears(ack, kind, hid)]
+    refused = [(kind, hid) for kind, hid in new if hid in ack]
+    for kind, hid in refused:
+        print(f"public text commits: a [reviewed] row can not clear a {kind} hit ({hid[:16]}): only the owner's "
+              f"decision ([acknowledged]) can")
     print(f"public text commits: {len(hits) + dropped} hits, {len(hits) - len(new) + dropped} acknowledged, "
           f"{len(new)} new")
     for kind, hid in new:
@@ -423,7 +446,7 @@ def judge(hits: list[tuple[str, str]], ack: dict[str, str], gap: tuple[str, int]
     return 1 if new or gap else 0
 
 
-def read_ack(path: str) -> dict[str, str]:
+def read_ack(path: str) -> dict[str, tuple[str, str]]:
     return load_ack(Path(path).read_text(encoding="utf-8"))
 
 
@@ -556,10 +579,10 @@ def main(argv: list[str] | None = None) -> int:
     seen: set[str] = set()
     merged = []
     for kind, hid in carried + lines:
-        if hid not in seen and hid not in ack:
+        if hid not in seen and not clears(ack, kind, hid):
             seen.add(hid)
             merged.append((kind, hid))
-    dropped = len({h for _, h in carried + lines} & set(ack))
+    dropped = len({h for k, h in carried + lines if clears(ack, k, h)})
     lines = merged
     gap_days = gap_of(today, a.days, last)
     gap = (last.isoformat(), gap_days) if gap_days and last else None
