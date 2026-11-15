@@ -48,6 +48,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/conformance_roster_check.py --summary "$GITHUB_STEP_SUMMARY"
 
+      # a push run skips the jobs below that read every public repository; a green push run must not be read as
+      # their count, so the job summary names them (read from this file)
+      - name: The jobs a push run skips (named in the job summary)
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          python3 scripts/test_live_scope_note.py
+          python3 scripts/live_scope_note.py --event "$EVENT"
+
   # The only rights holder is the author: every public repository of the account, at its default
   # branch, against conformance/holder-baseline.toml (scripts/holder_live.py). A new occurrence or a
   # listed one that is gone is red; a repository that could not be read is red, never a pass.
