@@ -363,7 +363,7 @@ jobs:
   shared-files:
     name: Every shared file equals the table at each repository's main
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 45  # the daily universe step reads every public repository (the holder job takes up to 30)
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
@@ -410,3 +410,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}  # for scripts/workflow_gh_token_check.py, as in the step above
         run: scripts/shared_files_strict.sh --daily
+
+      # the universe, daily: every public repository of the account (the list the holder job reads, scripts/holder_live.py
+      # public_repos), not only the repositories the rows name, so a repository that holds a row's path and is in no row
+      # is read and is red (same bytes: an unlisted holder, --fail-unlisted; other bytes: the table is out of date). An
+      # empty list is red (compared nothing). The run names what it cannot see: a private repository is not on the list,
+      # so a private holder no row names is not found here. Daily only: it reads every public repository.
+      - name: Every public repository holding a shared file is in the table (daily)
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/gen_shared_files.py --table conformance/shared-files.toml --check --lock-file .github/workflows/conformance-live.yml --universe-owner "${GITHUB_REPOSITORY_OWNER}" --fail-unlisted
