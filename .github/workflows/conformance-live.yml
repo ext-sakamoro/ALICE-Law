@@ -108,6 +108,37 @@ jobs:
         # this repository at the commit under test (its own tree), every other one at its default branch
         run: python3 scripts/public_text_live.py --local "${GITHUB_REPOSITORY#*/}=."
 
+  # The keyed half of the public text check over every public repository's new commits
+  # (scripts/public_text_commits_live.py; a repository's own CI has no key). Its own job, so another job's red does
+  # not skip it and its read is judged on its own. Two steps: the read (every branch's commits since the previous
+  # complete read, at least the last 7 days; a hit is written as its kind and keyed id only) and the judgement
+  # against conformance/public-text-commit-ack.toml. The next run measures its window from the last run whose read
+  # step succeeded, so a red judgement or another job's red does not widen a gap. Daily and by hand only.
+  public-text-commits:
+    name: Every public repository's new commits, keyed
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      # 3.14, as the public text job: the checker reads zstd streams with the standard library
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the new-commit reader
+        run: python3 scripts/test_public_text_commits_live.py
+
+      - name: Read the public repositories' new commits, keyed
+        env:
+          ALICE_PRIVATE_NAME_HMAC_KEY: ${{ secrets.ALICE_PRIVATE_NAME_HMAC_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/public_text_commits_live.py --read-out "$RUNNER_TEMP/commit-hits.txt"
+
+      - name: The hits against the acknowledged ones
+        run: python3 scripts/public_text_commits_live.py --judge "$RUNNER_TEMP/commit-hits.txt"
+
   # Jobs that must not run on ubuntu-latest (scripts/runner_pin_live.py, patterns in conformance/runner-pin.toml):
   # ubuntu-latest moved to 26.04, where Mesa's lavapipe crashes and Playwright installs no Chromium, so a job that
   # uses either names a fixed image. Every public repository at its default branch (this one at the commit under

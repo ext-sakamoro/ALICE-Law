@@ -290,6 +290,28 @@ class MergeCommits(Base):
         self.assertIn("in 2 commits", out)  # the side's commit and the merge
 
 
+class Commits(Base):
+    """--commits SHA...: exactly the listed commits, each on its own (ALICE-Law's daily read of a window of new
+    commits); a commit not listed is not read, whatever its text"""
+
+    def test_a_listed_commit_with_the_name_is_found_and_an_unlisted_one_is_not(self):
+        bad = commit(self.repo, {"a.txt": f"{MADE_UP}\n"})
+        clean = commit(self.repo, {"b.txt": "b\n"})
+        code, out = run(self.repo, "--commits", clean)
+        self.assertEqual(code, 0, out)
+        self.assertIn("in 1 commits", out)
+        code, out = run(self.repo, "--commits", clean, bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"commit {bad[:12]} a.txt:1: private name", out)
+        self.assertIn("in 2 commits", out)
+
+    def test_a_message_and_a_merge_are_read_like_in_a_range(self):
+        named = commit(self.repo, {"c.txt": "c\n"}, message=f"add c for {MADE_UP}")
+        code, out = run(self.repo, "--commits", named)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"commit {named[:12]} message", out)
+
+
 class NewSince(Base):
     """--new-since REF...: the commits HEAD publishes beyond what the REFs already have (a push of a new branch
     reads its own commits, not main's history; a repository's first push, with no REF, reads from the root)"""

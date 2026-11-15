@@ -2967,9 +2967,14 @@ def main(argv: list[str] | None = None) -> int:
                    help="read the commits HEAD publishes beyond the REFs (git rev-list HEAD --not REF...; with no "
                         "REF, HEAD's whole history), merges included, with the allow entries of the newest commit "
                         "on HEAD's first-parent chain that a REF already has")
+    g.add_argument("--commits", nargs="+", metavar="SHA",
+                   help="read exactly these commits (each on its own: message, added lines and paths), with the allow "
+                        "entries of --tip (ALICE-Law's daily read of every public repository's new commits)")
     g.add_argument("--suggest-allow", nargs=2, metavar=("REF", "SCOPE"),
                    help="print the [[public-text.allow]] entries that would allow, by class, what is found "
                         "in SCOPE (a file, or a directory ending in /) at REF, with their counts")
+    ap.add_argument("--tip", default="HEAD", metavar="REF",
+                    help="with --commits: the commit whose settings and allow entries apply (default HEAD)")
     ap.add_argument("--repo-name-counts", action="store_true",
                     help="with --tree: print the tree's private repository name counts as the baseline keys them "
                          "(JSON), for scripts/gen_private_repo_hashes.py --baseline")
@@ -3021,7 +3026,8 @@ def main(argv: list[str] | None = None) -> int:
     ALLOW_STATE["repo"] = name
     ALLOW_STATE["used"] = {}
     try:
-        head = a.tree if a.tree is not None else "HEAD" if a.new_since is not None else a.range.split("..")[-1] or "HEAD"
+        head = (a.tree if a.tree is not None else "HEAD" if a.new_since is not None else a.tip if a.commits
+                else a.range.split("..")[-1] or "HEAD")
         CONFIG.update(load_config(a.repo, head))
         stale: list[tuple[str, int, int]] = []
         if a.tree is not None:
@@ -3057,6 +3063,9 @@ def main(argv: list[str] | None = None) -> int:
             if a.new_since is not None:
                 args, base = new_since(a.repo, a.new_since)
                 rng, tip, shown = args, "HEAD", "HEAD not in " + (" ".join(a.new_since) or "(no other ref)")
+            elif a.commits:
+                rng, tip, base = ["--no-walk", *a.commits], a.tip, a.tip
+                shown = f"{len(a.commits)} listed commit(s)"
             else:
                 base, rng, tip, shown = range_base(a.repo, a.range), a.range, None, a.range
             CONFIG["allow"] = load_config(a.repo, base)["allow"] if base else []
