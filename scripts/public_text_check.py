@@ -83,6 +83,8 @@ def name_mac(text: str) -> str | None:
     key = load_name_key()
     return hmac.new(key, text.encode("utf-8"), hashlib.sha256).hexdigest() if key else None
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
+# a combined diff's hunk (a merge): one more `@` than parents, a range per parent, then the result's
+COMBINED_HUNK_RE = re.compile(r"^(@{3,}) (?:-\d+(?:,\d+)? )+\+(\d+)")
 
 # ---------------------------------------------------------------- vocabulary (from docs_lint.py)
 
@@ -2729,14 +2731,45 @@ def added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
     return out
 
 
+def merge_added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
+    """(line number, text) of the lines a merge commit added to path that are in none of its parents: the text
+    written while merging (a conflict's resolution, or any other edit in the merge), from the combined diff, where
+    such a line is marked `+` against every parent; a line taken from one of the parents is not the merge's own"""
+    out, n = [], 0
+    diff = git(repo, "show", "--format=", "--no-color", "--no-renames", "--no-ext-diff", "--cc", "-U0", commit,
+               "--", ":(literal)" + path)
+    width = 0
+    for line in diff.splitlines():
+        m = COMBINED_HUNK_RE.match(line)
+        if m:
+            width = len(m.group(1)) - 1  # one marker column per parent
+            n = int(m.group(2))
+        elif width and not line.startswith(("+++ ", "--- ")):
+            marks, text = line[:width], line[width:]
+            if "-" in marks:
+                continue  # a line of a parent, not in the merge
+            if marks == "+" * width:
+                out.append((n, text))
+            n += 1
+    return out
+
+
+def merge_paths(repo: str, commit: str) -> list[str]:
+    """the paths where a merge commit differs from every parent (the paths of its own text)"""
+    return paths_z(git(repo, "diff-tree", "--cc", "--no-commit-id", "-r", "-z", "--name-only", "--no-renames",
+                       commit))
+
+
 def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
     findings, compared, files = [], 0, 0
     # the tip of "a..b" or "a...b"
     approver = config_approver(repo, rng.split("..")[-1].lstrip(".") or "HEAD")
-    for commit in git(repo, "rev-list", "--no-merges", rng).splitlines():
+    # merges too: a merge's message and the text written while merging are published like any commit's
+    for commit in git(repo, "rev-list", rng).splitlines():
         if upstream_commit(repo, commit):
             continue  # the upstream project's commit in a fork (up to the fork point)
         compared += 1
+        merge = len(git(repo, "rev-list", "--parents", "-n", "1", commit).split()) > 2
         short = commit[:12]
         message = git(repo, "log", "-1", "--format=%B", commit)
         findings += scan_text(f"commit {short} message", message)
@@ -2749,8 +2782,9 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                      if folded_agent_word(line) and "agent process" not in kinds(line)]
         # the paths the commit adds or changes, from a NUL-separated listing (not the diff headers,
         # which quote non-ASCII names and end a name with a space in a tab)
-        changed = paths_z(git(repo, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only",
-                              "--no-renames", "--diff-filter=d", commit))
+        changed = merge_paths(repo, commit) if merge else paths_z(git(
+            repo, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only", "--no-renames",
+            "--diff-filter=d", commit))
         if REPO_CONFIG in changed:
             keys = config_changes(repo, commit)
             tightens, rows = config_tightens(repo, commit)
@@ -2779,8 +2813,10 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                 continue  # a submodule's commit, not a file of this repository
             files += 1
             findings += [f"commit {short} path {f}" for f in scan_text(path, path, path)]
-            added = added_lines(repo, commit, path)
-            if not added and git(repo, "diff-tree", "--root", "--no-commit-id", "--numstat", "-r", commit,
+            added = merge_added_lines(repo, commit, path) if merge else added_lines(repo, commit, path)
+            if merge:
+                pass  # a merge's own text is its added lines (a binary or a pointer file comes from a commit read on its own)
+            elif not added and git(repo, "diff-tree", "--root", "--no-commit-id", "--numstat", "-r", commit,
                                  "--", ":(literal)" + path).startswith("-\t-\t"):
                 # a binary file: its printable runs at this commit, and the build paths in them
                 data = blob_bytes(repo, commit, path)
