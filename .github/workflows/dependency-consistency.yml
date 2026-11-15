@@ -196,6 +196,11 @@ jobs:
           python3 scripts/test_public_text_commits_live.py
           python3 scripts/public_text_commits_live.py --check-ack
 
+      - name: The note a push run of Conformance (live) writes on the jobs it skips
+        run: |
+          python3 scripts/test_live_scope_note.py
+          python3 scripts/live_scope_note.py --event push --summary /dev/null
+
       - name: Test the conformance measurement
         run: python3 scripts/test_measure_conformance.py
       - name: Fold set tool (tests)
