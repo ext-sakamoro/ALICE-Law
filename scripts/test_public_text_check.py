@@ -590,6 +590,26 @@ class AllowList(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("message:1: private name", out)
 
+    def test_a_changelog_entry_allows_its_repository_s_changelog_only(self):
+        # the model family a crate implements, named in its changelog: allowed there in that repository, read
+        # through --commits as the daily pass reads new commits; another repository's changelog and any commit
+        # message stay findings
+        ptc.ALLOWED = {ptc.repo_key("r"): {self.entry("CHANGELOG.md"): 1}}
+        commit(self.repo, {"CHANGELOG.md": f"- support the {MADE_UP} family\n"}, message="changelog")
+        sha = git(self.repo, "rev-parse", "HEAD").strip()
+        code, out = run(self.repo, "--repo-name", "r", "--commits", sha)
+        self.assertEqual(code, 0, out)
+        code, out = run(self.repo, "--repo-name", "another", "--commits", sha)
+        self.assertEqual(code, 1, out)
+        self.assertIn("CHANGELOG.md:1: private name", out)
+        commit(self.repo, {"CHANGELOG.md": f"- support the {MADE_UP} family\n- more\n"},
+               message=f"changelog for {MADE_UP}")
+        sha = git(self.repo, "rev-parse", "HEAD").strip()
+        code, out = run(self.repo, "--repo-name", "r", "--commits", sha)
+        self.assertEqual(code, 1, out)
+        self.assertIn("message:1: private name", out)
+        self.assertNotIn("CHANGELOG.md:1: private name", out)
+
     def test_a_prefix_entry_allows_every_file_under_it_by_whole_components(self):
         commit(self.repo, {"kits/cad/a.md": f"{MADE_UP} one\n", "kits/cad/sub/b.md": f"{MADE_UP} two\n",
                            "kits/cadx/c.md": f"{MADE_UP} three\n"})
