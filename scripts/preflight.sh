@@ -22,6 +22,8 @@ python3 scripts/test_name_key.py
 python3 scripts/test_licence_files_check.py
 python3 scripts/test_holder_live.py
 python3 scripts/test_public_text_live.py
+python3 scripts/test_public_text_commits_live.py
+python3 scripts/public_text_commits_live.py --check-ack
 # the base every comparison with an earlier commit uses (scripts/ci_base.py: the merge-base with origin/main)
 base=$(python3 scripts/ci_base.py)
 python3 scripts/licence_files_check.py --repo . --holder-base-ref "$base"

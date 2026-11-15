@@ -1,0 +1,11 @@
+# Acknowledged hits of scripts/public_text_commits_live.py (the keyed public text check over every public
+# repository's new commits). A hit is an entry in a public repository's history; a later commit can not remove it,
+# so the daily run stays red on it until it is acknowledged here.
+#
+# Each row is a hit's keyed id: HMAC-SHA256 under the name key of "<repository> NUL <commit, 12 hex> NUL <kind>"
+# (64 hex). Only a holder of the key can map a row to a commit: the file names no repository and no commit.
+#
+# An acknowledgement records the repository owner's decision to accept the entry in the history; its value cites
+# the date of that decision (YYYY-MM-DD). When the owner decides to rewrite the history instead, no row is added:
+# the hit leaves the window once the history no longer holds the commit.
+[acknowledged]

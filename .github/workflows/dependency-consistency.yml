@@ -189,6 +189,13 @@ jobs:
           python3 scripts/test_locked_lockfile_check.py
           python3 scripts/locked_lockfile_check.py
 
+      # the daily keyed pass over the public repositories' new commits runs on main (Conformance (live)); its tests
+      # and the acknowledged-hit file it reads are checked here, so neither reaches main unread
+      - name: The new-commit reader (tests) and conformance/public-text-commit-ack.toml
+        run: |
+          python3 scripts/test_public_text_commits_live.py
+          python3 scripts/public_text_commits_live.py --check-ack
+
       - name: Test the conformance measurement
         run: python3 scripts/test_measure_conformance.py
       - name: Fold set tool (tests)
