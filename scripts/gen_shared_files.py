@@ -41,6 +41,7 @@ bytes; it is not re-rolled before its owner lands (an error).
                       [--today YYYY-MM-DD]
                       [--target PATH=SHA256@ALICE-X ...] [--next-from REGISTRY]
                       [--lock-file .github/workflows/conformance-live.yml]
+                      [--universe-owner OWNER [--fail-unlisted]]
 
 --lock-file names the file holding the live check's count lock (`--expect-copies N`, the copies
 of uniform rows): --write sets N from the table it writes, and --check is red when N is not
@@ -55,6 +56,13 @@ rollout that landed before the table was regenerated), which is reported as an u
 holder; with --strict an unlisted holder is a difference too (a pending row's variants are
 expected to move during its rollout, so they stay reported in every mode). The repositories' main is fetched from GitHub (blob-less), or read from
 DIR/<repo> (its origin/main) with --checkouts. A run that would write no entry exits 2.
+
+--universe-owner OWNER reads, besides the rows' repositories, every public repository of OWNER whose default branch
+is main (GitHub REST, the list scripts/holder_live.py reads), so a repository that holds a row's path but is named in
+no row is found (with --write it joins the row; with --check it is an unlisted holder, or the table is out of date
+when its bytes differ). An empty list exits 2. It prints what it cannot see: the repositories named in rows that are
+not on the public list (private or gone); a private holder that no row names is not found. --fail-unlisted makes an
+unlisted holder with the row's bytes a failure of --check (the daily scan in conformance-live.yml).
 """
 from __future__ import annotations
 
@@ -232,9 +240,27 @@ def add_rows(rows: list[dict], specs: list[str]) -> None:
         have.add(path)
 
 
-def widen(rows: list[dict], repo_of) -> None:
-    """Add to each row every one of the rows' repositories that has its path on main."""
-    universe = sorted({r for row in rows for r in row["order"]} | {r for row in rows for r in row["exempt"]})
+def universe_names(owner: str) -> list[str]:
+    """The account's public repositories whose default branch is main (GitHub REST, the list the daily holder run
+    reads: scripts/holder_live.py public_repos); a public repository on another default branch is named as not read
+    (the rows read main). A private repository is not on the list at all: the scan cannot see it."""
+    import holder_live
+
+    try:
+        repos = holder_live.public_repos(owner)
+    except holder_live.Unreadable as e:
+        raise sfc.Unreadable(f"universe: listing {owner}: {e}") from e
+    off = sorted(r["name"] for r in repos if r.get("default_branch") != "main")
+    if off:
+        print(f"gen_shared_files: universe: not read (default branch is not main; the rows read main): {', '.join(off)}")
+    return sorted(r["name"] for r in repos if r.get("default_branch") == "main")
+
+
+def widen(rows: list[dict], repo_of, extra: list[str] = ()) -> None:
+    """Add to each row every one of the universe's repositories that has its path on main: the rows' own
+    repositories, and with --universe-owner every public repository of the account (extra), so a holder no row names
+    is found instead of never being read."""
+    universe = sorted({r for row in rows for r in row["order"]} | {r for row in rows for r in row["exempt"]} | set(extra))
     trees = {r: sfc.tree(repo_of(r)) for r in universe}
     for row in rows:
         if not row["order"]:
@@ -512,6 +538,12 @@ def main(argv: list[str]) -> int:
                     help="PATH<TAB>REPO,REPO: a new row added to the table's rows (repeatable)")
     ap.add_argument("--discover", action="store_true")
     ap.add_argument("--checkouts", type=Path)
+    ap.add_argument("--universe-owner",
+                    help="also read every public repository of this account (not only the rows' repositories), so a "
+                         "holder no row names is found; an empty list exits 2")
+    ap.add_argument("--fail-unlisted", action="store_true",
+                    help="with --check: an unlisted holder with the row's own bytes is a failure, not a report (the "
+                         "daily universe scan)")
     ap.add_argument("--today", help="the date a new pending row records (default: today, UTC)")
     ap.add_argument("--base-table", type=Path,
                     help="with --check: the table at the base (origin/main); a holder it lists that the table under "
@@ -557,7 +589,18 @@ def main(argv: list[str]) -> int:
             repo_of = Checkouts(a.checkouts) if a.checkouts else sfc.Remote(Path(d))
             if a.discover:
                 rows += discover(rows, repo_of)
-            widen(rows, repo_of)
+            extra: list[str] = []
+            if a.universe_owner:
+                extra = universe_names(a.universe_owner)
+                if not extra:
+                    raise sfc.Unreadable(f"universe: {a.universe_owner} lists no public repository (compared nothing)")
+                named = sorted({r for row in rows for r in row["order"]} | {r for row in rows for r in row["exempt"]})
+                unseen = [r for r in named if r not in set(extra)]
+                print(f"gen_shared_files: universe: {len(extra)} public repositories listed")
+                print(f"gen_shared_files: not seen: repositories off the public list (private or gone) named in rows: "
+                      f"{len(unseen)}" + (f" ({', '.join(unseen)})" if unseen else "")
+                      + "; a private holder that no row names is not found by this scan")
+            widen(rows, repo_of, extra)
             planned_ids = next_ids(a.next_from.read_text(encoding="utf-8")) if a.next_from else None
             drift = registry_drift(planned_ids, old, targets) if planned_ids is not None else []
             if drift:
@@ -574,6 +617,7 @@ def main(argv: list[str]) -> int:
     n = sum(len(e["repos"]) for e in entries)
     p = sum("pending" in e for e in entries)
     if a.check:
+        unlisted_fail = 0
         current = a.table.read_text(encoding="utf-8") if a.table.exists() else ""
         try:
             cur_plain, cur_var = without_variants(current)
@@ -588,6 +632,10 @@ def main(argv: list[str]) -> int:
             for path, repos in held:
                 print(f"gen_shared_files: unlisted holder, same bytes: {path} on {', '.join(repos)}"
                       " (regenerate the table before the next publish)")
+            if a.fail_unlisted and held:
+                # a failure, read at the end: the comparisons below still run, so a holder with other bytes (the table
+                # out of date) is reported in the same run instead of being hidden behind this one
+                unlisted_fail = len(held)
             # without --base-table (main: conformance-live.yml) the table itself is the base: a rollout step the mains
             # took after the table was written (the last copy of the bytes a planned row moved from gone, every copy
             # at the target) is reported and recorded by the next regeneration, not a difference that turns the live
@@ -615,6 +663,13 @@ def main(argv: list[str]) -> int:
                       + ", ".join(moved))
         if cur_plain != new_plain:
             print(f"gen_shared_files: {a.table} is out of date (regenerate with --write)", file=sys.stderr)
+            if unlisted_fail:
+                print(f"gen_shared_files: {unlisted_fail} row(s) have a holder the table does not list (--fail-unlisted)",
+                      file=sys.stderr)
+            return 1
+        if unlisted_fail:
+            print(f"gen_shared_files: {unlisted_fail} row(s) have a holder the table does not list (--fail-unlisted)",
+                  file=sys.stderr)
             return 1
         if a.lock_file is not None:
             try:

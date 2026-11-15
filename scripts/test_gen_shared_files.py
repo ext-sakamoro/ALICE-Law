@@ -832,6 +832,68 @@ class Generate(Base):
         self.assertEqual(e["pending"]["planned"], sfc.git_blob(SHARED))
         self.assertEqual(e["pending"]["since"], TODAY)
 
+    # the universe of repositories comes from the account's public repository list (--universe-owner), not from the
+    # rows: a repository that holds a row's path but was never named in any row is read and reported
+    def universe(self, names):
+        saved = gen.universe_names
+        gen.universe_names = lambda owner: list(names)
+        self.addCleanup(lambda: setattr(gen, "universe_names", saved))
+
+    def test_a_universe_holder_no_row_names_is_found_and_fails_the_scan(self):
+        # oracle (red before the universe came from the public list): ALICE-C holds scripts/s.sh with the row's own
+        # bytes, the table's row names ALICE-A and ALICE-B only, and no row names ALICE-C at all
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        self.assertNotIn("ALICE-C", self.t.read_text(encoding="utf-8"))
+        self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
+        self.universe(["ALICE-A", "ALICE-B", "ALICE-C"])
+        code, out = self.gen("--check", "--universe-owner", "stand-in", "--fail-unlisted")
+        self.assertEqual(code, 1, out)
+        self.assertIn("unlisted holder, same bytes: scripts/s.sh on ALICE-C", out)
+        # the same table without the universe does not see ALICE-C (the gap this closes)
+        self.assertEqual(self.gen("--check")[0], 0)
+
+    def test_a_universe_holder_with_other_bytes_makes_the_table_out_of_date(self):
+        # ALICE-C (no row names it) holds scripts/s.sh with different bytes: the row is no longer what the mains hold
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        self.universe(["ALICE-A", "ALICE-B", "ALICE-C"])
+        code, out = self.gen("--check", "--universe-owner", "stand-in")
+        self.assertEqual(code, 1, out)
+        self.assertIn("is out of date", out)
+        self.assertEqual(self.gen("--check")[0], 0)  # unseen without the universe
+
+    def test_an_unlisted_same_bytes_holder_does_not_hide_a_holder_with_other_bytes(self):
+        # two rows: s.sh gains ALICE-C with the row's own bytes (an unlisted holder), c.sh gains ALICE-D with other bytes
+        # (the table out of date); one run reports both (the unlisted-holder failure must not return before the
+        # comparison that finds the other row)
+        self.w.commit("ALICE-A", {"scripts/c.sh": b"c\n"})
+        self.w.commit("ALICE-B", {"scripts/c.sh": b"c\n"})
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\nscripts/c.sh\tALICE-A,ALICE-B\n")
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
+        self.w.commit("ALICE-D", {"scripts/c.sh": b"other c\n", "README": b"ALICE-D"})  # commit() makes the repository
+        self.universe(["ALICE-A", "ALICE-B", "ALICE-C", "ALICE-D"])
+        code, out = self.gen("--check", "--universe-owner", "stand-in", "--fail-unlisted")
+        self.assertEqual(code, 1, out)
+        self.assertIn("unlisted holder, same bytes: scripts/s.sh on ALICE-C", out)
+        self.assertIn("is out of date", out)
+
+    def test_the_universe_scan_states_what_it_cannot_see(self):
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        # ALICE-B is named in a row but is not on the public list: a private (or gone) holder the scan cannot read
+        self.universe(["ALICE-A"])
+        code, out = self.gen("--check", "--universe-owner", "stand-in")
+        self.assertIn("universe: 1 public repositories listed", out)
+        self.assertIn("not seen: repositories off the public list (private or gone) named in rows: 1 (ALICE-B)", out)
+
+    def test_an_empty_universe_compares_nothing_and_exits_2(self):
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\n")
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        self.universe([])
+        self.assertEqual(self.gen("--check", "--universe-owner", "stand-in")[0], 2)
+
     def test_check_reports_an_unlisted_holder_with_the_same_bytes(self):
         self.gained_holder(SHARED)
         code, out = self.gen("--check")
