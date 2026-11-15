@@ -93,7 +93,7 @@ class CommitsLive(unittest.TestCase):
 
     def test_an_acknowledged_hit_passes(self):
         sha = self.commit("clean\n", f"see the {TRACKER} row", "2026-11-29T00:00:00Z")
-        hid = pcl.hit_id(bytes.fromhex(KEY), NAME, sha[:12], "internal tracker")
+        hid = pcl.hit_id(bytes.fromhex(KEY), NAME, sha[:12], "internal tracker", "message:1")
         self.ack.write_text(f'[acknowledged]\n"{hid}" = "accepted by the owner on 2026-12-01"\n', encoding="utf-8")
         p = self.run_live("--last-success", "none")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -240,7 +240,9 @@ class CommitsLive(unittest.TestCase):
 
     def test_the_kind_is_part_of_the_id(self):
         k = bytes.fromhex(KEY)
-        self.assertNotEqual(pcl.hit_id(k, NAME, "a" * 12, "internal tracker"), pcl.hit_id(k, NAME, "a" * 12, "device"))
+        self.assertNotEqual(pcl.hit_id(k, NAME, "a" * 12, "internal tracker", "x:1"), pcl.hit_id(k, NAME, "a" * 12, "device", "x:1"))
+        # one id per place: the same kind at two places of one commit
+        self.assertNotEqual(pcl.hit_id(k, NAME, "a" * 12, "device", "x:1"), pcl.hit_id(k, NAME, "a" * 12, "device", "x:2"))
 
     def test_main_reports_zero_read_while_pushed(self):
         self.commit("clean\n", "clean change", "2026-11-29T00:00:00Z")
@@ -285,7 +287,7 @@ class CommitsLive(unittest.TestCase):
 
     def test_resolve_maps_an_id_back_off_ci_and_is_refused_in_ci(self):
         sha = self.commit("clean\n", f"see the {TRACKER} row", "2026-11-29T00:00:00Z")
-        hid = pcl.hit_id(bytes.fromhex(KEY), NAME, sha[:12], "internal tracker")
+        hid = pcl.hit_id(bytes.fromhex(KEY), NAME, sha[:12], "internal tracker", "message:1")
         p = self.run_live("--resolve", hid[:16])
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertIn(f"{hid} {NAME} {sha[:12]}", p.stdout)
@@ -306,6 +308,30 @@ class CommitsLive(unittest.TestCase):
         p = subprocess.run([sys.executable, str(SCRIPT), "--check-ack"], capture_output=True, text=True,
                            encoding="utf-8", env={"PATH": os.environ["PATH"], "HOME": str(self.home)})
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+
+    def test_a_row_covers_its_place_only(self):
+        # the same kind in the message and in a file of one commit: two hits, and a row for one leaves the other
+        (self.repo / "notes.md").write_text(f"the {TRACKER} again\n", encoding="utf-8")
+        sha = self.commit(f"the {TRACKER} again\n", f"see the {TRACKER} row", "2026-11-29T00:00:00Z")
+        k = bytes.fromhex(KEY)
+        msg = pcl.hit_id(k, NAME, sha[:12], "internal tracker", "message:1")
+        p = self.run_live("--last-success", "none")
+        self.assertIn("2 hits", p.stdout)
+        self.ack.write_text(f'[acknowledged]\n\n[reviewed]\n"{msg}" = "technical use, reviewed 2026-12-01"\n',
+                            encoding="utf-8")
+        p = self.run_live("--last-success", "none")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("2 hits, 1 acknowledged, 1 new", p.stdout)
+
+    def test_both_tables_are_read_and_nothing_else(self):
+        a, b = "a" * 64, "b" * 64
+        rows = pcl.load_ack(f'[acknowledged]\n"{a}" = "accepted 2026-12-01"\n[reviewed]\n"{b}" = "x 2026-12-01"\n')
+        self.assertEqual(set(rows), {a, b})
+        for bad in (f'"{a}" = "accepted 2026-12-01"\n',                       # a row before any table
+                    f'[other]\n"{a}" = "accepted 2026-12-01"\n',             # an unknown table
+                    f'[acknowledged]\n"{a}" = "x 2026-12-01"\n[reviewed]\n"{a}" = "y 2026-12-01"\n'):  # in both
+            with self.assertRaises(pcl.Unreadable, msg=bad):
+                pcl.load_ack(bad)
 
     def test_the_ack_file_rejects_a_malformed_row(self):
         with self.assertRaises(pcl.Unreadable):
