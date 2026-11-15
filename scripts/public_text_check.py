@@ -83,6 +83,8 @@ def name_mac(text: str) -> str | None:
     key = load_name_key()
     return hmac.new(key, text.encode("utf-8"), hashlib.sha256).hexdigest() if key else None
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
+# a combined diff's hunk (a merge): one more `@` than parents, a range per parent, then the result's
+COMBINED_HUNK_RE = re.compile(r"^(@{3,}) (?:-\d+(?:,\d+)? )+\+(\d+)")
 
 # ---------------------------------------------------------------- vocabulary (from docs_lint.py)
 
@@ -2729,14 +2731,59 @@ def added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
     return out
 
 
-def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
+def merge_added_lines(repo: str, commit: str, path: str) -> list[tuple[int, str]]:
+    """(line number, text) of the lines a merge commit added to path that are in none of its parents: the text
+    written while merging (a conflict's resolution, or any other edit in the merge), from the combined diff, where
+    such a line is marked `+` against every parent; a line taken from one of the parents is not the merge's own"""
+    out, n = [], 0
+    diff = git(repo, "show", "--format=", "--no-color", "--no-renames", "--no-ext-diff", "--cc", "-U0", commit,
+               "--", ":(literal)" + path)
+    width = 0
+    for line in diff.splitlines():
+        m = COMBINED_HUNK_RE.match(line)
+        if m:
+            width = len(m.group(1)) - 1  # one marker column per parent
+            n = int(m.group(2))
+        elif width and not line.startswith(("+++ ", "--- ")):
+            marks, text = line[:width], line[width:]
+            if "-" in marks:
+                continue  # a line of a parent, not in the merge
+            if marks == "+" * width:
+                out.append((n, text))
+            n += 1
+    return out
+
+
+def merge_paths(repo: str, commit: str) -> list[str]:
+    """the paths where a merge commit differs from every parent (the paths of its own text)"""
+    return paths_z(git(repo, "diff-tree", "--cc", "--no-commit-id", "-r", "-z", "--name-only", "--no-renames",
+                       commit))
+
+
+def new_since(repo: str, refs: list[str]) -> tuple[list[str], str | None]:
+    """the rev-list arguments of what HEAD publishes beyond `refs` (HEAD's whole history when there are none),
+    and the base whose allow entries apply: the newest commit on HEAD's first-parent chain already reachable from
+    a ref (None when no commit of HEAD is)"""
+    args = ["HEAD", "--not", *refs] if refs else ["HEAD"]
+    new = set(git(repo, "rev-list", *args).split())
+    base = next((c for c in git(repo, "rev-list", "--first-parent", "HEAD").split() if c not in new), None)
+    return args, base
+
+
+def scan_range(repo: str, rng: str | list[str], tip: str | None = None) -> tuple[list[str], int, int]:
+    """the findings of the commits of a range ("a..b", "a...b", or rev-list arguments with `tip`)"""
     findings, compared, files = [], 0, 0
+    args = [rng] if isinstance(rng, str) else rng
+    shown = rng if isinstance(rng, str) else " ".join(rng)
     # the tip of "a..b" or "a...b"
-    approver = config_approver(repo, rng.split("..")[-1].lstrip(".") or "HEAD")
-    for commit in git(repo, "rev-list", "--no-merges", rng).splitlines():
+    tip = tip or rng.split("..")[-1].lstrip(".") or "HEAD"
+    approver = config_approver(repo, tip)
+    # merges too: a merge's message and the text written while merging are published like any commit's
+    for commit in git(repo, "rev-list", *args).splitlines():
         if upstream_commit(repo, commit):
             continue  # the upstream project's commit in a fork (up to the fork point)
         compared += 1
+        merge = len(git(repo, "rev-list", "--parents", "-n", "1", commit).split()) > 2
         short = commit[:12]
         message = git(repo, "log", "-1", "--format=%B", commit)
         findings += scan_text(f"commit {short} message", message)
@@ -2749,8 +2796,9 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                      if folded_agent_word(line) and "agent process" not in kinds(line)]
         # the paths the commit adds or changes, from a NUL-separated listing (not the diff headers,
         # which quote non-ASCII names and end a name with a space in a tab)
-        changed = paths_z(git(repo, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only",
-                              "--no-renames", "--diff-filter=d", commit))
+        changed = merge_paths(repo, commit) if merge else paths_z(git(
+            repo, "diff-tree", "--root", "--no-commit-id", "-r", "-z", "--name-only", "--no-renames",
+            "--diff-filter=d", commit))
         if REPO_CONFIG in changed:
             keys = config_changes(repo, commit)
             tightens, rows = config_tightens(repo, commit)
@@ -2779,8 +2827,10 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                 continue  # a submodule's commit, not a file of this repository
             files += 1
             findings += [f"commit {short} path {f}" for f in scan_text(path, path, path)]
-            added = added_lines(repo, commit, path)
-            if not added and git(repo, "diff-tree", "--root", "--no-commit-id", "--numstat", "-r", commit,
+            added = merge_added_lines(repo, commit, path) if merge else added_lines(repo, commit, path)
+            if merge:
+                pass  # a merge's own text is its added lines (a binary or a pointer file comes from a commit read on its own)
+            elif not added and git(repo, "diff-tree", "--root", "--no-commit-id", "--numstat", "-r", commit,
                                  "--", ":(literal)" + path).startswith("-\t-\t"):
                 # a binary file: its printable runs at this commit, and the build paths in them
                 data = blob_bytes(repo, commit, path)
@@ -2797,13 +2847,12 @@ def scan_range(repo: str, rng: str) -> tuple[list[str], int, int]:
                         RANGE_ALLOWED.setdefault((entry["path"], k), set()).add((path, text))
     # an entry allows at most its count of distinct added lines, and at most its count of lines in all
     # at the tip (lines already there before the range count too)
-    tip = rng.split("..")[-1].lstrip(".") or "HEAD"
     tip_paths = None
     for e in CONFIG["allow"]:
         got = len(RANGE_ALLOWED.get((e["path"], e["class"]), ()))
         if got > e["count"]:
             findings.append(f"{REPO_CONFIG}: allow {e['path']} / {e['class']} allows {e['count']} lines, "
-                            f"{rng} adds {got}")
+                            f"{shown} adds {got}")
         elif got:
             if tip_paths is None:
                 tip_paths = paths_z(git(repo, "ls-tree", "-r", "-z", "--name-only", tip))
@@ -2891,6 +2940,10 @@ def main(argv: list[str] | None = None) -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--tree", nargs="?", const="HEAD", metavar="REF")
     g.add_argument("--range", metavar="BASE..HEAD")
+    g.add_argument("--new-since", nargs="*", metavar="REF",
+                   help="read the commits HEAD publishes beyond the REFs (git rev-list HEAD --not REF...; with no "
+                        "REF, HEAD's whole history), merges included, with the allow entries of the newest commit "
+                        "on HEAD's first-parent chain that a REF already has")
     g.add_argument("--suggest-allow", nargs=2, metavar=("REF", "SCOPE"),
                    help="print the [[public-text.allow]] entries that would allow, by class, what is found "
                         "in SCOPE (a file, or a directory ending in /) at REF, with their counts")
@@ -2945,7 +2998,8 @@ def main(argv: list[str] | None = None) -> int:
     ALLOW_STATE["repo"] = name
     ALLOW_STATE["used"] = {}
     try:
-        CONFIG.update(load_config(a.repo, a.tree if a.tree is not None else a.range.split("..")[-1] or "HEAD"))
+        head = a.tree if a.tree is not None else "HEAD" if a.new_since is not None else a.range.split("..")[-1] or "HEAD"
+        CONFIG.update(load_config(a.repo, head))
         stale: list[tuple[str, int, int]] = []
         if a.tree is not None:
             global REPO_NAME_COUNTS
@@ -2977,10 +3031,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             # the range is read with the allow entries of its base: a commit that changes the settings is
             # a finding of its own, and the entries it adds do not apply to the range that adds them
-            base = range_base(a.repo, a.range)
+            if a.new_since is not None:
+                args, base = new_since(a.repo, a.new_since)
+                rng, tip, shown = args, "HEAD", "HEAD not in " + (" ".join(a.new_since) or "(no other ref)")
+            else:
+                base, rng, tip, shown = range_base(a.repo, a.range), a.range, None, a.range
             CONFIG["allow"] = load_config(a.repo, base)["allow"] if base else []
-            findings, compared, files = scan_range(a.repo, a.range)
-            what = f"{compared} commits ({files} files) in {a.range}"
+            findings, compared, files = scan_range(a.repo, rng, tip)
+            what = f"{compared} commits ({files} files) in {shown}"
     except subprocess.CalledProcessError as e:
         print(f"error: git: {(e.stderr or '').strip() if isinstance(e.stderr, str) else e}", file=sys.stderr)
         return 2

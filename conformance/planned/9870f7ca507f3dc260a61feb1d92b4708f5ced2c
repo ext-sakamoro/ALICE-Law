@@ -1,0 +1,61 @@
+name: Public text
+
+# The text this public repository publishes (every tracked file's path and text, and
+# each pushed commit's message, added lines and paths) carries none of the words the
+# ALICE-Law check refuses: scripts/public_text.sh runs ALICE-Law's own checker at the
+# revision .github/public-text-pin names, verified by its SHA-256. Mirrored in
+# scripts/preflight.sh.
+
+on:
+  push:
+    # ci/**: the same check on a branch before it is fast-forwarded to main
+    branches: [main, 'ci/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# on main each commit has a group of its own and a run there is never
+# cancelled; a newer push cancels an older run only off main
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  public-text:
+    name: Public text
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # 3.14: the checker reads zstd streams with the standard library
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Tests of scripts/public_text.sh (no network)
+        run: python scripts/test_public_text.py
+      - name: Public text (tree at HEAD, then the pushed commits)
+        env:
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          TOKEN: ${{ github.token }}
+        run: |
+          # git reads the token from the environment (the checkout keeps no credentials): every branch of the
+          # remote is fetched, so a push with no previous head reads only the commits it publishes
+          # (scripts/public_text.sh new), and the script can ask the remote which branches it has
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: bearer $TOKEN"
+          git fetch -q --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          base=""
+          if [ -n "${PR_BASE:-}" ]; then
+            base="$PR_BASE"
+          elif [ "${BEFORE:-}" = "0000000000000000000000000000000000000000" ]; then
+            base=new
+          elif [ -n "${BEFORE:-}" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            base="$BEFORE"
+          fi
+          if [ -n "$base" ]; then scripts/public_text.sh "$base"; else scripts/public_text.sh; fi
