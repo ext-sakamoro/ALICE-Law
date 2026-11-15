@@ -740,7 +740,10 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
     unlisted: list[tuple[str, str, str, str]] = []
     repos = sorted({r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})})
     base_listed = {e["path"]: set(e["repos"]) for e in (base or [])}
-    base_rows = {e["path"]: row_but_variants(e) for e in (base or [])}
+    # without --base-table (main: conformance-live.yml) the table itself is the base: a planned row whose copies all
+    # reached the target after the table was written is a rollout step, a note until the next regeneration (the same
+    # split as gen_shared_files.py --check)
+    base_rows = {e["path"]: row_but_variants(e) for e in (base if base is not None else entries)}
     trees = {r: tree(remote(r)) for r in repos}
     if not trees:
         raise Unreadable("no repository read (compared nothing)")

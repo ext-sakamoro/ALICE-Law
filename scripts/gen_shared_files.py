@@ -467,7 +467,8 @@ def moved_from_gone_since_base(old: list[dict], new: list[dict], base: list[dict
     """new entries with the moved_from the regeneration dropped put back, where the drop is the mains moving on: the
     table under check has it, main's table (the base) has the same row (all but the variants), and no main holds the
     bytes it moved from any more (the regeneration drops it only then). A moved_from the change added or edited is not
-    the base's, so its drop stays a difference; so is one on main (no base), which the regeneration must remove"""
+    the base's, so its drop stays a difference. On main (no --base-table) the base is the table itself: the drop is
+    the mains moving on, reported, and the next regeneration removes it"""
     cur = {e["path"]: e for e in old}
     base_rows = {e["path"]: sfc.row_but_variants(e) for e in base}
     out, gone = [], []
@@ -587,16 +588,21 @@ def main(argv: list[str]) -> int:
             for path, repos in held:
                 print(f"gen_shared_files: unlisted holder, same bytes: {path} on {', '.join(repos)}"
                       " (regenerate the table before the next publish)")
-            if base is not None:
-                entries, gone = moved_from_gone_since_base(sfc.load(current), entries, base)
-                for path in gone:
-                    print(f"gen_shared_files: pending {path}: moved_from gone since the base (no main holds the bytes it "
-                          "moved from any more; the next table drops it)")
-                entries, done = converged_since_base(sfc.load(current), entries, base)
-                for path, added in done:
-                    print(f"gen_shared_files: converged since the base: {path} (every copy has the target"
-                          + (f", and {', '.join(added)} took it as an unlisted holder" if added else "")
-                          + "; the next table makes it uniform)")
+            # without --base-table (main: conformance-live.yml) the table itself is the base: a rollout step the mains
+            # took after the table was written (the last copy of the bytes a planned row moved from gone, every copy
+            # at the target) is reported and recorded by the next regeneration, not a difference that turns the live
+            # check red; a moved_from or row a change edited is still caught where the change is checked (ci/, with
+            # main's table as the base)
+            steps_base = base if base is not None else sfc.load(current)
+            entries, gone = moved_from_gone_since_base(sfc.load(current), entries, steps_base)
+            for path in gone:
+                print(f"gen_shared_files: pending {path}: moved_from gone since the base (no main holds the bytes it "
+                      "moved from any more; the next table drops it)")
+            entries, done = converged_since_base(sfc.load(current), entries, steps_base)
+            for path, added in done:
+                print(f"gen_shared_files: converged since the base: {path} (every copy has the target"
+                      + (f", and {', '.join(added)} took it as an unlisted holder" if added else "")
+                      + "; the next table makes it uniform)")
             text = render(entries)
         new_plain, new_var = without_variants(text)
         for path in sorted(set(cur_var) & set(new_var)):

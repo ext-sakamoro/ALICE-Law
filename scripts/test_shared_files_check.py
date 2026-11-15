@@ -1009,10 +1009,15 @@ class Planned(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("the owner ALICE-A main does not hold the target", out)
 
-    def test_a_planned_row_that_has_converged_is_red(self):
+    def test_a_planned_row_that_has_converged_is_a_note_on_main_and_red_with_strict(self):
+        # main (no base): the table itself is the base, so the rollout finishing after the table was written is a
+        # step of it, a note until the next regeneration; --strict (the regeneration and landing path) is red
         self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
         self.w.commit("ALICE-C", {"scripts/s.sh": SHARED})
         code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn("scripts/s.sh: converged since the base", out)
+        code, out = self.live("--strict")
         self.assertEqual(code, 1, out)
         self.assertIn("it has converged", out)
 
@@ -1075,12 +1080,18 @@ class Planned(Base):
         base.write_text(self.w.table(other), encoding="utf-8")
         self.assertNotEqual(self.gen_check("--base-table", str(base))[0], 0)
 
-    def test_the_daily_strict_run_and_a_run_without_a_base_keep_converged_a_finding(self):
+    def test_the_strict_run_keeps_converged_a_finding_and_a_run_without_a_base_reports_it(self):
+        # --strict (regeneration and landing) is red; main without a base reads the table itself as the base, so the
+        # rollout finishing after the table was written is a note there (live stays green for an expected step)
         base = self.converged_since(self.w.planned())
         self.assertEqual(self.live("--base-table", str(base), "--strict")[0], 1)
-        self.assertEqual(self.live()[0], 1)
         self.assertEqual(self.gen_check("--base-table", str(base), "--strict")[0], 1)
-        self.assertEqual(self.gen_check()[0], 1)
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertIn("scripts/s.sh: converged since the base", out)
+        code, out = self.gen_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("converged since the base: scripts/s.sh", out)
 
     def test_converged_is_a_finding_when_the_base_planned_other_bytes_or_other_repositories(self):
         # the change re-planned the row (another planned id or target than the base), or listed other repositories:

@@ -742,12 +742,36 @@ class Generate(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("pending scripts/s.sh: moved_from gone since the base (no main holds", out)
 
-    def test_without_a_base_the_drop_is_still_a_difference(self):
-        # on main (conformance-live.yml, no base) the table must be regenerated
+    def test_without_a_base_the_drop_is_a_note_too(self):
+        # on main (conformance-live.yml, no base) the table itself is the base: the last copy of the bytes the row
+        # moved from leaving is a step of the rollout, reported, not a difference that turns the live check red
         reg, _ = self.rerolled_and_landed()
         code, out = self.gen("--check", "--next-from", str(reg))
-        self.assertEqual(code, 1, out)
-        self.assertIn("is out of date", out)
+        self.assertEqual(code, 0, out)
+        self.assertIn("pending scripts/s.sh: moved_from gone since the base (no main holds", out)
+        self.assertNotIn("is out of date", out)
+
+    def test_without_a_base_a_converged_rollout_is_a_note(self):
+        # every copy reached the target after the table was written: on main the row stays planned until the next
+        # regeneration makes it uniform, reported, not a difference
+        reg, _ = self.rerolled_and_landed()
+        self.w.commit("ALICE-B", {"scripts/s.sh": SHARED + b"# v3\n"})
+        code, out = self.gen("--check", "--next-from", str(reg))
+        self.assertEqual(code, 0, out)
+        self.assertIn("converged since the base: scripts/s.sh", out)
+        self.assertNotIn("is out of date", out)
+
+    def test_without_a_base_a_normative_edit_is_still_a_difference(self):
+        # the table itself as the base forgives only the mains moving on: a changed target is still out of date
+        reg, _ = self.rerolled_and_landed()
+        current = self.t.read_text(encoding="utf-8")
+        target = self.entries()["scripts/s.sh"]["pending"]["target"]
+        self.t.write_text(current.replace(f'target = "{target}", owner', f'target = "{"0" * 64}", owner', 1),
+                          encoding="utf-8")
+        self.assertNotEqual(self.t.read_text(encoding="utf-8"), current)
+        code, out = self.gen("--check", "--next-from", str(reg))
+        self.assertNotEqual(code, 0, out)
+        self.assertNotIn("is current", out)
 
     def test_a_moved_from_the_change_added_is_a_difference(self):
         # main's row has no moved_from; the change writes one naming bytes no main holds: not the mains moving on
