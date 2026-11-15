@@ -2,10 +2,16 @@
 # repository's new commits). A hit is an entry in a public repository's history; a later commit can not remove it,
 # so the daily run stays red on it until it is acknowledged here.
 #
-# Each row is a hit's keyed id: HMAC-SHA256 under the name key of "<repository> NUL <commit, 12 hex> NUL <kind>"
-# (64 hex). Only a holder of the key can map a row to a commit: the file names no repository and no commit.
+# Each row is a hit's keyed id: HMAC-SHA256 under the name key of
+# "<repository> NUL <commit, 12 hex> NUL <kind> NUL <place>" (64 hex), one per place (a commit message line, a file
+# line, a path). Only a holder of the key can map a row to a commit: the file names no repository and no commit.
 #
-# An acknowledgement records the repository owner's decision to accept the entry in the history; its value cites
-# the date of that decision (YYYY-MM-DD). When the owner decides to rewrite the history instead, no row is added:
-# the hit leaves the window once the history no longer holds the commit.
+# [acknowledged]: the repository owner's decision to accept the entry in the history; the value cites the date of
+# that decision (YYYY-MM-DD). When the owner decides to rewrite the history instead, no row is added: the hit
+# leaves the window once the history no longer holds the commit.
+# [reviewed]: a hit read as a technical use of the word, not a name (an API identifier, a test fixture, a product
+# label); the value cites the date of the reading and the commit that allows the same use in its scope from then
+# on (a path and the word, never the word everywhere).
 [acknowledged]
+
+[reviewed]

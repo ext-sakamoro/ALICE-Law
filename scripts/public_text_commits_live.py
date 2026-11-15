@@ -15,7 +15,8 @@ lists, each commit whose committer date is inside the window (see below), with
 public_text_check.py --commits under the key (message, added lines, added paths).
 
 The output of CI is public, and repository names and commit ids are public and enumerable, so a hit is printed
-as its kind and a keyed id only: HMAC-SHA256 under the name key of "<repository> NUL <commit, 12 hex> NUL <kind>".
+as its kind and a keyed id only: HMAC-SHA256 under the name key of "<repository> NUL <commit, 12 hex> NUL <kind> NUL <place>" (the place is
+"message:<line>", "<file>:<line>", "path <file>:1" or a settings file: one id per place).
 Only a holder of the key can map an id back (--resolve, run on that machine). A hit in a commit can not be
 removed by a later commit (it is in the history; rewriting public history is the owner's decision), so a hit is
 acknowledged in conformance/public-text-commit-ack.toml by its keyed id, citing that decision with its date. A hit
@@ -99,8 +100,9 @@ class Unreadable(Exception):
     pass
 
 
-def hit_id(key: bytes, repo: str, sha: str, kind: str) -> str:
-    return hmac.new(key, f"{repo}\0{sha}\0{kind}".encode("utf-8"), hashlib.sha256).hexdigest()
+def hit_id(key: bytes, repo: str, sha: str, kind: str, where: str) -> str:
+    """one id per place: a row then covers that place only, never another use of the same kind in the commit"""
+    return hmac.new(key, f"{repo}\0{sha}\0{kind}\0{where}".encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def parse_hit(finding: str) -> tuple[str, str, str]:
@@ -114,12 +116,26 @@ def parse_hit(finding: str) -> tuple[str, str, str]:
     return m.group(1), (kind if sep else rest), (where if sep else "")
 
 
+ACK_TABLES = ("[acknowledged]", "[reviewed]")
+
+
 def load_ack(text: str) -> dict[str, str]:
+    """the rows of both tables, id -> value: [acknowledged] (the owner's decision to accept the entry) and
+    [reviewed] (a hit read as a technical use of the word, not a name, with its scoped allow); a row outside a
+    table, an id in both, or a value without a date is unreadable"""
     out: dict[str, str] = {}
+    table = None
     for n, line in enumerate(text.splitlines(), 1):
         s = line.strip()
-        if not s or s.startswith("#") or s == "[acknowledged]":
+        if not s or s.startswith("#"):
             continue
+        if s.startswith("["):
+            if s not in ACK_TABLES:
+                raise Unreadable(f"ack line {n}: a table other than {' / '.join(ACK_TABLES)}")
+            table = s
+            continue
+        if table is None:
+            raise Unreadable(f"ack line {n}: a row before any table")
         m = ACK_RE.match(s)
         if m is None or m.group(1) in out:
             raise Unreadable(f"ack line {n}: needs one '\"<64 hex keyed id>\" = \"<the decision it cites, with its "
@@ -496,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
     for name, found in read.items():
         for f in found:
             sha, kind, where = parse_hit(f)
-            hits.append((hit_id(key, name, sha, kind), kind, name, sha, where))
+            hits.append((hit_id(key, name, sha, kind, where), kind, name, sha, where))
     if a.resolve:
         want = set(a.resolve)
         for hid, kind, name, sha, where in hits:
