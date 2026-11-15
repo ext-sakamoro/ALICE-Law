@@ -46,6 +46,29 @@ NAME_KEY_FILE = os.path.join("~", ".config", "alice", "private_name_hmac_key")
 NAME_KEY: dict = {"key": None, "read": False}
 
 
+# what a run without the name key did and did not check, for the job summary as well as the log: a green "Public
+# text" there is the unkeyed half only (the keyed half runs where the key is: the push hook on a machine that has it,
+# and ALICE-Law's daily run over every public repository's default-branch tree)
+UNKEYED_SUMMARY = ("Public text: the unkeyed half only. Private repository, project, session and host names were not "
+                   f"checked in this run ({NAME_KEY_ENV} is not set here); they are checked at push by the name hook "
+                   "where the key is installed, and daily by ALICE-Law on every public repository's default-branch tree")
+
+
+def write_step_summary(text: str) -> None:
+    """append `text` as a line of the GitHub job summary when the run has one (GITHUB_STEP_SUMMARY), once per run"""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            if text in f.read():
+                return
+    except OSError:
+        pass
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(text + "\n")
+
+
 def load_name_key() -> bytes | None:
     """the key from the environment or the key file, None when neither is set; a value that is not 64 hex
     characters is a ValueError that does not quote the value"""
@@ -3069,10 +3092,12 @@ def main(argv: list[str] | None = None) -> int:
     if key is None:
         print(f"public text: private repository, project, session and host names not checked: the name key is "
               f"not set here ({NAME_KEY_ENV}); ALICE-Law checks them over every public repository daily")
+        write_step_summary(UNKEYED_SUMMARY)
     if not zstd_available():
         print(f"public text: Python {sys.version_info.major}.{sys.version_info.minor} has no zstd reader: "
               f"a zstd stream is an unscanned container (Python 3.14 reads it)")
-    print(f"public text: {len(findings)} findings in {what}" + (f" ({allowed} allowed mentions)" if allowed else ""))
+    print(f"public text: {len(findings)} findings in {what}" + (f" ({allowed} allowed mentions)" if allowed else "")
+          + (" (unkeyed half only)" if key is None else ""))
     return 1 if findings else 0
 
 

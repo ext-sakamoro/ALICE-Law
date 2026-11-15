@@ -1877,6 +1877,52 @@ class TrackerPathInIdentifier(Base):
             self.assertIn("internal tracker", ptc.kinds(line), line)
 
 
+class UnkeyedSummary(unittest.TestCase):
+    """A run without the name key (a public repository's CI) says it checked the unkeyed half only: in the log's last
+    line and, where the run has one, in the job summary (once, however many times the checker runs in the job). With
+    the key, neither: the summary stays empty and the last line has no suffix."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name, "r")
+        self.repo.mkdir()
+        git(self.repo, "init", "-q")
+        commit(self.repo, {"README.md": "# a clean file\n"})
+        self.summary = Path(self.tmp.name, "summary.md")
+        self.home = Path(self.tmp.name, "home")  # no ~/.config/alice key file here
+        self.home.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def check(self, key: bool) -> subprocess.CompletedProcess:
+        env = {k: v for k, v in ENV.items() if k != "ALICE_PRIVATE_NAME_HMAC_KEY"}
+        env.update(HOME=str(self.home), GITHUB_STEP_SUMMARY=str(self.summary))
+        if key:
+            env["ALICE_PRIVATE_NAME_HMAC_KEY"] = FAKE_NAME_KEY
+        return subprocess.run([sys.executable, str(HERE / "public_text_check.py"), "--repo", str(self.repo), "--tree"],
+                              capture_output=True, text=True, encoding="utf-8", env=env)
+
+    def test_without_the_key_the_log_and_the_job_summary_say_unkeyed_half_only(self):
+        p = self.check(key=False)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        last = p.stdout.strip().splitlines()[-1]
+        self.assertRegex(last, r"^public text: 0 findings in [1-9][0-9]* files at HEAD \(unkeyed half only\)$")
+        text = self.summary.read_text(encoding="utf-8")
+        self.assertIn("Public text: the unkeyed half only.", text)
+        self.assertIn("ALICE_PRIVATE_NAME_HMAC_KEY is not set here", text)
+        # a second run in the same job does not repeat the line
+        self.check(key=False)
+        self.assertEqual(self.summary.read_text(encoding="utf-8").count("Public text: the unkeyed half only."), 1)
+
+    def test_with_the_key_no_summary_line_and_no_suffix(self):
+        p = self.check(key=True)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertNotIn("unkeyed half only", p.stdout)
+        self.assertFalse(self.summary.exists() and self.summary.read_text(encoding="utf-8").strip(),
+                         "a keyed run wrote a job summary line")
+
+
 class PrivateRepoNames(unittest.TestCase):
     """the name of a private ALICE-* repository, as a whole token in any text of a public repository"""
 
