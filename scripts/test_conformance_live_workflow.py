@@ -126,6 +126,17 @@ class Workflow(unittest.TestCase):
         self.assertNotIn("FETCH_HEAD", push["run"])
         self.assertNotRegex(push["run"], r"LAW_BASE_(TABLE|STATE)=")
 
+    def test_the_universe_scan_runs_daily_over_every_public_repository_and_fails_on_an_unlisted_holder(self):
+        step = self.step("Every public repository holding a shared file is in the table (daily)")
+        self.assertEqual(step["if"], "github.event_name == 'schedule'")
+        self.assertIn("scripts/gen_shared_files.py", step["run"])
+        self.assertIn("--check", step["run"])
+        self.assertIn('--universe-owner "${GITHUB_REPOSITORY_OWNER}"', step["run"])
+        self.assertIn("--fail-unlisted", step["run"])
+        # the per-push table check keeps comparing the committed table to the rows (no network scan on a push)
+        push = self.step("The table is the generated one")
+        self.assertNotIn("--universe-owner", push["run"])
+
     def test_the_parser_reads_a_branch_and_refuses_a_step_without_one(self):
         s = steps("jobs:\n  a:\n    steps:\n      - name: x\n        if: y\n        run: |\n"
                   "          if [ \"$EVENT\" = schedule ]; then\n            one\n          else\n            two\n"
