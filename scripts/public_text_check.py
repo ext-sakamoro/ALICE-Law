@@ -1194,7 +1194,6 @@ BASELINE_END = "# <<< " + "generated private repository name baseline <<<"
 PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {
     "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970": {
         "039c868536717ce1806ea8ebe24b2b5800106e1ff6c90dc140ffeea8367ffef6": 1,
-        "060a693ee68b1ebf3e5f3b70cbb5eee990b26ee755f5ebfc6268a924b6f5643b": 2,
         "2092cecc80d2f3894406895e710b05e477afc3542fa6f8ab9ce080c8d86c1633": 1,
         "262257dfbe122d3bfce69dea7184fe68613fc4cb7e16e636a41e8de85534b871": 1,
         "27a55539ce71bad2d8e87b5e49dcc9755cb03e3bbac007afdb4fb7b2bfb2edaf": 3,
@@ -1209,7 +1208,6 @@ PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {
         "6d5a3846922386bea9056d3c2a40f1c6b8649dddd1b47264a5eb808540a1f27b": 1,
         "78abf593ac510ccb283488a44898a85dad094741b39fc391190cbcd745bf3489": 1,
         "802e32b53768f899afd3ae0f2fe95ce51aece5009f6bd35ee35d80559bf5ec09": 2,
-        "90c579c73b277f2bfd985bbe6a3ad0bfa471a85dec8e12470e915adea7d72aa0": 2,
         "b770f5deace8d2940d7ead36260acbb9ca68150907dd1780856875b4c3505b52": 2,
         "c5ba5662d0c565c74df86fbfddf187178675dbc6a8d46f367624c4b9cc517c34": 1,
         "c81a169b02e830dc09b8e213a9d1e19557a0d28db494a333385a2a037cbf5e38": 1,
@@ -1451,7 +1449,6 @@ PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {
     },
     "eb1be37e716a03011b3c0905d2f5c9158b75b037d5c82de4856090f434122f36": {
         "4d109d3aedd46a1b1ca69e692c09a1680c39bfed7fffe96ef0d8304e84c9b2f0": 2,
-        "5e3b32ef0d7490534fd580a1ef4666cbc3384248c08eb44af5db3e51deace277": 1,
         "7fd58d8882a5983cdda391d65bfafb626f77cbe40cabc5203f64daf58bf5fced": 1,
     },
     "f079bfdf6b47444ea00b1b511af924def022bbb36e76c00dc84ef9585b8e8183": {
@@ -1471,7 +1468,7 @@ PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {
         "c77a9cd06467e94c155c4389a60712d039cc6064ab6067f199b23de9ebe6636b": 1,
     },
 }
-PRIVATE_REPO_NAME_BASELINE_DATE = "2026-11-12"
+PRIVATE_REPO_NAME_BASELINE_DATE = "2026-11-16"
 # <<< generated private repository name baseline <<<
 # (path, name) -> lines, while a tree is read for the baseline (None: every line naming one is a finding)
 REPO_NAME_COUNTS: dict[tuple[str, str], int] | None = None
