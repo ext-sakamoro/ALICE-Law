@@ -1320,7 +1320,7 @@ assert = 0
 [repo."ALICE-Ephemeris"]
 unwrap = 0
 expect = 0
-panic = 1
+panic = 0
 todo = 0
 unimplemented = 0
 unreachable = 2
@@ -2476,7 +2476,7 @@ panic = 26
 todo = 0
 unimplemented = 0
 unreachable = 6
-assert = 97
+assert = 94
 
 [repo."ALICE-Physics-Cloud"]
 unwrap = 11
@@ -2818,7 +2818,7 @@ panic = 21
 todo = 0
 unimplemented = 0
 unreachable = 10
-assert = 37
+assert = 35
 
 [repo."ALICE-SDF-SaaS"]
 unwrap = 9

@@ -28,6 +28,14 @@
 //!   `clippy::unreachable` — one per lint named, counted under that lint: a deny of the lint is
 //!   void where such an attribute stands, so it is a site of the lint.
 //!
+//! Not counted: a site the compiler evaluates while building, so that it fails the build and never
+//! panics at runtime. These are the initializers of `const` and `static` items (associated ones
+//! too), array lengths (`[T; N]`, `[x; N]`), const-generic arguments (`f::<{ N }>`) and inline
+//! `const { .. }` blocks. Inside them a closure or a nested `fn` item is runtime code and is
+//! counted, and a `const fn` body is counted (it is callable at runtime). A macro other than the
+//! counted ones keeps all its sites even there (its expansion is not seen), and so do the
+//! arguments of a counted macro that do not parse as expressions.
+//!
 //! Without the types the scan cannot tell `Option::expect` from another method named `expect`
 //! with one argument; it counts both (over-counting, never under).
 //!
@@ -133,6 +141,8 @@ struct Scan<'a> {
     path: &'a str,
     counts: &'a mut BTreeMap<&'static str, usize>,
     sites: &'a mut Vec<String>,
+    /// inside an expression the compiler evaluates while building (see the module doc)
+    in_const: bool,
 }
 
 impl Scan<'_> {
@@ -141,18 +151,44 @@ impl Scan<'_> {
         self.sites.push(format!("site {}:{} {}", self.path, line, lint));
     }
 
+    /// a site in code: not counted where the compiler evaluates it while building
+    fn code_hit(&mut self, lint: &'static str, line: usize) {
+        if !self.in_const {
+            self.hit(lint, line);
+        }
+    }
+
+    /// run `f` with `in_const` set to `value`, then put the previous value back
+    fn with_const(&mut self, value: bool, f: impl FnOnce(&mut Self)) {
+        let prev = std::mem::replace(&mut self.in_const, value);
+        f(self);
+        self.in_const = prev;
+    }
+
     fn macro_tokens(&mut self, mac: &syn::Macro) {
+        use syn::punctuated::Punctuated;
         let name = mac
             .path
             .segments
             .last()
             .map(|s| s.ident.to_string())
             .unwrap_or_default();
-        if let Some(lint) = macro_lint(&name) {
+        let lint = macro_lint(&name);
+        if let Some(lint) = lint {
             let line = mac.path.segments[0].ident.span().start().line;
-            self.hit(lint, line);
+            self.code_hit(lint, line);
         }
-        self.scan_tokens(&mac.tokens);
+        if self.in_const && lint.is_some() {
+            // a counted macro evaluated by the compiler: its arguments are read as expressions, so
+            // a closure among them is still counted; arguments that do not parse keep every site
+            if let Ok(args) = mac.parse_body_with(Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated) {
+                for e in &args {
+                    self.visit_expr(e);
+                }
+                return;
+            }
+        }
+        self.with_const(false, |s| s.scan_tokens(&mac.tokens));
     }
 
     /// The sites inside a macro's tokens, read from the token sequence (the tokens of `quote!`,
@@ -178,12 +214,12 @@ impl Scan<'_> {
                     let line = id.span().start().line;
                     let name = id.to_string();
                     if dot_before && name == "unwrap" && paren == Some(true) {
-                        self.hit("unwrap", line);
+                        self.code_hit("unwrap", line);
                     } else if dot_before && name == "expect" && paren == Some(false) {
-                        self.hit("expect", line);
+                        self.code_hit("expect", line);
                     } else if matches!(next, Some(TokenTree::Punct(p)) if p.as_char() == '!') {
                         if let Some(lint) = macro_lint(&name) {
-                            self.hit(lint, line);
+                            self.code_hit(lint, line);
                         }
                     }
                 }
@@ -225,28 +261,85 @@ impl<'ast> Visit<'ast> for Scan<'_> {
     }
     fn visit_item_fn(&mut self, f: &'ast syn::ItemFn) {
         if !skipped(&f.attrs) {
-            visit::visit_item_fn(self, f);
+            // a fn body runs at runtime, also a `const fn` and one nested in a const initializer
+            self.with_const(false, |s| visit::visit_item_fn(s, f));
         }
     }
     fn visit_impl_item_fn(&mut self, f: &'ast syn::ImplItemFn) {
         if !skipped(&f.attrs) {
-            visit::visit_impl_item_fn(self, f);
+            // a fn body runs at runtime, also a `const fn` and one nested in a const initializer
+            self.with_const(false, |s| visit::visit_impl_item_fn(s, f));
         }
     }
     fn visit_trait_item_fn(&mut self, f: &'ast syn::TraitItemFn) {
         if !skipped(&f.attrs) {
-            visit::visit_trait_item_fn(self, f);
+            // a fn body runs at runtime, also a `const fn` and one nested in a const initializer
+            self.with_const(false, |s| visit::visit_trait_item_fn(s, f));
         }
     }
     fn visit_item_const(&mut self, c: &'ast syn::ItemConst) {
         if !skipped(&c.attrs) {
-            visit::visit_item_const(self, c);
+            for a in &c.attrs {
+                self.visit_attribute(a);
+            }
+            self.visit_type(&c.ty);
+            self.with_const(true, |s| s.visit_expr(&c.expr));
         }
     }
     fn visit_item_static(&mut self, c: &'ast syn::ItemStatic) {
         if !skipped(&c.attrs) {
-            visit::visit_item_static(self, c);
+            for a in &c.attrs {
+                self.visit_attribute(a);
+            }
+            self.visit_type(&c.ty);
+            self.with_const(true, |s| s.visit_expr(&c.expr));
         }
+    }
+    fn visit_impl_item_const(&mut self, c: &'ast syn::ImplItemConst) {
+        if !skipped(&c.attrs) {
+            for a in &c.attrs {
+                self.visit_attribute(a);
+            }
+            self.visit_type(&c.ty);
+            self.with_const(true, |s| s.visit_expr(&c.expr));
+        }
+    }
+    fn visit_trait_item_const(&mut self, c: &'ast syn::TraitItemConst) {
+        if !skipped(&c.attrs) {
+            for a in &c.attrs {
+                self.visit_attribute(a);
+            }
+            self.visit_type(&c.ty);
+            if let Some((_, e)) = &c.default {
+                self.with_const(true, |s| s.visit_expr(e));
+            }
+        }
+    }
+    fn visit_expr_const(&mut self, c: &'ast syn::ExprConst) {
+        // an inline `const { .. }` block
+        self.with_const(true, |s| visit::visit_expr_const(s, c));
+    }
+    fn visit_expr_repeat(&mut self, r: &'ast syn::ExprRepeat) {
+        for a in &r.attrs {
+            self.visit_attribute(a);
+        }
+        self.visit_expr(&r.expr);
+        self.with_const(true, |s| s.visit_expr(&r.len));
+    }
+    fn visit_type_array(&mut self, t: &'ast syn::TypeArray) {
+        self.visit_type(&t.elem);
+        self.with_const(true, |s| s.visit_expr(&t.len));
+    }
+    fn visit_generic_argument(&mut self, g: &'ast syn::GenericArgument) {
+        if let syn::GenericArgument::Const(e) = g {
+            self.with_const(true, |s| s.visit_expr(e));
+        } else {
+            visit::visit_generic_argument(self, g);
+        }
+    }
+    fn visit_expr_closure(&mut self, c: &'ast syn::ExprClosure) {
+        // a closure's body runs at runtime, also one written in a const initializer
+        self.with_const(false, |s| visit::visit_expr_closure(s, c));
     }
     fn visit_item_use(&mut self, _u: &'ast syn::ItemUse) {}
     fn visit_stmt(&mut self, s: &'ast syn::Stmt) {
@@ -260,9 +353,9 @@ impl<'ast> Visit<'ast> for Scan<'_> {
     fn visit_expr_method_call(&mut self, m: &'ast syn::ExprMethodCall) {
         let line = m.method.span().start().line;
         if m.method == "unwrap" && m.args.is_empty() {
-            self.hit("unwrap", line);
+            self.code_hit("unwrap", line);
         } else if m.method == "expect" && m.args.len() == 1 {
-            self.hit("expect", line);
+            self.code_hit("expect", line);
         }
         visit::visit_expr_method_call(self, m);
     }
@@ -372,6 +465,7 @@ fn scan_text(
         path,
         counts,
         sites,
+        in_const: false,
     };
     // inner attributes of the file (`#![allow(..)]`) are part of `file.attrs`
     s.visit_file(&file);
@@ -463,6 +557,104 @@ mod tests {
         for l in LINTS {
             assert_eq!(n(&c, l), 1, "{l}");
         }
+    }
+
+    #[test]
+    fn const_and_static_initializers_are_not_counted_but_the_same_code_in_a_fn_is() {
+        let c = count(
+            "const _: () = assert!(core::mem::size_of::<u64>() == 8, \"x\");\n\
+             const A: u32 = match Some(3) { Some(v) => v, None => panic!(\"y\") };\n\
+             static B: u8 = { assert_eq!(1, 1); X.unwrap() };\n\
+             struct S; impl S { const C: u8 = Y.expect(\"z\"); }\n\
+             trait T { const D: u8 = { unreachable!() }; }\n\
+             const E: () = assert!(Z.unwrap() > 0, \"{}\", W.expect(\"w\"));",
+        );
+        for l in LINTS {
+            assert_eq!(n(&c, l), 0, "{l}");
+        }
+        // the look-alike: the same calls in runtime code
+        let c = count(
+            "fn f() { assert!(core::mem::size_of::<u64>() == 8, \"x\"); \
+             let _ = match Some(3) { Some(v) => v, None => panic!(\"y\") }; assert_eq!(1, 1); X.unwrap(); \
+             Y.expect(\"z\"); unreachable!(); }",
+        );
+        assert_eq!(
+            (n(&c, "assert"), n(&c, "panic"), n(&c, "unwrap"), n(&c, "expect"), n(&c, "unreachable")),
+            (2, 1, 1, 1, 1)
+        );
+    }
+
+    #[test]
+    fn array_lengths_const_generics_and_inline_const_blocks_are_not_counted() {
+        let c = count(
+            "fn f() -> [u8; { assert!(N > 0); N }] { let a = [0u8; { assert!(M > 0); M }]; \
+             g::<{ X.unwrap() }>(); const { assert!(K < 4) }; a }",
+        );
+        for l in LINTS {
+            assert_eq!(n(&c, l), 0, "{l}");
+        }
+        // the look-alike: the element of a repeat, the type's element and a type argument are runtime
+        let c = count(
+            "fn f() { let a = [x.unwrap(); 4]; let b = { assert!(N > 0); N }; \
+             g::<Vec<u8>>(y.expect(\"e\")); }",
+        );
+        assert_eq!((n(&c, "unwrap"), n(&c, "assert"), n(&c, "expect")), (1, 1, 1));
+    }
+
+    #[test]
+    fn closures_and_fn_items_inside_a_const_initializer_are_counted() {
+        let c = count(
+            "const F: fn() -> u8 = || x.unwrap();\n\
+             static G: fn() = || { assert!(a); panic!(\"b\") };\n\
+             const H: () = { fn inner() { y.expect(\"c\"); } };\n\
+             const I: [u8; 2] = [0; { let f = || todo!(); 2 }];\n\
+             const J: () = assert!((|| z.unwrap())() > 0);",
+        );
+        assert_eq!(
+            (n(&c, "unwrap"), n(&c, "assert"), n(&c, "panic"), n(&c, "expect"), n(&c, "todo")),
+            (2, 1, 1, 1, 1)
+        );
+    }
+
+    #[test]
+    fn a_const_fn_body_is_counted() {
+        let c = count(
+            "const fn f(x: Option<u8>) -> u8 { assert!(true); x.unwrap() }\n\
+             impl S { const fn g() { panic!() } }",
+        );
+        assert_eq!((n(&c, "assert"), n(&c, "unwrap"), n(&c, "panic")), (1, 1, 1));
+    }
+
+    #[test]
+    fn other_macros_in_a_const_initializer_keep_their_sites() {
+        // the expansion of another macro is not seen, so its tokens are scanned as in runtime code
+        let c = count(
+            "const A: u8 = my_macro!(x.unwrap(), assert!(b));\n\
+             const B: &str = concat!(\"a\", stringify!(y.expect(\"c\")));",
+        );
+        assert_eq!((n(&c, "unwrap"), n(&c, "assert"), n(&c, "expect")), (1, 1, 1));
+        // a counted macro whose arguments do not parse as expressions keeps them counted
+        let c = count("const C: () = assert!(=> x.unwrap());");
+        assert_eq!((n(&c, "assert"), n(&c, "unwrap")), (0, 1));
+    }
+
+    #[test]
+    fn a_planted_runtime_assert_next_to_a_const_one_is_counted() {
+        let c = count(
+            "const _: () = assert!(core::mem::size_of::<Result<(), E>>() == core::mem::size_of::<usize>());\n\
+             pub fn decode(b: &[u8]) -> u8 { assert!(!b.is_empty()); b[0] }",
+        );
+        assert_eq!(n(&c, "assert"), 1);
+        let mut c2 = BTreeMap::new();
+        let mut sites = Vec::new();
+        assert!(scan_text("src/x.rs", "const _: () = assert!(a);\nfn f() { assert!(b); }", &mut c2, &mut sites));
+        assert_eq!(sites, vec!["site src/x.rs:2 assert".to_string()]);
+    }
+
+    #[test]
+    fn allow_attributes_on_a_const_item_still_count() {
+        let c = count("#[allow(clippy::unwrap_used)]\nconst A: u8 = X.unwrap();");
+        assert_eq!(n(&c, "unwrap"), 1);
     }
 
     #[test]
