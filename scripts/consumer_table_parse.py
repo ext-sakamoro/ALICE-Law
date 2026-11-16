@@ -183,6 +183,11 @@ def main(argv: list[str]) -> int:
     for u in unreadable:
         print(f"consumer_table_parse: not read: {u}", file=sys.stderr)
     print(f"consumer_table_parse: {n} version(s) of {CONSUMER} run on {a.table}, {len(findings)} finding(s)")
+    return verdict(findings, unreadable, n)
+
+
+def verdict(findings: list[str], unreadable: list[str], n: int) -> int:
+    """the exit code: 2 when a version could not be read or none ran (compared nothing), else 1 on a finding"""
     if unreadable or n == 0:
         return 2
     return 1 if findings else 0

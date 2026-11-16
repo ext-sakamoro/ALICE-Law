@@ -142,6 +142,17 @@ class Versions(unittest.TestCase):
 
 
 class Main(unittest.TestCase):
+    def test_no_version_run_is_compared_nothing(self):
+        # check() of an empty set of versions runs none: that is exit 2, never a pass
+        findings, unreadable, n = ctp.check(SHARED_ROW, None, "t" * 64, {}, lambda s: "unused", Path("unused"))
+        self.assertEqual((findings, unreadable, n), ([], [], 0))
+        self.assertEqual(ctp.verdict(findings, unreadable, n), 2)
+
+    def test_the_exit_codes(self):
+        self.assertEqual(ctp.verdict([], [], 1), 0)
+        self.assertEqual(ctp.verdict(["f"], [], 1), 1)
+        self.assertEqual(ctp.verdict(["f"], ["u"], 1), 2)
+
     def test_a_table_without_the_consumer_s_row_compares_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             t = Path(tmp) / "shared-files.toml"
