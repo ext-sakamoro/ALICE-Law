@@ -61,11 +61,13 @@ class Reads(unittest.TestCase):
         self.n += 1
         return Path(self.tmp.name) / f"w{self.n}"
 
-    def check(self, table, base, target, held_bytes):
-        """check() with versions given as {bytes: [holders]} and the target given by its bytes"""
+    def check(self, table, base, target, held_bytes, moving=None):
+        """check() with versions given as {bytes: [holders]} and the target given by its bytes; the row moves from
+        every non-target version unless `moving` (bytes) says otherwise"""
         held = {sha(b): repos for b, repos in held_bytes.items()}
         by = {sha(b): b for b in held_bytes}
-        return ctp.check(table, base, sha(target), held, lambda s: by.get(s, "no holder"), self.work())
+        mv = frozenset(sha(b) for b in moving) if moving is not None else frozenset(set(held) - {sha(target)})
+        return ctp.check(table, base, sha(target), held, lambda s: by.get(s, "no holder"), self.work(), mv)
 
     def test_a_strict_consumer_reads_a_table_without_own_rows(self):
         self.assertEqual(ctp.reads(STRICT, SHARED_ROW, self.work())[0], True)
@@ -98,6 +100,13 @@ class Reads(unittest.TestCase):
         findings, _, n = self.check(SHARED_ROW + OWN_ROW, SHARED_ROW + OWN_ROW, OWN_AWARE,
                                     {OWN_AWARE: ["ALICE-X"], STRICT: ["ALICE-Y"]})
         self.assertEqual((findings, n), ([], 2))
+
+    def test_a_version_broken_at_the_base_that_the_row_does_not_move_from_is_a_finding(self):
+        findings, _, n = self.check(SHARED_ROW + OWN_ROW, SHARED_ROW + OWN_ROW, OWN_AWARE,
+                                    {OWN_AWARE: ["ALICE-X"], STRICT: ["ALICE-Y"]}, moving=[])
+        self.assertEqual(n, 2)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("does not move from it", findings[0])
 
     def test_without_a_base_every_held_version_must_read_the_table(self):
         findings, _, _ = self.check(SHARED_ROW + OWN_ROW, None, OWN_AWARE, {OWN_AWARE: ["ALICE-X"], STRICT: ["ALICE-Y"]})
@@ -139,6 +148,16 @@ class Versions(unittest.TestCase):
         target, held = ctp.versions(e)
         self.assertEqual(target, "t" * 64)
         self.assertEqual(held, {"v" * 64: ["ALICE-Y"], "t" * 64: ["ALICE-X"]})
+
+
+class MovingFrom(unittest.TestCase):
+    def test_a_uniform_row_moves_from_nothing(self):
+        self.assertEqual(ctp.moving_from({"sha256": "s" * 64, "source": {"repo": "ALICE-X"}}), frozenset())
+
+    def test_a_pending_row_moves_from_its_stale_variants_and_moved_from(self):
+        e = {"pending": {"target": "t" * 64, "owner": "ALICE-X", "moved_from": {"planned": "p" * 40, "target": "m" * 64},
+                         "variants": {"t" * 64: ["ALICE-X"], "v" * 64: ["ALICE-Y"], "absent": ["ALICE-Z"]}}}
+        self.assertEqual(ctp.moving_from(e), frozenset({"v" * 64, "m" * 64}))
 
 
 class Main(unittest.TestCase):

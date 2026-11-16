@@ -64,6 +64,18 @@ def versions(entry: dict) -> tuple[str, dict[str, list[str]]]:
     return p["target"], held
 
 
+def moving_from(entry: dict) -> frozenset[str]:
+    """the SHA-256s the row moves from: a pending row's stale variants and its moved_from target (a uniform row
+    moves from nothing)"""
+    if "pending" not in entry:
+        return frozenset()
+    p = entry["pending"]
+    out = {sha for sha in p.get("variants", {}) if sha not in ("absent", p["target"])}
+    if isinstance(p.get("moved_from"), dict) and p["moved_from"].get("target"):
+        out.add(p["moved_from"]["target"])
+    return frozenset(out)
+
+
 def scratch_env(law: Path) -> dict[str, str]:
     """git's fetches of ALICE-Law sent to the local repository `law` (and nothing else of the user's config)"""
     env = {k: v for k, v in os.environ.items() if not sfc.CONFIG_FROM_ENV.fullmatch(k)}
@@ -102,7 +114,7 @@ def reads(consumer: bytes, table: bytes, work: Path) -> tuple[bool, str]:
 
 
 def check(table: bytes, base: bytes | None, target: str, held: dict[str, list[str]], read: Reader,
-          work: Path) -> tuple[list[str], list[str], int]:
+          work: Path, moving: frozenset[str] = frozenset()) -> tuple[list[str], list[str], int]:
     """(findings, unreadable versions, versions run) of the consumer on `table` (and `base`)"""
     findings, unreadable, n = [], [], 0
     for i, (sha, repos) in enumerate(sorted(held.items(), key=lambda kv: (kv[0] != target, kv[0]))):
@@ -129,6 +141,9 @@ def check(table: bytes, base: bytes | None, target: str, held: dict[str, list[st
             if ok_base:
                 findings.append(f"{CONSUMER} {sha[:12]} ({kind}) reads the base table and not this one: the table "
                                 f"change breaks it ({last})")
+            elif sha not in moving:
+                findings.append(f"{CONSUMER} {sha[:12]} ({kind}) cannot read the base table either, and the row does "
+                                f"not move from it (not pending, or neither a listed variant nor moved_from): {last}")
             else:
                 print(f"consumer_table_parse: {CONSUMER} {sha[:12]}: could not read the base table either "
                       "(moving to the target)")
@@ -177,7 +192,7 @@ def main(argv: list[str]) -> int:
         Path(tmp, "mains").mkdir()
         remote = sfc.Remote(Path(tmp) / "mains")
         findings, unreadable, n = check(text, base, target, held, main_reader(a.table, remote, entry, held),
-                                        Path(tmp) / "probe")
+                                        Path(tmp) / "probe", moving_from(entry))
     for f in findings:
         print(f"consumer_table_parse: {f}", file=sys.stderr)
     for u in unreadable:
