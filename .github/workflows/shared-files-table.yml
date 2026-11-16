@@ -21,6 +21,8 @@ on:
       - "scripts/test_holder_mode_check.py"
       - "scripts/shared_files_branch_live.py"
       - "scripts/test_shared_files_branch_live.py"
+      - "scripts/consumer_table_parse.py"
+      - "scripts/test_consumer_table_parse.py"
       - "scripts/ci_base.py"
       - ".github/workflows/shared-files-table.yml"
 
