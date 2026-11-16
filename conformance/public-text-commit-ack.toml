@@ -15,6 +15,13 @@
 # owner's decision. The same use in later commits is allowed only by a scoped entry (a path and the word, or a class
 # for one file), never by removing the word.
 [acknowledged]
+"0d987c3c9c58c30ea6b07998ef4c2365ac433c66279e8542fd5dbb192865f8a3" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
+"30aa3726b257c4a5f2e48fda3bf4d35d4b823a13b245e1c7d1586789777efcc6" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
+"722290c82e43efda8faf919c6b79b7029a1601748b7ba1e383e321be3d84e323" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
+"994bd590863fad1c6f04d606743ebcb97f32d613abb040aa4ee4123625e12e74" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
+"bf1c0438c500f0f055d6be4d4b0f10b881b589f0437cc17e9934bb077df7f8a7" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
+"d0796690831015b9f571d58bd651cea850416fc4ef1d1d3e2855abc5e918664b" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
+"ff27fccf73b18e96f467c26022d386ae854e8d03225d02fa9ea2699115cee11a" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
 
 [reviewed]
 "163b952ebeb4988d58f26c58de979cca7468bf16cbbd1e0a18ba422c1a912f66" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
