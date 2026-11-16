@@ -91,11 +91,19 @@ def inline(d: dict) -> str:
                             for k, v in sorted(d.items())) + " }"
 
 
+# the own rows of the table being regenerated (`{ path, own }`): written back as they are, never derived from the
+# mains (an own path is a decision about what the file is, made in a reviewed table change)
+OWN_ROWS: list[dict] = []
+
+
 def render(entries: list[dict]) -> str:
     out = [HEADER]
-    for e in sorted(entries, key=lambda e: e["path"]):
+    for e in sorted([*entries, *OWN_ROWS], key=lambda e: e["path"]):
         out.append("\n[[file]]\n")
         out.append(f"path = {q(e['path'])}\n")
+        if "own" in e:
+            out.append(f"own = {q(e['own'])}\n")
+            continue
         if not e["repos"]:
             pass  # per-repository data: no bytes
         elif "pending" in e:
@@ -184,7 +192,8 @@ def rows_from_table(entries: list[dict]) -> list[dict]:
 
 def discover(rows: list[dict], repo_of) -> list[dict]:
     repos = sorted({r for row in rows for r in row["order"]})
-    known = {row["path"] for row in rows} | {p for row in rows for p in row["paths"].values()}
+    known = ({row["path"] for row in rows} | {p for row in rows for p in row["paths"].values()}
+             | {o["path"] for o in OWN_ROWS})
     by_path: dict[str, dict[str, list[str]]] = collections.defaultdict(lambda: collections.defaultdict(list))
     for r in repos:
         for path, blob in sfc.tree(repo_of(r)).items():
@@ -535,8 +544,9 @@ def main(argv: list[str]) -> int:
             if not path or not sfc.HEX64.match(sha) or not sfc.is_repo_name(owner):
                 raise sfc.Unreadable(f"--target {t!r}: needs PATH=SHA256@ALICE-X")
             targets[path] = (sha, owner)
-        old_entries = (sfc.load(a.table.read_text(encoding="utf-8"))
-                       if a.table.exists() and a.table.read_text(encoding="utf-8").strip() != HEADER.strip() else [])
+        has_table = a.table.exists() and a.table.read_text(encoding="utf-8").strip() != HEADER.strip()
+        old_entries, own_rows = (sfc.load_all(a.table.read_text(encoding="utf-8")) if has_table else ([], []))
+        OWN_ROWS[:] = own_rows
         old = {e["path"]: e for e in old_entries}
         if a.registry is not None:
             rows = rows_from_registry(a.registry.read_text(encoding="utf-8"))

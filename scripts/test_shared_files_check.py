@@ -914,6 +914,41 @@ class Live(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("scripts/new.py: byte-identical in ALICE-A, ALICE-B but has no entry", out)
 
+    def test_an_own_path_is_not_reported_by_discovery(self):
+        # repositories cut from one template have the same CI file without sharing it: an own row says so once
+        self.w.commit("ALICE-A", {"scripts/new.py": b"print(1)\n"})
+        self.w.commit("ALICE-B", {"scripts/new.py": b"print(1)\n"})
+        own = {"path": "scripts/new.py", "own": "each repository's own script, cut from one template"}
+        self.t.write_text(self.w.table(own, self.w.uniform(exempt={"ALICE-C": "a different script of its own"})),
+                          encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("has no entry", out)
+        self.assertIn("own paths (each repository's own, not compared): 1 (scripts/new.py)", out)
+        # only the own path: another byte-identical path is still reported
+        self.w.commit("ALICE-A", {"scripts/other.py": b"x\n"})
+        self.w.commit("ALICE-B", {"scripts/other.py": b"x\n"})
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/other.py: byte-identical in ALICE-A, ALICE-B but has no entry", out)
+
+    def test_an_own_path_is_never_also_a_shared_row(self):
+        own = {"path": "scripts/new.py", "own": "each repository's own script, cut from one template"}
+        text = self.w.table(own, self.w.uniform())
+        self.assertEqual(sfc.load_all(text)[1], [own])
+        self.assertEqual(sfc.own_paths(text), ["scripts/new.py"])
+        both = text.replace('own = "each', 'sha256 = "' + "0" * 64 + '"\nown = "each', 1)
+        with self.assertRaisesRegex(sfc.Unreadable, "never also a shared row"):
+            sfc.load_all(both)
+        with self.assertRaisesRegex(sfc.Unreadable, "own must say why"):
+            sfc.load_all(text.replace("each repository's own script, cut from one template", "own"))
+
+    def test_the_own_paths_of_the_table_are_the_expected_ones(self):
+        # a new own path is a reviewed table change: this list changes with it
+        table = Path(__file__).resolve().parent.parent / "conformance" / "shared-files.toml"
+        self.assertEqual(sfc.own_paths(table.read_text(encoding="utf-8")),
+                         [".github/workflows/ci.yml", "scripts/preflight.sh"])
+
     def test_a_new_holder_of_a_per_repository_path_is_red(self):
         # ALICE-C is read through the uniform row of scripts/c.sh, and has scripts/s.sh unexempted
         rev = self.w.commit("ALICE-C", {"scripts/c.sh": b"c\n"})
