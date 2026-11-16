@@ -420,6 +420,10 @@ copy, with how many copies hold the target), and any other value is a finding; t
 check fails a moving row that records a variant its base table did not have, and a planned id that changed without `moved_from` naming the
 base's planned id and target. The generator refuses such a move without the SHA-256, and a
 planned row whose bytes left every main, instead of dropping either to an unplanned row.
+The crates read this table with their copy of `scripts/test_shared_files.py` (a shared file of its
+own): `scripts/consumer_table_parse.py` runs that test's table reader, at the row's target and at
+each version a main holds, on the table of the candidate revision, so a format change that a held
+version read at the base and cannot read now is red before it lands.
 A rollout that lands before the table is regenerated does not turn that job red: a copy on a
 main the table does not list, with the bytes of its row (or one of a pending row's
 variants), is counted as an unlisted holder with the date it appeared, while a copy with

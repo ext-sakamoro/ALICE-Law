@@ -73,6 +73,7 @@ python3 scripts/test_added_function_pins.py
 python3 scripts/test_surface_claims_check.py
 python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py
+python3 scripts/test_consumer_table_parse.py
 python3 scripts/test_shared_files_strict.py
 python3 scripts/test_holder_mode_check.py
 python3 scripts/test_shared_files_branch_live.py
@@ -106,9 +107,11 @@ if git cat-file -e "$base":conformance/shared-files.toml 2>/dev/null; then
   base_table=$(mktemp)
   git show "$base":conformance/shared-files.toml > "$base_table"
   python3 scripts/shared_files_check.py --table conformance/shared-files.toml --base-table "$base_table" --lock-file .github/workflows/conformance-live.yml
+  python3 scripts/consumer_table_parse.py --table conformance/shared-files.toml --base-table "$base_table"
   rm -f "$base_table"
 else
   python3 scripts/shared_files_check.py --table conformance/shared-files.toml --lock-file .github/workflows/conformance-live.yml
+  python3 scripts/consumer_table_parse.py --table conformance/shared-files.toml
 fi
 python3 scripts/shared_files_check.py --table conformance/shared-files.toml --repo . --name ALICE-Law
 
