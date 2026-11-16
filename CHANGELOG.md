@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/shared_files_check.py` / `scripts/gen_shared_files.py`: 表に「各 repository に固有の path」の行 `{ path, own = "<理由>" }` を足す (repos・bytes・免除を持たない) discovery はこの path の byte が同じ copy を「行が無い」と報告しない (1 つの雛形から作った repository は file を共有せずに同じ byte を持つ) own と共有の行を兼ねるのは誤り、own の path は出力に数えて試験で固定する (足すのは表の review を経た変更) 生成器は own の行をそのまま書き戻す `.github/workflows/ci.yml` と `scripts/preflight.sh` を own にする
 - `conformance/shared-files.toml`: ALICE-Ephemeris と ALICE-Audit を public text の 3 行 (`.github/workflows/public-text.yml` / `scripts/public_text.sh` / `scripts/test_public_text.py`、移行先の bytes) に足し、表を作り直す 2 つが表のどの行にも無かったので、同じく持っている他の共有 file (eol / changed_paths / lock_sources_check / upstream_previous_ids_check と試験) の持ち主にも入った ALICE-SDF も upstream_previous_ids_check と試験の持ち主に入った ALICE-BLE / ALICE-HTTP / ALICE-LoRa / ALICE-gRPC も同じ bytes の `scripts/changed_paths.py` を持っていたので、その行に足した (156 file、1812 copy、pending 22) 数の固定は 1436 → 1448
 - `scripts/public_text_check.py`: ALICE-LLM の許可を足す (鍵付き、範囲と数を固定): 実装する model の系統の名前を `src/` (16)・`examples/` (10)・`CHANGELOG.md` (12) で、互換の HTTP API の名前を `src/bin/server.rs` (8)・`CHANGELOG.md` (1) で commit message は許さない 他の repository の同じ file の同じ語は finding のまま (試験) `conformance/public-text-baseline.toml` の ALICE-LLM の 10 行を下げる (47 件)
 - `conformance/public-text-commit-ack.toml`: `[reviewed]` に 22 行 (共通の語の技術的な使い方と読んだ過去の commit の場所、各行が使い方と日付を引く)

@@ -16,6 +16,10 @@ source = { repo = "ALICE-Channel", rev = "296cc891e0c55357087a30c71dc2cc9f02b3d7
 repos = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Identity"]
 
 [[file]]
+path = ".github/workflows/ci.yml"
+own = "each repository's own CI workflow: repositories cut from one template have the same bytes without sharing a file"
+
+[[file]]
 path = ".github/workflows/eol.yml"
 sha256 = "1acdeab1e6c9b88d7283b5cf42c3c8822e058857b0a5c2e2a3f55badbe64fa33"
 source = { repo = "ALICE-Analytics", rev = "b67c3c2c1266c081914a479404941f45558c6073" }
@@ -258,6 +262,10 @@ path = "scripts/package_integrity.py"
 sha256 = "672775541e6eb7ca0afb908bd37511c0a6562aa835975edc33616c9bed3d60fe"
 source = { repo = "ALICE-Analytics", rev = "459f2cde1cb89eaaf1334bccfb8187d8029b9a7f" }
 repos = ["ALICE-Analytics", "ALICE-Auth", "ALICE-Cache", "ALICE-DB", "ALICE-Edge", "ALICE-LOL", "ALICE-MQTT", "ALICE-OS-Keystore", "ALICE-SDF", "ALICE-Signal", "ALICE-Streaming-Protocol"]
+
+[[file]]
+path = "scripts/preflight.sh"
+own = "each repository's own preflight (its gates and their order): repositories cut from one template have the same bytes without sharing a file"
 
 [[file]]
 path = "scripts/public_text.sh"

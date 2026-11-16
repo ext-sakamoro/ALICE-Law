@@ -40,6 +40,17 @@ class Generate(Base):
         self.assertEqual((e["sha256"], e["source"]["rev"]), (h(SHARED), self.w.revs["ALICE-A"]))
         self.assertEqual(self.gen("--check")[0], 0)
 
+    def test_an_own_row_is_written_back_as_it_is(self):
+        reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B\tenforced\n")
+        self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)
+        own = '\n[[file]]\npath = "scripts/t.sh"\nown = "each repository\'s own script, cut from one template"\n'
+        self.t.write_text(self.t.read_text(encoding="utf-8") + own, encoding="utf-8")
+        self.assertEqual(self.gen("--write")[0], 0)
+        text = self.t.read_text(encoding="utf-8")
+        self.assertEqual(sfc.own_paths(text), ["scripts/t.sh"])
+        self.assertIn("scripts/s.sh", self.entries())
+        self.assertEqual(self.gen("--check")[0], 0)
+
     def test_disagreeing_copies_become_a_pending_row_with_the_majority_target(self):
         reg = self.registry("scripts/s.sh\tALICE-A,ALICE-B,ALICE-C\n")
         self.assertEqual(self.gen("--write", "--registry", str(reg))[0], 0)

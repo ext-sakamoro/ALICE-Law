@@ -56,7 +56,12 @@ A repository that legitimately has a different file at a shared path is exempted
 path's entry with its reason, or with `{ reason, until = "YYYY-MM-DD" }` for one that is
 converging: after `until` its copy must have the row's bytes (a uniform row's sha256, a pending
 row's target), live and in --repo, so the exemption cannot outlive its reason. The discovery
-scope itself has no exceptions. A path that looks
+scope has one kind of exception, decided once per path: a path that is each repository's own by
+nature (its CI workflow, its preflight) is an entry `{ path, own = "<reason>" }` with nothing else
+(no repos, bytes or exemptions), and discovery does not report byte-identical copies of it as a
+missing entry (repositories cut from one template have the same bytes without sharing a file). A
+path is never both own and a shared row (an error), and the own paths are listed in the output and
+pinned by a test, so a new one is a reviewed table change. A path that looks
 shared but is per-repository data (each repository's own content) is an entry with `repos =
 []` and every repository that has it exempted: it pins nothing and compares nothing, and a
 repository that gains the path without an exemption is a finding.
@@ -299,7 +304,8 @@ def is_repos(v: object) -> bool:
 
 
 def load_all(text: str) -> tuple[list[dict], list[dict]]:
-    """The [[file]] entries of a table, checked against the schema (and an empty list)."""
+    """The [[file]] entries of a table, checked against the schema: the shared rows, and the own rows
+    (`{ path, own }`, a path each repository has as its own by nature)."""
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as e:
@@ -312,10 +318,30 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
         raise Unreadable("no [[file]] entry (compares nothing)")
     seen: set[str] = set()
     previous = ""
+    own: list[dict] = []
+    shared: list[dict] = []
     for i, f in enumerate(files, 1):
         where = f"entry {i}"
         if not isinstance(f, dict):
             raise Unreadable(f"{where}: not a table")
+        if "own" in f:
+            if set(f) != {"path", "own"}:
+                raise Unreadable(f"{where}: an own path is {{ path, own = \"<reason>\" }} and nothing else; it is never "
+                                 f"also a shared row (it has {sorted(set(f) - {'path', 'own'})})")
+            if not reason(f["own"]):
+                raise Unreadable(f"{where}: own must say why the path is each repository's own (at least {MIN_REASON} "
+                                 "characters)")
+            if not safe_path(f["path"]):
+                raise Unreadable(f"{where}: path {f['path']!r} is not a relative path")
+            if f["path"] in seen:
+                raise Unreadable(f"entry {f['path']}: listed twice")
+            if f["path"] < previous:
+                raise Unreadable(f"entry {f['path']}: entries are not sorted by path")
+            seen.add(f["path"])
+            previous = f["path"]
+            own.append(f)
+            continue
+        shared.append(f)
         per_repo = f.get("repos") == []
         keys = ({"path", "repos", "exempt"} if per_repo else PENDING_KEYS if "pending" in f else UNIFORM_KEYS)
         required = {"path", "repos"} | (set() if per_repo else {"pending"} if "pending" in f else {"sha256", "source"})
@@ -406,7 +432,14 @@ def load_all(text: str) -> tuple[list[dict], list[dict]]:
         if not isinstance(ex, dict) or not all(is_repo_name(r) and r not in repos and exemption(w) for r, w in ex.items()):
             raise Unreadable(f"{where}: exempt must map unlisted repositories (ALICE-… or a listed product) to a reason "
                              f"of at least {MIN_REASON} characters, or to {{ reason, until = \"YYYY-MM-DD\" }}")
-    return files, []
+    if not shared:
+        raise Unreadable("no shared [[file]] entry (compares nothing)")
+    return shared, own
+
+
+def own_paths(text: str) -> list[str]:
+    """the paths a table records as each repository's own (sorted)"""
+    return sorted(f["path"] for f in load_all(text)[1])
 
 
 def load(text: str) -> list[dict]:
@@ -731,7 +764,7 @@ def introduction_problems(e: dict, found: dict[str, list[str]], remote: Remote, 
 
 
 def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False,
-         proofs: dict[str, bytes] | None = None, base: list[dict] | None = None):
+         proofs: dict[str, bytes] | None = None, base: list[dict] | None = None, own: frozenset[str] = frozenset()):
     """Every listed repository's main against the table, and the discovery pass."""
     problems: list[str] = []
     notes: list[str] = []
@@ -840,7 +873,8 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
             if sha256(data) != e["sha256"]:
                 problems.append(f"{rel}: {r} main has sha256 {sha256(data)}, the table {e['sha256']}")
     # discovery
-    known = {e["path"] for e in entries} | {q for e in entries for q in e.get("paths", {}).values()}
+    # an own path (each repository's own by nature) is not a shared file, whatever its bytes
+    known = {e["path"] for e in entries} | {q for e in entries for q in e.get("paths", {}).values()} | set(own)
     by_path: dict[str, dict[str, list[str]]] = collections.defaultdict(lambda: collections.defaultdict(list))
     for r, files in trees.items():
         for path, blob in files.items():
@@ -922,7 +956,10 @@ def main(argv: list[str]) -> int:
     notes: list[str] = []
     locked: int | None = None
     try:
-        entries = load(a.table.read_text(encoding="utf-8"))
+        entries, own_rows = load_all(a.table.read_text(encoding="utf-8"))
+        own = frozenset(f["path"] for f in own_rows)
+        print(f"shared_files_check: own paths (each repository's own, not compared): {len(own)}"
+              + (f" ({', '.join(sorted(own))})" if own else ""))
         lock = None if a.lock_file is None else lock_in(a.lock_file.read_text(encoding="utf-8"), str(a.lock_file))
         proofs = planned_proofs(a.table)
         base_pending = None
@@ -957,7 +994,7 @@ def main(argv: list[str]) -> int:
                     today = (datetime.date.fromisoformat(a.today) if a.today
                              else datetime.datetime.now(datetime.timezone.utc).date())
                     problems, notes, c, locked = live(entries, remote, today, strict=a.strict, proofs=proofs,
-                                                      base=base_entries)
+                                                      base=base_entries, own=own)
         else:
             problems = []
             c = counts(len(entries), len({r for e in entries for r in e["repos"]}),
