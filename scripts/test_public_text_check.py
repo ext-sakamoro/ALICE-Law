@@ -1027,8 +1027,8 @@ class Shapes(unittest.TestCase):
 
     # the set as committed: its size and the SHA-256 of its sorted lines (a change of the set is a
     # change of these two numbers)
-    PRIVATE_REPO_COUNT = 329
-    PRIVATE_REPO_DIGEST = "7480fbfc733c105a2205ce3d3122edc83e14fee5627ce2ac2b72c4e25565aae5"
+    PRIVATE_REPO_COUNT = 330
+    PRIVATE_REPO_DIGEST = "8c4c56f802e130f9d1b9e6823c52d549e526d6fa3338269030b2328b988cf443"
 
     def standalone(self, source: str | None = None) -> Path:
         """this checker copied alone into an empty directory (as a repository's CI fetches it)"""
