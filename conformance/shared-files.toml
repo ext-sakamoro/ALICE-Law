@@ -37,6 +37,10 @@ pending = { since = "2026-11-11", exit = "every listed repository's main has the
 repos = ["ALICE-Cloud-Gateway", "ALICE-Container", "ALICE-Kinematics", "ALICE-OS-Keystore", "ALICE-Queue", "text-to-print"]
 
 [[file]]
+path = "scripts/advisory_holds.toml"
+own = "each repository's own advisory holds (which advisories it holds and why): two repositories with no hold left have the same bytes without sharing a file"
+
+[[file]]
 path = "scripts/alice_dup_check.py"
 sha256 = "052f95b6d1322ed9f88b24727f2c7709e4bf52177ad304d6929d436a55227fda"
 source = { repo = "ALICE-Eco-System", rev = "b3b294c051892474b8d3f7a43e403ed67a18371a" }

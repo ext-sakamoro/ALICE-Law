@@ -947,7 +947,29 @@ class Live(Base):
         # a new own path is a reviewed table change: this list changes with it
         table = Path(__file__).resolve().parent.parent / "conformance" / "shared-files.toml"
         self.assertEqual(sfc.own_paths(table.read_text(encoding="utf-8")),
-                         [".github/workflows/ci.yml", "scripts/preflight.sh"])
+                         [".github/workflows/ci.yml", "scripts/advisory_holds.toml", "scripts/preflight.sh"])
+
+    def test_two_repositories_with_no_advisory_hold_left_are_not_a_shared_file(self):
+        # 2026-11-17: ALICE-Kinematics and ALICE-Queue each removed their last hold, so their own
+        # scripts/advisory_holds.toml became byte-identical; the table's own row (read from the real table)
+        # keeps discovery quiet for that path, and another identical path is still reported
+        table = Path(__file__).resolve().parent.parent / "conformance" / "shared-files.toml"
+        rows = [f for f in sfc.load_all(table.read_text(encoding="utf-8"))[1]
+                if f["path"] == "scripts/advisory_holds.toml"]
+        self.assertEqual(len(rows), 1, "the table has no own row for scripts/advisory_holds.toml")
+        empty = b"# advisory holds of this repository\n"
+        self.w.commit("ALICE-A", {"scripts/advisory_holds.toml": empty})
+        self.w.commit("ALICE-B", {"scripts/advisory_holds.toml": empty})
+        self.t.write_text(self.w.table(rows[0], self.w.uniform(exempt={"ALICE-C": "a different script of its own"})),
+                          encoding="utf-8")
+        code, out = self.live()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("advisory_holds.toml: byte-identical", out)
+        self.w.commit("ALICE-A", {"scripts/other.toml": b"x\n"})
+        self.w.commit("ALICE-B", {"scripts/other.toml": b"x\n"})
+        code, out = self.live()
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/other.toml: byte-identical in ALICE-A, ALICE-B but has no entry", out)
 
     def test_a_new_holder_of_a_per_repository_path_is_red(self):
         # ALICE-C is read through the uniform row of scripts/c.sh, and has scripts/s.sh unexempted
