@@ -85,6 +85,15 @@ repository that gains the path without an exemption is a finding.
       makes it a finding: the regeneration and landing path of this repository and the
       pre-publish gate run strict, so the table cannot stay stale into a release) (a shared copy outside DISCOVERED, under tests/ or src/, is checked only once a
       row names it)
+  shared_files_check.py --table TABLE --discover NAME=DIR --paths P...
+      the discovery pass of one commit, for a producer's receipt: of the commit's changed and
+      added paths P, each one under DISCOVERED with no row and not own, read from the tree DIR
+      and compared with the same path on the main of every other repository the live check
+      reads (table_repos: one function, so the two modes read the same set); the same bytes
+      elsewhere is a finding; a path compared against no readable repository is exit 2. With
+      no such path nothing is fetched. This sees the commit's own paths only: drift between
+      other repositories (a file changing in B while A's commit does not touch it) stays with
+      the daily full --live run (conformance-live.yml), the backstop of this per-commit view
   shared_files_check.py --table TABLE ... --lock-file FILE
       in any mode, also the count lock written in FILE (the one `--expect-copies N` of
       .github/workflows/conformance-live.yml) against the table: N must be the number of
@@ -763,6 +772,46 @@ def introduction_problems(e: dict, found: dict[str, list[str]], remote: Remote, 
     return problems + planned_bytes_problems(e, proof, "new file")
 
 
+def table_repos(entries: list[dict]) -> list[str]:
+    """the repositories the live check and the discovery of one commit read: every repository a row lists or exempts
+    (one function, so the two modes cannot read different sets)"""
+    return sorted({r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})})
+
+
+def known_paths(entries: list[dict], own: frozenset[str] | set[str]) -> set[str]:
+    """the paths discovery never reports: each row's path, its per-repository paths, and the own paths"""
+    return {e["path"] for e in entries} | {q for e in entries for q in e.get("paths", {}).values()} | set(own)
+
+
+def discover(entries: list[dict], remote: Remote, name: str, root: Path, paths: list[str],
+             own: frozenset[str] = frozenset()) -> tuple[list[str], list[str], int]:
+    """The discovery pass for one commit: of `paths` (the commit's changed and added files) each one under DISCOVERED
+    with no row and not own, present in the tree at `root`, compared with the same path on the main of every other
+    repository the live check reads (table_repos). A copy with the same bytes is a shared file with no row: a finding.
+    Returns (problems, notes, the number of paths compared). Cost follows the commit: with no such path nothing is
+    fetched. A path compared against no readable repository is Unreadable (nothing compared, never a pass).
+    This sees the commit's own paths only; drift between other repositories (a file changing in B while A's commit
+    does not touch it) is the daily full --live run's (conformance-live.yml), the backstop of this per-commit view."""
+    known = known_paths(entries, own)
+    cand = sorted({p for p in paths if p.startswith(DISCOVERED) and p not in known and (root / p).is_file()})
+    notes = [f"discover: {name}: {len(cand)} unlisted path(s) under {', '.join(DISCOVERED)} in the commit"]
+    if not cand:
+        return [], notes, 0
+    others = [r for r in table_repos(entries) if r != name]
+    if not others:
+        raise Unreadable("discover: the table names no other repository (compared nothing)")
+    trees = {r: tree(remote(r)) for r in others}
+    problems = []
+    for p in cand:
+        blob = git_blob((root / p).read_bytes())
+        same = sorted(r for r, files in trees.items() if files.get(p) == blob)
+        if same:
+            problems.append(f"{p}: byte-identical in {', '.join(sorted([name, *same]))} but has no entry "
+                            "(a shared file gets a row; a file each repository keeps for itself gets an own row)")
+    notes.append(f"discover: {name}: {len(cand)} path(s) compared against {len(trees)} repositories")
+    return problems, notes, len(cand)
+
+
 def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool = False,
          proofs: dict[str, bytes] | None = None, base: list[dict] | None = None, own: frozenset[str] = frozenset()):
     """Every listed repository's main against the table, and the discovery pass."""
@@ -771,7 +820,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
     copies = pending = 0
     uniform_copies = 0
     unlisted: list[tuple[str, str, str, str]] = []
-    repos = sorted({r for e in entries for r in e["repos"]} | {r for e in entries for r in e.get("exempt", {})})
+    repos = table_repos(entries)
     base_listed = {e["path"]: set(e["repos"]) for e in (base or [])}
     # without --base-table (main: conformance-live.yml) the table itself is the base: a planned row whose copies all
     # reached the target after the table was written is a rollout step, a note until the next regeneration (the same
@@ -874,7 +923,7 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                 problems.append(f"{rel}: {r} main has sha256 {sha256(data)}, the table {e['sha256']}")
     # discovery
     # an own path (each repository's own by nature) is not a shared file, whatever its bytes
-    known = {e["path"] for e in entries} | {q for e in entries for q in e.get("paths", {}).values()} | set(own)
+    known = known_paths(entries, own)
     by_path: dict[str, dict[str, list[str]]] = collections.defaultdict(lambda: collections.defaultdict(list))
     for r, files in trees.items():
         for path, blob in files.items():
@@ -934,6 +983,10 @@ def main(argv: list[str]) -> int:
     mode.add_argument("--fetch", action="store_true", help="fetch each source commit and compare")
     mode.add_argument("--live", action="store_true", help="compare every listed repository's main")
     mode.add_argument("--repo", type=Path, help="a crate checkout to check against the table")
+    mode.add_argument("--discover", metavar="NAME=DIR",
+                      help="the discovery of one commit: the --paths of repository NAME's tree DIR against the other "
+                           "repositories' mains (a receipt's view; the daily --live is the backstop)")
+    ap.add_argument("--paths", nargs="*", default=None, help="with --discover: the commit's changed and added paths")
     ap.add_argument("--name", help="the crate's repository name (ALICE-…), with --repo")
     ap.add_argument("--private", action="store_true",
                     help="with --repo: a private repository, which the table (public repositories only) never names")
@@ -953,6 +1006,8 @@ def main(argv: list[str]) -> int:
         ap.error("--repo and --name go together")
     if a.private and a.repo is None:
         ap.error("--private goes with --repo")
+    if (a.discover is None) != (a.paths is None):
+        ap.error("--discover and --paths go together")
     notes: list[str] = []
     locked: int | None = None
     try:
@@ -985,6 +1040,13 @@ def main(argv: list[str]) -> int:
                                                 datetime.date.fromisoformat(a.today) if a.today else None)
                 off = off_target(entries, a.repo, a.name)
                 print(f"shared_files_check: {OFF_TARGET}: {len(off)}" + (f" ({', '.join(off)})" if off else ""))
+        elif a.discover is not None:
+            dname, _, ddir = a.discover.partition("=")
+            if not is_repo_name(dname) or not ddir:
+                raise Unreadable(f"--discover {a.discover!r} is not NAME=DIR")
+            with tempfile.TemporaryDirectory() as d:
+                problems, notes, n = discover(entries, Remote(Path(d)), dname, Path(ddir), a.paths, own)
+            c = counts(len(entries), len(table_repos(entries)), n, 0)
         elif a.fetch or a.live:
             with tempfile.TemporaryDirectory() as d:
                 remote = Remote(Path(d))

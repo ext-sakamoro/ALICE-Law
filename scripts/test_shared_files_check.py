@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -790,6 +791,74 @@ class Fetch(Base):
                     os.environ.pop(k, None)
                 else:
                     os.environ[k] = v
+
+
+class Discover(Base):
+    """--discover: one commit's paths against the other repositories' mains (a receipt's view)"""
+
+    def discover(self, name: str, *paths: str):
+        return self.check("--discover", f"{name}={self.w.work / name}", "--paths", *paths)
+
+    def table_c_exempt(self, *extra: dict):
+        return self.w.table(*extra, self.w.uniform(exempt={"ALICE-C": "a different script of its own"}))
+
+    def test_a_new_unlisted_file_with_another_repository_s_bytes_is_a_finding(self):
+        self.w.commit("ALICE-B", {"scripts/new.py": b"print(1)\n"})
+        (self.w.work / "ALICE-A" / "scripts" / "new.py").write_bytes(b"print(1)\n")  # the commit, not yet on main
+        self.t.write_text(self.table_c_exempt(), encoding="utf-8")
+        code, out = self.discover("ALICE-A", "scripts/new.py")
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/new.py: byte-identical in ALICE-A, ALICE-B but has no entry", out)
+
+    def test_an_own_row_and_a_listed_row_are_not_findings(self):
+        # 2026-11-17: two repositories each emptied their own advisory holds; an own row says that is not sharing
+        self.w.commit("ALICE-B", {"scripts/holds.toml": b"# none\n"})
+        (self.w.work / "ALICE-A" / "scripts" / "holds.toml").write_bytes(b"# none\n")
+        own = {"path": "scripts/holds.toml", "own": "each repository's own holds, the same bytes when both are empty"}
+        self.t.write_text(self.w.table(own, self.w.uniform(exempt={"ALICE-C": "a different script of its own"})),
+                          encoding="utf-8")
+        code, out = self.discover("ALICE-A", "scripts/holds.toml", "scripts/s.sh")
+        self.assertEqual(code, 0, out)
+        self.assertIn("discover: ALICE-A: 0 unlisted path(s)", out)
+
+    def test_a_unique_file_is_compared_and_passes_and_paths_outside_are_not_read(self):
+        (self.w.work / "ALICE-A" / "scripts" / "mine.py").write_bytes(b"only here\n")
+        (self.w.work / "ALICE-A" / "notes.md").write_bytes(b"x\n")
+        self.t.write_text(self.table_c_exempt(), encoding="utf-8")
+        code, out = self.discover("ALICE-A", "scripts/mine.py", "notes.md")
+        self.assertEqual(code, 0, out)
+        self.assertIn("discover: ALICE-A: 1 path(s) compared against 2 repositories", out)
+
+    def test_a_path_compared_against_no_readable_repository_is_undecided(self):
+        (self.w.work / "ALICE-A" / "scripts" / "mine.py").write_bytes(b"only here\n")
+        self.t.write_text(self.table_c_exempt(), encoding="utf-8")
+        sfc.GITHUB = "https://github.invalid/"
+        code, out = self.discover("ALICE-A", "scripts/mine.py")
+        self.assertEqual(code, 2, out)
+
+    def test_discover_reads_the_same_repositories_as_live(self):
+        # one function decides the set; a mode with its own list would miss a holder the other reads
+        self.t.write_text(self.table_c_exempt(), encoding="utf-8")
+        entries = sfc.load(self.t.read_text(encoding="utf-8"))
+        read = {"live": set(), "discover": set()}
+        real = sfc.Remote.__call__
+        for mode in read:
+            def spy(remote, repo, mode=mode):
+                read[mode].add(repo)
+                return real(remote, repo)
+            with mock.patch.object(sfc.Remote, "__call__", spy):
+                if mode == "live":
+                    self.live_check()
+                else:
+                    (self.w.work / "ALICE-Z").mkdir(exist_ok=True)
+                    (self.w.work / "ALICE-Z" / "scripts").mkdir(exist_ok=True)
+                    (self.w.work / "ALICE-Z" / "scripts" / "z.py").write_bytes(b"z\n")
+                    self.check("--discover", f"ALICE-Z={self.w.work / 'ALICE-Z'}", "--paths", "scripts/z.py")
+        self.assertEqual(read["live"], set(sfc.table_repos(entries)))
+        self.assertEqual(read["discover"], set(sfc.table_repos(entries)))
+
+    def live_check(self):
+        return self.check("--live", "--today", "2026-10-17")
 
 
 class Live(Base):
