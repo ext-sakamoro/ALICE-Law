@@ -365,6 +365,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` と `conformance/pending-state.toml`、`conformance_roster_check.py` の `--write` / `--state` / `--pending` / `--strict` / `--state-drift-note` と pending の 3 日の規則、`land_law_state.py` の `--write` / `--today` crate の着地のたびに要った追いかけの commit と、着地済の entry が他の repository の着地を止める経路がなくなる
 
 ### Fixed
+- `release-train.toml`: `[crate.alice-physics]` の 1 つ目の consumer set に `mpm2d` を足す (ALICE-Physics main d79caf6b が既定 off の feature として足し、どの set にも `exclude-features` にも無かったので `e2e-main.yml` の `feature-coverage` で 11-16 の定期 run が red) build と semver check の対象にする `[crate.alice-sdf]` の `gpu-slot-guard` (ALICE-SDF main 6c5b877f の試験専用 feature) は `exclude-features` に理由付きで載せる 両方を足した表で、10 repository の main に対する `feature-coverage` は 5 crate を比べて problem 0
 - `conformance/shared-files.toml`: `scripts/workflow_pipefail.py` と試験の holder に ALICE-DB と ALICE-SDF を足した
 - `shared_files_check.py`: `--private` で読める product repo の名前を 1 つ足した (集合は名前の SHA-256 だけを持つ)
 - `conformance/holder-baseline.toml`: 直った 1 行 (`eb3c7d3b` の `Cargo.toml` の authors) を `holder_live.py --shrink` で外す 検査は各 repository の既定 branch を読むので、既定 branch を変えると読む bytes も変わる この repository は既定 branch が main になった時点で出現が無くなり、毎日の検査が古い行として red にしていた
