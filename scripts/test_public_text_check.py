@@ -1025,10 +1025,8 @@ class Shapes(unittest.TestCase):
         for line in ("see ~/ALICE-LOL/README.md", "/Users/runner/work/x", "zorblat-notes alone", "~/zorblat-notes2/x"):
             self.assertNotIn("private path", ptc.kinds(line), line)
 
-    # the set as committed: its size and the SHA-256 of its sorted lines (a change of the set is a
-    # change of these two numbers)
-    PRIVATE_REPO_COUNT = 330
-    PRIVATE_REPO_DIGEST = "8c4c56f802e130f9d1b9e6823c52d549e526d6fa3338269030b2328b988cf443"
+    # the fewest hashes the generated block may hold (the count when it was last regenerated)
+    PRIVATE_REPO_MIN = 333
 
     def standalone(self, source: str | None = None) -> Path:
         """this checker copied alone into an empty directory (as a repository's CI fetches it)"""
@@ -1060,7 +1058,15 @@ class Shapes(unittest.TestCase):
                               "h = sorted(p.PRIVATE_REPO_HASHES); "
                               "print(len(h), hashlib.sha256('\\n'.join(h).encode()).hexdigest())", str(d)],
                              capture_output=True, text=True, check=True, encoding="utf-8").stdout.split()
-        self.assertEqual(got, [str(self.PRIVATE_REPO_COUNT), self.PRIVATE_REPO_DIGEST])
+        # the copy run alone holds exactly the generated block (count and digest taken from the block
+        # scripts/gen_private_repo_hashes.py writes, so a new private repository moves no pin here)
+        want = sorted(ptc.PRIVATE_REPO_HASHES)
+        # a floor, not a pin: a new private repository moves nothing, but a hash removed from the block (a private
+        # name no longer caught) needs this number lowered in the same diff (public CI cannot run the generator's
+        # --check, which needs the private list)
+        self.assertGreaterEqual(len(want), self.PRIVATE_REPO_MIN, "a private repository hash was removed")
+        self.assertEqual(got, [str(len(want)), hashlib.sha256("\n".join(want).encode()).hexdigest()])
+        self.assertEqual(len(set(want)), len(want), "no hash twice")
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in ptc.PRIVATE_REPO_HASHES))
         self.assertFalse((Path(ptc.__file__).parent / "public_text_private_repos.txt").exists())
 
