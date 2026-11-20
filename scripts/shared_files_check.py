@@ -840,6 +840,8 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
             if age < 0:
                 problems.append(f"{e['path']}: pending since {e['pending']['since']}, after today ({today.isoformat()}): "
                                 "a future date switches the age limits off")
+            # the landing mode (a base table given, not --strict) and the change left the row as the base has it
+            as_base = base is not None and not strict and base_rows.get(e["path"]) == row_but_variants(e)
             found: dict[str, list[str]] = collections.defaultdict(list)
             owner_blob = None
             for r in e["repos"]:
@@ -899,15 +901,26 @@ def live(entries: list[dict], remote: Remote, today: datetime.date, strict: bool
                 if p.get("first_move") and not owner_landed(p, found):  # the stored flag is derived: recompute it
                     problems += first_move_problems(e, found, remote, age, (proofs or {}).get(p["planned"]))
                 if age > PLANNED_MAX_DAYS:
-                    problems.append(f"{e['path']}: planned since {p['since']}, more than {PLANNED_MAX_DAYS} days "
-                                    f"(the rollout to {p['planned'][:12]} has not finished)")
+                    late = (f"{e['path']}: planned since {p['since']}, more than {PLANNED_MAX_DAYS} days "
+                            f"(the rollout to {p['planned'][:12]} has not finished)")
+                    if as_base:
+                        # the landing mode (a base table given): the age is the mains' state (a rollout other repositories have not
+                        # finished), not this change's; the daily strict run stays red on it (2026-11-20: a Law
+                        # change that carried the rollout's own fix could not land while the rollout was late)
+                        notes.append(late + "; left as the base has it: the daily run reports it")
+                    else:
+                        problems.append(late)
             recorded = {k: sorted(v) for k, v in e["pending"]["variants"].items()}
             moved = "" if dict(found) == recorded else " (the variants on the mains have moved since the table)"
             notes.append(f"{e['path']}: pending {age} day(s), {len(found)} variant(s): "
                          + "; ".join(f"{k[:12]} {','.join(v)}" for k, v in sorted(found.items())) + moved)
             if age > PENDING_MAX_DAYS:
-                problems.append(f"{e['path']}: pending since {e['pending']['since']}, more than "
-                                f"{PENDING_MAX_DAYS} days ({e['pending']['exit']})")
+                late = (f"{e['path']}: pending since {e['pending']['since']}, more than "
+                        f"{PENDING_MAX_DAYS} days ({e['pending']['exit']})")
+                if as_base:
+                    notes.append(late + "; left as the base has it: the daily run reports it")
+                else:
+                    problems.append(late)
             continue
         if "sha256" not in e:
             continue  # per-repository data: nothing to compare

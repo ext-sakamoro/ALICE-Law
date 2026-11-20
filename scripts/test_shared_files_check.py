@@ -1063,6 +1063,32 @@ class Live(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("more than 21 days", out)
 
+    def late_against(self, row: dict, base_row: dict | None, *argv: str, today: str):
+        """the table has row, the base table has base_row (or no row for the path), checked in the landing mode"""
+        self.t.write_text(self.w.table(row), encoding="utf-8")
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.w.table(base_row) if base_row is not None else self.w.table(self.w.uniform(
+            path="scripts/other.sh")), encoding="utf-8")
+        return self.live("--base-table", str(base), *argv, today=today)
+
+    def test_a_late_pending_row_the_change_left_as_the_base_has_it_is_a_note_in_the_landing_mode(self):
+        # the age is the mains' state (the copies have not converged), not this change's: the daily run (no base,
+        # above) and --strict stay red on it
+        code, out = self.late_against(self.w.pending(), self.w.pending(), today="2026-11-30")
+        self.assertEqual(code, 0, out)
+        self.assertIn("more than 21 days", out)
+        self.assertIn("left as the base has it: the daily run reports it", out)
+        self.assertEqual(self.late_against(self.w.pending(), self.w.pending(), "--strict", today="2026-11-30")[0], 1)
+
+    def test_a_late_pending_row_the_change_adds_or_edits_is_red_in_the_landing_mode(self):
+        for base_row in (None,  # the change adds the row, already past its time
+                         self.w.pending(since="2026-11-20"),  # the change back-dates the row
+                         self.w.pending(exempt={"ALICE-D": "its own copy"})):  # another field of the row
+            code, out = self.late_against(self.w.pending(), base_row, today="2026-11-30")
+            self.assertEqual(code, 1, (base_row, out))
+            self.assertIn("more than 21 days", out)
+            self.assertNotIn("the daily run reports it", out)
+
 
 class Planned(Base):
     def live(self, *argv: str, today: str = "2026-10-17"):
@@ -1244,6 +1270,32 @@ class Planned(Base):
         self.assertEqual(code, 1, out)
         self.assertIn("more than 14 days", out)
         self.assertEqual(self.live(today="2026-10-24")[0], 0)
+
+    def late_against(self, base_row: dict | None, *argv: str):
+        """the table plans the row since 10-10, the base has base_row (or no row for the path), 20 days later"""
+        self.t.write_text(self.w.table(self.w.planned()), encoding="utf-8")
+        base = Path(self.tmp.name) / "base.toml"
+        base.write_text(self.w.table(base_row) if base_row is not None else self.w.table(self.w.uniform(
+            path="scripts/other.sh")), encoding="utf-8")
+        return self.live("--base-table", str(base), *argv, today="2026-10-30")
+
+    def test_a_late_planned_row_the_change_left_as_the_base_has_it_is_a_note_in_the_landing_mode(self):
+        # a change that does not touch a late rollout can land; the daily run (no base, above) and --strict stay red
+        code, out = self.late_against(self.w.planned())
+        self.assertEqual(code, 0, out)
+        self.assertIn("more than 14 days", out)
+        self.assertIn("left as the base has it: the daily run reports it", out)
+        self.assertEqual(self.late_against(self.w.planned(), "--strict")[0], 1)
+
+    def test_a_late_planned_row_the_change_adds_or_edits_is_red_in_the_landing_mode(self):
+        for base_row in (None,  # the change adds the row, already past its time
+                         self.w.pending(),  # the change turns a pending row into a planned one
+                         self.w.planned(since="2026-10-25"),  # the change back-dates the row
+                         self.w.planned(pending={**self.w.planned()["pending"], "planned": sfc.git_blob(OTHER)})):
+            code, out = self.late_against(base_row)
+            self.assertEqual(code, 1, (base_row, out))
+            self.assertIn("more than 14 days", out)
+            self.assertNotIn("the daily run reports it", out)
 
 
     def test_a_moved_row_passes_while_the_owner_holds_either_pair(self):
