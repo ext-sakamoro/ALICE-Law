@@ -185,6 +185,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/runner_pin_live.py --local "${GITHUB_REPOSITORY#*/}=."
 
+  # No workflow pins dtolnay/rust-toolchain to a commit (scripts/toolchain_pin_live.py): the action rewrites its branches,
+  # so a pinned commit stops being reachable and re-pinning only restarts that clock; the toolchain is installed with a
+  # rustup run step. Counts per workflow against conformance/toolchain-pin-baseline.toml, which only goes down (a new
+  # one and a stale row are red). An unreadable repository and 0 pinned steps compared are red.
+  # Daily and by hand only.
+  toolchain-pin:
+    name: No public repository pins the rust-toolchain action to a commit (baseline only goes down)
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the toolchain pin check
+        run: python3 scripts/test_toolchain_pin_check.py
+
+      - name: The public repositories' workflows against the baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/toolchain_pin_live.py --local "${GITHUB_REPOSITORY#*/}=."
+
   # Every alice-* dependency comes from its repository's main branch (scripts/branch_main_live.py): each public
   # repository's tracked Cargo.toml (git with branch = "main", no rev / tag, no registry release) and Cargo.lock
   # (`?branch=main#<commit>`) at its default branch, this one at the commit under test. A file
