@@ -337,7 +337,6 @@ def build_ll(args: argparse.Namespace) -> Path:
     package, crate = _cargo_metadata(args.package)
     shared = os.environ.get("CARGO_TARGET_DIR")
     target_dir = Path(shared) if shared else own_target_dir()
-    profile_dir = target_dir / (args.target or "") / "release" / "deps"
     sel = ["-p", package]
     tgt = ["--target", args.target] if args.target else []
     # a shared target directory may hold an older build of the package: clean it so the IR
@@ -346,8 +345,6 @@ def build_ll(args: argparse.Namespace) -> Path:
     if shared:
         subprocess.run(["cargo", "clean", "--release", *sel, *tgt, "--target-dir", str(target_dir)],
                        check=True, capture_output=True)
-    for old in profile_dir.glob(f"{crate}-*.ll"):
-        old.unlink()
     feat: list[str] = []
     if args.all_features:
         feat.append("--all-features")
@@ -356,17 +353,51 @@ def build_ll(args: argparse.Namespace) -> Path:
     if args.features:
         feat += ["--features", args.features]
     cmd = ["cargo", "rustc", "--lib", "--release", "--crate-type", "rlib", *sel, *tgt, *feat,
-           "--target-dir", str(target_dir), "--",
+           "--target-dir", str(target_dir), "--message-format=json-render-diagnostics", "--",
            *IR_FLAGS]
     print("fneg_fma_ir_check: running " + " ".join(cmd), flush=True)
-    r = subprocess.run(cmd)
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, encoding="utf-8")
     if r.returncode != 0:
         raise SystemExit(2)
-    found = sorted(profile_dir.glob(f"{crate}-*.ll"))
-    if len(found) != 1:
-        print(f"fneg_fma_ir_check: expected one {crate}-*.ll in {profile_dir}, found {len(found)}")
+    ll, why = ll_from_artifacts(r.stdout, crate)
+    if ll is None:
+        print(f"fneg_fma_ir_check: {why}")
         raise SystemExit(1)
-    return found[0]
+    return ll
+
+
+# cargo writes the crate's outputs to a directory it chooses (release/deps up to cargo 1.99; from 1.100 the build
+# directory layout puts them under release/build/<package>/<hash>/out/, and a --target adds the triple), so the .ll
+# is not looked up by a fixed path: the compiler-artifact message of the library names the .rmeta that rustc wrote
+# next to the .ll, with the same file stem, and the .ll is <that directory>/<crate>-<hash>.ll (2026-11-20: the fixed
+# release/deps glob found 0 on runner images whose default toolchain is 1.100)
+_ARTIFACT_STEM = re.compile(r"lib(?P<crate>[A-Za-z0-9_]+)-(?P<hash>[0-9a-f]+)\.rmeta$")
+
+
+def ll_from_artifacts(stdout: str, crate: str) -> tuple[Path | None, str]:
+    """(the .ll, "") from cargo's JSON messages for the library `crate`, or (None, why) when no artifact message names
+    it, when several do, or when the .ll it implies is missing or empty"""
+    found: list[Path] = []
+    for line in stdout.splitlines():
+        if not line.startswith("{"):
+            continue
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if msg.get("reason") != "compiler-artifact":
+            continue
+        for f in msg.get("filenames", []):
+            m = _ARTIFACT_STEM.search(Path(f).name)
+            if m and m.group("crate") == crate:
+                found.append(Path(f).parent / f"{crate}-{m.group('hash')}.ll")
+    found = sorted(set(found))
+    if len(found) != 1:
+        return None, f"expected one compiler-artifact message naming {crate}'s .rmeta, found {len(found)}"
+    ll = found[0]
+    if not ll.is_file() or ll.stat().st_size == 0:
+        return None, f"{ll} is missing or empty (cargo built {crate} but rustc wrote no IR there)"
+    return ll, ""
 
 
 def host_triple() -> str:

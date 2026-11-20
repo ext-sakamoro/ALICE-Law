@@ -315,18 +315,22 @@ class Cli(unittest.TestCase):
             self.assertEqual(g.main(["--ll", str(empty)]), 1)
 
 
-# a child that builds with a stand-in for cargo (writes the .ll where cargo would), in a fresh TMPDIR
+# a child that builds with a stand-in for cargo (writes the .ll where cargo would and prints the compiler-artifact
+# message that names the .rmeta next to it, as cargo does), in a fresh TMPDIR
 STUB = '''
-import argparse, os, subprocess, sys
+import argparse, json, os, subprocess, sys
 sys.path.insert(0, {scripts!r})
 import fneg_fma_ir_check as g
 g._cargo_metadata = lambda package: ("pkg", "pkg")
 def fake_run(cmd, *a, **k):
+    out = ""
     if "--target-dir" in cmd and "rustc" in cmd:
         deps = os.path.join(cmd[cmd.index("--target-dir") + 1], "release", "deps")
         os.makedirs(deps, exist_ok=True)
         open(os.path.join(deps, "pkg-0.ll"), "w").write("define void @f() {{ ret void }}\\n")
-    return subprocess.CompletedProcess(cmd, 0, "", "")
+        out = json.dumps({{"reason": "compiler-artifact", "target": {{"name": "pkg"}},
+                          "filenames": [os.path.join(deps, "libpkg-0.rmeta")]}}) + "\\n"
+    return subprocess.CompletedProcess(cmd, 0, out, "")
 g.subprocess.run = fake_run
 NS = argparse.Namespace(package=None, target=None, all_features=False, no_default_features=False, features=None)
 def left():
@@ -393,6 +397,59 @@ class OwnTargetDirectory(unittest.TestCase):
         self.assertIn("RC 0", r.stdout, r.stdout + r.stderr)
         self.assertTrue((shared / "release" / "deps" / "pkg-0.ll").exists())
         self.assertEqual(list(tmp.iterdir()), [])
+
+
+class LlFromArtifacts(unittest.TestCase):
+    """the .ll is found from cargo's compiler-artifact message, whatever directory cargo chose"""
+
+    def msg(self, *files, name="g3_fixture"):
+        import json
+        return json.dumps({"reason": "compiler-artifact", "target": {"name": name}, "filenames": list(files)})
+
+    def layout(self, d, rel):
+        out = Path(d) / rel
+        out.mkdir(parents=True)
+        (out / "g3_fixture-abc123.ll").write_text("define void @f() {}\n", encoding="utf-8")
+        return out
+
+    def test_the_old_deps_layout(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = self.layout(d, "release/deps")
+            ll, why = g.ll_from_artifacts(self.msg(f"{d}/release/libg3_fixture.rlib", f"{out}/libg3_fixture-abc123.rmeta"), "g3_fixture")
+            self.assertEqual((ll, why), (out / "g3_fixture-abc123.ll", ""))
+
+    def test_the_build_dir_layout_of_cargo_1_100(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = self.layout(d, "release/build/g3_fixture/abc123/out")
+            ll, _ = g.ll_from_artifacts(self.msg(f"{out}/libg3_fixture-abc123.rmeta"), "g3_fixture")
+            self.assertEqual(ll, out / "g3_fixture-abc123.ll")
+
+    def test_a_target_triple_directory(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = self.layout(d, "aarch64-unknown-linux-gnu/release/deps")
+            ll, _ = g.ll_from_artifacts(self.msg(f"{out}/libg3_fixture-abc123.rmeta"), "g3_fixture")
+            self.assertEqual(ll, out / "g3_fixture-abc123.ll")
+
+    def test_no_artifact_message_for_the_crate_fails(self):
+        ll, why = g.ll_from_artifacts(self.msg("/x/libother-1.rmeta", name="other") + "\nnot json\n", "g3_fixture")
+        self.assertIsNone(ll)
+        self.assertIn("found 0", why)
+
+    def test_two_different_artifacts_fail(self):
+        lines = self.msg("/a/libg3_fixture-1.rmeta") + "\n" + self.msg("/b/libg3_fixture-2.rmeta")
+        ll, why = g.ll_from_artifacts(lines, "g3_fixture")
+        self.assertIsNone(ll)
+        self.assertIn("found 2", why)
+
+    def test_a_missing_or_empty_ll_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "release/deps"
+            out.mkdir(parents=True)
+            ll, why = g.ll_from_artifacts(self.msg(f"{out}/libg3_fixture-abc123.rmeta"), "g3_fixture")
+            self.assertIsNone(ll)
+            self.assertIn("missing or empty", why)
+            (out / "g3_fixture-abc123.ll").write_text("", encoding="utf-8")
+            self.assertIsNone(g.ll_from_artifacts(self.msg(f"{out}/libg3_fixture-abc123.rmeta"), "g3_fixture")[0])
 
 
 if __name__ == "__main__":
