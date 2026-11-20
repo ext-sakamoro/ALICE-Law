@@ -144,7 +144,7 @@ CI (`e2e-main.yml`) では repository を並べて checkout し、`scripts/main_
 
 | alice-det-math | 値の digest |
 |---|---|
-| 0.6.1 | `80aec05517ce040db16a29c4690e38ecfb1fbf127b4e8ee83a21d964d2d5f3bd` |
+| 0.6.1 | `d1a37d5f3bf2590657f8507277f1661ea9f7ea27bb0b492e7952add280f2a414` |
 
 ### Conformance manifest (15 gate)
 

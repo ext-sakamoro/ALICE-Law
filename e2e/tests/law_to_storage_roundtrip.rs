@@ -1243,10 +1243,16 @@ fn a_pre_release_is_refused() {
 
 /// The values digests a re-record replaced, each still computed by the main commits named under it in
 /// golden/values.previous (the record of what moved, ALICE-Law G8): dropping one is refused
-const KEPT_PREVIOUS: &[(&str, &str)] = &[(
-    "0.6.1",
-    "66b99010e871b2bc099ad5a4dd0f7c34cc5d6731f1c2a0459c0dd58284b081d7",
-)];
+const KEPT_PREVIOUS: &[(&str, &str)] = &[
+    (
+        "0.6.1",
+        "66b99010e871b2bc099ad5a4dd0f7c34cc5d6731f1c2a0459c0dd58284b081d7",
+    ),
+    (
+        "0.6.1",
+        "80aec05517ce040db16a29c4690e38ecfb1fbf127b4e8ee83a21d964d2d5f3bd",
+    ),
+];
 
 #[test]
 fn the_previous_values_digests_are_kept() {

@@ -204,6 +204,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- e2e: `golden/values.digest` を記録し直す (80aec055 → d1a37d5f) 原因は ALICE-Physics 11a457b1..db31ddfb だけ (Fix128 の超越関数を最後に 1 回だけ丸める、PHYSICS_SEMANTICS_ID fcbe6072 → 0d77da7f): 他の repository を今の main にして ALICE-Physics だけ 11a457b1 に戻すと以前の digest を計算する (実測) 以前の digest は `golden/values.previous` と `KEPT_PREVIOUS` に残す
 - `conformance/toolchain-pin-baseline.toml`: 固定をやめた 11 workflow の行を下げる (136 → 125 step、127 → 116 行、436 repository を読んだ結果、増えた行は 0)
 - `conformance/public-text-baseline.toml`: ALICE-LLM の許可 (code 10 行・文書 53 行) で 0 件になった 13 行 (60 件) を下げる (`public_text_live.py --shrink`、436 repository を読んだ結果)
 - `conformance/public-text-commit-ack.toml`: `[acknowledged]` に 1 行 (2026-11-19 の日次の読み取りが見つけた 1 件、その commit は後に全公開 branch から消えた、持ち主がその削除を承認) 行は鍵付きの id だけで、repository と commit は書かない

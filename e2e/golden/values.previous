@@ -10,3 +10,11 @@
 # ALICE-Edge 5de16c5a / ALICE-LLM 0e31e189 / ALICE-LOL 82a01573 / ALICE-Physics 8ea9fb86 / ALICE-SDF 0d5830e3 /
 # ALICE-Serial 16b34ebc / ALICE-Zip c498e176 (the commits of the previous provenance), and as well by the
 # commits of golden/values.provenance with ALICE-Physics at 8ea9fb86
+
+0.6.1 80aec05517ce040db16a29c4690e38ecfb1fbf127b4e8ee83a21d964d2d5f3bd
+# replaced 2026-11-21 by ALICE-Physics 11a457b1..db31ddfb (644c3096: the Fix128 transcendental functions
+# rounded once at the end; 1ea17fac: PHYSICS_SEMANTICS_ID fcbe6072 -> 0d77da7f)
+# computed by: ALICE-Analytics fd09b3e4 / ALICE-Crypto 5ab21f5d / ALICE-DB f717243f / ALICE-DetMath 6269efc2 /
+# ALICE-Edge f57d5172 / ALICE-LOL f620a63d / ALICE-Physics 5e23fdf1 / ALICE-SDF 24b7fc68 / ALICE-Serial 38f306c2 /
+# ALICE-Zip 95ef35ac (the commits of the previous provenance), and as well by the commits of
+# golden/values.provenance with ALICE-Physics at 11a457b1 (measured 2026-11-21)
