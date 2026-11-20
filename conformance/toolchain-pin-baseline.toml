@@ -3,18 +3,8 @@
 # any count above its row (a new one) and on any count below it (stale: lower or drop the row with --write). Fix a
 # row by installing the toolchain with a rustup run step (`rustup toolchain install <channel> --profile minimal`).
 [pins]
-"ALICE-ABM-SaaS/secret-defaults.yml" = 1
-"ALICE-API-Gateway-SaaS/secret-defaults.yml" = 1
-"ALICE-AR-SaaS/secret-defaults.yml" = 1
-"ALICE-ASR-SaaS/secret-defaults.yml" = 1
-"ALICE-Accessibility-SaaS/secret-defaults.yml" = 1
-"ALICE-AgriIoT-SaaS/secret-defaults.yml" = 1
 "ALICE-Analytics/semver-checks.yml" = 1
-"ALICE-Atoms-SaaS/secret-defaults.yml" = 1
-"ALICE-Audit-SaaS/secret-defaults.yml" = 1
-"ALICE-AutoML-SaaS/secret-defaults.yml" = 1
 "ALICE-BIM-SaaS/secret-defaults.yml" = 1
-"ALICE-BackupCloud-SaaS/secret-defaults.yml" = 1
 "ALICE-Bio-SaaS/secret-defaults.yml" = 1
 "ALICE-Blockchain-SaaS/secret-defaults.yml" = 1
 "ALICE-Browser-SaaS/secret-defaults.yml" = 1
@@ -27,7 +17,6 @@
 "ALICE-Cloud-Gateway-SaaS/secret-defaults.yml" = 1
 "ALICE-Codec-Cloud-SaaS/secret-defaults.yml" = 1
 "ALICE-Collaboration-SaaS/secret-defaults.yml" = 1
-"ALICE-Config-SaaS/secret-defaults.yml" = 1
 "ALICE-Container-Cloud/secret-defaults.yml" = 1
 "ALICE-Content-Platform-SaaS/secret-defaults.yml" = 1
 "ALICE-Crypto/semver-checks.yml" = 1

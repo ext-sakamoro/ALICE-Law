@@ -204,6 +204,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- `conformance/toolchain-pin-baseline.toml`: 固定をやめた 11 workflow の行を下げる (136 → 125 step、127 → 116 行、436 repository を読んだ結果、増えた行は 0)
 - `conformance/public-text-baseline.toml`: ALICE-LLM の許可 (code 10 行・文書 53 行) で 0 件になった 13 行 (60 件) を下げる (`public_text_live.py --shrink`、436 repository を読んだ結果)
 - `conformance/public-text-commit-ack.toml`: `[acknowledged]` に 1 行 (2026-11-19 の日次の読み取りが見つけた 1 件、その commit は後に全公開 branch から消えた、持ち主がその削除を承認) 行は鍵付きの id だけで、repository と commit は書かない
 - `conformance/shared-files.toml`: `scripts/fneg_fma_ir_check.py` と試験の移行先を ALICE-Analytics の新しい bytes (sha256 67466411 / 7bfa27c3、blob 6f908880 / 8584c264) へ移す 検査器は crate の `.ll` を固定の `release/deps` でなく cargo の compiler-artifact の知らせ (`.rmeta` の隣) から見つける Rust 1.100 の build-dir は emit した `.ll` を `release/build/<pkg>/<hash>/out/` に置くので、従来の検査器は `.ll` を 0 件と数えて止まった 移行前の bytes (ef2db4d7 / 1a04b973) は `moved_from`、計画した bytes は `conformance/planned/` に置く
