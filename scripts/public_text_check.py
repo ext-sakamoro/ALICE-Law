@@ -445,6 +445,12 @@ ALLOWED: dict[str, dict[str, int]] = {
         "5d453f19b84b8d17468a349ebdb12b9dac5977e334745cd59c9c2a5e6597f44b": 1,
     },
     "7218f32b0e056930aa0b50b7188ffcded8e75ba4f201971c26a746a5a0661bba": {
+        "k:a87d9538e772952c14b4e58b92119c1579346fd1d15db828b19b66c16b3d626c": 1,
+        "k:16d1c424c2f4981afbf97e08b2bc3cb4624bb313dfc195e35943635dcaaae86f": 1,
+        "k:22c23bbfebbf4b5bd03edd16d41f2b2010554452e2fce83976f8dea8fe40e5be": 1,
+        "k:db5e6a87bf455bf7c75bfd26729b64887a43242a277f9ddb8568726243ee95dd": 1,
+        "k:dade9975d1a4ce8236b584db9725673579d52013508e9a7e32927096b86ac261": 1,
+        "k:44e43b876f200501f4a305f5cedeb18e732026024fda0165cffde022c88879dd": 5,
         # the model family the crate implements, named in its public function and their tests (src/llama3.rs only)
         "k:718f3a21158e4056c77fd0bd555d13d1c5084615a9badc3cbd05cc0c5cadb299": 219,
         "k:76d25801587f8527f7dcc0f1cb140cee14559a365a3e6912e14b350d96a80f98": 1,
