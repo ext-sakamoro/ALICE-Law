@@ -114,27 +114,27 @@ CI (`e2e-main.yml`) では repository を並べて checkout し、`scripts/main_
 
 | crate | 版 | main の commit | 順 | repository |
 |---|---|---|---|---|
-| alice-det-math | 0.6.1 | 6269efc2280a | 0 | ALICE-DetMath |
-| alice-crypto | 0.7.0 | 5ab21f5da595 | 1 | ALICE-Crypto |
-| alice-zip | 0.12.0 | 95ef35acd5ae | 2 | ALICE-Zip |
-| alice-zip-cli | 5.0.0 | 95ef35acd5ae | 3 | ALICE-Zip |
-| alice-analytics | 0.7.0 | fd09b3e44710 | 4 | ALICE-Analytics |
-| alice-db | 0.7.2 | f717243f9c40 | 5 | ALICE-DB |
-| alice-llm | 5.0.0 | be521bda68c5 | 6 | ALICE-LLM |
-| alice-lol-macro | 0.4.0 | f620a63d1a83 | 7 | ALICE-LOL |
+| alice-det-math | 0.6.1 | 8a46fde1e289 | 0 | ALICE-DetMath |
+| alice-crypto | 0.7.0 | fa5c668d8ff9 | 1 | ALICE-Crypto |
+| alice-zip | 0.12.0 | 52186410b2f4 | 2 | ALICE-Zip |
+| alice-zip-cli | 5.0.0 | 52186410b2f4 | 3 | ALICE-Zip |
+| alice-analytics | 0.7.0 | b7eaf317295e | 4 | ALICE-Analytics |
+| alice-db | 0.7.2 | 9d567a61a650 | 5 | ALICE-DB |
+| alice-llm | 5.0.0 | adab83280f26 | 6 | ALICE-LLM |
+| alice-lol-macro | 0.4.0 | 0008b7032681 | 7 | ALICE-LOL |
 | alice-law-integration | 0.0.0 | (対象外) | 8 | ALICE-Law |
-| alice-ml | 0.4.0 | 5b3d871c1577 | 9 | ALICE-ML |
-| alice-physics | 4.0.0 | 5e23fdf18315 | 10 | ALICE-Physics |
-| alice-sdf | 7.0.0 | 24b7fc689d11 | 11 | ALICE-SDF |
-| alice-edge | 0.5.0 | f57d5172dac5 | 12 | ALICE-Edge |
+| alice-ml | 0.4.0 | 0de3abd996ea | 9 | ALICE-ML |
+| alice-physics | 4.0.0 | db31ddfbd37c | 10 | ALICE-Physics |
+| alice-sdf | 7.0.0 | a8f4ccd0dd2c | 11 | ALICE-SDF |
+| alice-edge | 0.5.0 | 719bf8b4f92f | 12 | ALICE-Edge |
 | alice-sign | 0.1.0 | 41b19c231f36 | 13 | ALICE-Sign |
-| alice-lol | 0.5.0 | f620a63d1a83 | 14 | ALICE-LOL |
-| alice-kinematics | 0.4.0 | 6919b0feddc4 | 15 | ALICE-Kinematics |
-| alice-identity | 3.0.0 | 0e1809b95fdb | 16 | ALICE-Identity |
-| alice-channel | 0.1.0 | e7de79ffae48 | 17 | ALICE-Channel |
-| alice-sync | 0.8.0 | cb0fbde08363 | 18 | ALICE-Sync |
-| alice-font | 0.8.0 | 696df29e5f91 | 19 | ALICE-Font |
-| alice-os-keystore | 0.2.0 | 99ac2a4e2df0 | 20 | ALICE-OS-Keystore |
+| alice-lol | 0.5.0 | 0008b7032681 | 14 | ALICE-LOL |
+| alice-kinematics | 0.4.0 | c9b7bc9d29b0 | 15 | ALICE-Kinematics |
+| alice-identity | 3.0.0 | 154ab9989de1 | 16 | ALICE-Identity |
+| alice-channel | 0.1.0 | dda5a20f1daa | 17 | ALICE-Channel |
+| alice-sync | 0.8.0 | b11012133f52 | 18 | ALICE-Sync |
+| alice-font | 0.8.0 | d4b6a152b7c6 | 19 | ALICE-Font |
+| alice-os-keystore | 0.2.0 | 5e9acd87d5bd | 20 | ALICE-OS-Keystore |
 
 ### 版まで失敗を予期する step
 
