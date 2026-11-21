@@ -204,6 +204,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- `conformance/toolchain-pin-baseline.toml`: 固定をやめた 96 workflow の行をさらに下げる (125 → 29 step、116 → 20 行、436 repository を読んだ結果、増えた行は 0)
 - `release-train.toml`: e2e の記録し直しに合わせて roster を記録し直す (`release_train.py record --provenance e2e/golden/values.provenance`、19 行を各 main の commit へ、版は変わらない) `release_train.py check` は 20 crate を比べて問題 0
 - e2e: `golden/values.digest` を記録し直す (80aec055 → d1a37d5f) 原因は ALICE-Physics 11a457b1..db31ddfb だけ (Fix128 の超越関数を最後に 1 回だけ丸める、PHYSICS_SEMANTICS_ID fcbe6072 → 0d77da7f): 他の repository を今の main にして ALICE-Physics だけ 11a457b1 に戻すと以前の digest を計算する (実測) 以前の digest は `golden/values.previous` と `KEPT_PREVIOUS` に残す
 - `conformance/toolchain-pin-baseline.toml`: 固定をやめた 11 workflow の行を下げる (136 → 125 step、127 → 116 行、436 repository を読んだ結果、増えた行は 0)
