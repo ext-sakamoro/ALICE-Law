@@ -266,6 +266,26 @@ class AllowTable(KeyState):
         self.assertEqual(ptc.allowed_for("ALICE-Open", None), {ptc.allow_hash("docs/a.md", PUBLIC_WORD): 1})
         self.assertEqual(ptc.allowed_for("ALICE-Hidden", None), {})
 
+    def test_a_plain_entry_allows_a_legacy_name_at_its_path_only_with_and_without_the_key(self):
+        # a name in the legacy plain set matches without the key, so only a plain entry can allow it in a run
+        # without the key (the repository's own CI); it allows that file and no other, and its count holds
+        saved = ptc.ALLOWED, ptc.LEGACY_PRIVATE_NAME_SHA256
+        self.addCleanup(lambda: (setattr(ptc, "ALLOWED", saved[0]),
+                                 setattr(ptc, "LEGACY_PRIVATE_NAME_SHA256", saved[1])))
+        ptc.LEGACY_PRIVATE_NAME_SHA256 = frozenset({hashlib.sha256(b"zorblat quux").hexdigest()})
+        ptc.ALLOWED = {ptc.repo_key("ALICE-Open"): {ptc.allow_hash("src/a.rs", "zorblat quux"): 1}}
+        repo = repo_with({"src/a.rs": "// every zorblat-quux test\n", "src/b.rs": "// every zorblat-quux test\n"})
+        for key in (None, KEY_A):
+            self.use(key)
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = ptc.main(["--repo", str(repo), "--repo-name", "ALICE-Open", "--tree", "HEAD"])
+            text = out.getvalue()
+            self.assertEqual(code, 1, text)
+            self.assertNotIn("src/a.rs:1", text, f"key={key is not None}: the entry allows its own file")
+            self.assertIn("src/b.rs:1: private name", text, f"key={key is not None}: and no other file")
+            self.assertNotIn("allows 0 lines", text)
+
     def test_which_entries_are_keyed(self):
         saved = ptc.PRIVATE_NAME_HASHES
         self.addCleanup(lambda: setattr(ptc, "PRIVATE_NAME_HASHES", saved))
