@@ -69,6 +69,61 @@ class Rules(unittest.TestCase):
                 self.assertEqual(len(npr.compare({"A": scan(**{lint: 1})}, {"A": row()})), 1)
 
 
+class Landing(unittest.TestCase):
+    """--landing: a fall prints the row to lower and passes; a rise against the row or against main, unparsed code,
+    no row and an unreadable main stay red"""
+
+    def land(self, have: dict, row_: dict, main: dict | None, lowered: list[str] | None = None) -> list[str]:
+        return npr.compare({"A": have}, {"A": row_}, landing=True, lowered=lowered,
+                           base=None if main is None else {"A": main})
+
+    def test_a_fall_at_a_landing_names_the_row_and_is_no_finding(self):
+        lowered: list[str] = []
+        self.assertEqual(self.land(scan(panic=1, unwrap=3), row(panic=2, unwrap=3), scan(panic=2, unwrap=3),
+                                   lowered), [])
+        self.assertEqual(lowered, ["A: panic 1 < baseline 2: lower the row [repo.A] panic to 1"])
+
+    def test_a_site_added_back_under_a_stale_row_is_red_against_main(self):
+        # day 0: 10 -> 9 lands against a row of 10 (passes, the row waits to be lowered)
+        self.assertEqual(self.land(scan(unwrap=9), row(unwrap=10), scan(unwrap=10)), [])
+        # a second landing before the row is lowered: 9 -> 10 is <= the row, but above main
+        f = self.land(scan(unwrap=10), row(unwrap=10), scan(unwrap=9))
+        self.assertEqual(len(f), 1)
+        self.assertIn("unwrap 10 > main 9 (a new site against main)", f[0])
+
+    def test_growth_against_the_row_is_red_even_when_main_is_higher(self):
+        f = self.land(scan(expect=5), row(expect=4), scan(expect=6))
+        self.assertEqual(len(f), 1)
+        self.assertIn("expect 5 > baseline 4", f[0])
+
+    def test_a_missing_or_unreadable_main_is_red(self):
+        self.assertIn("no read of the main", self.land(scan(), row(), None)[0])
+        self.assertIn("main: 1 file(s) do not parse",
+                      self.land(scan(), row(), scan(unparsed=1, unparsed_files=["x.rs"]))[0])
+        self.assertIn("main: no production Rust code read", self.land(scan(), row(), scan(files=0))[0])
+
+    def test_a_rise_at_a_landing_stays_red_beside_a_fall(self):
+        lowered: list[str] = []
+        f = self.land(scan(panic=1, expect=5), row(panic=2, expect=4), scan(panic=2, expect=5), lowered)
+        self.assertEqual(len(f), 1)
+        self.assertIn("expect 5 > baseline 4", f[0])
+        self.assertEqual(len(lowered), 1)
+
+    def test_unparsed_no_row_and_dropped_code_stay_red_at_a_landing(self):
+        self.assertIn("do not parse", self.land(scan(unparsed=1, unparsed_files=["x.rs"]), row(), scan())[0])
+        self.assertIn("no row", npr.compare({"B": scan()}, {}, landing=True, base={"B": scan()})[0])
+        self.assertIn("drop the row", npr.compare({"C": scan(files=0)}, {"C": row()}, landing=True,
+                                                  base={"C": scan()})[0])
+
+    def test_without_landing_a_fall_stays_red(self):
+        self.assertIn("lower the baseline", npr.compare({"A": scan(panic=1)}, {"A": row(panic=2)}, landing=False)[0])
+
+    def test_landing_needs_only_and_base_needs_landing(self):
+        self.assertEqual(npr.main(["--landing"]), 2)
+        self.assertEqual(npr.main(["--only", "A=.", "--landing"]), 2)
+        self.assertEqual(npr.main(["--only", "A=.", "--base", "."]), 2)
+
+
 class Baseline(unittest.TestCase):
     def test_round_trip(self):
         rows = {"ALICE-A": row(unwrap=3), "ALICE-B": row(todo=1)}
@@ -226,6 +281,43 @@ class OwnFile(unittest.TestCase):
             empty = Path(d) / "empty"
             empty.mkdir()
             self.assertEqual(npr.main(["--only", f"ALICE-Own={empty}", "--baseline", str(own)]), 2)
+
+    def test_a_landing_through_main(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as d:
+            def tree(name: str, n: int) -> Path:
+                root = Path(d) / name
+                (root / "src").mkdir(parents=True, exist_ok=True)
+                body = " + ".join(["x.unwrap()"] * n) if n else "0"
+                (root / "src" / "lib.rs").write_text(f"pub fn f(x: Option<u8>) -> u8 {{ {body} }}\n",
+                                                     encoding="utf-8")
+                return root
+            own = Path(d) / "own.toml"
+            main2, land1 = tree("main2", 2), tree("land1", 1)
+            self.assertEqual(npr.main(["--write-own", f"ALICE-Own={main2}", "--baseline", str(own)]), 0)
+            args = ["--baseline", str(own), "--landing"]
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={land1}", "--baseline", str(own)]), 1)  # live: red
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(npr.main(["--only", f"ALICE-Own={land1}", "--base", str(main2), *args]), 0)
+            self.assertIn("landing: ALICE-Own: unwrap 1 < baseline 2: lower the row [repo.ALICE-Own] unwrap to 1 "
+                          "in own.toml", out.getvalue())
+            # main is now at 1 and the row still says 2: a landing back to 2 is red against main
+            main1, land2 = tree("main1", 1), tree("land2", 2)
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={land2}", "--base", str(main1), *args]), 1)
+            # growth against the row, unparsed code, a missing main
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={tree('land3', 3)}", "--base", str(tree('main3', 3)),
+                                       *args]), 1)
+            bad = tree("bad", 1)
+            (bad / "src" / "lib.rs").write_text("pub fn f( {\n", encoding="utf-8")
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={bad}", "--base", str(main2), *args]), 1)
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={land1}", "--base", str(bad), *args]), 1)
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={land1}", *args]), 2)   # --landing needs --base
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={land1}", "--base", str(Path(d) / "absent"), *args]), 2)
+            empty = Path(d) / "empty"
+            empty.mkdir()
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={empty}", "--base", str(main2), *args]), 2)
 
     def test_write_own_refuses_the_shared_baseline(self):
         self.assertEqual(npr.main(["--write-own", "ALICE-Own=."]), 2)
