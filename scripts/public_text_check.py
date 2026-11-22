@@ -1221,27 +1221,23 @@ BASELINE_END = "# <<< " + "generated private repository name baseline <<<"
 PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {
     "02a148b01541d8673d3b2ada504d8e3cdcf7725fefaac791004ff60620516970": {
         "039c868536717ce1806ea8ebe24b2b5800106e1ff6c90dc140ffeea8367ffef6": 1,
-        "2092cecc80d2f3894406895e710b05e477afc3542fa6f8ab9ce080c8d86c1633": 1,
         "262257dfbe122d3bfce69dea7184fe68613fc4cb7e16e636a41e8de85534b871": 1,
         "27a55539ce71bad2d8e87b5e49dcc9755cb03e3bbac007afdb4fb7b2bfb2edaf": 3,
         "30a9fe344e738343637a6f5d5fd9fdb2992cf9b6cb042228ac7f85d06cb929f0": 2,
         "354d76ac9151c2622d032bbc7fa1215c8f8a47b3e4fead6c5fc0574ed824f874": 15,
-        "360886e3824af8fda73f01a620ae166cbd16294762d7bd7826bb21445b20fe3f": 5,
+        "360886e3824af8fda73f01a620ae166cbd16294762d7bd7826bb21445b20fe3f": 4,
         "3a695a671527dff4c358fa6cb120ae4198adc024f37dbf6901c6e0c0f462f00d": 5,
         "3c155798391a71fe4bf41c0c293d7a493a7c5dd3f96d366ab8b416c404e2f72d": 4,
         "3f6099da731834958fc099e1445dc648125bd68b0c17a00a87029dfc130bb316": 1,
         "50c135154398ac5d4ad90cee1ec8aaa49ef6118850b7a9394c9564cdc154bcbf": 5,
         "594f0faf9a9202ff1d655f4444071c41fa13e3d40264bee0e78ce578c338fd62": 3,
-        "6d5a3846922386bea9056d3c2a40f1c6b8649dddd1b47264a5eb808540a1f27b": 1,
         "78abf593ac510ccb283488a44898a85dad094741b39fc391190cbcd745bf3489": 1,
         "802e32b53768f899afd3ae0f2fe95ce51aece5009f6bd35ee35d80559bf5ec09": 2,
         "b770f5deace8d2940d7ead36260acbb9ca68150907dd1780856875b4c3505b52": 2,
         "c5ba5662d0c565c74df86fbfddf187178675dbc6a8d46f367624c4b9cc517c34": 1,
-        "c81a169b02e830dc09b8e213a9d1e19557a0d28db494a333385a2a037cbf5e38": 1,
         "cb0a406ee68847330921a9079f8bbc08fb666f9aaf35bd2124923f2d9e0b97ea": 7,
         "cbfa97f14e809aca38da3cd0a2303f8990f0c613a2f52feb7fd0ea769b0e5eab": 7,
         "d2a86d3cd681927713c1666a3ad7bfe84b97217aec7ae33cb077a4af3344917b": 1,
-        "d3c4b99d9566f9fb5c1f47536a14c554885b76b73a35d0772c89eb99ff378190": 1,
         "f62cc9dc4dbd72ddbad21d43a664dcb29416ae68aa675413c0cae0c022bafd40": 2,
         "fccfb9e3b68bbd16185e443777d3b7bae3e25eccafad48d2c09f01649e0484fe": 2,
     },
@@ -1432,7 +1428,6 @@ PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {
         "8c8d3376517e68ec03052752a9dbb5edf96c2c1b00a2aeaec3abf4863201375d": 2,
     },
     "7d128cb8fb3d29d456bebb86adcc9944ec00909a9c4164cf54c75fbc8909a521": {
-        "bd2db41d17fac9e58bfb1cd1a794f8619c2bbc7dbb41de0f41d889b6b513354c": 3,
         "ff420f97255ff4a68ed2c8cb9cf67b21ede1666aaa199f83d01541e3deb59555": 1,
     },
     "84a67b619d09a4c7c1b7c87d0f83d3f40350be0131a8db355676a7fad09b116d": {
@@ -1495,7 +1490,7 @@ PRIVATE_REPO_NAME_BASELINE: dict[str, dict[str, int]] = {
         "c77a9cd06467e94c155c4389a60712d039cc6064ab6067f199b23de9ebe6636b": 1,
     },
 }
-PRIVATE_REPO_NAME_BASELINE_DATE = "2026-11-16"
+PRIVATE_REPO_NAME_BASELINE_DATE = "2026-11-22"
 # <<< generated private repository name baseline <<<
 # (path, name) -> lines, while a tree is read for the baseline (None: every line naming one is a finding)
 REPO_NAME_COUNTS: dict[tuple[str, str], int] | None = None
