@@ -2,7 +2,7 @@
 """The no-panic ratchet: every repository's production panic sites may only go down.
 
     no_panic_ratchet.py [--owner NAME] [--local NAME=DIR] [--jobs N]
-    no_panic_ratchet.py --only NAME=DIR [--baseline OWN.toml]
+    no_panic_ratchet.py --only NAME=DIR [--baseline OWN.toml] [--landing --base MAINDIR]
     no_panic_ratchet.py --write-baseline
     no_panic_ratchet.py --write-own NAME=DIR --baseline conformance-own/no-panic.toml
 
@@ -22,6 +22,14 @@ The rules, on every repository read:
     the count rise back unnoticed);
   * a repository with production Rust code and no row is red; a repository whose code does not parse is red;
   * 0 files read over all the repositories is red (a check that compared nothing passes nothing).
+At a landing (--landing, with --only: the push gate of a repository landing on its main) a count below the row is
+not red: the landing prints one line naming the row to lower ("lower the row ... in <baseline>") and passes, so a
+repository that removes sites is not held until the row is lowered; the baseline's owner lowers the row within a day
+of the landing. The limit at a landing is the smaller of the row and the count of the main being landed onto
+(--base, required with --landing: a checkout of the repository's current main, read with the same scanner): while a row waits to be lowered,
+a second landing that adds a site back is red against main, never hidden under the stale row. A count above the row
+or above main, a file that does not parse (in the landing or in main), no row, and 0 files read (in either) stay red.
+The live check (the default mode) keeps a decrease red until the row is lowered.
 When a repository reaches 0 for a lint, its row keeps the 0: from then on the repository carries
 `#![deny(clippy::<lint>)]` at its crate roots and the ratchet holds it at 0 even if the deny is removed.
 
@@ -112,9 +120,25 @@ def load_baseline(path: Path = BASELINE) -> dict[str, dict[str, int]]:
     return rows
 
 
-def compare(read: dict[str, dict], baseline: dict[str, dict[str, int]]) -> list[str]:
-    """findings for the repositories read (key → scan); a repository with no production Rust code is not compared"""
+def compare(read: dict[str, dict], baseline: dict[str, dict[str, int]], landing: bool = False,
+            lowered: list[str] | None = None, base: dict[str, dict] | None = None) -> list[str]:
+    """findings for the repositories read (key → scan); a repository with no production Rust code is not compared;
+    with `landing`, a count below the row is no finding but a line in `lowered` naming the row to lower, and a count
+    above the scan of the main being landed onto (`base`, required) is a new site against main"""
     out = []
+    if landing:
+        for k in sorted(read):
+            b = (base or {}).get(k)
+            if b is None:
+                out.append(f"{k}: no read of the main being landed onto (a landing compares against main: pass --base)")
+            elif b["unparsed"]:
+                out.append(f"{k}: main: {b['unparsed']} file(s) do not parse ({', '.join(b['unparsed_files'][:5])})")
+            elif b["files"] == 0 and read[k]["files"]:
+                out.append(f"{k}: main: no production Rust code read (a landing compares against main)")
+            else:
+                for lint in LINTS:
+                    if read[k][lint] > b[lint]:
+                        out.append(f"{k}: {lint} {read[k][lint]} > main {b[lint]} (a new site against main)")
     for k in sorted(read):
         s = read[k]
         if s["unparsed"]:
@@ -131,6 +155,9 @@ def compare(read: dict[str, dict], baseline: dict[str, dict[str, int]]) -> list[
             have, base = s[lint], row[lint]
             if have > base:
                 out.append(f"{k}: {lint} {have} > baseline {base} (a new site)")
+            elif have < base and landing:
+                if lowered is not None:
+                    lowered.append(f"{k}: {lint} {have} < baseline {base}: lower the row [repo.{k}] {lint} to {have}")
             elif have < base:
                 out.append(f"{k}: {lint} {have} < baseline {base} (lower the baseline in this commit)")
     return out
@@ -199,7 +226,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--write-baseline", action="store_true")
     ap.add_argument("--write-own", help="NAME=DIR: write the one row of NAME, read from DIR, to --baseline")
     ap.add_argument("--baseline", type=Path, default=BASELINE)
+    ap.add_argument("--landing", action="store_true",
+                    help="with --only and --base: a count below the row prints the row to lower and passes; growth "
+                         "against the row or against main stays red")
+    ap.add_argument("--base", help="with --landing: a checkout of the repository's current main")
     a = ap.parse_args(argv)
+    if a.landing and not a.only:
+        print("no_panic_ratchet: --landing reads one repository: pass --only NAME=DIR", file=sys.stderr)
+        return 2
+    if a.landing and not a.base:
+        print("no_panic_ratchet: --landing compares against the main being landed onto: pass --base MAINDIR",
+              file=sys.stderr)
+        return 2
+    if a.base and not a.landing:
+        print("no_panic_ratchet: --base is the main a landing compares against: pass --landing", file=sys.stderr)
+        return 2
     bin_ = scanner()
 
     if a.write_own:
@@ -243,10 +284,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     baseline = load_baseline(a.baseline)
+    base_read: dict[str, dict] = {}
     if a.only:
         name, _, d = a.only.partition("=")
         read = {name: scan_dir(bin_, Path(d))}
         errors: list[str] = []
+        if a.base:
+            if not Path(a.base).is_dir():
+                print(f"no_panic_ratchet: --base {a.base}: not a directory", file=sys.stderr)
+                return 2
+            base_read[name] = scan_dir(bin_, Path(a.base))
     else:
         local = None
         if a.local:
@@ -258,7 +305,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"no_panic_ratchet: {e}", file=sys.stderr)
             return 2
     files = sum(s["files"] for s in read.values())
-    findings = compare(read, baseline)
+    lowered: list[str] = []
+    findings = compare(read, baseline, landing=a.landing, lowered=lowered, base=base_read)
     if not a.only:
         listed = set(read)
         for k in sorted(baseline):
@@ -268,6 +316,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"no_panic_ratchet: unreadable: {e}", file=sys.stderr)
     for f in findings:
         print(f"no_panic_ratchet: {f}")
+    for line in lowered:
+        print(f"no_panic_ratchet: landing: {line} in {a.baseline.name}")
     sites = sum(s[lint] for s in read.values() for lint in LINTS)
     print(f"no_panic_ratchet: {len(read)} repositories read, {files} production files, {sites} sites, "
           f"{len(findings)} finding(s)")
