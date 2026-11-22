@@ -467,7 +467,10 @@ ALLOWED: dict[str, dict[str, int]] = {
         "k:44e43b876f200501f4a305f5cedeb18e732026024fda0165cffde022c88879dd": 5,
         # the model family the crate implements, named in its public function and their tests (src/llama3.rs only)
         "k:718f3a21158e4056c77fd0bd555d13d1c5084615a9badc3cbd05cc0c5cadb299": 219,
-        "k:76d25801587f8527f7dcc0f1cb140cee14559a365a3e6912e14b350d96a80f98": 1,
+        # the two-word spelling on 1 line: its plain SHA-256 is in LEGACY_PRIVATE_NAME_SHA256, which also matches
+        # without the key, so the entry is plain (a keyed one is left out of a run without the key and the line
+        # was a finding in the repository's own CI); it allows only this file
+        "84eee6cc62aed1d932024ac92298c60fbf3867a941d95a55406c2c247a249728": 1,
         # the same model family in the other source files, the examples and the changelog (the supported
         # architectures are product documentation); commit messages are not allowed
         "k:00766575d81d1ab3d1534c8a7047f9e0a9da388d7a7dc5ec0085a2e1788156ec": 16,
