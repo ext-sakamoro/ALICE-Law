@@ -7,6 +7,7 @@
     public_text_commits_live.py --judge FILE [--ack FILE]   (the hits a read wrote, against the acknowledged ones)
     public_text_commits_live.py --check-ack [--ack FILE]   (only parse the acknowledgement file)
     public_text_commits_live.py --resolve ID [ID ...]      (on a machine with the name key; refused in CI)
+    public_text_commits_live.py --exception-id REPOSITORY FILE KIND   (an [excepted] row's id; refused in CI)
 
 A public repository's own CI runs the public text check without the name key (the unkeyed half only); the keyed
 half runs at push, on a machine whose push hook has the key, and here. The tree of every default branch is read
@@ -20,7 +21,9 @@ as its kind and a keyed id only: HMAC-SHA256 under the name key of "<repository>
 Only a holder of the key can map an id back (--resolve, run on that machine). A hit in a commit can not be
 removed by a later commit (it is in the history; rewriting public history is the owner's decision), so a hit is
 acknowledged in conformance/public-text-commit-ack.toml by its keyed id, citing that decision with its date. A hit
-that is not acknowledged is a finding.
+that is not acknowledged is a finding. An [excepted] row is the owner's decision that a word-list kind is allowed in
+one file of one repository (a keyed scope): every hit of that kind in that file is reviewable under it and needs no
+row of its own. A finding with no commit (a settings allow row the window overflows) keeps its file, row and kind.
 
 The window: the last --days days (7), widened back to the day before the previous complete read. The previous
 complete read is the newest scheduled or dispatched run of the Conformance (live) workflow on main whose read step
@@ -105,18 +108,27 @@ def hit_id(key: bytes, repo: str, sha: str, kind: str, where: str) -> str:
     return hmac.new(key, f"{repo}\0{sha}\0{kind}\0{where}".encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+ALLOW_ROW_RE = re.compile(r"^(\.public-text\.toml): allow (.+) / ([a-z][a-z ]*[a-z]) allows \d+ lines, ")
+
+
 def parse_hit(finding: str) -> tuple[str, str, str]:
     """(commit, kind, where) of a finding line of public_text_check.py --commits: "commit <12 hex> <where>: <kind>";
-    a finding that names no commit (a settings entry) is ("-", the finding, "")"""
+    a finding that names no commit (a settings entry) has no commit ("-"): an allow row that allows fewer lines than
+    the window adds keeps its file, its row and its class as the kind ("-", class, "<file>: allow <path> / <class>",
+    without the counts, so the place is the same from run to run); any other is ("-", OUTSIDE, its file)"""
     m = COMMIT_RE.match(finding)
     if m is None:
-        return "-", OUTSIDE, ""
+        r = ALLOW_ROW_RE.match(finding)
+        if r is not None:
+            return "-", r.group(3), f"{r.group(1)}: allow {r.group(2)} / {r.group(3)}"
+        head, sep, _ = finding.partition(": ")
+        return "-", OUTSIDE, head if sep else ""
     rest = m.group(2)
     where, sep, kind = rest.rpartition(": ")
     return m.group(1), (kind if sep else rest), (where if sep else "")
 
 
-ACK_TABLES = ("[acknowledged]", "[reviewed]")
+ACK_TABLES = ("[acknowledged]", "[reviewed]", "[excepted]")
 
 
 # the kinds a [reviewed] row may clear: the unkeyed word-list kinds, a use of a common word that a reader can judge
@@ -151,11 +163,42 @@ def load_ack(text: str) -> dict[str, tuple[str, str]]:
 
 
 def clears(ack: dict[str, tuple[str, str]], kind: str, hid: str) -> bool:
-    """an [acknowledged] row clears its hit; a [reviewed] row only a hit of a kind in REVIEWABLE"""
+    """an [acknowledged] row clears its hit; a [reviewed] row only a hit of a kind in REVIEWABLE; an [excepted] row
+    names a scope, never a hit (see excepted)"""
     row = ack.get(hid)
-    if row is None:
+    if row is None or row[0] == "[excepted]":
         return False
     return row[0] == "[acknowledged]" or kind in REVIEWABLE
+
+
+def exception_id(key: bytes, repo: str, path: str, kind: str) -> str:
+    """the keyed id of an exception's scope: one repository, one file, one word-list kind"""
+    return hmac.new(key, f"exception\0{repo}\0{path}\0{kind}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def place_path(where: str) -> str | None:
+    """the file a place is in: "<file>:<line>" (an added line) or "<settings file>: allow <file> / <class>" (an allow
+    row); a message line, an added path or another settings finding has none"""
+    r = re.match(r"^\.public-text\.toml: allow (.+) / [a-z][a-z ]*[a-z]$", where)
+    if r is not None:
+        return r.group(1)
+    if where.startswith(("message:", "path ")):
+        return None
+    path, sep, line = where.rpartition(":")
+    return path if sep and line.isdigit() else None
+
+
+def excepted(ack: dict[str, tuple[str, str]], key: bytes, repo: str, kind: str, where: str) -> bool:
+    """an [excepted] row (the owner's decision that a word-list kind is allowed in one file of one repository, by its
+    keyed scope) clears every hit of that kind in that file, an allow row of that file and class included: the hit is
+    reviewable under the decision and needs no row of its own; a kind outside REVIEWABLE is never excepted"""
+    if kind not in REVIEWABLE:
+        return False
+    path = place_path(where)
+    if path is None:
+        return False
+    row = ack.get(exception_id(key, repo, path, kind))
+    return row is not None and row[0] == "[excepted]"
 
 
 def window_commits(g: Path, start: datetime.date) -> list[str]:
@@ -468,6 +511,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--resolve", nargs="+", metavar="ID",
                     help="print the full keyed id, repository, commit and place of each id (on a machine with the "
                          "key)")
+    ap.add_argument("--exception-id", nargs=3, metavar=("REPOSITORY", "FILE", "KIND"),
+                    help="print the keyed id of an [excepted] row for this repository, file and word-list kind (on a "
+                         "machine with the key)")
     ap.add_argument("--check-ack", action="store_true",
                     help="only parse the acknowledged-hit file (no key, no network; the ci/ branch check)")
     a = ap.parse_args(argv)
@@ -491,6 +537,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: the name key is not set ({ptc.NAME_KEY_ENV}): the keyed check can not run", file=sys.stderr)
         return 2
     in_ci = bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"))
+    if a.exception_id:
+        if in_ci:
+            print("error: --exception-id takes a repository: it runs on a key holder's machine, not in CI",
+                  file=sys.stderr)
+            return 2
+        repo, path, kind = a.exception_id
+        if kind not in REVIEWABLE:
+            print(f"error: only a word-list kind ({', '.join(sorted(REVIEWABLE))}) can be excepted, not {kind!r}",
+                  file=sys.stderr)
+            return 2
+        print(exception_id(key, repo, path, kind))
+        return 0
     if a.resolve and in_ci:
         print("error: --resolve prints repositories and commits: it runs on a key holder's machine, not in CI",
               file=sys.stderr)
@@ -547,11 +605,26 @@ def main(argv: list[str] | None = None) -> int:
     for e in errors:
         # the full error names the repository: only its class is printed where the output is public
         print(f"couldn't read: {e}" if a.resolve else f"couldn't read: {e.split(':', 1)[-1].split(':', 1)[0].strip()}")
+    try:
+        ack = read_ack(a.ack)
+    except (OSError, Unreadable) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     hits = []
+    excepted_n = 0
     for name, found in read.items():
         for f in found:
             sha, kind, where = parse_hit(f)
+            if excepted(ack, key, name, kind, where):
+                excepted_n += 1
+                continue
             hits.append((hit_id(key, name, sha, kind, where), kind, name, sha, where))
+    # a settings finding of a repository read now used to be one hit per repository under OUTSIDE with no place; it
+    # is a finding of the window (no commit), so this read finds it again under its place: the old form is dropped
+    # from the carried hits of the repositories read now, never from one that was not read
+    legacy = {hit_id(key, name, "-", OUTSIDE, "") for name in read}
+    superseded = [(k, h) for k, h in carried if k == OUTSIDE and h in legacy]
+    carried = [(k, h) for k, h in carried if (k, h) not in superseded]
     if a.resolve:
         want = set(a.resolve)
         for hid, kind, name, sha, where in hits:
@@ -560,6 +633,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print(f"public text commits: {len(repos)} public repositories, {len(read)} read, {len(errors)} unread, "
           f"{commits} commits read since {start.isoformat()}, {len(hits)} hits")
+    if excepted_n:
+        print(f"public text commits: {excepted_n} findings inside an [excepted] scope (reviewable under the owner's "
+              f"decision, no row of their own)")
+    for kind, hid in superseded:
+        print(f"public text commits: carried {kind} {hid[:16]} is read again under its place (a settings finding of "
+              f"the window)")
     print("public text commits: not read here: commits on branches deleted or force-pushed away inside the window "
           "before this run, and commits with a committer date older than the window (the push hook reads those)")
     if errors or not read:
@@ -570,11 +649,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {problem}", file=sys.stderr)
         return 2
     lines = [(kind, hid) for hid, kind, *_ in hits]
-    try:
-        ack = read_ack(a.ack)
-    except (OSError, Unreadable) as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
     # carried and new, each once, the acknowledged dropped (an acknowledged hit is never carried again)
     seen: set[str] = set()
     merged = []
