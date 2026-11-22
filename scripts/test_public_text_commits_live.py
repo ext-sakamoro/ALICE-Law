@@ -13,6 +13,9 @@
   - --read-out writes kind and keyed id only and exits 0 on hits; --judge exits 1 on a new hit or a gap
   - 0 commits read while a repository was pushed to inside the window: a problem, not a pass
   - --resolve maps an id back to repository and commit on a key holder's machine, and is refused under CI
+  - a finding with no commit keeps its file, row and kind; an [excepted] row (keyed scope: repository, file,
+    word-list kind) clears every hit of that kind in that file and nothing else; the old placeless form of a
+    settings hit is not carried for a repository read now
 """
 from __future__ import annotations
 
@@ -275,8 +278,21 @@ class CommitsLive(unittest.TestCase):
         self.assertIn("couldn't read:", p.stdout)
         self.assertNotIn("ALICE-Broken", p.stdout + p.stderr)
 
-    def test_a_finding_outside_the_commits_gets_a_fixed_kind(self):
-        self.assertEqual(pcl.parse_hit(".public-text.toml: allow line names a path"), ("-", pcl.OUTSIDE, ""))
+    def test_a_finding_outside_the_commits_keeps_its_file_row_and_kind(self):
+        # an allow row that the window overflows: its file, its row and its class, without the counts
+        row = ".public-text.toml: allow CHANGELOG.md / device"
+        self.assertEqual(pcl.parse_hit(f"{row} allows 2 lines, --no-walk {'a' * 40} adds 5"), ("-", "device", row))
+        self.assertEqual(pcl.parse_hit(f"{row} allows 2 lines, 3 at {'b' * 12}"), ("-", "device", row))
+        # any other finding with no commit: the fixed kind, and its file as the place
+        self.assertEqual(pcl.parse_hit(".public-text.toml: allow line names a path"),
+                         ("-", pcl.OUTSIDE, ".public-text.toml"))
+        self.assertEqual(pcl.parse_hit("a line with no file"), ("-", pcl.OUTSIDE, ""))
+
+    def test_the_place_path_of_each_form(self):
+        self.assertEqual(pcl.place_path(".public-text.toml: allow CHANGELOG.md / device"), "CHANGELOG.md")
+        self.assertEqual(pcl.place_path("docs/a b.md:12"), "docs/a b.md")
+        for none in ("message:1", "path docs/x.md:1", ".public-text.toml", ""):
+            self.assertIsNone(pcl.place_path(none), none)
 
     def test_zero_commits_read_while_pushed_is_a_problem(self):
         start = datetime.date(2026, 11, 24)
@@ -477,6 +493,121 @@ class CommitsLive(unittest.TestCase):
         sha = git(self.repo, "rev-parse", "side").strip()
         self.assertFalse(pcl.approved_copy(self.repo, f"commit {sha[:12]} .public-text.toml: policy config changed "
                                                       f"(technical-paths)", "main"))
+
+    def overflow(self) -> None:
+        """settings approved before the window allow one device line in CHANGELOG.md; inside the window a branch
+        words it two ways, so the window adds two distinct lines (the tip still holds one)"""
+        self.settings("CHANGELOG.md", extra='count = 1\nwhy = "x"\n')
+        self.save("settings", "2026-11-01T00:00:00Z")
+        git(self.repo, "checkout", "-q", "-b", "side")
+        for n, word in enumerate(("a", "b")):
+            (self.repo / "CHANGELOG.md").write_text(f"- {self.BOARD} {word}\n", encoding="utf-8")
+            self.save(f"changelog {word}", f"2026-11-2{8 + n}T00:00:00Z")
+        git(self.repo, "checkout", "-q", "main")
+
+    def excepted_row(self, repo: str = NAME, path: str = "CHANGELOG.md", kind: str = "device") -> str:
+        return (f'[acknowledged]\n\n[excepted]\n"{pcl.exception_id(bytes.fromhex(KEY), repo, path, kind)}" = '
+                f'"the owner allows the supported models here, decided 2026-12-01"\n')
+
+    def test_an_overflowing_allow_row_is_a_hit_of_its_kind_at_its_row(self):
+        self.overflow()
+        p = self.run_live("--last-success", "none")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        hid = pcl.hit_id(bytes.fromhex(KEY), NAME, "-", "device", ".public-text.toml: allow CHANGELOG.md / device")
+        self.assertIn(f"found: device {hid[:16]}", p.stdout)
+        self.assertNotIn(pcl.OUTSIDE, p.stdout)
+
+    def test_an_excepted_scope_clears_the_overflow_with_no_row_of_its_own(self):
+        self.overflow()
+        self.ack.write_text(self.excepted_row(), encoding="utf-8")
+        p = self.run_live("--last-success", "none")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("1 findings inside an [excepted] scope", p.stdout)
+        self.assertNotIn(NAME, p.stdout + p.stderr)
+
+    def test_an_excepted_scope_clears_nothing_outside_its_repository_file_and_kind(self):
+        self.overflow()
+        for row in (self.excepted_row(repo="ALICE-Other"), self.excepted_row(path="README.md"),
+                    self.excepted_row(kind="agent process")):
+            self.ack.write_text(row, encoding="utf-8")
+            p = self.run_live("--last-success", "none")
+            self.assertEqual(p.returncode, 1, row + p.stdout + p.stderr)
+            self.assertNotIn("[excepted] scope", p.stdout)
+
+    def test_an_excepted_row_never_clears_a_keyed_kind_or_a_hit_by_its_id(self):
+        key = bytes.fromhex(KEY)
+        for kind in ("private name", "private repository name", "private path", "private address", pcl.OUTSIDE):
+            ack = pcl.load_ack(self.excepted_row(kind=kind))
+            self.assertFalse(pcl.excepted(ack, key, NAME, kind, "CHANGELOG.md:3"), kind)
+        ack = pcl.load_ack(self.excepted_row())
+        self.assertTrue(pcl.excepted(ack, key, NAME, "device", "CHANGELOG.md:3"))
+        self.assertTrue(pcl.excepted(ack, key, NAME, "device", ".public-text.toml: allow CHANGELOG.md / device"))
+        self.assertFalse(pcl.excepted(ack, key, NAME, "device", "message:1"))
+        (eid,) = ack
+        self.assertFalse(pcl.clears(ack, "device", eid))
+
+    def test_exception_id_is_printed_off_ci_for_a_word_list_kind_only(self):
+        (self.repo / "docs").mkdir()
+        (self.repo / "docs" / "a.md").write_text("a\n", encoding="utf-8")
+        (self.repo / "CHANGELOG.md").write_text("- start\n", encoding="utf-8")
+        self.save("files", "2026-11-01T00:00:00Z")
+        p = self.run_live("--exception-id", NAME, "CHANGELOG.md", "device")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(p.stdout.strip(), pcl.exception_id(bytes.fromhex(KEY), NAME, "CHANGELOG.md", "device"))
+        p = self.run_live("--exception-id", NAME, "CHANGELOG.md", "private name")
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        p = self.run_live("--exception-id", NAME, "CHANGELOG.md", "device", ci=True)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        # one file of the default branch: a directory, a prefix and an absent file are refused
+        for path in ("docs", "docs/", "CHANGE", "NOTES.md"):
+            p = self.run_live("--exception-id", NAME, path, "device")
+            self.assertEqual(p.returncode, 2, path + p.stdout + p.stderr)
+            self.assertIn("is not one", p.stderr, path)
+
+    def test_a_directory_scope_row_clears_nothing(self):
+        key = bytes.fromhex(KEY)
+        ack = pcl.load_ack(self.excepted_row(path="docs/"))
+        self.assertFalse(pcl.excepted(ack, key, NAME, "device", ".public-text.toml: allow docs/ / device"))
+        self.assertFalse(pcl.excepted(ack, key, NAME, "device", "docs/a.md:1"))
+
+    def carry_legacy(self) -> tuple[str, str, subprocess.CompletedProcess]:
+        key = bytes.fromhex(KEY)
+        old = pcl.hit_id(key, NAME, "-", pcl.OUTSIDE, "")
+        other = pcl.hit_id(key, "ALICE-Gone", "-", pcl.OUTSIDE, "")
+        prev = Path(self.tmp.name, "prev.txt")
+        prev.write_text(f"{pcl.OUTSIDE}\t{old}\n{pcl.OUTSIDE}\t{other}\n", encoding="utf-8")
+        out = Path(self.tmp.name, "hits.txt")
+        p = self.run_live("--last-success", "2026-11-30", "--previous", str(prev), "--read-out", str(out))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        return old, other, p
+
+    def test_the_old_placeless_settings_hit_is_kept_even_when_this_read_places_a_settings_finding(self):
+        # the old id stood for every finding with no commit the repository had then: a placed finding now does not
+        # show which of them came back, so the old id stays
+        self.overflow()
+        self.ack.write_text(self.excepted_row(), encoding="utf-8")
+        old, other, p = self.carry_legacy()
+        text = Path(self.tmp.name, "hits.txt").read_text(encoding="utf-8")
+        self.assertIn(old, text)
+        self.assertIn(other, text)
+        self.assertIn(f"carried {pcl.OUTSIDE} {old[:16]} is an old settings hit with no place", p.stdout)
+
+    def test_the_old_placeless_settings_hit_is_kept_when_this_read_finds_no_settings_finding(self):
+        old, other, p = self.carry_legacy()
+        text = Path(self.tmp.name, "hits.txt").read_text(encoding="utf-8")
+        self.assertIn(old, text)
+        self.assertIn(other, text)
+        self.assertIn(f"carried {pcl.OUTSIDE} {old[:16]} is an old settings hit with no place", p.stdout)
+
+    def test_the_old_placeless_settings_hit_is_cleared_by_an_acknowledged_row_only(self):
+        old = pcl.hit_id(bytes.fromhex(KEY), NAME, "-", pcl.OUTSIDE, "")
+        self.ack.write_text(f'[acknowledged]\n"{old}" = "settings history read, accepted 2026-12-01"\n',
+                            encoding="utf-8")
+        _, other, p = self.carry_legacy()
+        text = Path(self.tmp.name, "hits.txt").read_text(encoding="utf-8")
+        self.assertNotIn(old, text)
+        self.assertIn(other, text)
+        self.assertNotIn(f"{old[:16]} is an old settings hit", p.stdout)
 
     def test_both_tables_are_read_and_nothing_else(self):
         a, b = "a" * 64, "b" * 64

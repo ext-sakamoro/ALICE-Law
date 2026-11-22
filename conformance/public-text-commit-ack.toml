@@ -14,6 +14,13 @@
 # tracker): a name, a repository, a path or an address stays a finding until an [acknowledged] row records the
 # owner's decision. The same use in later commits is allowed only by a scoped entry (a path and the word, or a class
 # for one file), never by removing the word.
+# [excepted]: the owner's decision that a word-list kind is allowed in one file of one repository (a product's own
+# use, such as the printer models it supports). The row is a keyed scope, HMAC-SHA256 under the name key of
+# "exception NUL <repository> NUL <file> NUL <kind>" (public_text_commits_live.py --exception-id, on a machine with
+# the key; FILE must be a file at the default branch, never a directory or a prefix scope); every hit of that kind in
+# that file, the file's allow row overflowing in the window included, is then
+# reviewable under the decision and needs no row of its own. A name, a repository, a path or an address is never
+# excepted. The value cites the decision with its date.
 [acknowledged]
 "0d987c3c9c58c30ea6b07998ef4c2365ac433c66279e8542fd5dbb192865f8a3" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
 "30aa3726b257c4a5f2e48fda3bf4d35d4b823a13b245e1c7d1586789777efcc6" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
@@ -47,3 +54,6 @@
 "e00eec49d08ed7a8863efa70e5d2752fe627cc8add52788d21e6a7995c177597" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
 "f7e8d6c4c6bdc245b9f06cacd3d1c4a12a5dbc89b9242e156851b340a89fa2a1" = "the browser's thread API identifier in code and its documentation, reviewed 2026-11-16"
 "fc7a2a7e362f00e3f3ed04d9dd1ba67c0ed34298195b77127d43f0058adcc583" = "a product preset's enclosure label, reviewed 2026-11-16"
+
+[excepted]
+"5dbfc0af9e42711700f7d05b05f3650891828c843d09fd1e24604ba16000b9e3" = "product-supported printer preset names only, in the change log, allowed by the owner's decision, decided 2026-11-22"
