@@ -69,6 +69,35 @@ class Rules(unittest.TestCase):
                 self.assertEqual(len(npr.compare({"A": scan(**{lint: 1})}, {"A": row()})), 1)
 
 
+class Landing(unittest.TestCase):
+    """--landing: a fall prints the row to lower and passes; a rise, unparsed code, no row stay red"""
+
+    def test_a_fall_at_a_landing_names_the_row_and_is_no_finding(self):
+        lowered: list[str] = []
+        self.assertEqual(npr.compare({"A": scan(panic=1, unwrap=3)}, {"A": row(panic=2, unwrap=3)}, landing=True,
+                                     lowered=lowered), [])
+        self.assertEqual(lowered, ["A: panic 1 < baseline 2: lower the row [repo.A] panic to 1"])
+
+    def test_a_rise_at_a_landing_stays_red_beside_a_fall(self):
+        lowered: list[str] = []
+        f = npr.compare({"A": scan(panic=1, expect=5)}, {"A": row(panic=2, expect=4)}, landing=True, lowered=lowered)
+        self.assertEqual(len(f), 1)
+        self.assertIn("expect 5 > baseline 4", f[0])
+        self.assertEqual(len(lowered), 1)
+
+    def test_unparsed_no_row_and_dropped_code_stay_red_at_a_landing(self):
+        self.assertIn("do not parse", npr.compare({"A": scan(unparsed=1, unparsed_files=["x.rs"])}, {"A": row()},
+                                                  landing=True)[0])
+        self.assertIn("no row", npr.compare({"B": scan()}, {}, landing=True)[0])
+        self.assertIn("drop the row", npr.compare({"C": scan(files=0)}, {"C": row()}, landing=True)[0])
+
+    def test_without_landing_a_fall_stays_red(self):
+        self.assertIn("lower the baseline", npr.compare({"A": scan(panic=1)}, {"A": row(panic=2)}, landing=False)[0])
+
+    def test_landing_needs_only(self):
+        self.assertEqual(npr.main(["--landing"]), 2)
+
+
 class Baseline(unittest.TestCase):
     def test_round_trip(self):
         rows = {"ALICE-A": row(unwrap=3), "ALICE-B": row(todo=1)}
@@ -226,6 +255,33 @@ class OwnFile(unittest.TestCase):
             empty = Path(d) / "empty"
             empty.mkdir()
             self.assertEqual(npr.main(["--only", f"ALICE-Own={empty}", "--baseline", str(own)]), 2)
+
+    def test_a_landing_through_main(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "repo"
+            (root / "src").mkdir(parents=True)
+            lib = root / "src" / "lib.rs"
+            own = Path(d) / "own.toml"
+            lib.write_text("pub fn f(x: Option<u8>) -> u8 { x.unwrap() + x.unwrap() }\n", encoding="utf-8")
+            self.assertEqual(npr.main(["--write-own", f"ALICE-Own={root}", "--baseline", str(own)]), 0)
+            lib.write_text("pub fn f(x: Option<u8>) -> u8 { x.unwrap() }\n", encoding="utf-8")
+            args = ["--only", f"ALICE-Own={root}", "--baseline", str(own)]
+            self.assertEqual(npr.main(args), 1)   # the live form: a fall is red
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(npr.main(args + ["--landing"]), 0)
+            self.assertIn("landing: ALICE-Own: unwrap 1 < baseline 2: lower the row [repo.ALICE-Own] unwrap to 1 "
+                          "in own.toml", out.getvalue())
+            lib.write_text("pub fn f(x: Option<u8>) -> u8 { x.unwrap() + x.unwrap() + x.unwrap() }\n",
+                           encoding="utf-8")
+            self.assertEqual(npr.main(args + ["--landing"]), 1)   # growth stays red
+            lib.write_text("pub fn f( {\n", encoding="utf-8")
+            self.assertEqual(npr.main(args + ["--landing"]), 1)   # unparsed stays red
+            empty = Path(d) / "empty"
+            empty.mkdir()
+            self.assertEqual(npr.main(["--only", f"ALICE-Own={empty}", "--baseline", str(own), "--landing"]), 2)
 
     def test_write_own_refuses_the_shared_baseline(self):
         self.assertEqual(npr.main(["--write-own", "ALICE-Own=."]), 2)
