@@ -24,6 +24,7 @@
 [acknowledged]
 "0d987c3c9c58c30ea6b07998ef4c2365ac433c66279e8542fd5dbb192865f8a3" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
 "30aa3726b257c4a5f2e48fda3bf4d35d4b823a13b245e1c7d1586789777efcc6" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
+"3e69bd82abdca709227b3dd0b651f9b353bcd676383ff4cce5d91b4aec80fb39" = "a legacy record without a place (an old settings hit), its source branches deleted, today's read 0 hits, the place-keeping fix prevents a recurrence, decided 2026-11-23"
 "722290c82e43efda8faf919c6b79b7029a1601748b7ba1e383e321be3d84e323" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
 "8c0b32eedc54139f49f7b29f9bc17ac0a2a3e1eaf0d8748a77876adfdab36e45" = "the commit was removed from every public branch (the owner approved the deletion), decided 2026-11-20"
 "994bd590863fad1c6f04d606743ebcb97f32d613abb040aa4ee4123625e12e74" = "the owner accepted this entry in the public history (removed from the main text, history not rewritten), decided 2026-11-16"
