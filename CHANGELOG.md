@@ -205,6 +205,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- `conformance/shared-files.toml`: `scripts/entropy_guard.py` / `scripts/id_move_check.py` と各試験の計画 4 行は全 copy が target に揃い uniform (source は ALICE-Analytics の main)、その planned の bytes 4 つを外す ほかの pending 行は variants だけ動く (ALICE-DetMath / ALICE-LOL / ALICE-SDF が target に揃った) 数の固定は 1567 → 1631 (4 行の copy 11 + 23 + 10 + 20 = 64)
 - `conformance/public-text-commit-ack.toml`: `[acknowledged]` に 1 行 (場所を持たない古い記録の 1 件、設定の指摘で、元の branch は削除済み、2026-11-23 の読み取りは 0 件、場所を保つ修正で再発しない、持ち主の決定 2026-11-23) 行は鍵付きの id だけで、repository と commit は書かない
 - `conformance/toolchain-pin-baseline.toml`: 固定をやめた 96 workflow の行をさらに下げる (125 → 29 step、116 → 20 行、436 repository を読んだ結果、増えた行は 0)
 - `release-train.toml`: e2e の記録し直しに合わせて roster を記録し直す (`release_train.py record --provenance e2e/golden/values.provenance`、19 行を各 main の commit へ、版は変わらない) `release_train.py check` は 20 crate を比べて問題 0
