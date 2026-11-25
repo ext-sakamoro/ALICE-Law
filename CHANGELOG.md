@@ -435,6 +435,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `tools/no-panic-scan`: `#[cfg(all(test, not(..)))]` のように `all` の直下に `test` がある item と file module を試験のものとして数えない (`all` の中に `not(` が 1 つでもあると本番として数えていた) `test` が `not(..)` / `any(..)` の中にしか無い `all` は従来どおり本番 全公開 repository で数え直して finding 0
 - ci/** の 8 workflow (g1-coverage / holder-baseline / crates-conformance / branch-main / public-text-baseline / runner-pin / no-panic / structural-lint) を `workflow_dispatch` でも走らせる path を変えた push の後に別の commit を積むと、最後の commit ではその push の paths に当たらず run が無く、取り込みの受領が得られなかった
 - G15 (surface claims): この repository の 4 manifest (root / e2e / tools/no-panic-scan / tools/semver-oracle) に `[package.metadata.alice] surfaces` を宣言し、基準の行から undeclared を外す 0 件や件数が減った行を下げる (ALICE-Font の ci-not-built 2 → 1、ALICE-Kinematics の undeclared 4 → 3、ALICE-LOL の undeclared 11 → 10、面を持たない tool / fuzz / probe の crate に surfaces = [] を宣言した ALICE-OS-Keystore 3 → 2 / ALICE-Physics 8 → 5、ALICE-Font は 2 つ宣言して基準の 4 に戻る)
+- `scripts/crates_conformance_ci.py`: 共有 file の表の `own` の行 (repository ごとに持つ path、`repos` が無い) で KeyError になり、catalog や g11_table_gen を変える ci/** の「Crates conformance」が全部 red だった `repos` の無い行は数えない 実の表を読む試験と own の行を含む表の試験を足した
 
 ### Security
 - `scripts/public_text_check.py`: 追跡している file の container (zip / tar / gzip / bzip2 / xz / zstd) の member を区切って読み、読んだ bytes が上限 (`CONTAINER_BUDGET`、512 MiB) を超えた所で止める (以前は member を全部展開してから上限と比べていた) member の数も `CONTAINER_MEMBERS` (65536) までにし、超えた container は読めなかった container として報告する

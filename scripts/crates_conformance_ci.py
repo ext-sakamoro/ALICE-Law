@@ -31,11 +31,13 @@ OWNER = "ext-sakamoro"
 SELF = "ALICE-Law"
 
 
-def table_repos() -> list[str]:
-    text = (ROOT / "conformance" / "shared-files.toml").read_text(encoding="utf-8")
+def table_repos(table: Path | None = None) -> list[str]:
+    """the repositories the shared-files table lists (an `own` row lists none: it records a path each repository
+    keeps for itself)"""
+    text = (table or ROOT / "conformance" / "shared-files.toml").read_text(encoding="utf-8")
     repos: set[str] = set()
     for e in tomllib.loads(text)["file"]:
-        repos |= set(e["repos"])
+        repos |= set(e.get("repos", []))
     return sorted(repos - {SELF})
 
 

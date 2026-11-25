@@ -38,6 +38,21 @@ class Crates(unittest.TestCase):
             code = c.g11(None) if kind == "g11" else c.g15(None)
         return code, buf.getvalue()
 
+    def test_table_repos_skips_own_rows(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            t = Path(d) / "shared-files.toml"
+            t.write_text('[[file]]\npath = "a.py"\nrepos = ["ALICE-B", "ALICE-Law"]\n\n'
+                         '[[file]]\npath = ".github/workflows/ci.yml"\nown = "each repository\'s own"\n\n'
+                         '[[file]]\npath = "b.py"\nrepos = ["ALICE-A"]\n', encoding="utf-8")
+            self.assertEqual(self.saved[0](t), ["ALICE-A", "ALICE-B"])
+
+    def test_table_repos_reads_this_repository_s_table(self):
+        # the real table (own rows included) is read, and lists crates other than this repository
+        got = self.saved[0]()
+        self.assertTrue(got)
+        self.assertNotIn(c.SELF, got)
+
     def test_g11_every_crate_ok(self):
         repos = {"ALICE-A": self.repo("ALICE-A"), "ALICE-B": self.repo("ALICE-B")}
         c.table_repos = lambda: sorted(repos)
