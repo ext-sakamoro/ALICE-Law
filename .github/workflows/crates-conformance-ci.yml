@@ -9,19 +9,13 @@
 name: Crates conformance (ci)
 
 on:
-  # also on demand, so a run can be had at a commit whose own push did not touch the paths below
+  # also on demand
   workflow_dispatch:
   push:
+    # no paths here: GitHub's filter diffs only the commits new to the repository when a push creates a branch,
+    # so a ci/ branch re-pushed with a commit another ref already has (a re-roll of a stack) got no run at all; the
+    # changes job compares with merge-base(origin/main) instead (patterns: .github/paths/crates-conformance-ci.txt)
     branches: ["ci/**"]
-    paths:
-      - "conformance/g11-shared-rows.toml"
-      - "conformance/surface-claims-baseline.toml"
-      - "scripts/g11_table_gen.py"
-      - "scripts/g11_table_check.py"
-      - "scripts/surface_claims_check.py"
-      - "scripts/crates_conformance_ci.py"
-      - "scripts/test_crates_conformance_ci.py"
-      - ".github/workflows/crates-conformance-ci.yml"
 
 permissions:
   contents: read
@@ -31,8 +25,35 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main), another push with
+  # before..after; a manual run always runs; any error runs (fail-closed) — scripts/changed_paths.py
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+      - name: decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --before "$BEFORE" --after "$AFTER" --created "$CREATED" --forced "$FORCED"
+          --patterns-file .github/paths/crates-conformance-ci.txt
+
   crates:
     name: Every crate's G11 table and G15 counts with this branch's catalog and baseline
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -50,3 +71,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/crates_conformance_ci.py g15
+
+  # red when the changes job said run and the check was skipped, cancelled or failed
+  gate:
+    name: Gate
+    if: always()
+    needs: [changes, crates]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"

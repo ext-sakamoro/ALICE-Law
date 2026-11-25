@@ -1,0 +1,12 @@
+# Crates conformance (ci): a change to the G11 catalog, the G15 baseline or their readers
+# (scripts/changed_paths.py decide reads this file; the workflow has no on.push.paths)
+conformance/g11-shared-rows.toml
+conformance/surface-claims-baseline.toml
+scripts/g11_table_gen.py
+scripts/g11_table_check.py
+scripts/surface_claims_check.py
+scripts/crates_conformance_ci.py
+scripts/test_crates_conformance_ci.py
+scripts/changed_paths.py
+.github/paths/crates-conformance-ci.txt
+.github/workflows/crates-conformance-ci.yml
