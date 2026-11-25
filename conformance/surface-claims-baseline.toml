@@ -2,13 +2,64 @@
 # The G15 finding counts by kind each repository is allowed while it adopts the gate; a count
 # only goes down (a lower count than allowed is a stale row and fails too).
 
+[repository."ALICE-API"]
+"ci-not-built" = 1
+"readme" = 1
+"undeclared" = 2
+
 [repository."ALICE-Analytics"]
 "readme" = 2
 "undeclared" = 3
 
+[repository."ALICE-Audio"]
+"readme" = 2
+"undeclared" = 1
+
+[repository."ALICE-Audit"]
+"readme" = 2
+"undeclared" = 2
+
+[repository."ALICE-Auth"]
+"ci-not-built" = 2
+"ci-not-run" = 1
+"readme" = 1
+"undeclared" = 2
+
+[repository."ALICE-BLE"]
+"readme" = 2
+"undeclared" = 1
+
+[repository."ALICE-Bridge"]
+"readme" = 1
+"undeclared" = 2
+
+[repository."ALICE-Cache"]
+"ci-not-built" = 1
+"ci-not-run" = 1
+"readme" = 1
+"undeclared" = 2
+
 [repository."ALICE-Channel"]
 "readme" = 1
 "undeclared" = 2
+
+[repository."ALICE-Cloud-Gateway"]
+"readme" = 1
+"undeclared" = 1
+
+[repository."ALICE-Codec"]
+"ci-not-built" = 2
+"ci-not-run" = 1
+"readme" = 1
+"undeclared" = 2
+
+[repository."ALICE-Compiler"]
+"readme" = 2
+"undeclared" = 2
+
+[repository."ALICE-Container"]
+"readme" = 1
+"undeclared" = 1
 
 [repository."ALICE-Crypto"]
 "readme" = 1
@@ -20,20 +71,47 @@
 "readme" = 2
 "undeclared" = 3
 
+[repository."ALICE-DataShield"]
+"readme" = 1
+"undeclared" = 3
+
 [repository."ALICE-DetMath"]
 "readme" = 2
 "undeclared" = 4
+
+[repository."ALICE-Drone"]
+"readme" = 2
+"undeclared" = 1
+
+[repository."ALICE-Eco-System"]
+"readme" = 1
+"undeclared" = 1
 
 [repository."ALICE-Edge"]
 "ci-not-run" = 1
 "readme" = 2
 "undeclared" = 4
 
+[repository."ALICE-Ephemeris"]
+"ci-not-built" = 2
+"readme" = 1
+"undeclared" = 5
+
 [repository."ALICE-Font"]
 "ci-not-built" = 1
 "ci-not-run" = 1
 "readme" = 1
 "undeclared" = 4
+
+[repository."ALICE-GameEngine"]
+"ci-not-built" = 1
+"ci-not-run" = 1
+"readme" = 1
+"undeclared" = 1
+
+[repository."ALICE-HTTP"]
+"readme" = 2
+"undeclared" = 1
 
 [repository."ALICE-Identity"]
 "readme" = 1
@@ -54,11 +132,32 @@
 [repository."ALICE-Law"]
 "readme" = 2
 
+[repository."ALICE-Legal"]
+"ci-not-built" = 1
+"readme" = 1
+"undeclared" = 1
+
+[repository."ALICE-LoRa"]
+"readme" = 2
+"undeclared" = 1
+
 [repository."ALICE-ML"]
 "ci-not-built" = 2
 "ci-not-run" = 1
 "readme" = 2
 "undeclared" = 3
+
+[repository."ALICE-MQTT"]
+"readme" = 1
+"undeclared" = 2
+
+[repository."ALICE-Markup"]
+"readme" = 1
+"undeclared" = 3
+
+[repository."ALICE-Navigation"]
+"readme" = 2
+"undeclared" = 1
 
 [repository."ALICE-OS-Keystore"]
 "readme" = 1
@@ -68,10 +167,47 @@
 "readme" = 2
 "undeclared" = 5
 
+[repository."ALICE-Presence"]
+"readme" = 1
+"undeclared" = 1
+
+[repository."ALICE-Queue"]
+"readme" = 1
+"undeclared" = 1
+
 [repository."ALICE-SDF"]
 "ci-not-run" = 2
 
+[repository."ALICE-SIMD"]
+"ci-not-built" = 1
+"readme" = 2
+"undeclared" = 1
+
+[repository."ALICE-Search"]
+"ci-not-built" = 1
+"readme" = 1
+"undeclared" = 1
+
+[repository."ALICE-Settlement"]
+"ci-not-built" = 1
+"readme" = 1
+"undeclared" = 1
+
 [repository."ALICE-Sign"]
+"readme" = 1
+"undeclared" = 2
+
+[repository."ALICE-Signal"]
+"readme" = 2
+"undeclared" = 2
+
+[repository."ALICE-Space"]
+"readme" = 1
+"undeclared" = 1
+
+[repository."ALICE-Streaming-Protocol"]
+"ci-not-built" = 1
+"ci-not-run" = 1
 "readme" = 1
 "undeclared" = 2
 
@@ -81,8 +217,46 @@
 "readme" = 2
 "undeclared" = 4
 
+[repository."ALICE-TRT"]
+"ci-not-built" = 1
+"ci-not-run" = 1
+"readme" = 2
+"undeclared" = 1
+
+[repository."ALICE-Text"]
+"ci-not-run" = 1
+"readme" = 2
+"undeclared" = 2
+
+[repository."ALICE-VCS"]
+"ci-not-built" = 1
+"readme" = 1
+"undeclared" = 1
+
+[repository."ALICE-View"]
+"readme" = 1
+"undeclared" = 3
+
+[repository."ALICE-Voice"]
+"ci-not-built" = 2
+"ci-not-run" = 1
+"readme" = 1
+"undeclared" = 1
+
+[repository."ALICE-WebSocket"]
+"readme" = 2
+"undeclared" = 1
+
 [repository."ALICE-Zip"]
 "ci-not-built" = 1
 "ci-not-run" = 1
+"readme" = 1
+"undeclared" = 7
+
+[repository."ALICE-gRPC"]
+"readme" = 2
+"undeclared" = 1
+
+[repository."text-to-print"]
 "readme" = 1
 "undeclared" = 7
