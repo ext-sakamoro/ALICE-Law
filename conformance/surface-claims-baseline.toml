@@ -70,8 +70,6 @@
 
 [repository."ALICE-SDF"]
 "ci-not-run" = 2
-"readme" = 2
-"undeclared" = 8
 
 [repository."ALICE-Sign"]
 "readme" = 1
