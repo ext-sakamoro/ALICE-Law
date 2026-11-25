@@ -133,6 +133,55 @@ class Gen(unittest.TestCase):
         self.assertGap("G1 is pass and has no row")
         self.assertNotIn("scripts/ban.py", self.table())
 
+    def unlist(self, path: str, extra: str = "") -> None:
+        """the table lists `path` for another repository only, with the crate's bytes recorded as `extra` says"""
+        self.edit(self.law / "conformance/shared-files.toml", f'path = "{path}"\nrepos = ["ALICE-Demo"]',
+                  f'path = "{path}"\n{extra}repos = ["ALICE-Else"]')
+
+    def crate_sha(self, rel: str) -> str:
+        import hashlib
+        return hashlib.sha256((self.crate / rel).read_bytes()).hexdigest()
+
+    def test_an_adopting_copy_with_the_uniform_bytes_is_the_crate_s(self):
+        # the crate's commit that adds a shared checker cannot be listed first: its exact copy counts
+        for rel in ("scripts/ban.py", "scripts/test_ban.py"):
+            self.unlist(rel, f'sha256 = "{self.crate_sha(rel)}"\n')
+        self.assertEqual(self.run_main()[0], 0)
+        self.assertIn('shared = ["scripts/ban.py", "scripts/test_ban.py"]\n', self.table())
+
+    def test_an_adopting_copy_at_a_pending_row_s_target_is_the_crate_s(self):
+        self.unlist("scripts/ban.py", f'pending = {{ target = "{self.crate_sha("scripts/ban.py")}" }}\n')
+        self.assertEqual(self.run_main()[0], 0)
+        self.assertIn('checker = "scripts/ban.py"', self.table())
+
+    def test_a_copy_with_other_bytes_is_not_adopting(self):
+        self.unlist("scripts/ban.py", f'sha256 = "{"0" * 64}"\n')
+        self.assertGap("G1 is pass and has no row")
+
+    def test_a_copy_at_a_pending_row_s_old_variant_is_not_adopting(self):
+        self.unlist("scripts/ban.py", f'pending = {{ target = "{"0" * 64}", variants = {{ '
+                                      f'"{self.crate_sha("scripts/ban.py")}" = ["ALICE-Else"] }} }}\n')
+        self.assertGap("G1 is pass and has no row")
+
+    def test_an_exempted_copy_is_not_adopting(self):
+        self.unlist("scripts/ban.py", f'sha256 = "{self.crate_sha("scripts/ban.py")}"\n'
+                                      'exempt = { "ALICE-Demo" = "its own copy" }\n')
+        self.assertGap("G1 is pass and has no row")
+
+    def test_a_row_without_bytes_does_not_adopt(self):
+        self.unlist("scripts/ban.py")
+        self.assertGap("G1 is pass and has no row")
+
+    def test_an_absent_copy_is_not_adopting(self):
+        self.unlist("scripts/ban.py", f'sha256 = "{self.crate_sha("scripts/ban.py")}"\n')
+        (self.crate / "scripts/ban.py").unlink()
+        self.assertGap("G1 is pass and has no row")
+
+    def test_without_a_byte_reader_nothing_is_adopting(self):
+        self.unlist("scripts/ban.py", f'sha256 = "{self.crate_sha("scripts/ban.py")}"\n')
+        self.assertEqual(gen.adopting([{"path": "scripts/ban.py", "sha256": self.crate_sha("scripts/ban.py"),
+                                        "repos": ["ALICE-Else"]}], NAME, lambda p: None), set())
+
     def test_no_row_where_the_gate_evidence_does_not_name_the_checker(self):
         self.edit(self.crate / "alice-law-conformance.toml", 'evidence = ["scripts/ban.py with', 'evidence = ["a ban with')
         self.assertGap("G1 is pass and has no row")

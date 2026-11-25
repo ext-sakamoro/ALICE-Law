@@ -375,6 +375,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - 依存: alice-zip 0.12 / alice-db 0.7 / alice-edge 0.5 に上げ (本体と e2e)、Cargo.lock を `cargo update -p` で作り直す (alice-lol f620a63、alice-sdf bed9d564、alice-zip 95ef35ac)
 - e2e: `golden/values.digest` を記録し直す (`0.6.1 80aec055…`) 動いたのは世界の位置だけ (720 値のうち 38、どれも 1 ulp、冷却・熱・棒・継ぎ・alice-edge の当てはめ・残差の要約は同じ bits) 原因は ALICE-Physics 8ea9fb86..5e23fdf1 だけ (他を今の main にして ALICE-Physics だけ 8ea9fb86 に戻すと以前の digest に戻る)、その範囲に 1f9eb099 (Fix128 の積を最近接偶数へ丸める) と接触の作り直し、PHYSICS_SEMANTICS_ID 9b356707 → 6edd67f6 → 07035121 alice-db 0.7 / alice-zip 0.12 / alice-edge 0.5 はどの値も動かさない `golden/values.provenance` に commit と原因
 - 基準を下げる方向だけ合わせる: no-panic の ALICE-SDF `unreachable` 15 → 10 (main の実測)、public text の基準から 0 件になった 232 entry を `--shrink` で外す、G1 coverage の definers に ALICE-TRT (G1 の clippy の証拠が main 344ab8d に入ったので `lacking` の行も外す)
+- `scripts/g11_table_gen.py`: crate が表に載る前に持つ共有の検査器の copy (行の bytes と同じ、pending の行は移行先と同じ) も、その crate の行として数える `scripts/shared_files_check.py --repo` が「adopting」として認める copy と同じ判定 表は main がその path を持つ repository だけを載せるので、検査器を足す crate の commit は先に載れず、G1 などの pass の行を持てずに G11 の自己検査が落ちていた 違う bytes・古い variant・exempt・bytes の無い行・無い file は数えない 試験 8 件、変異 6 件 (1 件は同値で該当行を外した) はすべて red
 
 ### Removed
 - `scripts/release_train.py` の crates.io 公開の gate: `next` / `publish-gate` / `publish-verify` / `roster-mark` と、それらが走らせた package・consumer build・semver・secrets・owners・CHANGELOG・tag の検査 (必要になればこの file の履歴から戻す)

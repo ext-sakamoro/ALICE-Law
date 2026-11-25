@@ -8,8 +8,13 @@ A row comes from one of two places:
                                                 alice-law-conformance.toml names the checker in G's evidence,
                                                 G is pass there, and ALICE-Law's conformance/shared-files.toml
                                                 (at the revision .github/shared-files-pin names) lists the
-                                                checker for the crate. `shared` keeps the entry's paths that
-                                                table lists for the crate.
+                                                checker for the crate, or the crate is adopting it: its copy has
+                                                exactly the row's bytes (a uniform row's, or a pending row's
+                                                target), the copy scripts/shared_files_check.py --repo counts
+                                                as "adopting" (the table lists a holder only once its main has
+                                                the path, so a crate's commit that adds a shared checker cannot
+                                                be listed first). `shared` keeps the entry's paths that are the
+                                                crate's in that sense.
   conformance/g11-own.toml (the crate)          the crate's own rows, in the table's row format, copied as
                                                 they are (a checker of its own, or a cargo test oracle).
 The table is the generated rows and the crate's own rows, ordered by gate and checker.
@@ -30,6 +35,7 @@ cannot read what it needs.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import re
@@ -104,8 +110,25 @@ def load_catalog(text: str) -> list[dict]:
     return entries
 
 
-def generate(tree, name: str, law_at, catalog: list[dict]) -> tuple[list[dict], list[str], int]:
-    """(rows, gaps, pass gates); raises ValueError when it cannot read what it needs"""
+def adopting(table: list[dict], name: str, read_bytes) -> set[str]:
+    """the table paths the crate carries without being listed or exempted, with exactly the row's bytes (a uniform
+    row's sha256, or a pending row's target): the same test as shared_files_check.py --repo's "adopting" note.
+    Other bytes, a per-repository row (no bytes to compare) or an unreadable file are not the crate's"""
+    out = set()
+    for f in table:
+        if name in f.get("repos", []) or name in f.get("exempt", {}):
+            continue
+        want = f.get("sha256") or (f.get("pending") or {}).get("target")
+        # at the row's own path (another repository's alternative path is that repository's name for it)
+        data = read_bytes(f["path"]) if f.get("path") else None
+        if data is not None and hashlib.sha256(data).hexdigest() == want:
+            out.add(f["path"])
+    return out
+
+
+def generate(tree, name: str, law_at, catalog: list[dict], read_bytes=None) -> tuple[list[dict], list[str], int]:
+    """(rows, gaps, pass gates); raises ValueError when it cannot read what it needs. `read_bytes(path)` reads a
+    file of the crate's tree as bytes (None when absent); without it no copy counts as adopting"""
     try:
         manifest = tomllib.loads(tree.read(chk.MANIFEST) or "")
     except tomllib.TOMLDecodeError as e:
@@ -140,6 +163,8 @@ def generate(tree, name: str, law_at, catalog: list[dict]) -> tuple[list[dict], 
     except tomllib.TOMLDecodeError as e:
         raise ValueError(f"conformance/shared-files.toml: {e}")
     mine = {f.get("path") for f in table if name in f.get("repos", [])}
+    if read_bytes is not None:
+        mine |= adopting(table, name, read_bytes)
 
     gaps: list[str] = []
     rows: list[dict] = []
@@ -193,8 +218,13 @@ def main(argv: list[str] | None = None) -> int:
         local[rev] = chk.Tree.of_dir(Path(d))
     try:
         catalog = load_catalog(a.catalog.read_text(encoding="utf-8"))
+        def read_bytes(rel: str) -> bytes | None:
+            try:
+                return (a.repo / rel).read_bytes()
+            except OSError:
+                return None
         rows, gaps, gates = generate(chk.Tree.of_dir(a.repo), a.name, lambda rev: local.get(rev) or chk.git_law(rev),
-                                     catalog)
+                                     catalog, read_bytes)
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, ValueError) as e:
         print(f"g11_table_gen: {e}", file=sys.stderr)
         return 2
