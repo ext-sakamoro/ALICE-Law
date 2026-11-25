@@ -179,7 +179,7 @@ class Gen(unittest.TestCase):
 
     def test_without_a_byte_reader_nothing_is_adopting(self):
         self.unlist("scripts/ban.py", f'sha256 = "{self.crate_sha("scripts/ban.py")}"\n')
-        self.assertEqual(gen.adopting([{"path": "scripts/ban.py", "sha256": self.crate_sha("scripts/ban.py"),
+        self.assertEqual(gen.chk.adopting([{"path": "scripts/ban.py", "sha256": self.crate_sha("scripts/ban.py"),
                                         "repos": ["ALICE-Else"]}], NAME, lambda p: None), set())
 
     def test_no_row_where_the_gate_evidence_does_not_name_the_checker(self):

@@ -35,7 +35,6 @@ cannot read what it needs.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import re
@@ -110,22 +109,6 @@ def load_catalog(text: str) -> list[dict]:
     return entries
 
 
-def adopting(table: list[dict], name: str, read_bytes) -> set[str]:
-    """the table paths the crate carries without being listed or exempted, with exactly the row's bytes (a uniform
-    row's sha256, or a pending row's target): the same test as shared_files_check.py --repo's "adopting" note.
-    Other bytes, a per-repository row (no bytes to compare) or an unreadable file are not the crate's"""
-    out = set()
-    for f in table:
-        if name in f.get("repos", []) or name in f.get("exempt", {}):
-            continue
-        want = f.get("sha256") or (f.get("pending") or {}).get("target")
-        # at the row's own path (another repository's alternative path is that repository's name for it)
-        data = read_bytes(f["path"]) if f.get("path") else None
-        if data is not None and hashlib.sha256(data).hexdigest() == want:
-            out.add(f["path"])
-    return out
-
-
 def generate(tree, name: str, law_at, catalog: list[dict], read_bytes=None) -> tuple[list[dict], list[str], int]:
     """(rows, gaps, pass gates); raises ValueError when it cannot read what it needs. `read_bytes(path)` reads a
     file of the crate's tree as bytes (None when absent); without it no copy counts as adopting"""
@@ -164,7 +147,7 @@ def generate(tree, name: str, law_at, catalog: list[dict], read_bytes=None) -> t
         raise ValueError(f"conformance/shared-files.toml: {e}")
     mine = {f.get("path") for f in table if name in f.get("repos", [])}
     if read_bytes is not None:
-        mine |= adopting(table, name, read_bytes)
+        mine |= chk.adopting(table, name, read_bytes)
 
     gaps: list[str] = []
     rows: list[dict] = []

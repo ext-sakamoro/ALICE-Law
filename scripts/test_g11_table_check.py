@@ -271,6 +271,45 @@ class Table(unittest.TestCase):
         self.edit("conformance/g11.toml", '"scripts/test_run_tests.py"]', '"scripts/other.py"]')
         self.assertFinding("F6", "scripts/other.py is not a shared-files row")
 
+    def sha(self, rel):
+        import hashlib
+        return hashlib.sha256((self.crate / rel).read_bytes()).hexdigest()
+
+    def unlist(self, rel, extra):
+        self.edit("conformance/shared-files.toml", f'path = "{rel}"\nrepos = ["{NAME}"]',
+                  f'path = "{rel}"\n{extra}repos = ["ALICE-Else"]', root=self.law)
+
+    def test_an_adopting_copy_is_the_crate_s_shared_path(self):
+        # the crate's commit that adds a shared checker cannot be listed first: its exact copy counts
+        self.unlist("scripts/test_run_tests.py", f'sha256 = "{self.sha("scripts/test_run_tests.py")}"\n')
+        self.assertEqual(self.run_main()[0], 0)
+
+    def test_an_adopting_copy_at_a_pending_row_s_target_is_the_crate_s(self):
+        self.unlist("scripts/test_run_tests.py",
+                    f'pending = {{ target = "{self.sha("scripts/test_run_tests.py")}" }}\n')
+        self.assertEqual(self.run_main()[0], 0)
+
+    def test_f6_a_copy_with_other_bytes_is_not_adopting(self):
+        self.unlist("scripts/test_run_tests.py", f'sha256 = "{"0" * 64}"\n')
+        self.assertFinding("F6", "scripts/test_run_tests.py is not a shared-files row")
+
+    def test_f6_an_exempted_copy_is_not_adopting(self):
+        self.unlist("scripts/test_run_tests.py", f'sha256 = "{self.sha("scripts/test_run_tests.py")}"\n'
+                                                 'exempt = { "ALICE-Demo" = "its own" }\n')
+        self.assertFinding("F6", "scripts/test_run_tests.py is not a shared-files row")
+
+    def test_adopting_reads_a_row_s_alternate_paths(self):
+        # as shared_files_check.py --repo walks them: the copy at another repository's alternate path is adopting,
+        # and the row is named by its own path (the path the catalog and the g11 table use)
+        import hashlib
+        data = b"print()\n"
+        files = {"tools/ban.py": data}
+        row = {"path": "scripts/ban.py", "paths": {"ALICE-Else": "tools/ban.py"}, "repos": ["ALICE-Else"],
+               "sha256": hashlib.sha256(data).hexdigest()}
+        self.assertEqual(g.adopting([row], NAME, files.get), {"scripts/ban.py"})
+        self.assertEqual(g.adopting([{**row, "paths": {}}], NAME, files.get), set())
+        self.assertEqual(g.adopting([row], NAME, None), set(), "no byte reader: nothing is adopting")
+
     def test_f6_n_a_while_the_table_lists_the_checker(self):
         self.edit("conformance/g11.toml", 'checker = "scripts/ban.py"', 'checker = "scripts/run_tests.sh"')
         self.assertFinding("F6", "shared is n/a but the shared-files table lists scripts/run_tests.sh")

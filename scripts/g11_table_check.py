@@ -31,8 +31,8 @@ Findings (each fails the run, exit 1):
   F4  a canary or zero reference does not resolve as above
   F5  a row's canary and zero are the same reference (they test different things)
   F6  a shared path is not a row of ALICE-Law's conformance/shared-files.toml (at the revision
-      .github/shared-files-pin names) listing this crate, or shared is "n/a" while that table lists the
-      checker's path for this crate
+      .github/shared-files-pin names) listing this crate (or one the crate is adopting: see adopting()),
+      or shared is "n/a" while that table lists the checker's path for this crate
   F7  the checker is a place on a scripts/run_tests.sh line, and the canary is not a test of a binary
       (tests/<name>.rs of the root or of a workspace package) that line names, or a Rust zero test is in a
       binary it does not name (a unit test of the lib counts as named when the line names `lib`, run_tests.sh's
@@ -83,8 +83,10 @@ FEATURE_RE = re.compile(r'feature\s*=\s*"([^"]+)"')
 class Tree:
     """files of one tree, read by path from the root"""
 
-    def __init__(self, read, paths: set[str]):
-        self.read, self.paths = read, paths
+    def __init__(self, read, paths: set[str], read_bytes=None):
+        # read_bytes(path) -> bytes | None: the file's exact bytes (None for a tree that cannot give them:
+        # then no copy counts as adopting)
+        self.read, self.paths, self.read_bytes = read, paths, read_bytes
 
     @staticmethod
     def of_dir(root: Path) -> "Tree":
@@ -99,7 +101,13 @@ class Tree:
                 return (root / p).read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 return None
-        return Tree(read, paths)
+
+        def read_bytes(p: str) -> bytes | None:
+            try:
+                return (root / p).read_bytes()
+            except OSError:
+                return None
+        return Tree(read, paths, read_bytes)
 
 
 def rust_code(text: str) -> str:
@@ -694,6 +702,28 @@ def git_law(rev: str, url: str = LAW_URL) -> Tree | None:
     return Tree(read, set(ls.stdout.split()))
 
 
+def adopting(table: list[dict], name: str, read_bytes) -> set[str]:
+    """the shared-files rows (by their `path`) the crate carries without being listed or exempted, with exactly
+    the row's bytes (a uniform row's sha256, or a pending row's target) at the row's path or at one of its
+    alternate `paths`: the copies shared_files_check.py --repo counts as "adopting" (the table lists a holder
+    only once its main has the file, so the commit that adds a shared checker to a crate cannot be listed
+    first). Other bytes, a per-repository row (no bytes to compare) or an unreadable file are not the crate's"""
+    import hashlib
+    out = set()
+    if read_bytes is None:
+        return out
+    for f in table:
+        if name in f.get("repos", []) or name in f.get("exempt", {}) or not f.get("path"):
+            continue
+        want = f.get("sha256") or (f.get("pending") or {}).get("target")
+        for rel in sorted({f["path"], *f.get("paths", {}).values()}):
+            data = read_bytes(rel)
+            if data is not None and hashlib.sha256(data).hexdigest() == want:
+                out.add(f["path"])
+                break
+    return out
+
+
 def check(tree: Tree, name: str, law_at) -> tuple[list[str], int, int]:
     """(findings, rows, pass gates); raises ValueError when it cannot read what it needs"""
     try:
@@ -732,6 +762,7 @@ def check(tree: Tree, name: str, law_at) -> tuple[list[str], int, int]:
         except tomllib.TOMLDecodeError as e:
             shared_why = f"conformance/shared-files.toml: {e}"
     mine = {f.get("path") for f in (shared_rows or []) if name in f.get("repos", [])}
+    mine |= adopting(shared_rows or [], name, tree.read_bytes)
 
     out = []
     covered = set()
