@@ -142,6 +142,49 @@ class FalseForms(unittest.TestCase):
         d = base(surfaces='["rust", "browser"]', ci=ci, lib="pub fn f() {}\n")
         self.assertIn("declared-not-found", kinds(d))
 
+    def test_a_cfg_attr_no_mangle_export_is_a_c_surface(self):
+        # an export kept out of the test build only: `#[cfg_attr(not(test), no_mangle)]` (and the unsafe form)
+        ci = BROWSER_CI + "      - run: cargo rustc --crate-type cdylib --features ffi\n"
+        for attr in ("#[cfg_attr(not(test), no_mangle)]", "#[cfg_attr(all(not(test), feature = \"ffi\"), unsafe(no_mangle))]"):
+            with self.subTest(attr=attr):
+                lib = f'#[wasm_bindgen]\npub fn f() {{}}\n{attr}\npub extern "C" fn g() {{}}\n'
+                d = base(surfaces='["rust", "browser", "c"]', readme=table("rust", "browser", "c"), ci=ci, lib=lib)
+                self.assertEqual(kinds(d), [])
+
+    def test_a_cfg_attr_of_something_else_is_not_a_c_surface(self):
+        lib = '#[wasm_bindgen]\npub fn f() {}\n#[cfg_attr(not(test), inline)]\npub extern "C" fn g() {}\n'
+        self.assertEqual(kinds(base(lib=lib)), [])
+
+    def test_wasi_is_credited_only_to_the_crate_the_step_builds(self):
+        sub = '[package]\nname = "alice-x-sub"\nversion = "0.1.0"\n\n[package.metadata.alice]\nsurfaces = ["rust"]\n'
+        for step in ("cargo build --target wasm32-wasip1",
+                     "cargo build -p alice-x --target wasm32-wasip1",
+                     "cargo build --manifest-path Cargo.toml --target wasm32-wasip1"):
+            with self.subTest(step=step):
+                ci = f"on:\n  push:\njobs:\n  j:\n    steps:\n      - run: {step}\n"
+                d = base(surfaces='["rust", "wasi"]', readme=table("rust", "wasi"), ci=ci, lib="pub fn f() {}\n",
+                         extra={"sub/Cargo.toml": sub, "sub/src/lib.rs": "pub fn h() {}\n"})
+                self.assertEqual(kinds(d), [], "the root builds wasi, the sub-crate does not")
+
+    def test_wasi_built_for_a_sub_crate_is_not_the_root_s(self):
+        sub = '[package]\nname = "alice-x-sub"\nversion = "0.1.0"\n\n[package.metadata.alice]\nsurfaces = ["rust", "wasi"]\n'
+        for step in ("      - run: cargo build -p alice-x-sub --target wasm32-wasip1\n",
+                     "      - run: cargo build --manifest-path sub/Cargo.toml --target wasm32-wasip1\n",
+                     "      - working-directory: sub\n        run: cargo build --target wasm32-wasip1\n"):
+            with self.subTest(step=step):
+                ci = "on:\n  push:\njobs:\n  j:\n    steps:\n" + step
+                # the README lists the repository's surfaces (the sub-crate's wasi among them)
+                d = base(surfaces='["rust"]', readme=table("rust", "wasi"), ci=ci, lib="pub fn f() {}\n",
+                         extra={"sub/Cargo.toml": sub, "sub/src/lib.rs": "pub fn h() {}\n"})
+                self.assertEqual(kinds(d), [])
+
+    def test_a_workspace_wide_wasi_build_credits_every_crate(self):
+        sub = '[package]\nname = "alice-x-sub"\nversion = "0.1.0"\n\n[package.metadata.alice]\nsurfaces = ["rust", "wasi"]\n'
+        ci = "on:\n  push:\njobs:\n  j:\n    steps:\n      - run: cargo build --workspace --target wasm32-wasip1\n"
+        d = base(surfaces='["rust", "wasi"]', readme=table("rust", "wasi"), ci=ci, lib="pub fn f() {}\n",
+                 extra={"sub/Cargo.toml": sub, "sub/src/lib.rs": "pub fn h() {}\n"})
+        self.assertEqual(kinds(d), [])
+
     def test_a_csharp_port_is_not_a_unity_binding(self):
         d = base(extra={"vrchat/Udon/T.cs": "class T : UdonSharpBehaviour { float Sdf(float x) { return x; } }",
                         "bindings/Other.cs": '[DllImport("alice_zip")] static extern void g();'})

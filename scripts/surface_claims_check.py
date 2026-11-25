@@ -52,7 +52,9 @@ BUILT_IN_CI = ("browser", "wasi", "c", "python")
 RUN_IN_CI = ("browser", "python")
 
 RX_WASM = re.compile(r"#\[\s*wasm_bindgen\b")
-RX_NO_MANGLE = re.compile(r"#\[\s*(?:unsafe\s*\(\s*)?no_mangle\b")
+# `#[no_mangle]`, `#[unsafe(no_mangle)]`, and the same under `#[cfg_attr(<predicate>, ...)]` (an export kept out of
+# the test build only, e.g. `#[cfg_attr(not(test), no_mangle)]`); a predicate holds no `]`
+RX_NO_MANGLE = re.compile(r"#\[\s*(?:cfg_attr\s*\([^\]]*?,\s*)?(?:unsafe\s*\(\s*)?no_mangle\b")
 RX_EXTERN_C = re.compile(r'\bextern\s+"C"')
 RX_PYO3 = re.compile(r"#\[\s*(?:pyfunction|pymodule|pyclass|pymethods)\b")
 RX_DLLIMPORT = re.compile(r"\[\s*DllImport\s*\(\s*([^,\)]+)")
@@ -188,9 +190,49 @@ def under(rel: str, d: str) -> bool:
     return d == "" or rel == d or rel.startswith(d + "/")
 
 
-def detect(repo: Path, files: list[str], crate: dict, others: list[str], workflows: dict[str, str]) -> dict[str, list[str]]:
+def step_targets(step: str, cs: list[dict]) -> set[str]:
+    """the directories of the crates one workflow step builds: `-p` / `--package NAME`, `--manifest-path PATH`,
+    `--workspace` / `--all`, else the crate at the step's `working-directory` (the repository root without
+    one), or every crate under it when no crate is there (a virtual workspace builds its members)"""
+    names = {c["name"]: c["dir"] for c in cs}
+    dirs = {c["dir"] for c in cs}
+    wd = re.search(r"^\s*(?:-\s+)?working-directory:\s*['\"]?([^'\"\n#]*?)['\"]?\s*(?:#.*)?$", step, re.M)
+    base = (wd[1].strip() if wd else "").removeprefix("./").strip("/")
+    base = "" if base == "." else base
+    if re.search(r"(?<![\w-])--(?:workspace|all)\b", step):
+        return {d for d in dirs if under(d, base)}
+    out: set[str] = set()
+    for m in re.finditer(r"(?<![\w-])(?:-p|--package)(?:\s+|=)['\"]?([A-Za-z0-9_-]+)", step):
+        if m[1] in names:
+            out.add(names[m[1]])
+    for m in re.finditer(r"--manifest-path(?:\s+|=)['\"]?([^\s'\"]+)", step):
+        rel = "/".join(x for x in (base, m[1].removeprefix("./")) if x)
+        out.add(str(Path(rel).parent) if Path(rel).name == "Cargo.toml" else rel.strip("/"))
+    if out:
+        return {"" if d == "." else d for d in out}
+    if base in dirs:
+        return {base}
+    return {d for d in dirs if under(d, base)}
+
+
+def wasi_dirs(cs: list[dict], workflows: dict[str, str]) -> dict[str, str]:
+    """{crate directory: the workflow that builds it for wasm32-wasip1 on push}"""
+    out: dict[str, str] = {}
+    for name, text in workflows.items():
+        if not push_triggered(text):
+            continue
+        for step in run_steps(text):
+            if any(re.search(rx, step) for rx in CI_BUILD["wasi"]):
+                for d in step_targets(step, cs):
+                    out.setdefault(d, name)
+    return out
+
+
+def detect(repo: Path, files: list[str], crate: dict, others: list[str], workflows: dict[str, str],
+           wasi: dict[str, str] | None = None) -> dict[str, list[str]]:
     """the surfaces of `crate` found in the repository, each with the files that show it; `others` are
-    the directories of the other crates (a file under a nested crate belongs to it)"""
+    the directories of the other crates (a file under a nested crate belongs to it); `wasi` maps a crate
+    directory to the workflow that builds that crate for wasm32-wasip1 (wasi_dirs)"""
     d = crate["dir"]
     src = f"{d}/src/" if d else "src/"
     nested = [o for o in others if o != d and (d == "" or o.startswith(d + "/"))]
@@ -221,10 +263,9 @@ def detect(repo: Path, files: list[str], crate: dict, others: list[str], workflo
             if rel.endswith(".h") and any(re.fullmatch(r"(?i)ue[45]|unreal[-_ a-z]*", p) for p in parts) \
                     and RX_EXTERN_C.search(read(repo, rel)):
                 found.setdefault("unreal", []).append(rel)
-    for name, text in workflows.items():
-        if push_triggered(text) and any(re.search(rx, s) for s in run_steps(text) for rx in CI_BUILD["wasi"]):
-            if "rust" in found:
-                found.setdefault("wasi", []).append(name)
+    # wasi only for the crate a wasm32-wasip1 step builds (not every crate of a repository that builds one)
+    if "rust" in found and wasi is not None and d in wasi:
+        found["wasi"] = [wasi[d]]
     return found
 
 
@@ -261,7 +302,8 @@ def check_repo(repo: Path, require_declaration: bool = True) -> tuple[list[tuple
     findings: list[tuple[str, str]] = []
     compared = 0
     union: set[str] = set()
-    founds = {c["manifest"]: detect(repo, files, c, dirs, workflows) for c in cs}
+    wasi = wasi_dirs(cs, workflows)
+    founds = {c["manifest"]: detect(repo, files, c, dirs, workflows, wasi) for c in cs}
     # an engine binding names the library a facade crate is built into, while the extern "C" items may live
     # in the engine crate it re-exports (ALICE-Physics): the c surface is a property of the repository here
     repo_c = any("c" in f or "c" in (c["declared"] or []) for c, f in zip(cs, founds.values()))
