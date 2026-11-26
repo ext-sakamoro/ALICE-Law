@@ -724,6 +724,44 @@ def adopting(table: list[dict], name: str, read_bytes) -> set[str]:
     return out
 
 
+def all_gates_declared(tree: Tree, law_at) -> tuple[bool, str]:
+    """For a crate with no pass gate: (True, summary) when its manifest declares every gate of ALICE-Law's
+    conformance/gates.toml (at the revision .github/shared-files-pin names) with a status of the catalog's
+    vocabulary, none of them pass; (False, why) otherwise. Zero pass gates is then a declared state, not
+    "compared nothing": every declared row was read, and the unverified count shows on each run"""
+    try:
+        manifest = tomllib.loads(tree.read(MANIFEST) or "") if MANIFEST in tree.paths else None
+    except tomllib.TOMLDecodeError as e:
+        return False, f"{MANIFEST}: {e}"
+    if not manifest:
+        return False, f"no {MANIFEST}"
+    rev, why = pin_rev(tree, SHARED_PIN.removeprefix(".github/"))
+    if why:
+        return False, why
+    lt = law_at(rev)
+    text = lt.read("conformance/gates.toml") if lt is not None else None
+    if not text:
+        return False, f"ALICE-Law {rev[:12]} has no conformance/gates.toml (the gate catalog)"
+    try:
+        catalog = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        return False, f"conformance/gates.toml: {e}"
+    vocab = set(catalog.get("status_vocabulary", []))
+    ids = [g.get("id") for g in catalog.get("gate", []) if isinstance(g, dict) and g.get("id")]
+    if not ids or not vocab:
+        return False, "conformance/gates.toml names no gate or no status vocabulary"
+    missing = [g for g in ids if not (isinstance(manifest.get(g), dict) and manifest[g].get("status") in vocab)]
+    if missing:
+        return False, f"{MANIFEST} does not declare {', '.join(missing)} (every gate needs a row)"
+    counts: dict[str, int] = {}
+    for g in ids:
+        counts[manifest[g]["status"]] = counts.get(manifest[g]["status"], 0) + 1
+    if counts.get("pass"):
+        return False, "a gate is pass"
+    detail = ", ".join(f"{k} {counts[k]}" for k in sorted(counts))
+    return True, f"0 pass gates; {len(ids)} of {len(ids)} gates declared ({detail})"
+
+
 def check(tree: Tree, name: str, law_at) -> tuple[list[str], int, int]:
     """(findings, rows, pass gates); raises ValueError when it cannot read what it needs"""
     try:
@@ -827,6 +865,13 @@ def main(argv: list[str] | None = None) -> int:
     for f in found:
         print(f"error: {f}", file=sys.stderr)
     print(f"g11_table: {a.name}: {rows} rows, {gates} pass gates, {len(found)} findings")
+    if rows == 0 and gates == 0:
+        ok, summary = all_gates_declared(Tree.of_dir(a.repo), lambda rev: local.get(rev) or git_law(rev))
+        if ok:
+            print(f"g11_table: {a.name}: {summary}")
+            return 1 if found else 0
+        print(f"g11_table: compared nothing (no row and no pass gate: {summary})", file=sys.stderr)
+        return 2
     if rows == 0 or gates == 0:
         print("g11_table: compared nothing (no row or no pass gate)", file=sys.stderr)
         return 2

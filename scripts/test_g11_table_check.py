@@ -455,6 +455,42 @@ class Table(unittest.TestCase):
         self.edit("conformance/g11.toml", "#- name: Law>scripts/run_tests.sh golden", "#- name: Law>scripts/run_tests.sh other")
         self.assertFinding("F7", "is not a test of a binary this run_tests.sh line names (other)")
 
+    GATES = ('schema_version = 0\nstatus_vocabulary = ["pass", "fail-known", "unverified", "n/a"]\n'
+             + "".join(f'[[gate]]\nid = "{g}"\nname = "g{g}"\n' for g in ("G1", "G4", "G11")))
+
+    def no_pass_shape(self, ids=("G1", "G4", "G11")):
+        write(self.law, {"conformance/gates.toml": self.GATES})
+        write(self.crate, {"alice-law-conformance.toml": "".join(f'[{g}]\nstatus = "unverified"\n\n' for g in ids),
+                           "conformance/g11.toml": "# no row\n"})
+
+    def test_every_gate_declared_and_none_pass_passes_with_its_count(self):
+        self.no_pass_shape()
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("0 pass gates; 3 of 3 gates declared (unverified 3)", out)
+
+    def test_an_undeclared_gate_with_none_pass_is_compared_nothing(self):
+        self.no_pass_shape(ids=("G1", "G4"))
+        rc, out = self.run_main()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("compared nothing", out)
+        self.assertIn("G11", out)
+
+    def test_a_status_outside_the_vocabulary_is_not_declared(self):
+        self.no_pass_shape()
+        self.edit("alice-law-conformance.toml", '[G4]\nstatus = "unverified"', '[G4]\nstatus = "maybe"')
+        rc, out = self.run_main()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("G4", out)
+
+    def test_the_declared_state_is_never_claimed_with_a_pass_gate(self):
+        # all_gates_declared answers only the zero-pass case: a pass gate in the manifest is not that state
+        self.no_pass_shape()
+        self.edit("alice-law-conformance.toml", '[G4]\nstatus = "unverified"', '[G4]\nstatus = "pass"')
+        ok, why = g.all_gates_declared(g.Tree.of_dir(self.crate), lambda rev: g.Tree.of_dir(self.law))
+        self.assertFalse(ok)
+        self.assertIn("pass", why)
+
     def test_no_row_is_compared_nothing(self):
         (self.crate / "conformance/g11.toml").write_text("")
         self.assertEqual(self.run_main()[0], 2)
