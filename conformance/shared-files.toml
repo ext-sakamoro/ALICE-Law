@@ -124,7 +124,7 @@ repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/ci_test_coverage_check.py"
-pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "f6eeb487d933381f0561e2e245d37da4e9f7640983eb7dcdd14b92a177f9436d", owner = "ALICE-SDF", planned = "334fe0701784153bd2948d142acbbc0312a7b10e", moved_from = { planned = "ec7b0efa33f3c0104274bfbb7ab895bd4419658d", target = "103b24f28c8b7a572b8f30002014b8c1ffeb61d45968669c247ec7547d2d8883" }, first_move = true, variants = { "103b24f28c8b7a572b8f30002014b8c1ffeb61d45968669c247ec7547d2d8883" = ["ALICE-LLM", "ALICE-SDF"] } }
+pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "04d22868fdd37fa9e5e09889524fa0f32e22ed205b867f0d46fea1f5b09b9e86", owner = "ALICE-SDF", planned = "566a8cd97b711962cff334379d578acd402798e2", moved_from = { planned = "ec7b0efa33f3c0104274bfbb7ab895bd4419658d", target = "103b24f28c8b7a572b8f30002014b8c1ffeb61d45968669c247ec7547d2d8883" }, first_move = true, variants = { "103b24f28c8b7a572b8f30002014b8c1ffeb61d45968669c247ec7547d2d8883" = ["ALICE-LLM", "ALICE-SDF"] } }
 repos = ["ALICE-LLM", "ALICE-SDF"]
 
 [[file]]
@@ -380,7 +380,7 @@ repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/test_ci_test_coverage_check.py"
-pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "9a9cbf9c491e2f266a35984abe30e71e8c34e61183d50cb99965af17abc71f9e", owner = "ALICE-SDF", planned = "1bf6b2beed961750238a1a8bcb6c8ab8a97c01cb", moved_from = { planned = "47addef408e6d942e37ea9a563046406063f4b2c", target = "47f48d312531bcca14ea46781be509ffcb55ecf71aa57bb5b9f50971c6cd0d51" }, first_move = true, variants = { "47f48d312531bcca14ea46781be509ffcb55ecf71aa57bb5b9f50971c6cd0d51" = ["ALICE-LLM", "ALICE-SDF"] } }
+pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "85100445bb51f76e07789071538bc805d9276c466c66cb778b9fa8a1e86ff119", owner = "ALICE-SDF", planned = "204501de73c403a730513d00d76e7389d6638d2c", moved_from = { planned = "47addef408e6d942e37ea9a563046406063f4b2c", target = "47f48d312531bcca14ea46781be509ffcb55ecf71aa57bb5b9f50971c6cd0d51" }, first_move = true, variants = { "47f48d312531bcca14ea46781be509ffcb55ecf71aa57bb5b9f50971c6cd0d51" = ["ALICE-LLM", "ALICE-SDF"] } }
 repos = ["ALICE-LLM", "ALICE-SDF"]
 
 [[file]]
