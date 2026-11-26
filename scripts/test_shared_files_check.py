@@ -525,6 +525,35 @@ class Private(Base):
         self.assertIn("scripts/data.tsv: per-repository data (no repository holds the row), not compared", out)
         self.assertIn("copies 1", out)
 
+    def test_a_shared_workflow_is_not_held_by_a_private_repository(self):
+        # a shared workflow exists to trigger a hosted run, which a private repository must not have: holding it is a
+        # finding even with the row's bytes, and its absence is not a stale copy
+        wf = {**self.w.uniform(), "path": ".github/workflows/w.yml"}
+        table = self.w.table(self.w.uniform(), wf)
+        code, out = self.private({"scripts/s.sh": SHARED, ".github/workflows/w.yml": SHARED}, table)
+        self.assertEqual(code, 1, out)
+        self.assertIn(".github/workflows/w.yml: a shared workflow is not held by a private repository", out)
+        (Path(self.tmp.name) / "ALICE-P/.github/workflows/w.yml").unlink()
+        code, out = self.private({"scripts/s.sh": SHARED}, table)
+        self.assertEqual(code, 0, out)
+        self.assertIn(".github/workflows/w.yml: shared workflow, not held by a private repository", out)
+        self.assertIn("copies 1", out)
+
+    def test_a_shared_workflow_on_a_pending_row_is_not_held_either(self):
+        wf = {**self.w.pending(), "path": ".github/workflows/w.yml"}
+        table = self.w.table(self.w.uniform(), wf)
+        code, out = self.private({"scripts/s.sh": SHARED, ".github/workflows/w.yml": SHARED}, table)
+        self.assertEqual(code, 1, out)
+        self.assertIn("not held by a private repository", out)
+
+    def test_a_shared_composite_action_is_still_compared(self):
+        # only .github/workflows/ triggers a run; a composite action under .github/actions/ is a plain shared copy
+        act = {**self.w.uniform(), "path": ".github/actions/a/action.yml"}
+        table = self.w.table(self.w.uniform(), act)
+        code, out = self.private({"scripts/s.sh": SHARED, ".github/actions/a/action.yml": SHARED + b"#"}, table)
+        self.assertEqual(code, 1, out)
+        self.assertIn(".github/actions/a/action.yml: sha256", out)
+
     def test_a_private_name_the_table_lists_or_exempts_is_refused(self):
         code, out = self.private({"scripts/s.sh": SHARED}, name="ALICE-A")
         self.assertEqual(code, 2, out)

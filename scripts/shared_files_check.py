@@ -484,6 +484,10 @@ def summary(c: tuple[int, int, int, int]) -> str:
     return f"compared: files {c[0]}, repos {c[1]}, copies {c[2]}, pending {c[3]}"
 
 
+# the shared rows a private repository does not hold: a workflow under this directory triggers a hosted run
+HOSTED_TRIGGER = ".github/workflows/"
+
+
 def check_private(entries: list[dict], root: Path, name: str) -> tuple[list[str], list[str], tuple]:
     """Findings, notes and counts for a private repository's tree: the table lists public repositories
     only, so each table path present is compared with its row directly (never "adopting": no table
@@ -497,6 +501,16 @@ def check_private(entries: list[dict], root: Path, name: str) -> tuple[list[str]
     copies = files = 0
     for e in entries:
         for rel in sorted({e["path"], *e.get("paths", {}).values()}):
+            if rel.startswith(HOSTED_TRIGGER):
+                # a shared workflow exists to trigger a hosted run, which a private repository must not have (its CI
+                # is the local run and the remote receipt): holding one is a finding whatever its bytes, and its
+                # absence is not a stale copy
+                if (root / rel).is_file():
+                    problems.append(f"{rel}: a shared workflow is not held by a private repository (it triggers a "
+                                    "hosted run; run the checker it calls from the repository's own preflight instead)")
+                else:
+                    notes.append(f"{rel}: shared workflow, not held by a private repository")
+                continue
             if not (root / rel).is_file():
                 continue
             want = e["sha256"] if "sha256" in e else e["pending"]["target"] if "pending" in e else None
