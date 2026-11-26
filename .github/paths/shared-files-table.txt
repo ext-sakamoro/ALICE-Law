@@ -1,0 +1,17 @@
+# shared-files-table.yml: the files whose change runs it on push
+# (scripts/changed_paths.py decide reads this file; the workflow has no on.push.paths)
+conformance/**
+scripts/gen_shared_files.py
+scripts/shared_files_check.py
+scripts/test_gen_shared_files.py
+scripts/test_shared_files_check.py
+scripts/holder_mode_check.py
+scripts/test_holder_mode_check.py
+scripts/shared_files_branch_live.py
+scripts/test_shared_files_branch_live.py
+scripts/consumer_table_parse.py
+scripts/test_consumer_table_parse.py
+scripts/ci_base.py
+.github/workflows/shared-files-table.yml
+scripts/changed_paths.py
+.github/paths/shared-files-table.txt

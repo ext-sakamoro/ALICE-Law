@@ -23,21 +23,10 @@ on:
     - cron: "41 4 * * 1"   # Mondays 04:41 UTC
   workflow_dispatch:
   push:
+    # no paths here: GitHub's filter diffs only the commits new to the repository when a push creates a branch,
+    # so a ci/ branch re-pushed with a commit another ref already has got no run; the changes job compares with
+    # merge-base(origin/main) instead (patterns: .github/paths/dependency-consistency.txt)
     branches: [main, "ci/**"]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "release-train.toml"
-      - "README.md"
-      - "docs/CONFORMANCE.md"
-      - "conformance/**"
-      - "e2e/golden/values.provenance"
-      - "e2e/golden/values.digest"
-      - "README_JP.md"
-      - "scripts/**"
-      - ".github/workflows/**"
-      - "tools/**"
-      - ".github/workflows/dependency-consistency.yml"
 
 permissions:
   contents: read
@@ -47,7 +36,34 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main), another push with
+  # before..after; a schedule or manual run always runs; any error runs (fail-closed) — scripts/changed_paths.py
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+      - name: decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --before "$BEFORE" --after "$AFTER" --created "$CREATED" --forced "$FORCED"
+          --patterns-file .github/paths/dependency-consistency.txt
+
   check:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     name: One version per crate, every alice-* package from its main branch
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -303,6 +319,8 @@ jobs:
           exit "$rc"
 
   g11-table-check:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     # G11: the per-crate table of each pass gate's checker, canary, compared-nothing test and shared rows
     # (conformance/g11.toml in a crate, which fetches this checker and its generator at a pin and runs them
     # on ubuntu, macOS and Windows), so their tests run on the same three
@@ -350,3 +368,17 @@ jobs:
         run: |
           py=$(command -v python3 || command -v python)
           "$py" scripts/test_checker_case.py
+
+  # red when the changes job said run and a job was skipped, cancelled or failed
+  gate:
+    name: Gate
+    if: always()
+    needs: [changes, check, g11-table-check]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"

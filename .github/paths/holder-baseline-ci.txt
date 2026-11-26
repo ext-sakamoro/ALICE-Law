@@ -1,0 +1,11 @@
+# holder-baseline-ci.yml: the files whose change runs it on push
+# (scripts/changed_paths.py decide reads this file; the workflow has no on.push.paths)
+conformance/holder-baseline.toml
+scripts/holder_live.py
+scripts/licence_files_check.py
+scripts/test_holder_live.py
+scripts/live_baseline_delta.py
+scripts/test_live_baseline_delta.py
+.github/workflows/holder-baseline-ci.yml
+scripts/changed_paths.py
+.github/paths/holder-baseline-ci.txt

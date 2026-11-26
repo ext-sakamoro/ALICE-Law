@@ -1,0 +1,17 @@
+# dependency-consistency.yml: the files whose change runs it on push
+# (scripts/changed_paths.py decide reads this file; the workflow has no on.push.paths)
+Cargo.toml
+Cargo.lock
+release-train.toml
+README.md
+docs/CONFORMANCE.md
+conformance/**
+e2e/golden/values.provenance
+e2e/golden/values.digest
+README_JP.md
+scripts/**
+.github/workflows/**
+tools/**
+.github/workflows/dependency-consistency.yml
+scripts/changed_paths.py
+.github/paths/dependency-consistency.txt

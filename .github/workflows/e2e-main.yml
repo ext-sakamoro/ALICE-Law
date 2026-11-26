@@ -21,17 +21,10 @@ on:
     - cron: "47 5 * * *"   # daily 05:47 UTC: the siblings' mains change the answer, and no path here sees them
   workflow_dispatch:
   push:
+    # no paths here: GitHub's filter diffs only the commits new to the repository when a push creates a branch,
+    # so a ci/ branch re-pushed with a commit another ref already has got no run; the changes job compares with
+    # merge-base(origin/main) instead (patterns: .github/paths/e2e-main.txt)
     branches: [main, "ci/**"]
-    paths:
-      - "e2e/**"
-      - "scripts/main_mode.py"
-      - "scripts/e2e_teeth.py"
-      - "scripts/expected_failure.py"
-      - "release-train.toml"
-      - "scripts/release_train.py"
-      - "scripts/semver_gate.py"
-      - "scripts/release_baseline.py"
-      - ".github/workflows/e2e-main.yml"
 
 permissions:
   contents: read
@@ -44,7 +37,34 @@ env:
   REPOSITORIES: ALICE-DetMath ALICE-Crypto ALICE-Zip ALICE-Analytics ALICE-DB ALICE-Physics ALICE-SDF ALICE-LOL ALICE-Edge ALICE-LLM
 
 jobs:
+  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main), another push with
+  # before..after; a schedule or manual run always runs; any error runs (fail-closed) — scripts/changed_paths.py
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+      - name: decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --before "$BEFORE" --after "$AFTER" --created "$CREATED" --forced "$FORCED"
+          --patterns-file .github/paths/e2e-main.txt
+
   roundtrip:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     name: Read, compute, save, restore, compare (main)
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -94,8 +114,8 @@ jobs:
     # rebuilds the test once per mutation: on demand and when the check changes.
     # Runs after the round trip whatever its result (a crate not taken from main
     # fails that job, and says nothing about the teeth)
-    if: ${{ !cancelled() && github.event_name != 'schedule' }}
-    needs: roundtrip
+    if: ${{ !cancelled() && github.event_name != 'schedule' && needs.changes.outputs.run == 'true' }}
+    needs: [changes, roundtrip]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     defaults:
@@ -195,3 +215,17 @@ jobs:
           # the store): the golden is golden/values.digest
           grep -qxF -- "$a" e2e/golden/values.digest || { echo "both differ from the e2e/golden/values.digest line for their KNOWN_SEMANTICS row"; exit 1; }
           echo "aarch64 = x86_64 = golden: $a" >> "$GITHUB_STEP_SUMMARY"
+
+  # red when the changes job said run and a job was skipped, cancelled or failed
+  gate:
+    name: Gate
+    if: always()
+    needs: [changes, roundtrip, digest, digest-compare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"

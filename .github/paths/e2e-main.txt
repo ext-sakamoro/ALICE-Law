@@ -1,0 +1,13 @@
+# e2e-main.yml: the files whose change runs it on push
+# (scripts/changed_paths.py decide reads this file; the workflow has no on.push.paths)
+e2e/**
+scripts/main_mode.py
+scripts/e2e_teeth.py
+scripts/expected_failure.py
+release-train.toml
+scripts/release_train.py
+scripts/semver_gate.py
+scripts/release_baseline.py
+.github/workflows/e2e-main.yml
+scripts/changed_paths.py
+.github/paths/e2e-main.txt

@@ -10,21 +10,10 @@ name: Shared-file table (ci)
 
 on:
   push:
+    # no paths here: GitHub's filter diffs only the commits new to the repository when a push creates a branch,
+    # so a ci/ branch re-pushed with a commit another ref already has got no run; the changes job compares with
+    # merge-base(origin/main) instead (patterns: .github/paths/shared-files-table.txt)
     branches: ["ci/**"]
-    paths:
-      - "conformance/**"
-      - "scripts/gen_shared_files.py"
-      - "scripts/shared_files_check.py"
-      - "scripts/test_gen_shared_files.py"
-      - "scripts/test_shared_files_check.py"
-      - "scripts/holder_mode_check.py"
-      - "scripts/test_holder_mode_check.py"
-      - "scripts/shared_files_branch_live.py"
-      - "scripts/test_shared_files_branch_live.py"
-      - "scripts/consumer_table_parse.py"
-      - "scripts/test_consumer_table_parse.py"
-      - "scripts/ci_base.py"
-      - ".github/workflows/shared-files-table.yml"
 
 permissions:
   contents: read
@@ -34,7 +23,34 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main), another push with
+  # before..after; a schedule or manual run always runs; any error runs (fail-closed) — scripts/changed_paths.py
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+      - name: decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --before "$BEFORE" --after "$AFTER" --created "$CREATED" --forced "$FORCED"
+          --patterns-file .github/paths/shared-files-table.txt
+
   table:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     name: The table is the generated one and every main carries its copies
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -68,3 +84,17 @@ jobs:
       # and red in every crate)
       - name: A holder's own check passes against this commit
         run: python3 scripts/holder_mode_check.py --holder ALICE-Analytics
+
+  # red when the changes job said run and a job was skipped, cancelled or failed
+  gate:
+    name: Gate
+    if: always()
+    needs: [changes, table]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"
