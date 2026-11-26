@@ -17,3 +17,23 @@ reason = "compat reader for the 0.10 container format: links the published alice
 repo = "ALICE-Zip"
 path = "compat/v0_10_reader/Cargo.lock"
 reason = "the lock of the 0.10 compat reader: alice-zip 0.10.0 and its alice-det-math 0.5.1 from crates.io, as that release resolved them"
+
+# Window rows: a coordinated major move pins consumers to the candidate commit of the moving crate for a short while
+# (leaf consumers land first, then the crate fast-forwards, then each consumer returns to branch = "main" and its rows
+# here go). Each names the dependency, the commit and an expiry; an expired row fails the check.
+
+[[exempt]]
+repo = "ALICE-Channel"
+path = "Cargo.toml"
+dependency = "alice-identity"
+rev = "480d591a0617b8511f6ce91af7aa3570ee6aa7e0"
+expires = "2026-11-29T01:30:00+09:00"
+reason = "Identity 4.0 wave: alice-identity pinned to the 4.0 candidate commit until alice-identity main fast-forwards to it"
+
+[[exempt]]
+repo = "ALICE-Channel"
+path = "Cargo.lock"
+dependency = "alice-identity"
+rev = "480d591a0617b8511f6ce91af7aa3570ee6aa7e0"
+expires = "2026-11-29T01:30:00+09:00"
+reason = "Identity 4.0 wave: the lock of the pinned candidate commit (see the Cargo.toml row)"

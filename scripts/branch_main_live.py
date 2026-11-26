@@ -8,7 +8,9 @@ branch is fetched at depth 1 without blobs, and only its Cargo.toml / Cargo.lock
 reads repository NAME (the one a CI run tests) from the checkout DIR instead; NAME must be one of the listed public
 repositories. There is no baseline: every alice-* dependency not from its repository's main branch is red, except
 in a file conformance/branch-main-exempt.toml names (repo, path, reason: a published version pinned on purpose,
-such as a compat reader of an old format). A row whose file has no finding fails, so the table cannot go stale.
+such as a compat reader of an old format), and, for a coordinated move that pins a candidate commit for a short
+while, the findings a window row names (repo, path, dependency, rev, expires). A row whose file has no finding
+fails, and a window row past its expiry fails, so the table cannot go stale.
 
 Exit 0 when every repository was read and nothing was found, 1 on a finding, 2 when a repository could not be read,
 no repository was listed, or no manifest or lock was read.
@@ -16,12 +18,14 @@ no repository was listed, or no manifest or lock was read.
 from __future__ import annotations
 
 import argparse
+import re
 import tomllib
 import shutil
 import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -33,30 +37,74 @@ GITHUB = "https://github.com/"
 EXEMPT = HERE.parent / "conformance" / "branch-main-exempt.toml"
 
 
-def load_exempt(path: Path = EXEMPT) -> dict[tuple[str, str], str]:
-    """{(repo, path): reason} of the exemption table; a row without a reason is refused"""
+REV_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def load_exempt(path: Path = EXEMPT, now: datetime | None = None) -> dict[tuple[str, ...], str]:
+    """{key: reason} of the exemption table; a row without a reason, or a window row that has expired, is refused
+
+    A row names a file (repo, path) and exempts its findings. A window row also names `dependency`, `rev` (the full
+    commit) and `expires` (an ISO 8601 time with its offset): it exempts only the findings of that file that name that
+    dependency at that commit, for a coordinated move that pins a candidate commit for a short while, and it fails the
+    check once `expires` has passed. Its key is (repo, path, dependency, rev); a plain row's key is (repo, path).
+    """
     rows = tomllib.loads(path.read_text(encoding="utf-8")).get("exempt", [])
-    out = {}
+    now = now or datetime.now(timezone.utc)
+    out: dict[tuple[str, ...], str] = {}
     for r in rows:
         if not (isinstance(r.get("repo"), str) and isinstance(r.get("path"), str) and str(r.get("reason", "")).strip()):
             raise ValueError(f"{path.name}: a row needs repo, path and a reason: {r!r}")
-        if (r["repo"], r["path"]) in out:
-            raise ValueError(f"{path.name}: two rows for {r['repo']}: {r['path']}")
-        out[(r["repo"], r["path"])] = r["reason"]
+        window = [k for k in ("dependency", "rev", "expires") if k in r]
+        if window and len(window) != 3:
+            raise ValueError(f"{path.name}: a window row needs dependency, rev and expires together: {r!r}")
+        if window:
+            if not (isinstance(r["dependency"], str) and r["dependency"].startswith("alice-")):
+                raise ValueError(f"{path.name}: a window row's dependency is an alice-* crate: {r!r}")
+            if not (isinstance(r["rev"], str) and REV_RE.fullmatch(r["rev"])):
+                raise ValueError(f"{path.name}: a window row's rev is a full 40-hex commit: {r!r}")
+            try:
+                expires = datetime.fromisoformat(str(r["expires"]))
+            except ValueError as e:
+                raise ValueError(f"{path.name}: a window row's expires is not an ISO 8601 time: {r!r}") from e
+            if expires.tzinfo is None:
+                raise ValueError(f"{path.name}: a window row's expires needs its offset: {r!r}")
+            if now > expires:
+                raise ValueError(f"{path.name}: window row expired at {r['expires']} (remove it): "
+                                 f"{r['repo']}: {r['path']}: {r['dependency']} {r['rev']}")
+            key: tuple[str, ...] = (r["repo"], r["path"], r["dependency"], r["rev"])
+        else:
+            key = (r["repo"], r["path"])
+        if key in out:
+            raise ValueError(f"{path.name}: two rows for {' / '.join(key)}")
+        out[key] = r["reason"]
+    plain = {k for k in out if len(k) == 2}
+    for k in out:
+        if len(k) == 4 and k[:2] in plain:
+            raise ValueError(f"{path.name}: {k[0]}: {k[1]} has a file row and a window row (the file row covers it)")
     return out
 
 
-def apply_exempt(found: list[str], exempt: dict[tuple[str, str], str]) -> tuple[list[str], list[str], int]:
+def _names(what: str, dependency: str, rev: str) -> bool:
+    """whether a finding's text names `dependency` at commit `rev` (a manifest row or a lock package)"""
+    return rev in what and re.search(rf"(^|[\s\]]){re.escape(dependency)}[\s:]", what) is not None
+
+
+def apply_exempt(found: list[str], exempt: dict[tuple[str, ...], str]) -> tuple[list[str], list[str], int]:
     """(findings left, unused rows, findings exempted); a finding reads `<repo>: <path>: <what>`"""
     left, used, n = [], set(), 0
+    windows = [k for k in exempt if len(k) == 4]
     for f in found:
-        repo, path, _ = f.split(": ", 2)
-        if (repo, path) in exempt:
-            used.add((repo, path))
+        repo, path, what = f.split(": ", 2)
+        hit = (repo, path) if (repo, path) in exempt else next(
+            (k for k in windows if k[:2] == (repo, path) and _names(what, k[2], k[3])), None)
+        if hit is not None:
+            used.add(hit)
             n += 1
         else:
             left.append(f)
-    unused = [f"{repo}: {path}: exemption row with no finding (remove it)" for repo, path in sorted(set(exempt) - used)]
+    unused = [f"{': '.join(k[:2])}: exemption row with no finding (remove it)" if len(k) == 2
+              else f"{': '.join(k[:2])}: window row for {k[2]} {k[3]} with no finding (remove it)"
+              for k in sorted(set(exempt) - used)]
     return left, unused, n
 
 
