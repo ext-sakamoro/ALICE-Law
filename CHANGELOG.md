@@ -207,6 +207,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- `scripts/surface_claims_propose.py` の説明: 検出から書いた宣言は検査と必ず一致し、その crate では G15 が独立した確かめにならない (誤って出した出口もそのまま宣言される) ので、差分は crate の持ち主が crate ごとに読んでから `--write` し、複数の repository にまとめて書かないことを書いた
 - `conformance/shared-files.toml` と count lock (1596 → 1612): `scripts/sibling_coverage_guard.py` と試験 (owner ALICE-Queue、8 repository) は ALICE-Settlement と ALICE-VCS が移行先の bytes を取り込んで全 copy が揃ったので、計画の行を一様の行にし、役目を終えた計画の bytes 2 つを外した (計画から 14 日を過ぎて conformance-live が finding にしていた)
 - `conformance/shared-files.toml`: `scripts/ci_test_coverage_check.py` と試験 (owner ALICE-SDF、ALICE-LLM と持つ) の移行先を新しい bytes (sha256 04d22868 / 85100445、blob 566a8cd9 / 204501de) へ移し直した repository の `scripts/gpu-receipt-suites.txt` に挙げた suite はその device で走ったものとして数え、形の崩れた一覧は finding、一覧の無い repository はこれまでどおり 役目を終えた計画の bytes 2 つを外す 数の固定は 1596 のまま
 - `conformance/shared-files.toml` と count lock (1591 → 1596): ALICE-OS-Keystore の main が 5 つの共有 file (eol.yml / public-text.yml / public_text.sh / test_public_text.py / test_shared_files.py) を移行先の bytes に揃え、clippy canary と G11 の表の 5 file を持つようになったので表を作り直した (consumer_table_parse が ALICE-OS-Keystore の main に旧 bytes を読みに行って exit 2 になっていた)

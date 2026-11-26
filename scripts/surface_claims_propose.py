@@ -15,6 +15,12 @@ unreal), so it is never declared here: it is listed for review and the owner dec
 the binding. A crate with no surface at all (a fuzz or tool crate without src/lib.rs) is declared `surfaces = []`.
 A crate that already declares is left as it is.
 
+Read the diff before writing it. A declaration written from detection agrees with the check by construction, so for
+that crate G15 stops being an independent signal: a surface the crate exposes by accident (an extern "C" item left
+public, a stray PyO3 attribute) is declared as if it were meant. The diff is for the crate's owner to read, crate by
+crate, against what the crate is meant to offer, removing what it should not expose, and only then `--write`. Do not
+run `--write` across repositories in bulk.
+
 The README table (README.md, and README_JP.md when it exists) lists the union of the declarations, one row per
 surface, with the crates and the files that show it. An existing table between the markers is replaced; otherwise
 a section is inserted before the license heading, or appended.
