@@ -207,6 +207,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- `conformance/shared-files.toml`: `scripts/gen_clippy_canary_calls.py` と試験を owner ALICE-Analytics の新しい bytes へ移す計画 (sha256 a326faad / 54b2174e、blob ada48da6 / a291301f、`conformance/planned/` に置く) 新しい生成器は Cargo.lock が無い・package を 1 つも持たない時に外部 crate の entry があれば失敗し、読めない lock は 1 行で断る (以前は外部の plant が全部 skip 行になり、表が正しい形のまま書かれていた) 一様の行の写しの数の固定は 1612 → 1584
 - `scripts/surface_claims_propose.py` の説明: 検出から書いた宣言は検査と必ず一致し、その crate では G15 が独立した確かめにならない (誤って出した出口もそのまま宣言される) ので、差分は crate の持ち主が crate ごとに読んでから `--write` し、複数の repository にまとめて書かないことを書いた
 - `conformance/shared-files.toml` と count lock (1596 → 1612): `scripts/sibling_coverage_guard.py` と試験 (owner ALICE-Queue、8 repository) は ALICE-Settlement と ALICE-VCS が移行先の bytes を取り込んで全 copy が揃ったので、計画の行を一様の行にし、役目を終えた計画の bytes 2 つを外した (計画から 14 日を過ぎて conformance-live が finding にしていた)
 - `conformance/shared-files.toml`: `scripts/ci_test_coverage_check.py` と試験 (owner ALICE-SDF、ALICE-LLM と持つ) の移行先を新しい bytes (sha256 04d22868 / 85100445、blob 566a8cd9 / 204501de) へ移し直した repository の `scripts/gpu-receipt-suites.txt` に挙げた suite はその device で走ったものとして数え、形の崩れた一覧は finding、一覧の無い repository はこれまでどおり 役目を終えた計画の bytes 2 つを外す 数の固定は 1596 のまま
