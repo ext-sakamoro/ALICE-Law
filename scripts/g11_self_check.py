@@ -18,6 +18,15 @@ first: `git -C <ALICE-Law checkout> checkout --detach <rev>`). Then, from that c
                  other repositories' mains does not hold it back, the crate's own copies must all be at target)
   4. manifest    scripts/conformance_roster_check.py --check-manifest: the manifest and its anchors at HEAD
 
+A private repository (the pin's line `visibility private`; a pin without the line, or with `visibility public`, is a
+public one) is never named in the shared-files table, which lists public repositories only. Its copies check runs in
+scripts/shared_files_check.py's private mode (--private): every table path present in its tree is compared with the
+row's bytes (a pending row's target), so a stale copy is a finding and no copy is "adopting" or off target. The
+per-repository data files that mode reports (a row no repository holds, nothing to compare) must each be declared in
+the crate's conformance/g11-own.toml under [private-data], path = reason (12 characters or more, 4 distinct): an
+undeclared one, a short reason, or a declared path the check does not report is a finding, and a public crate that
+declares [private-data] is a finding too (its per-repository rows are the table's `exempt`).
+
 The pin's SHA-256 values are compared with the blobs at the pinned revision, and the table, rows and copies
 checks read the crate's committed tree (each blob at HEAD, raw), so a checkout that converts line endings (Windows,
 core.autocrlf) gives the same result as any other.
@@ -40,6 +49,9 @@ PIN = ".github/shared-files-pin"
 G11_PIN = ".github/g11-table-pin"
 MANIFEST = "alice-law-conformance.toml"
 OFF_TARGET_RE = re.compile(r"^shared_files_check: own copies not at a pending row's target: (\d+)", re.M)
+PRIVATE_DATA_RE = re.compile(r"^shared_files_check: (?:pending: )?(\S.*?): per-repository data \(no repository holds "
+                             r"the row\), not compared$", re.M)
+OWN = "conformance/g11-own.toml"
 
 
 def declared_g11(repo: Path) -> str | None:
@@ -65,6 +77,41 @@ def pin_fields(text: str) -> dict[str, str]:
         if len(values) != 1 or not re.fullmatch(pattern, values[0]):
             raise ValueError(f"{PIN}: needs one '{key} <{'40' if key == 'rev' else '64'} hex>'")
         out[key] = values[0]
+    return out
+
+
+def visibility(text: str) -> str:
+    """the pin's `visibility` (public when the line is absent); anything but one public / private line is an error"""
+    values = [ln.split()[1] for ln in text.splitlines() if len(ln.split()) == 2 and ln.split()[0] == "visibility"]
+    if not values:
+        return "public"
+    if len(values) != 1 or values[0] not in ("public", "private"):
+        raise ValueError(f"{PIN}: 'visibility' is one line, 'public' or 'private' (got {', '.join(values)})")
+    return values[0]
+
+
+def private_data_declared(repo: Path) -> dict[str, str]:
+    """conformance/g11-own.toml [private-data] as committed at HEAD (path -> reason); {} when the file or the table is
+    absent; ValueError when the file cannot be read"""
+    r = subprocess.run(["git", "-C", str(repo), "show", f"HEAD:{OWN}"], capture_output=True)
+    if r.returncode != 0:
+        return {}
+    try:
+        table = tomllib.loads(r.stdout.decode("utf-8")).get("private-data", {})
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise ValueError(f"{OWN}: {e}")
+    if not isinstance(table, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()):
+        raise ValueError(f"{OWN}: [private-data] is path = reason (strings)")
+    return table
+
+
+def private_data_findings(reported: list[str], declared: dict[str, str]) -> list[str]:
+    out = [f"{p}: per-repository data the private copies check does not compare, not declared in {OWN} [private-data]"
+           for p in reported if p not in declared]
+    out += [f"{p}: {OWN} [private-data] reason {r!r} is too short (12 characters or more, 4 distinct)"
+            for p, r in sorted(declared.items()) if len(r.strip()) < 12 or len(set(r.strip())) < 4]
+    out += [f"{p}: declared in {OWN} [private-data], but the private copies check does not report it as "
+            "per-repository data (remove the line)" for p in sorted(declared) if p not in reported]
     return out
 
 
@@ -121,6 +168,7 @@ def pin_problem(repo: Path, law: Path) -> str | None:
         return f"{pin} is not there (the crate pins no ALICE-Law revision)"
     try:
         f = pin_fields(pin.read_text(encoding="utf-8"))
+        visibility(pin.read_text(encoding="utf-8"))
     except (ValueError, UnicodeDecodeError) as e:
         return str(e)
     head = subprocess.run(["git", "-C", str(law), "rev-parse", "HEAD"], capture_output=True, text=True, encoding="utf-8")
@@ -162,7 +210,7 @@ def pin_problem(repo: Path, law: Path) -> str | None:
     return None
 
 
-def checks(repo: Path, name: str, law: Path, rev: str) -> list[tuple[str, list[str]]]:
+def checks(repo: Path, name: str, law: Path, rev: str, private: bool = False) -> list[tuple[str, list[str]]]:
     s = str(law / "scripts")
     return [
         ("g11-table", [sys.executable, f"{s}/g11_table_gen.py", "--repo", str(repo), "--name", name, "--check",
@@ -170,17 +218,17 @@ def checks(repo: Path, name: str, law: Path, rev: str) -> list[tuple[str, list[s
         ("g11-rows", [sys.executable, f"{s}/g11_table_check.py", "--repo", str(repo), "--name", name,
                       "--law", f"{rev}={law}"]),
         ("copies", [sys.executable, f"{s}/shared_files_check.py", "--table", str(law / "conformance/shared-files.toml"),
-                    "--repo", str(repo), "--name", name]),
+                    "--repo", str(repo), "--name", name] + (["--private"] if private else [])),
         ("manifest", [sys.executable, f"{s}/conformance_roster_check.py", "--check-manifest", str(repo), "--ref", "HEAD"]),
     ]
 
 
-def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path) -> list[int]:
+def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path, private: bool = False) -> list[int]:
     """each check's exit status (and the own-target verdict), printing one line per check"""
     codes: list[int] = []
     # the tree checks read the committed tree; the manifest check reads HEAD itself (--ref HEAD)
     commands = [(label, [tree.as_posix() if x == str(repo) and label != "manifest" else x for x in cmd])
-                for label, cmd in checks(repo, name, law, rev)]
+                for label, cmd in checks(repo, name, law, rev, private)]
     for label, cmd in commands:
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         lines = [ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()]
@@ -189,7 +237,33 @@ def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path) -> list[i
         if r.returncode != 0:
             for ln in lines[-12:-1]:
                 print(f"  {ln}")
-        if label == "copies" and r.returncode in (0, 1):
+        if label == "copies" and r.returncode in (0, 1) and private:
+            # private mode: every present copy is compared with its row's bytes (a pending row's target), so a
+            # copy off target is already a finding of the check; what it cannot compare must be declared
+            print("g11 self-check: own-target: private mode (each present copy compared with its row's bytes or "
+                  "target; an off-target copy is a finding of the copies check)")
+            reported = PRIVATE_DATA_RE.findall(r.stdout)
+            try:
+                declared = private_data_declared(repo)
+            except ValueError as e:
+                codes.append(2)
+                print(f"g11 self-check: private-data: {e}: not checked")
+                continue
+            found = private_data_findings(reported, declared)
+            codes.append(1 if found else 0)
+            for ln in found:
+                print(f"g11 self-check: private-data: {ln}")
+            if not found:
+                print(f"g11 self-check: private-data: {len(reported)} per-repository data file(s) declared")
+        elif label == "copies" and r.returncode in (0, 1):
+            try:
+                if private_data_declared(repo):
+                    codes.append(1)
+                    print(f"g11 self-check: private-data: {OWN} declares [private-data], but the pin is public "
+                          "(a public crate's per-repository rows are the table's exempt)")
+            except ValueError as e:
+                codes.append(2)
+                print(f"g11 self-check: private-data: {e}: not checked")
             m = OFF_TARGET_RE.search(r.stdout)
             if m is None:
                 codes.append(2)
@@ -215,7 +289,9 @@ def main(argv: list[str] | None = None, law: Path = LAW) -> int:
     if why:
         print(f"g11 self-check: {why}: nothing was checked", file=sys.stderr)
         return 2
-    rev = pin_fields((repo / PIN).read_text(encoding="utf-8"))["rev"]
+    pin_text = (repo / PIN).read_text(encoding="utf-8")
+    rev = pin_fields(pin_text)["rev"]
+    private = visibility(pin_text) == "private"
     with tempfile.TemporaryDirectory() as tmp:  # removed however the checks end
         tree = Path(tmp)
         try:
@@ -223,7 +299,7 @@ def main(argv: list[str] | None = None, law: Path = LAW) -> int:
         except (ValueError, OSError) as e:
             print(f"g11 self-check: {e}: nothing was checked", file=sys.stderr)
             return 2
-        codes = run_checks(repo, a.name, law, rev, tree)
+        codes = run_checks(repo, a.name, law, rev, tree, private)
     verdict = 1 if 1 in codes else 2 if any(c != 0 for c in codes) else 0
     print(f"g11 self-check: {a.name} at ALICE-Law {rev[:12]}: "
           + ("pass" if verdict == 0 else "finding" if verdict == 1 else "not checked (an input could not be read or nothing was compared)"))
