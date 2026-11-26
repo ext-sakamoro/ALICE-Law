@@ -15,11 +15,9 @@
 "ALICE-DetMath/semver-checks.yml" = 1
 "ALICE-Edge/fuzz.yml" = 1
 "ALICE-Edge/semver-checks.yml" = 1
-"ALICE-Font/semver-checks.yml" = 1
 "ALICE-Identity/semver-checks.yml" = 1
 "ALICE-Kinematics/semver-checks.yml" = 1
 "ALICE-LLM/semver-checks.yml" = 1
-"ALICE-LOL/semver-checks.yml" = 1
 "ALICE-ML/semver-checks.yml" = 1
 "ALICE-Sync/semver-checks.yml" = 1
 "ALICE-Zip/semver-checks.yml" = 1
