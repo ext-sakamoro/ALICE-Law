@@ -71,6 +71,7 @@ python3 scripts/test_measure_conformance.py
 python3 scripts/test_fold_set_check.py
 python3 scripts/test_added_function_pins.py
 python3 scripts/test_surface_claims_check.py
+python3 scripts/test_surface_claims_propose.py
 python3 scripts/test_shared_files_check.py
 python3 scripts/test_gen_shared_files.py
 python3 scripts/test_consumer_table_parse.py
