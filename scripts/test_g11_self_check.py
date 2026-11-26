@@ -44,7 +44,10 @@ class SelfCheck(unittest.TestCase):
             (self.law / "scripts" / n).write_text(
                 "import json, os, sys\n"
                 f"open({str(self.log)!r}, 'a').write(json.dumps([{n!r}] + sys.argv[1:]) + '\\n')\n"
-                + ("print(\"shared_files_check: own copies not at a pending row's target: \" + os.environ.get('OFF_N', '0'))\n"
+                + ("print(\"shared_files_check: own copies not at a pending row's target: \" + os.environ.get('OFF_N', '0')) "
+                   "if '--private' not in sys.argv else None\n"
+                   "[print(f'shared_files_check: pending: {p}: per-repository data (no repository holds the row), not compared') "
+                   "for p in os.environ.get('PRIV_DATA', '').split(',') if p and '--private' in sys.argv]\n"
                    "import pathlib\n"
                    "probe = pathlib.Path(sys.argv[sys.argv.index('--repo') + 1]) / 'probe.txt'\n"
                    "sys.exit(1) if probe.exists() and b'\\r' in probe.read_bytes() else None\n"
@@ -67,11 +70,15 @@ class SelfCheck(unittest.TestCase):
         os.environ.update(self.saved_env)
         self.tmp.cleanup()
 
-    def pin(self, rev=None, table=None, checker=None):
+    def pin(self, rev=None, table=None, checker=None, extra=""):
         (self.crate / ".github" / "shared-files-pin").write_text(
             f"name ALICE-X\nrev {rev or self.rev}\n"
             f"table-sha256 {table or h(self.law / 'conformance' / 'shared-files.toml')}\n"
-            f"checker-sha256 {checker or h(self.law / 'scripts' / 'shared_files_check.py')}\n", encoding="utf-8")
+            f"checker-sha256 {checker or h(self.law / 'scripts' / 'shared_files_check.py')}\n{extra}", encoding="utf-8")
+
+    def own(self, text):
+        (self.crate / "conformance").mkdir(exist_ok=True)
+        (self.crate / "conformance" / "g11-own.toml").write_text(text, encoding="utf-8")
 
     def commit_crate(self):
         # the checks read the crate's committed tree (git archive HEAD): commit what the test wrote
@@ -268,6 +275,132 @@ class SelfCheck(unittest.TestCase):
         (self.crate / ".github" / "shared-files-pin").unlink()
         code, out, calls = self.run_check()
         self.assertEqual((code, calls), (2, []), out)
+
+
+    # a private repository (pin line `visibility private`): the table never names it, so the copies check runs in
+    # its private mode (each table path present compared with its row) and every per-repository data file it
+    # reports has to be declared in conformance/g11-own.toml [private-data] with a reason
+
+    def test_a_private_pin_runs_the_copies_check_in_private_mode(self):
+        self.pin(extra="visibility private\n")
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("--private", calls[2])
+        self.assertNotIn("--private", calls[0] + calls[1] + calls[3])
+        self.assertIn("own-target: private mode", out)
+
+    def test_a_public_pin_does_not_run_the_private_mode(self):
+        for extra in ("", "visibility public\n"):
+            self.log.unlink(missing_ok=True)
+            self.pin(extra=extra)
+            code, out, calls = self.run_check()
+            self.assertEqual(code, 0, (extra, out))
+            self.assertNotIn("--private", calls[2])
+
+    def test_a_private_data_file_not_declared_is_a_finding(self):
+        self.pin(extra="visibility private\n")
+        os.environ["PRIV_DATA"] = "scripts/data.tsv"
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/data.tsv", out)
+        self.assertIn("[private-data]", out)
+
+    def test_a_private_data_file_declared_with_a_reason_passes(self):
+        self.pin(extra="visibility private\n")
+        self.own('[private-data]\n"scripts/data.tsv" = "generated from clippy.toml by the shared generator"\n')
+        os.environ["PRIV_DATA"] = "scripts/data.tsv"
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 per-repository data file(s) declared", out)
+
+    def test_a_private_data_reason_too_short_is_a_finding(self):
+        self.pin(extra="visibility private\n")
+        self.own('[private-data]\n"scripts/data.tsv" = "data"\n')
+        os.environ["PRIV_DATA"] = "scripts/data.tsv"
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("reason", out)
+
+    def test_a_declared_private_data_file_the_check_does_not_report_is_a_finding(self):
+        self.pin(extra="visibility private\n")
+        self.own('[private-data]\n"scripts/gone.tsv" = "generated from clippy.toml by the shared generator"\n')
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("scripts/gone.tsv", out)
+
+    def test_private_data_declared_by_a_public_crate_is_a_finding(self):
+        self.own('[private-data]\n"scripts/data.tsv" = "generated from clippy.toml by the shared generator"\n')
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("[private-data]", out)
+
+    def test_an_unreadable_own_table_in_private_mode_is_not_checked(self):
+        self.pin(extra="visibility private\n")
+        self.own("[private-data\n")
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 2, out)
+
+    def test_a_visibility_other_than_public_or_private_or_twice_runs_nothing(self):
+        for extra in ("visibility secret\n", "visibility private\nvisibility private\n"):
+            self.log.unlink(missing_ok=True)
+            self.pin(extra=extra)
+            code, out, calls = self.run_check()
+            self.assertEqual((code, calls), (2, []), (extra, out))
+
+
+class PrivateCopiesReal(unittest.TestCase):
+    """the private mode with the real scripts/shared_files_check.py: a private repository holding a stale copy of a
+    shared file fails, the row's bytes pass (the other three checks are stubs)"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.law, self.crate = root / "law", root / "crate"
+        (self.law / "scripts").mkdir(parents=True)
+        (self.law / "conformance").mkdir()
+        self.good = b"print('shared v2')\n"
+        (self.law / "scripts" / "shared_files_check.py").write_bytes((HERE / "shared_files_check.py").read_bytes())
+        for n in ("g11_table_gen.py", "g11_table_check.py", "conformance_roster_check.py"):
+            (self.law / "scripts" / n).write_text("print('ok')\n", encoding="utf-8")
+        (self.law / "conformance" / "shared-files.toml").write_text(
+            '[[file]]\npath = "scripts/shared_tool.py"\n'
+            f'sha256 = "{hashlib.sha256(self.good).hexdigest()}"\n'
+            f'source = {{ repo = "ALICE-Zip", rev = "{"a" * 40}" }}\n'
+            'repos = ["ALICE-DB", "ALICE-Zip"]\n', encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(self.law)], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(self.law), "add", "-A"], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(self.law), "commit", "-q", "-m", "c"], check=True, env=ENV)
+        rev = subprocess.run(["git", "-C", str(self.law), "rev-parse", "HEAD"], capture_output=True, text=True,
+                             check=True, encoding="utf-8").stdout.strip()
+        (self.crate / ".github").mkdir(parents=True)
+        (self.crate / "scripts").mkdir()
+        subprocess.run(["git", "init", "-q", str(self.crate)], check=True, env=ENV)
+        (self.crate / ".github" / "shared-files-pin").write_text(
+            f"name ALICE-Private\nrev {rev}\n"
+            f"table-sha256 {h(self.law / 'conformance' / 'shared-files.toml')}\n"
+            f"checker-sha256 {h(self.law / 'scripts' / 'shared_files_check.py')}\nvisibility private\n",
+            encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_with(self, data: bytes):
+        (self.crate / "scripts" / "shared_tool.py").write_bytes(data)
+        subprocess.run(["git", "-C", str(self.crate), "add", "-A"], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(self.crate), "commit", "-q", "-m", "c"], check=True, env=ENV)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = sc.main(["--repo", str(self.crate), "--name", "ALICE-Private"], law=self.law)
+        return code, out.getvalue()
+
+    def test_a_private_repository_holding_a_stale_copy_fails(self):
+        code, out = self.run_with(b"print('shared v1')\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("the private copy differs", out)
+
+    def test_a_private_repository_holding_the_row_s_bytes_passes(self):
+        code, out = self.run_with(self.good)
+        self.assertEqual(code, 0, out)
 
 
 if __name__ == "__main__":
