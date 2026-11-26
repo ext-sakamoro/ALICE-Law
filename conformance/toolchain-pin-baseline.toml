@@ -3,23 +3,10 @@
 # any count above its row (a new one) and on any count below it (stale: lower or drop the row with --write). Fix a
 # row by installing the toolchain with a rustup run step (`rustup toolchain install <channel> --profile minimal`).
 [pins]
-"ALICE-Analytics/semver-checks.yml" = 1
-"ALICE-Channel/semver-checks.yml" = 1
-"ALICE-Crypto/semver-checks.yml" = 1
 "ALICE-DB/ci.yml" = 8
 "ALICE-DB/fuzz.yml" = 1
 "ALICE-DB/package-integrity.yml" = 1
 "ALICE-DB/release-profile.yml" = 1
 "ALICE-DB/security-audit.yml" = 3
 "ALICE-DB/semver-checks.yml" = 1
-"ALICE-DetMath/semver-checks.yml" = 1
-"ALICE-Edge/fuzz.yml" = 1
-"ALICE-Edge/semver-checks.yml" = 1
-"ALICE-Font/semver-checks.yml" = 1
 "ALICE-Identity/semver-checks.yml" = 1
-"ALICE-Kinematics/semver-checks.yml" = 1
-"ALICE-LLM/semver-checks.yml" = 1
-"ALICE-LOL/semver-checks.yml" = 1
-"ALICE-ML/semver-checks.yml" = 1
-"ALICE-Sync/semver-checks.yml" = 1
-"ALICE-Zip/semver-checks.yml" = 1
