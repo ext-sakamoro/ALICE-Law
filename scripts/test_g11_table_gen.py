@@ -286,6 +286,38 @@ class CompareNothing(unittest.TestCase):
         self.assertEqual(rc, 2, out)
         self.assertIn("compared nothing", out)
 
+    GATES = ('schema_version = 0\nstatus_vocabulary = ["pass", "fail-known", "unverified", "n/a"]\n'
+             + "".join(f'[[gate]]\nid = "{g}"\nname = "g{g}"\n' for g in ("G1", "G4", "G9", "G11")))
+
+    def no_pass_shape(self, ids=("G1", "G4", "G9", "G11")):
+        # a crate that declares every gate of ALICE-Law's catalog, none of them pass (the evidence is not there yet)
+        (self.law / "conformance/gates.toml").write_bytes(self.GATES.encode("utf-8"))
+        (self.crate / "conformance/g11-own.toml").unlink()
+        (self.crate / "alice-law-conformance.toml").write_bytes(
+            "".join(f'[{g}]\nstatus = "unverified"\n\n' for g in ids).encode("utf-8"))
+
+    def test_every_gate_declared_and_none_pass_is_not_compared_nothing(self):
+        self.no_pass_shape()
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("0 pass gates; 4 of 4 gates declared (unverified 4)", out)
+        self.assertNotIn("compared nothing", out)
+        self.assertEqual(self.run_main("--check")[0], 0)
+
+    def test_a_gate_left_undeclared_with_none_pass_is_compared_nothing(self):
+        self.no_pass_shape(ids=("G1", "G4", "G9"))
+        rc, out = self.run_main()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("compared nothing", out)
+        self.assertIn("G11", out)
+
+    def test_no_pass_gate_without_the_gate_catalog_is_compared_nothing(self):
+        self.no_pass_shape()
+        (self.law / "conformance/gates.toml").unlink()
+        rc, out = self.run_main()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("compared nothing", out)
+
     def test_no_row_exits_2(self):
         (self.crate / "conformance/g11-own.toml").unlink()
         self.edit(self.crate / "alice-law-conformance.toml", 'evidence = ["scripts/ban.py with', 'evidence = ["a ban with')

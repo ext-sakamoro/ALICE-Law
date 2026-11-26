@@ -228,6 +228,13 @@ def main(argv: list[str] | None = None) -> int:
     generated = sum(1 for r in rows if any(r["checker"] == e["path"] for e in catalog))
     print(f"g11_table_gen: {a.name}: {len(rows)} rows ({generated} from the catalog), {gates} pass gates, "
           f"{len(gaps)} gaps")
+    if not rows and not gates:
+        ok, summary = chk.all_gates_declared(chk.Tree.of_dir(a.repo), lambda rev: local.get(rev) or chk.git_law(rev))
+        if ok:
+            print(f"g11_table_gen: {a.name}: {summary}")
+            return 1 if gaps else 0
+        print(f"g11_table_gen: compared nothing (no row and no pass gate: {summary})", file=sys.stderr)
+        return 2
     if not rows or not gates:
         print("g11_table_gen: compared nothing (no row or no pass gate)", file=sys.stderr)
         return 2
