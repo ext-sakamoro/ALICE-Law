@@ -50,6 +50,8 @@ class Rules(unittest.TestCase):
     def test_a_fall_is_red_on_states_and_a_note_on_the_crate_check(self):
         f, n = npr.compare({"A": 1}, {"A": ROW}, {"A"}, below_is_note=False)
         self.assertIn("lower the row to 1) in this commit", f[0])
+        # a fall names the fix (the row to lower, or the whole file regenerated)
+        self.assertIn("--write-baseline", f[0])
         self.assertEqual(n, [])
         f, n = npr.compare({"A": 1}, {"A": ROW}, None, below_is_note=True)
         self.assertEqual(f, [])

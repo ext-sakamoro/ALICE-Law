@@ -94,7 +94,10 @@ def compare(read: dict[str, int], baseline: dict[str, dict], roster: set[str] | 
                             f"counts as met)")
         elif n < b:
             line = f"{repo}: {n} non-pass gate(s) < baseline {b} (lower the row to {n})"
-            (notes if below_is_note else findings).append(line + ("" if below_is_note else " in this commit"))
+            (notes if below_is_note else findings).append(line + ("" if below_is_note else
+                                                                  " in this commit: set non_pass to the count in "
+                                                                  "conformance/non-pass-baseline.toml, or rewrite every "
+                                                                  "row with --states FILE --write-baseline"))
     if roster is not None:
         for repo in sorted(set(baseline) - roster):
             findings.append(f"{repo}: a row for a repository the roster does not list")
