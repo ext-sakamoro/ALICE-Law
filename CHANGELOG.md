@@ -212,6 +212,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- `release-train.toml`: alice-sdf の `test-hooks` (crate 自身の試験専用の入口) を exclude-features に入れた e2e-main の feature-coverage が、どの利用側の set にも無い feature として断っていた
 - 共有 file の表: `scripts/changed_paths.py` と試験を ALICE-Law の新しい bytes へ移す計画の行にした 全 holder の main に行き渡った行 (gen_clippy_canary_calls.py / ci_test_coverage_check.py と各試験、changed-paths-oracle.yml ほか) は一様の行に戻した (写しの数 1556)
 - e2e の変異の job (teeth) を `.github/workflows/e2e-teeth.yml` に分けた (push / ci/** / dispatch、schedule 無し、自分の changes と gate) `e2e-main.yml` の gate は残る全 job を need する (`changed_paths.py sync` の gate_cover が red だった)
 - `scripts/shared_files_check.py --private`: `.github/workflows/` 以下の共有の行は非公開の repository が持たない (GitHub の実行機で run を起こすための workflow で、非公開 repository の CI は手元の全実行と Air の受領) その写しを持てば bytes によらず finding、持たなければ古い写しでなく note `.github/actions/` などは従来どおり比べる 試験 3 件、変異 4 件はすべて red
