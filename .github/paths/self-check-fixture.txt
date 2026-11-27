@@ -1,0 +1,21 @@
+# self-check-fixture.yml: the files whose change runs it on push
+# (scripts/changed_paths.py decide reads this file; the workflow has no on.push.paths)
+.github/workflows/self-check-fixture.yml
+.github/paths/self-check-fixture.txt
+scripts/changed_paths.py
+scripts/g11_self_check.py
+scripts/g11_fixture_bump.py
+scripts/shared_files_check.py
+scripts/g11_table_gen.py
+scripts/g11_table_check.py
+scripts/conformance_roster_check.py
+scripts/non_pass_ratchet.py
+scripts/no_panic_ratchet.py
+scripts/test_g11_self_check.py
+scripts/test_g11_fixture_bump.py
+tools/no-panic-scan/**
+conformance/shared-files.toml
+conformance/shared-test-setup.toml
+conformance/planned/**
+conformance/g11-shared-rows.toml
+conformance/gates.toml

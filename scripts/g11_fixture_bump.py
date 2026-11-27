@@ -108,10 +108,10 @@ def rename_rev(text: str, old: str, new: str) -> tuple[str, int]:
 
 def copies(rows: list[dict], name: str, private: bool, holder: Path) -> list[dict]:
     """the rows whose copy the holder carries: listed in `repos` (public) or present in the tree (private); own
-    paths and rows exempting the holder are not copies"""
+    paths and per-repository rows (no bytes) and rows exempting the holder are not copies"""
     out = []
     for r in rows:
-        if "own" in r or name in r.get("exempt", {}):
+        if name in r.get("exempt", {}):
             continue
         if private:
             if (holder / r["path"]).is_file() and ("sha256" in r or "pending" in r):

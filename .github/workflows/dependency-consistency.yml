@@ -355,11 +355,12 @@ jobs:
           py=$(command -v python3 || command -v python)
           "$py" scripts/test_g11_table_gen.py
 
-      - name: Test the G11 self-check
+      - name: Test the G11 self-check and the fixture bump
         shell: bash
         run: |
           py=$(command -v python3 || command -v python)
           "$py" scripts/test_g11_self_check.py
+          "$py" scripts/test_g11_fixture_bump.py
 
       # the self-check's no-panic check builds the real scanner (cargo) and runs it: its binary is
       # no-panic-scan.exe on Windows, so the build, the cache entry and the run are exercised on each lane
