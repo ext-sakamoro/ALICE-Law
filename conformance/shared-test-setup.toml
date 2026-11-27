@@ -2,7 +2,8 @@
 # scripts/g11_self_check.py's shared-tests check installs it in the crate's clone (rustup, the crate's own
 # toolchain) and then runs the test, so a holder's CI step needs no setup of its own; a setup that cannot be
 # installed is not checked (exit 2), the test is never skipped. Keys: path (a shared test row), why (what the test
-# needs), and at least one of rustc-targets (target triples for `rustup target add`) and platforms (the platforms the
+# needs), and at least one of rustc-targets (target triples for `rustup target add`), cargo-tools (cargo-<name>@<x.y.z>
+# for `cargo install --locked`, skipped when `cargo <name> --version` already prints it) and platforms (the platforms the
 # tested tool runs on in the holders' CI and preflight: the self-check runs the test only there, and names it as not
 # run on another; a tool that runs on a platform has its test run there, so a failure there is the tool's to fix).
 
@@ -31,3 +32,19 @@ why = "id_move_check.py runs in the holders' ci.yml on Linux and in preflight on
 path = "scripts/test_public_text.py"
 platforms = ["linux", "macos"]
 why = "public_text.sh runs in the holders' public-text.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 40 holders)"
+
+[[test]]
+path = "scripts/test_semver_gate.py"
+cargo-tools = ["cargo-semver-checks@0.50.0"]
+platforms = ["linux", "macos"]
+why = "SemverEndToEnd runs the real cargo-semver-checks (the holders' semver-checks.yml installs 0.50.0 on Linux, preflight runs it on macOS) and refuses to run without it; semver_gate.py never runs on Windows (2026-11-28 survey: 17 jobs)"
+
+[[test]]
+path = "scripts/test_gated_tests.py"
+platforms = ["linux", "macos"]
+why = "gated_tests.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 7 jobs)"
+
+[[test]]
+path = "scripts/test_clippy_external_coverage.py"
+platforms = ["linux", "macos"]
+why = "clippy_external_coverage.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 4 jobs)"

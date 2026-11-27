@@ -73,10 +73,13 @@ jobs:
           - ALICE-ML
           - ALICE-Zip
           - ALICE-Edge
+          # runs its self-check in a 3-OS job (its Windows leg was the first to fail the shared tests, 2026-11-28)
+          - ALICE-Sign
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
           persist-credentials: false
+          fetch-depth: 0  # a shared test reads ALICE-Law at older pins (the holders' CI clones it whole)
       - name: Bump ${{ matrix.holder }} to this commit
         shell: bash
         env:

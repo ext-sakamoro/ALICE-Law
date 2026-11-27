@@ -553,6 +553,33 @@ SETUP_ROW = ('[[test]]\npath = "scripts/test_shared_probe.py"\nrustc-targets = [
              'why = "the probe compiles for aarch64"\n')
 
 
+# a stand-in for cargo: `<sub> --version` prints `cargo-<sub> <v>` for an installed tool, `install --locked <name>
+# --version <v>` records it (FAIL_INSTALL makes it fail); each call is appended to CALLS
+STUB_CARGO = """import json, pathlib, sys
+state, calls = pathlib.Path(STATE), pathlib.Path(CALLS)
+have = json.loads(state.read_text(encoding="utf-8")) if state.exists() else {}
+args = sys.argv[1:]
+with calls.open("a", encoding="utf-8") as f:
+    f.write(" ".join(args) + "\\n")
+if args[1:] == ["--version"] and "cargo-" + args[0] in have:
+    print("cargo-" + args[0] + " " + have["cargo-" + args[0]])
+    sys.exit(0)
+if args[:2] == ["install", "--locked"] and not FAIL_INSTALL:
+    have[args[2]] = args[4]
+    state.write_text(json.dumps(have), encoding="utf-8")
+    sys.exit(0)
+sys.exit(101)
+"""
+NEEDS_TOOL_TEST = """import json, pathlib, sys
+pathlib.Path(RAN).write_text("ran", encoding="utf-8")
+state = pathlib.Path(STATE)
+have = json.loads(state.read_text(encoding="utf-8")) if state.exists() else {}
+sys.exit(0 if have.get("cargo-semver-checks") == "0.50.0" else 6)
+"""
+TOOL_ROW = ('[[test]]\npath = "scripts/test_shared_probe.py"\ncargo-tools = ["cargo-semver-checks@0.50.0"]\n'
+            'why = "the probe runs the real tool"\n')
+
+
 class SharedTestSetup(Fixture):
     """the rustc targets a shared test declares in conformance/shared-test-setup.toml are installed before it runs"""
 
@@ -647,6 +674,88 @@ class SharedTestSetup(Fixture):
     def test_the_platform_name_of_each_os(self):
         self.assertEqual([sc.this_platform(n) for n in ("win32", "darwin", "linux", "cygwin")],
                          ["windows", "macos", "linux", "windows"])
+
+    # the cargo tools
+    def cargo_stub(self, fail: bool = False) -> list[str]:
+        root = Path(self.tmp.name)
+        self.cstate, self.ccalls = root / "cargo-state.json", root / "cargo-calls.txt"
+        f = root / "cargo_stub.py"
+        f.write_text(STUB_CARGO.replace("STATE", repr(str(self.cstate))).replace("CALLS", repr(str(self.ccalls)))
+                     .replace("FAIL_INSTALL", repr(fail)), encoding="utf-8")
+        self.shared_test(NEEDS_TOOL_TEST.replace("STATE", repr(str(self.cstate))).replace("RAN", repr(str(self.ran))))
+        return [sys.executable, str(f)]
+
+    def cargo_asked(self) -> list[str]:
+        return self.ccalls.read_text(encoding="utf-8").splitlines() if self.ccalls.exists() else []
+
+    def test_cargo_tools_are_declared_by_name_and_exact_version(self):
+        self.setup_file(TOOL_ROW)
+        self.assertEqual(sc.shared_test_cargo_tools(self.law, self.law / "conformance" / "shared-files.toml"),
+                         {"scripts/test_shared_probe.py": ["cargo-semver-checks@0.50.0"]})
+        for bad in ('["cargo-semver-checks"]', '["semver-checks@0.50.0"]', '["cargo-x@1.2"]', "[]",
+                    '["cargo-x@1.2.3; rm -rf y"]'):
+            with self.subTest(bad):
+                self.setup_file(TOOL_ROW.replace('["cargo-semver-checks@0.50.0"]', bad))
+                with self.assertRaises(ValueError):
+                    sc.setup_rows(self.law, self.law / "conformance" / "shared-files.toml")
+
+    def test_a_missing_cargo_tool_is_installed_and_the_test_then_passes(self):
+        cargo = self.cargo_stub()
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"],
+                                          cargo_tools={"scripts/test_shared_probe.py": ["cargo-semver-checks@0.50.0"]},
+                                          cargo=cargo)
+        self.assertEqual(code, 0, lines)
+        self.assertEqual(self.cargo_asked(), ["semver-checks --version",
+                                              "install --locked cargo-semver-checks --version 0.50.0"])
+        self.assertIn("setup: cargo tools installed: cargo-semver-checks@0.50.0", lines)
+
+    def test_without_the_cargo_tool_the_same_test_fails(self):
+        cargo = self.cargo_stub()
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"], cargo_tools={},
+                                          cargo=cargo)
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(self.cargo_asked(), [])
+
+    def test_an_installed_cargo_tool_of_that_version_is_not_reinstalled(self):
+        cargo = self.cargo_stub()
+        self.cstate.write_text(json.dumps({"cargo-semver-checks": "0.50.0"}), encoding="utf-8")
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"],
+                                          cargo_tools={"scripts/test_shared_probe.py": ["cargo-semver-checks@0.50.0"]},
+                                          cargo=cargo)
+        self.assertEqual(code, 0, lines)
+        self.assertEqual(self.cargo_asked(), ["semver-checks --version"])
+
+    def test_another_installed_version_is_replaced(self):
+        cargo = self.cargo_stub()
+        self.cstate.write_text(json.dumps({"cargo-semver-checks": "0.49.0"}), encoding="utf-8")
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"],
+                                          cargo_tools={"scripts/test_shared_probe.py": ["cargo-semver-checks@0.50.0"]},
+                                          cargo=cargo)
+        self.assertEqual(code, 0, lines)
+        self.assertIn("install --locked cargo-semver-checks --version 0.50.0", self.cargo_asked())
+
+    def test_a_cargo_tool_that_cannot_be_installed_is_not_checked_and_runs_no_test(self):
+        cargo = self.cargo_stub(fail=True)
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"],
+                                          cargo_tools={"scripts/test_shared_probe.py": ["cargo-semver-checks@0.50.0"]},
+                                          cargo=cargo)
+        self.assertEqual(code, 2, lines)
+        self.assertTrue(lines[-1].startswith("setup: cargo install cargo-semver-checks --version 0.50.0 failed"), lines)
+        self.assertFalse(self.ran.exists())
+
+    def test_the_self_check_installs_law_s_declared_cargo_tools(self):
+        cargo = self.cargo_stub()
+        self.setup_file(TOOL_ROW)
+        self.commit_law()
+        with mock.patch.object(sc, "CARGO", cargo):
+            code, out, _ = self.run_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("g11 self-check: shared-tests: setup: cargo tools installed: cargo-semver-checks@0.50.0", out)
 
     # the platforms
     def test_a_test_declared_for_other_platforms_is_not_run_here_and_is_named(self):

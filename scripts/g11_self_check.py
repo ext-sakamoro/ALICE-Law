@@ -85,7 +85,9 @@ SHARED_TEST_TIMEOUT = 1200
 # the self-check installs it in the crate's clone (its rust-toolchain), so a holder's CI needs no step of its own
 SETUP = "conformance/shared-test-setup.toml"
 SETUP_KEYS = {"path", "why"}  # and at least one of SETUP_NEEDS
-SETUP_NEEDS = {"rustc-targets", "platforms"}
+SETUP_NEEDS = {"rustc-targets", "platforms", "cargo-tools"}
+CARGO_TOOL_RE = re.compile(r"^(cargo-[a-z0-9-]+)@([0-9]+\.[0-9]+\.[0-9]+)$")
+CARGO = ["cargo"]
 PLATFORMS = ("linux", "macos", "windows")
 TARGET_RE = re.compile(r"^[a-z0-9_]+(?:-[a-z0-9_.]+){1,3}$")
 RUSTUP = ["rustup"]
@@ -307,6 +309,12 @@ def setup_rows(law: Path, table: Path) -> dict[str, dict]:
                 raise ValueError(f"{where}: platforms must be a non-empty list of distinct names from {PLATFORMS}, "
                                  f"has {plats!r}")
             entry["platforms"] = [p for p in PLATFORMS if p in plats]
+        if "cargo-tools" in t:
+            tools = t["cargo-tools"]
+            if not isinstance(tools, list) or not tools or not all(isinstance(x, str) and CARGO_TOOL_RE.match(x)
+                                                                    for x in tools):
+                raise ValueError(f"{where}: cargo-tools must be a non-empty list of cargo-<name>@<x.y.z>, has {tools!r}")
+            entry["cargo-tools"] = sorted(set(tools))
         out[path] = entry
     return out
 
@@ -319,6 +327,37 @@ def shared_test_setup(law: Path, table: Path) -> dict[str, list[str]]:
 def shared_test_platforms(law: Path, table: Path) -> dict[str, list[str]]:
     """{shared test path: the platforms its tool runs on} (the tests that declare them; any other runs everywhere)"""
     return {p: e["platforms"] for p, e in setup_rows(law, table).items() if "platforms" in e}
+
+
+def shared_test_cargo_tools(law: Path, table: Path) -> dict[str, list[str]]:
+    """{shared test path: the cargo subcommands (cargo-<name>@<version>) it needs installed}"""
+    return {p: e["cargo-tools"] for p, e in setup_rows(law, table).items() if "cargo-tools" in e}
+
+
+def install_cargo_tools(clone: Path, tools: list[str], cargo: list[str]) -> tuple[bool, str]:
+    """(installed, line): `cargo install --locked <name> --version <v>` for each declared tool whose
+    `cargo <sub> --version` does not print that version (run in the clone, so its toolchain builds it); False when
+    cargo cannot be run or an install fails"""
+    def run(args: list[str]) -> subprocess.CompletedProcess | str:
+        try:
+            return subprocess.run(cargo + args, cwd=clone, capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace")
+        except OSError as e:
+            return str(e)
+    added = []
+    for spec in tools:
+        name, version = CARGO_TOOL_RE.match(spec).groups()
+        have = run([name.removeprefix("cargo-"), "--version"])
+        if not isinstance(have, str) and have.returncode == 0 and f"{name} {version}" in have.stdout:
+            continue
+        r = run(["install", "--locked", name, "--version", version])
+        if isinstance(r, str) or r.returncode != 0:
+            why = r if isinstance(r, str) else r.stderr.strip()[-200:]
+            return False, f"setup: cargo install {name} --version {version} failed ({why}): the shared tests are not run"
+        added.append(spec)
+    if not added:
+        return True, f"setup: cargo tools {', '.join(tools)} already installed"
+    return True, f"setup: cargo tools installed: {', '.join(added)}"
 
 
 def this_platform(name: str = sys.platform) -> str:
@@ -353,7 +392,9 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
                      setup: dict[str, list[str]] | None = None,
                      rustup: list[str] | None = None,
                      platforms: dict[str, list[str]] | None = None,
-                     platform: str | None = None) -> tuple[int, list[str]]:
+                     platform: str | None = None,
+                     cargo_tools: dict[str, list[str]] | None = None,
+                     cargo: list[str] | None = None) -> tuple[int, list[str]]:
     """(exit status, lines): each shared test file run in a clone of the crate at HEAD (the tests read their own git
     repository), with ALICE-Law's url sent to this checkout (the pinned revision, so a test that fetches ALICE-Law reads
     the same bytes, no network), after the rustc targets `setup` declares for the held tests are installed; 1 when any
@@ -390,6 +431,12 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
         targets = sorted({t for rel in run for t in (setup or {}).get(rel, [])})
         if targets:
             ok, line = install_setup(clone, targets, RUSTUP if rustup is None else rustup)
+            if not ok:
+                return 2, [line]
+            lines.append(line)
+        tools = sorted({t for rel in run for t in (cargo_tools or {}).get(rel, [])})
+        if tools:
+            ok, line = install_cargo_tools(clone, tools, CARGO if cargo is None else cargo)
             if not ok:
                 return 2, [line]
             lines.append(line)
@@ -519,11 +566,12 @@ def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path, private: 
         tests = shared_tests(law / "conformance/shared-files.toml", tree)
         setup = shared_test_setup(law, law / "conformance/shared-files.toml")
         platforms = shared_test_platforms(law, law / "conformance/shared-files.toml")
+        cargo_tools = shared_test_cargo_tools(law, law / "conformance/shared-files.toml")
     except (OSError, ValueError, KeyError) as e:  # tomllib.TOMLDecodeError is a ValueError
         codes.append(2)
         print(f"g11 self-check: shared-tests: the table or {SETUP} could not be read ({e}): not checked")
         return codes
-    code, lines = run_shared_tests(repo, law, tests, setup=setup, platforms=platforms)
+    code, lines = run_shared_tests(repo, law, tests, setup=setup, platforms=platforms, cargo_tools=cargo_tools)
     codes.append(code)
     for ln in lines[:-1] if code == 0 else []:  # a failure prints its lines below
         if ln.startswith(("setup: ", "not run on ")):
