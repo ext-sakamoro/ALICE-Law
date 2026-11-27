@@ -23,8 +23,9 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main), another push with
-  # before..after; a schedule or manual run always runs; any error runs (fail-closed) — scripts/changed_paths.py
+  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main), a push to main with
+  # before..after, another push with merge-base(origin/main)..after;
+  # a schedule or manual run always runs; any error runs (fail-closed) — scripts/changed_paths.py
   changes:
     name: Changed paths
     runs-on: ubuntu-24.04
