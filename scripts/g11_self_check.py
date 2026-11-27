@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ALICE-Law G11 self-check: the six checks a crate's G11 rests on, in one command, against the ALICE-Law
+"""ALICE-Law G11 self-check: the seven checks a crate's G11 rests on, in one command, against the ALICE-Law
 revision the crate pins.
 
     python3 <ALICE-Law checkout>/scripts/g11_self_check.py --repo . --name ALICE-<crate>
@@ -27,6 +27,11 @@ first: `git -C <ALICE-Law checkout> checkout --detach <rev>`). Then, from that c
                  origin at check time (a failed fetch is not checked, never a skip): a site added over the row or
                  over main is a finding, a fall names the row to lower; the scanner is built once per source
                  revision into NO_PANIC_CACHE (~/.cache/alice-law/no-panic-scan) and verified before each use
+  7. shared-tests every shared test file the crate holds (a shared row's path scripts/test_*.py present in the
+                 committed tree) run as the crate's CI runs it, in a clone of the crate at HEAD, with ALICE-Law's url
+                 sent to this checkout: a failing (or hung) one is a finding, none held is not checked; so a green
+                 self-check predicts the CI of the same tree (2026-11-28: the copies check passed at a new pin while
+                 every holder's scripts/test_shared_files.py failed its private-mode tests in CI)
 
 A private repository (the pin's line `visibility private`; a pin without the line, or with `visibility public`, is a
 public one) is never named in the shared-files table, which lists public repositories only. Its copies check runs in
@@ -40,13 +45,14 @@ declares [private-data] is a finding too (its per-repository rows are the table'
 The pin's SHA-256 values are compared with the blobs at the pinned revision, and the table, rows and copies
 checks read the crate's committed tree (each blob at HEAD, raw), so a checkout that converts line endings (Windows,
 core.autocrlf) gives the same result as any other.
-Each prints one line (its exit status and its summary). No GitHub API is used. Exit 0 when all six pass, 1 when
+Each prints one line (its exit status and its summary). No GitHub API is used. Exit 0 when all seven pass, 1 when
 any has a finding, 2 when any compared nothing or could not read its input, or the pin does not match.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import subprocess
 import sys
@@ -64,6 +70,12 @@ PRIVATE_DATA_RE = re.compile(r"^shared_files_check: (?:pending: )?(\S.*?): per-r
 OWN = "conformance/g11-own.toml"
 NO_PANIC_OWN = "conformance-own/no-panic.toml"
 NO_PANIC_CACHE = Path.home() / ".cache" / "alice-law" / "no-panic-scan"
+# the shared test files a holder carries (a shared row's path of this form): the self-check runs each one, as the
+# holder's CI does, so a green self-check predicts the CI of the same tree
+SHARED_TEST_RE = re.compile(r"^scripts/test_[A-Za-z0-9_]+\.py$")
+LAW_URL = "https://github.com/ext-sakamoro/ALICE-Law"
+# the bound on one shared test file's run (seconds): a test that hangs is a finding, never a silent wait
+SHARED_TEST_TIMEOUT = 1200
 
 
 def declared_g11(repo: Path) -> str | None:
@@ -232,6 +244,58 @@ def pin_problem(repo: Path, law: Path) -> str | None:
     return None
 
 
+def shared_tests(table: Path, tree: Path) -> list[str]:
+    """the shared rows' test files (scripts/test_*.py, a row with `repos`) the committed tree holds, in path order"""
+    rows = tomllib.loads(table.read_text(encoding="utf-8")).get("file", [])
+    paths = sorted({r["path"] for r in rows if "repos" in r and SHARED_TEST_RE.match(r["path"])})
+    return [p for p in paths if (tree / p).is_file()]
+
+
+def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHARED_TEST_TIMEOUT) -> tuple[int, list[str]]:
+    """(exit status, lines): each shared test file run in a clone of the crate at HEAD (the tests read their own git
+    repository), with ALICE-Law's url sent to this checkout (the pinned revision, so a test that fetches ALICE-Law reads
+    the same bytes, no network); 1 when any fails or exceeds `timeout`, 2 when none is held or the clone fails"""
+    if not tests:
+        return 2, ["the committed tree holds no shared test file (nothing compared)"]
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
+    if head.returncode != 0:
+        return 2, [f"git rev-parse HEAD failed ({head.stderr.strip()[:200]})"]
+    env = dict(os.environ)
+    n = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
+    env[f"GIT_CONFIG_KEY_{n}"] = f"url.{law.resolve().as_uri()}.insteadOf"
+    env[f"GIT_CONFIG_VALUE_{n}"] = LAW_URL
+    env["GIT_CONFIG_COUNT"] = str(n + 1)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    failed: list[str] = []
+    lines: list[str] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        clone = Path(tmp) / "clone"
+        for cmd in (["git", "clone", "-q", "--no-checkout", "--shared", str(repo), str(clone)],
+                    ["git", "-C", str(clone), "checkout", "-q", "--detach", head.stdout.strip()]):
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if r.returncode != 0:
+                return 2, [f"{' '.join(cmd[:4])} failed ({r.stderr.strip()[:200]})"]
+        for rel in tests:
+            try:
+                r = subprocess.run([sys.executable, rel], cwd=clone, env=env, capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace", timeout=timeout)
+            except subprocess.TimeoutExpired:
+                failed.append(rel)
+                lines.append(f"{rel}: did not finish in {timeout} s")
+                continue
+            if r.returncode != 0:
+                failed.append(rel)
+                tail = [ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()][-6:]
+                lines.append(f"{rel}: exit {r.returncode}")
+                lines.extend(f"  {ln}" for ln in tail)
+    if failed:
+        lines.append(f"{len(failed)} of {len(tests)} shared test file(s) failed: {', '.join(failed)}")
+        return 1, lines
+    lines.append(f"{len(tests)} shared test file(s) passed: {', '.join(tests)}")
+    return 0, lines
+
+
 def checks(repo: Path, name: str, law: Path, rev: str, private: bool = False,
            non_pass_baseline: Path | None = None, main_tree: Path | None = None,
            cache: Path = NO_PANIC_CACHE, tree: Path | None = None) -> list[tuple[str, list[str]]]:
@@ -333,6 +397,18 @@ def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path, private: 
             else:
                 print(f"g11 self-check: own-target: {m.group(1)} own copies off target, G11 declared "
                       f"{declared_g11(repo) or '(none)'}")
+    try:
+        tests = shared_tests(law / "conformance/shared-files.toml", tree)
+    except (OSError, ValueError, KeyError) as e:  # tomllib.TOMLDecodeError is a ValueError
+        codes.append(2)
+        print(f"g11 self-check: shared-tests: the table could not be read ({e}): not checked")
+        return codes
+    code, lines = run_shared_tests(repo, law, tests)
+    codes.append(code)
+    print(f"g11 self-check: shared-tests: exit {code}: {lines[-1]}")
+    if code != 0:
+        for ln in lines[:-1][-12:]:
+            print(f"  {ln}")
     return codes
 
 

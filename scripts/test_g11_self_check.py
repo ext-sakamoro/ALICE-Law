@@ -29,6 +29,14 @@ ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COM
        "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
 
+PASSING_TEST = "print('ok')\n"
+# fetches ALICE-Law by its public url: passes only when the url is sent to the pinned checkout (EXPECTED: its HEAD)
+LAW_READING_TEST = ("import subprocess, sys\n"
+                    "r = subprocess.run(['git', 'ls-remote', 'https://github.com/ext-sakamoro/ALICE-Law', 'HEAD'], "
+                    "capture_output=True, text=True, timeout=60)\n"
+                    "sys.exit(0 if r.returncode == 0 and r.stdout.split()[:1] == ['EXPECTED'] else 3)\n")
+
+
 def with_origin(crate: Path) -> Path:
     """a bare origin for the crate (its main is what the no-panic check fetches); returns the origin"""
     origin = crate.parent / (crate.name + "-origin.git")
@@ -54,7 +62,10 @@ class SelfCheck(unittest.TestCase):
         self.law, self.crate, self.log = root / "law", root / "crate", root / "argv.jsonl"
         (self.law / "scripts").mkdir(parents=True)
         (self.law / "conformance").mkdir()
-        (self.law / "conformance" / "shared-files.toml").write_text("# table\n", encoding="utf-8")
+        # one shared row whose path is a test file (the shared-tests check runs the crate's copy of it)
+        (self.law / "conformance" / "shared-files.toml").write_text(
+            '# table\n[[file]]\npath = "scripts/test_shared_probe.py"\nsha256 = "' + "0" * 64
+            + '"\nrepos = ["ALICE-X"]\n', encoding="utf-8")
         for n in NAMES:
             (self.law / "scripts" / n).write_text(
                 "import json, os, sys\n"
@@ -76,6 +87,8 @@ class SelfCheck(unittest.TestCase):
         self.rev = subprocess.run(["git", "-C", str(self.law), "rev-parse", "HEAD"], capture_output=True,
                                   text=True, check=True, encoding="utf-8").stdout.strip()
         (self.crate / ".github").mkdir(parents=True)
+        (self.crate / "scripts").mkdir()
+        self.shared_test(PASSING_TEST)
         subprocess.run(["git", "init", "-q", str(self.crate)], check=True, env=ENV)
         self.origin = with_origin(self.crate)
         # the private crates' own no-panic row (a public crate's check reads ALICE-Law's baseline instead)
@@ -100,6 +113,10 @@ class SelfCheck(unittest.TestCase):
             f"table-sha256 {table or h(self.law / 'conformance' / 'shared-files.toml')}\n"
             f"checker-sha256 {checker or h(self.law / 'scripts' / 'shared_files_check.py')}\n{extra}", encoding="utf-8")
 
+    def shared_test(self, body: str) -> None:
+        """the crate's copy of the shared test file the stub table lists"""
+        (self.crate / "scripts" / "test_shared_probe.py").write_text(body, encoding="utf-8")
+
     def own(self, text):
         (self.crate / "conformance").mkdir(exist_ok=True)
         (self.crate / "conformance" / "g11-own.toml").write_text(text, encoding="utf-8")
@@ -121,17 +138,66 @@ class SelfCheck(unittest.TestCase):
         calls = [json.loads(ln) for ln in self.log.read_text().splitlines()] if self.log.exists() else []
         return code, out.getvalue(), calls
 
+    def run_check_uncommitted(self):
+        """the self-check on what HEAD holds, the working copy left as the test wrote it"""
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = sc.main(["--repo", str(self.crate), "--name", "ALICE-X"] + self.extra, law=self.law)
+        return code, out.getvalue()
+
     def test_all_four_run_against_the_pinned_checkout_and_pass(self):
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
         self.assertEqual([c[0] for c in calls], list(NAMES))
-        self.assertEqual(out.count("g11 self-check: "), 8)
+        self.assertEqual(out.count("g11 self-check: "), 9)
         law = f"{self.rev}={self.law}"
         self.assertEqual(calls[0][-3:], ["--check", "--law", law])
         self.assertEqual(calls[1][-2:], ["--law", law])
         self.assertIn(str(self.law / "conformance" / "shared-files.toml"), calls[2])
         self.assertEqual(calls[3][1:3], ["--check-manifest", str(self.crate.resolve())])
         self.assertIn("summary of g11_table_check.py", out)
+
+    def test_a_failing_shared_test_is_a_finding_and_every_check_still_runs(self):
+        self.shared_test("import sys\nprint('a fixture finding')\nsys.exit(1)\n")
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("g11 self-check: shared-tests: exit 1: 1 of 1 shared test file(s) failed: "
+                      "scripts/test_shared_probe.py", out)
+        self.assertIn("  scripts/test_shared_probe.py: exit 1", out)
+        self.assertEqual([c[0] for c in calls], list(NAMES))
+
+    def test_a_passing_shared_test_is_named(self):
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("g11 self-check: shared-tests: exit 0: 1 shared test file(s) passed: "
+                      "scripts/test_shared_probe.py", out)
+
+    def test_a_crate_holding_no_shared_test_is_not_checked(self):
+        (self.crate / "scripts" / "test_shared_probe.py").unlink()
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 2, out)
+        self.assertIn("shared-tests: exit 2: the committed tree holds no shared test file (nothing compared)", out)
+
+    def test_the_shared_test_runs_the_committed_file_not_the_working_copy(self):
+        self.shared_test("import sys\nsys.exit(1)\n")
+        self.commit_crate()
+        self.shared_test(PASSING_TEST)  # fixed in the working copy only: the committed test still fails
+        code, out = self.run_check_uncommitted()
+        self.assertEqual(code, 1, out)
+        self.assertIn("1 of 1 shared test file(s) failed", out)
+
+    def test_the_shared_test_reads_alice_law_at_the_pinned_checkout(self):
+        # a test that fetches ALICE-Law by its public url gets the pinned checkout's revision (no network)
+        self.shared_test(LAW_READING_TEST.replace("EXPECTED", self.rev))
+        code, out, _ = self.run_check()
+        self.assertEqual(code, 0, out)
+
+    def test_a_shared_test_that_does_not_finish_is_a_finding(self):
+        self.shared_test("import time\ntime.sleep(30)\n")
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"], timeout=1)
+        self.assertEqual(code, 1, lines)
+        self.assertIn("scripts/test_shared_probe.py: did not finish in 1 s", lines)
 
     def test_the_non_pass_check_reads_law_s_baseline_for_a_public_crate(self):
         code, out, calls = self.run_check()
@@ -465,6 +531,7 @@ class PrivateCopiesReal(unittest.TestCase):
         (self.law / "scripts").mkdir(parents=True)
         (self.law / "conformance").mkdir()
         self.good = b"print('shared v2')\n"
+        self.test_body = b"print('a shared test passes')\n"
         (self.law / "scripts" / "shared_files_check.py").write_bytes((HERE / "shared_files_check.py").read_bytes())
         for n in ("g11_table_gen.py", "g11_table_check.py", "conformance_roster_check.py", "non_pass_ratchet.py",
                   "no_panic_ratchet.py"):
@@ -472,6 +539,10 @@ class PrivateCopiesReal(unittest.TestCase):
         (self.law / "conformance" / "shared-files.toml").write_text(
             '[[file]]\npath = "scripts/shared_tool.py"\n'
             f'sha256 = "{hashlib.sha256(self.good).hexdigest()}"\n'
+            f'source = {{ repo = "ALICE-Zip", rev = "{"a" * 40}" }}\n'
+            'repos = ["ALICE-DB", "ALICE-Zip"]\n'
+            '[[file]]\npath = "scripts/test_shared_tool.py"\n'
+            f'sha256 = "{hashlib.sha256(self.test_body).hexdigest()}"\n'
             f'source = {{ repo = "ALICE-Zip", rev = "{"a" * 40}" }}\n'
             'repos = ["ALICE-DB", "ALICE-Zip"]\n', encoding="utf-8")
         subprocess.run(["git", "init", "-q", str(self.law)], check=True, env=ENV)
@@ -497,6 +568,7 @@ class PrivateCopiesReal(unittest.TestCase):
 
     def run_with(self, data: bytes):
         (self.crate / "scripts" / "shared_tool.py").write_bytes(data)
+        (self.crate / "scripts" / "test_shared_tool.py").write_bytes(self.test_body)
         subprocess.run(["git", "-C", str(self.crate), "add", "-A"], check=True, env=ENV)
         subprocess.run(["git", "-C", str(self.crate), "commit", "-q", "-m", "c"], check=True, env=ENV)
         update_main(self.crate)
