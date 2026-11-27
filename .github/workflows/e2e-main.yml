@@ -7,12 +7,10 @@
 # fit what another core crate requires, so Cargo links a second copy beside the checkout)
 # and when e2e/Cargo.toml is behind a new major on main.
 #
-# The teeth job changes one line at a time in the checkouts and requires the test
-# to fail with the expected message (scripts/e2e_teeth.py); it rebuilds the test for
-# each change, so it runs on demand and when the test or the mutations change.
+# The mutations the test has to catch run in e2e-teeth.yml (on demand and on a push that changes the
+# check, never daily), so the gate here needs every job of this workflow.
 #
-# Daily and on demand, and on a push that changes the check. One run at a time;
-# the teeth job waits for the round trip and does not run on the daily schedule.
+# Daily and on demand, and on a push that changes the check. One run at a time.
 
 name: End to end (main)
 
@@ -108,39 +106,6 @@ jobs:
         if: always() && steps.patch.outcome == 'success' && steps.patch.outputs.expected != 'true'
         working-directory: e2e
         run: cargo test --release --locked -- --nocapture
-
-  teeth:
-    name: Mutations the test has to catch (main)
-    # rebuilds the test once per mutation: on demand and when the check changes.
-    # Runs after the round trip whatever its result (a crate not taken from main
-    # fails that job, and says nothing about the teeth)
-    if: ${{ !cancelled() && github.event_name != 'schedule' && needs.changes.outputs.run == 'true' }}
-    needs: [changes, roundtrip]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-      - name: Check out the main branches side by side
-        run: |
-          mkdir -p "$RUNNER_TEMP/core"
-          echo "| repository | main |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          for r in $REPOSITORIES; do
-            git clone --quiet --depth 1 "https://github.com/ext-sakamoro/$r.git" "$RUNNER_TEMP/core/$r"
-            echo "| $r | $(git -C "$RUNNER_TEMP/core/$r" rev-parse --short HEAD) |" >> "$GITHUB_STEP_SUMMARY"
-          done
-      - name: Patch the core crates with the checkouts
-        id: patch
-        run: |
-          python3 scripts/main_mode.py patch "$RUNNER_TEMP/core"
-          cd e2e && cargo --version
-          python3 ../scripts/expected_failure.py e2e-main-patch -- cargo generate-lockfile
-      - name: Mutations
-        if: steps.patch.outputs.expected != 'true'
-        run: python3 scripts/e2e_teeth.py "$RUNNER_TEMP/core" | tee -a "$GITHUB_STEP_SUMMARY"
 
   digest:
     # f32::max / f32::min leave the sign of an equal-zero result to the target, and
