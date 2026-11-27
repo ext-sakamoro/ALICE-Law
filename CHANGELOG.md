@@ -213,6 +213,7 @@ workflows are the interface, so changes to what they check are recorded here.
 
 ### Changed
 - `release_train.py feature-coverage`: exclude-features の feature は何も build しない間だけ除外が成り立つので、crate の他の feature が有効にする / crate 自身か他の checkout の manifest が dev-dependency 以外で有効にする (`features` か `dep/feature`、`dep?/feature`) と red にした 何件の manifest と比べたかを出す
+- changed_paths を使う 7 workflow の changes job の説明を、main への push は before..after、それ以外の 2 回目以降の push は merge-base(origin/main)..after に直した
 - `release-train.toml`: alice-sdf の `test-hooks` (crate 自身の試験専用の入口) を exclude-features に入れた e2e-main の feature-coverage が、どの利用側の set にも無い feature として断っていた
 - 共有 file の表: `scripts/changed_paths.py` と試験を ALICE-Law の新しい bytes へ移す計画の行にした 全 holder の main に行き渡った行 (gen_clippy_canary_calls.py / ci_test_coverage_check.py と各試験、changed-paths-oracle.yml ほか) は一様の行に戻した (写しの数 1556)
 - e2e の変異の job (teeth) を `.github/workflows/e2e-teeth.yml` に分けた (push / ci/** / dispatch、schedule 無し、自分の changes と gate) `e2e-main.yml` の gate は残る全 job を need する (`changed_paths.py sync` の gate_cover が red だった)
