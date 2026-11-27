@@ -78,6 +78,15 @@ LINTS = ("unwrap", "expect", "panic", "todo", "unimplemented", "unreachable", "a
 GITHUB = "https://github.com/"
 
 
+def binary_name(os_name: str = os.name) -> str:
+    """the scanner's file name as cargo writes it: with .exe on Windows (cargo adds it there, and a path without an
+    extension does not run: the system looks for the name with .exe)"""
+    return "no-panic-scan.exe" if os_name == "nt" else "no-panic-scan"
+
+
+BINARY = binary_name()
+
+
 def scanner() -> Path:
     """the scanner binary: NO_PANIC_SCAN if set, else built from tools/no-panic-scan (release)"""
     env = os.environ.get("NO_PANIC_SCAN")
@@ -86,7 +95,7 @@ def scanner() -> Path:
     target = Path(os.environ.get("CARGO_TARGET_DIR", SCANNER_DIR / "target"))
     subprocess.run(["cargo", "build", "-q", "--release", "--manifest-path", str(SCANNER_DIR / "Cargo.toml")],
                    check=True, env={**os.environ, "CARGO_TARGET_DIR": str(target)})
-    return target / "release" / "no-panic-scan"
+    return target / "release" / BINARY
 
 
 def scanner_source_key(src: Path = SCANNER_DIR) -> str:
@@ -119,7 +128,7 @@ def cached_scanner(cache: Path, src: Path = SCANNER_DIR, build=None) -> Path:
     entry = cache / key
 
     def verified() -> Path | None:
-        binary = entry / "no-panic-scan"
+        binary = entry / BINARY
         try:
             if ((entry / "source.sha256").read_text(encoding="utf-8").strip() == key and binary.is_file()
                     and (entry / "binary.sha256").read_text(encoding="utf-8").strip() == file_sha256(binary)):
@@ -137,8 +146,8 @@ def cached_scanner(cache: Path, src: Path = SCANNER_DIR, build=None) -> Path:
     try:
         with tempfile.TemporaryDirectory() as t:
             built = (build or _cargo_build(src))(Path(t))
-            shutil.copy2(built, staging / "no-panic-scan")
-        (staging / "binary.sha256").write_text(file_sha256(staging / "no-panic-scan") + "\n", encoding="utf-8")
+            shutil.copy2(built, staging / BINARY)
+        (staging / "binary.sha256").write_text(file_sha256(staging / BINARY) + "\n", encoding="utf-8")
         (staging / "source.sha256").write_text(key + "\n", encoding="utf-8")
         try:
             os.rename(staging, entry)
@@ -156,7 +165,7 @@ def _cargo_build(src: Path):
     def build(target: Path) -> Path:
         subprocess.run(["cargo", "build", "-q", "--release", "--manifest-path", str(src / "Cargo.toml")], check=True,
                        env={**os.environ, "CARGO_TARGET_DIR": str(target)})
-        return target / "release" / "no-panic-scan"
+        return target / "release" / BINARY
     return build
 
 

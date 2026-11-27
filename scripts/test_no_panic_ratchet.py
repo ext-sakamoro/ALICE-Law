@@ -435,7 +435,7 @@ class ScannerCache(unittest.TestCase):
         first = npr.cached_scanner(self.cache, self.src, build_and_look)
         self.assertEqual(seen, [False])
         self.assertEqual(sorted(p.name for p in first.parent.iterdir()),
-                         ["binary.sha256", "no-panic-scan", "source.sha256"])
+                         sorted(["binary.sha256", npr.BINARY, "source.sha256"]))
         # a builder that finishes after another already renamed its entry leaves that entry and no staging dir
         key = npr.scanner_source_key(self.src)
 
@@ -443,8 +443,8 @@ class ScannerCache(unittest.TestCase):
             out = self.build(target)
             entry = self.cache / key
             entry.mkdir()
-            (entry / "no-panic-scan").write_bytes(b"winner")
-            (entry / "binary.sha256").write_text(npr.file_sha256(entry / "no-panic-scan") + "\n", encoding="utf-8")
+            (entry / npr.BINARY).write_bytes(b"winner")
+            (entry / "binary.sha256").write_text(npr.file_sha256(entry / npr.BINARY) + "\n", encoding="utf-8")
             (entry / "source.sha256").write_text(key + "\n", encoding="utf-8")
             return out
 
@@ -453,6 +453,28 @@ class ScannerCache(unittest.TestCase):
         got = npr.cached_scanner(self.cache, self.src, late)
         self.assertEqual(got.read_bytes(), b"winner")
         self.assertEqual([p.name for p in self.cache.iterdir()], [key])
+
+    def test_the_binary_name_has_exe_on_windows_only(self):
+        # cargo writes target/release/no-panic-scan.exe on Windows; a path without .exe is not found there
+        self.assertEqual(npr.binary_name("nt"), "no-panic-scan.exe")
+        self.assertEqual(npr.binary_name("posix"), "no-panic-scan")
+        self.assertEqual(npr.BINARY, npr.binary_name())
+
+    def test_the_cargo_build_returns_the_file_cargo_writes_on_each_platform(self):
+        # a stand-in cargo that writes the file the way cargo does on the platform named (with .exe on "nt")
+        from unittest import mock
+        for os_name in ("nt", "posix"):
+            with self.subTest(os_name=os_name), mock.patch.object(npr, "BINARY", npr.binary_name(os_name)):
+                def fake_run(cmd, check, env):
+                    out = Path(env["CARGO_TARGET_DIR"]) / "release" / npr.binary_name(os_name)
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    out.write_bytes(b"built")
+                with mock.patch.object(npr.subprocess, "run", fake_run), tempfile.TemporaryDirectory() as t:
+                    built = npr._cargo_build(self.src)(Path(t))
+                    self.assertTrue(built.is_file(), built)
+                    got = npr.cached_scanner(Path(t) / "cache", self.src, lambda target: built)
+                    self.assertEqual(got.name, npr.binary_name(os_name))
+                    self.assertEqual(got.read_bytes(), b"built")
 
     def test_prepare_needs_a_cache(self):
         self.assertEqual(npr.main(["--prepare-scanner"]), 2)
