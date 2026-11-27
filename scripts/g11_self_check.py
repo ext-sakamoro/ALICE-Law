@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ALICE-Law G11 self-check: the five checks a crate's G11 rests on, in one command, against the ALICE-Law
+"""ALICE-Law G11 self-check: the six checks a crate's G11 rests on, in one command, against the ALICE-Law
 revision the crate pins.
 
     python3 <ALICE-Law checkout>/scripts/g11_self_check.py --repo . --name ALICE-<crate>
@@ -21,6 +21,12 @@ first: `git -C <ALICE-Law checkout> checkout --detach <rev>`). Then, from that c
                  crate's row (a public crate: conformance/non-pass-baseline.toml at the pinned revision, no row is a
                  note; a private crate: the baseline --non-pass-baseline FILE names, kept outside ALICE-Law, and no
                  row or no such file is a finding / not checked); a count below the row is a note (lower the row)
+  6. no-panic    scripts/no_panic_ratchet.py --only --landing: the committed tree's production panic sites against
+                 the crate's row (a public crate: conformance/no-panic-baseline.toml at the pinned revision; a
+                 private crate: its own conformance-own/no-panic.toml) and against the crate's main, fetched from its
+                 origin at check time (a failed fetch is not checked, never a skip): a site added over the row or
+                 over main is a finding, a fall names the row to lower; the scanner is built once per source
+                 revision into NO_PANIC_CACHE (~/.cache/alice-law/no-panic-scan) and verified before each use
 
 A private repository (the pin's line `visibility private`; a pin without the line, or with `visibility public`, is a
 public one) is never named in the shared-files table, which lists public repositories only. Its copies check runs in
@@ -34,7 +40,7 @@ declares [private-data] is a finding too (its per-repository rows are the table'
 The pin's SHA-256 values are compared with the blobs at the pinned revision, and the table, rows and copies
 checks read the crate's committed tree (each blob at HEAD, raw), so a checkout that converts line endings (Windows,
 core.autocrlf) gives the same result as any other.
-Each prints one line (its exit status and its summary). No GitHub API is used. Exit 0 when all five pass, 1 when
+Each prints one line (its exit status and its summary). No GitHub API is used. Exit 0 when all six pass, 1 when
 any has a finding, 2 when any compared nothing or could not read its input, or the pin does not match.
 """
 from __future__ import annotations
@@ -56,6 +62,8 @@ OFF_TARGET_RE = re.compile(r"^shared_files_check: own copies not at a pending ro
 PRIVATE_DATA_RE = re.compile(r"^shared_files_check: (?:pending: )?(\S.*?): per-repository data \(no repository holds "
                              r"the row\), not compared$", re.M)
 OWN = "conformance/g11-own.toml"
+NO_PANIC_OWN = "conformance-own/no-panic.toml"
+NO_PANIC_CACHE = Path.home() / ".cache" / "alice-law" / "no-panic-scan"
 
 
 def declared_g11(repo: Path) -> str | None:
@@ -130,12 +138,12 @@ def blob_sha256(law: Path, rev: str, rel: str) -> str | None:
     return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else None
 
 
-def committed_tree(repo: Path, dest: Path) -> None:
-    """the crate's committed tree at HEAD into dest, each file written as its raw blob (git archive would apply
+def committed_tree(repo: Path, dest: Path, ref: str = "HEAD") -> None:
+    """the crate's committed tree at `ref` (HEAD) into dest, each file written as its raw blob (git archive would apply
     core.autocrlf and eol attributes, a converted checkout holds other bytes again): the bytes the crates share"""
-    ls = subprocess.run(["git", "-C", str(repo), "ls-tree", "-r", "-z", "HEAD"], capture_output=True)
+    ls = subprocess.run(["git", "-C", str(repo), "ls-tree", "-r", "-z", ref], capture_output=True)
     if ls.returncode != 0:
-        raise ValueError(f"{repo}: git ls-tree HEAD failed ({ls.stderr.decode(errors='replace').strip()[:200]})")
+        raise ValueError(f"{repo}: git ls-tree {ref} failed ({ls.stderr.decode(errors='replace').strip()[:200]})")
     entries = []
     for item in ls.stdout.split(b"\0"):
         if not item:
@@ -147,7 +155,7 @@ def committed_tree(repo: Path, dest: Path) -> None:
         if kind == b"blob" and mode != b"120000":
             entries.append((oid.decode(), path.decode("utf-8", errors="surrogateescape")))
     if not entries:
-        raise ValueError(f"{repo}: HEAD has no file (nothing to check)")
+        raise ValueError(f"{repo}: {ref} has no file (nothing to check)")
     batch = subprocess.run(["git", "-C", str(repo), "cat-file", "--batch"],
                            input=b"".join(f"{oid}\n".encode() for oid, _ in entries), capture_output=True)
     if batch.returncode != 0:
@@ -163,6 +171,16 @@ def committed_tree(repo: Path, dest: Path) -> None:
             raise ValueError(f"{repo}: path {rel!r} leaves the tree")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
+
+
+def fetched_main(repo: Path, dest: Path) -> None:
+    """the crate's main as its origin has it now (fetched at check time, never a local ref that may be stale), its
+    committed tree written into dest; raises ValueError when the fetch fails"""
+    f = subprocess.run(["git", "-C", str(repo), "fetch", "-q", "--no-tags", "origin",
+                        "+refs/heads/main:refs/remotes/origin/main"], capture_output=True)
+    if f.returncode != 0:
+        raise ValueError(f"git fetch origin main failed ({f.stderr.decode(errors='replace').strip()[:200]})")
+    committed_tree(repo, dest, "refs/remotes/origin/main")
 
 
 def pin_problem(repo: Path, law: Path) -> str | None:
@@ -215,8 +233,15 @@ def pin_problem(repo: Path, law: Path) -> str | None:
 
 
 def checks(repo: Path, name: str, law: Path, rev: str, private: bool = False,
-           non_pass_baseline: Path | None = None) -> list[tuple[str, list[str]]]:
+           non_pass_baseline: Path | None = None, main_tree: Path | None = None,
+           cache: Path = NO_PANIC_CACHE, tree: Path | None = None) -> list[tuple[str, list[str]]]:
     s = str(law / "scripts")
+    # the no-panic check scans the committed tree (and the private row committed there), against main's tree
+    src = tree or repo
+    no_panic = [sys.executable, f"{s}/no_panic_ratchet.py", "--only", f"{name}={src}", "--landing",
+                "--base", str(main_tree), "--baseline",
+                str(src / NO_PANIC_OWN) if private else str(law / "conformance/no-panic-baseline.toml"),
+                "--scanner-cache", str(cache)]
     if private:
         non_pass = [sys.executable, f"{s}/non_pass_ratchet.py", "--private", f"{name}={repo}",
                     "--baseline", str(non_pass_baseline), "--gates", str(law / "conformance/gates.toml")]
@@ -233,19 +258,30 @@ def checks(repo: Path, name: str, law: Path, rev: str, private: bool = False,
                     "--repo", str(repo), "--name", name] + (["--private"] if private else [])),
         ("manifest", [sys.executable, f"{s}/conformance_roster_check.py", "--check-manifest", str(repo), "--ref", "HEAD"]),
         ("non-pass", non_pass),
+        ("no-panic", no_panic),
     ]
 
 
 def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path, private: bool = False,
-               non_pass_baseline: Path | None = None) -> list[int]:
+               non_pass_baseline: Path | None = None, main_tree: Path | None = None,
+               main_problem: str | None = None, cache: Path = NO_PANIC_CACHE) -> list[int]:
     """each check's exit status (and the own-target verdict), printing one line per check"""
     codes: list[int] = []
     # the tree checks read the committed tree; the manifest check reads HEAD itself (--ref HEAD)
     # the manifest and non-pass checks read HEAD itself (a git tree), the others the committed tree
     commands = [(label, [tree.as_posix() if x == str(repo) and label not in ("manifest", "non-pass") else x
                          for x in cmd])
-                for label, cmd in checks(repo, name, law, rev, private, non_pass_baseline)]
+                for label, cmd in checks(repo, name, law, rev, private, non_pass_baseline, main_tree, cache, tree)]
     for label, cmd in commands:
+        if label == "no-panic" and main_problem:
+            codes.append(2)
+            print(f"g11 self-check: no-panic: the crate's main could not be read ({main_problem}): not checked")
+            continue
+        if label == "no-panic" and private and not (tree / NO_PANIC_OWN).is_file():
+            codes.append(2)
+            print(f"g11 self-check: no-panic: a private crate keeps its row in {NO_PANIC_OWN}, not committed (write it "
+                  "with no_panic_ratchet.py --write-own NAME=. --baseline " + NO_PANIC_OWN + "): not checked")
+            continue
         if label == "non-pass" and private and non_pass_baseline is None:
             codes.append(2)
             print("g11 self-check: non-pass: a private crate's baseline is not handed in (--non-pass-baseline FILE): "
@@ -305,6 +341,8 @@ def main(argv: list[str] | None = None, law: Path = LAW) -> int:
     ap.add_argument("--repo", required=True, type=Path)
     ap.add_argument("--name", required=True)
     ap.add_argument("--non-pass-baseline", type=Path, help="a private crate's non-pass baseline (kept outside ALICE-Law)")
+    ap.add_argument("--no-panic-cache", type=Path, default=NO_PANIC_CACHE,
+                    help="where the no-panic scanner is built once per source revision (verified before each use)")
     a = ap.parse_args(argv)
     repo = a.repo.resolve()
     why = pin_problem(repo, law)
@@ -315,13 +353,21 @@ def main(argv: list[str] | None = None, law: Path = LAW) -> int:
     rev = pin_fields(pin_text)["rev"]
     private = visibility(pin_text) == "private"
     with tempfile.TemporaryDirectory() as tmp:  # removed however the checks end
-        tree = Path(tmp)
+        tree, main_tree = Path(tmp) / "head", Path(tmp) / "main"
+        tree.mkdir()
+        main_tree.mkdir()
         try:
             committed_tree(repo, tree)
         except (ValueError, OSError) as e:
             print(f"g11 self-check: {e}: nothing was checked", file=sys.stderr)
             return 2
-        codes = run_checks(repo, a.name, law, rev, tree, private, a.non_pass_baseline)
+        try:
+            fetched_main(repo, main_tree)
+            main_problem = None
+        except (ValueError, OSError) as e:
+            main_problem = str(e)
+        codes = run_checks(repo, a.name, law, rev, tree, private, a.non_pass_baseline, main_tree, main_problem,
+                           a.no_panic_cache)
     verdict = 1 if 1 in codes else 2 if any(c != 0 for c in codes) else 0
     print(f"g11 self-check: {a.name} at ALICE-Law {rev[:12]}: "
           + ("pass" if verdict == 0 else "finding" if verdict == 1 else "not checked (an input could not be read or nothing was compared)"))
