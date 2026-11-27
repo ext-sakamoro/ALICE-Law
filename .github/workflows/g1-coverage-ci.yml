@@ -33,7 +33,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the checker
-        run: python3 scripts/test_g1_coverage_live.py
+        run: python3 scripts/quiet_tests.py scripts/test_g1_coverage_live.py
 
       - name: Test the clippy region generator
         run: python3 scripts/test_g1_clippy_block.py

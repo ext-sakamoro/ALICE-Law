@@ -212,4 +212,4 @@ class UnderTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    sys.exit(unittest.main())
+    sys.exit(unittest.main(buffer=True))

@@ -212,6 +212,7 @@ workflows are the interface, so changes to what they check are recorded here.
 - `conformance/manifest-state.toml` / `conformance/pending-state.toml`: ALICE-Font の最初の manifest (a205ee5c) を着地の前に記録し、`conformance/missing-manifests.toml` から外す README の Status を作り直す
 
 ### Changed
+- 試験の出力: conformance-live と各 ci の ratchet の試験は `scripts/quiet_tests.py` を通して走らせ、通った試験は unittest の要約しか出さない (fixture の偽の repo の finding が本物の finding と並んで log に出ていた) 出していた 6 本は `unittest.main(buffer=True)` にした 通った試験が要約以外を出すと red
 - `release_train.py feature-coverage`: exclude-features の feature は何も build しない間だけ除外が成り立つので、crate の他の feature が有効にする / crate 自身か他の checkout の manifest が dev-dependency 以外で有効にする (`features` か `dep/feature`、`dep?/feature`) と red にした 何件の manifest と比べたかを出す
 - changed_paths を使う 7 workflow の changes job の説明を、main への push は before..after、それ以外の 2 回目以降の push は merge-base(origin/main)..after に直した
 - `release-train.toml`: alice-sdf の `test-hooks` (crate 自身の試験専用の入口) を exclude-features に入れた e2e-main の feature-coverage が、どの利用側の set にも無い feature として断っていた

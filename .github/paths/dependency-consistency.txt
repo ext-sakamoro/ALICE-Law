@@ -15,3 +15,5 @@ tools/**
 .github/workflows/dependency-consistency.yml
 scripts/changed_paths.py
 .github/paths/dependency-consistency.txt
+scripts/quiet_tests.py
+scripts/test_quiet_tests.py

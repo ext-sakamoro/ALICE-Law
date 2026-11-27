@@ -33,7 +33,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the ratchet
-        run: python3 scripts/test_pass_anchor_ratchet.py
+        run: python3 scripts/quiet_tests.py scripts/test_pass_anchor_ratchet.py
 
       - name: The baseline's form and rows
         env:

@@ -63,7 +63,7 @@ jobs:
           fetch-depth: 0  # the base (scripts/ci_base.py) is read from the history
 
       - name: Test the reader
-        run: python3 scripts/test_holder_live.py
+        run: python3 scripts/quiet_tests.py scripts/test_holder_live.py
 
       - name: Test what a baseline change makes worse
         run: python3 scripts/test_live_baseline_delta.py
