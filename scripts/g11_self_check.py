@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ALICE-Law G11 self-check: the four checks a crate's G11 rests on, in one command, against the ALICE-Law
+"""ALICE-Law G11 self-check: the five checks a crate's G11 rests on, in one command, against the ALICE-Law
 revision the crate pins.
 
     python3 <ALICE-Law checkout>/scripts/g11_self_check.py --repo . --name ALICE-<crate>
@@ -17,6 +17,10 @@ first: `git -C <ALICE-Law checkout> checkout --detach <rev>`). Then, from that c
                  declares G11 `pass` while N > 0 is a finding (G11 is a pass per crate: a row still pending on
                  other repositories' mains does not hold it back, the crate's own copies must all be at target)
   4. manifest    scripts/conformance_roster_check.py --check-manifest: the manifest and its anchors at HEAD
+  5. non-pass    scripts/non_pass_ratchet.py: the gates the manifest reads fail-known or unverified, not above the
+                 crate's row (a public crate: conformance/non-pass-baseline.toml at the pinned revision, no row is a
+                 note; a private crate: the baseline --non-pass-baseline FILE names, kept outside ALICE-Law, and no
+                 row or no such file is a finding / not checked); a count below the row is a note (lower the row)
 
 A private repository (the pin's line `visibility private`; a pin without the line, or with `visibility public`, is a
 public one) is never named in the shared-files table, which lists public repositories only. Its copies check runs in
@@ -30,7 +34,7 @@ declares [private-data] is a finding too (its per-repository rows are the table'
 The pin's SHA-256 values are compared with the blobs at the pinned revision, and the table, rows and copies
 checks read the crate's committed tree (each blob at HEAD, raw), so a checkout that converts line endings (Windows,
 core.autocrlf) gives the same result as any other.
-Each prints one line (its exit status and its summary). No GitHub API is used. Exit 0 when all four pass, 1 when
+Each prints one line (its exit status and its summary). No GitHub API is used. Exit 0 when all five pass, 1 when
 any has a finding, 2 when any compared nothing or could not read its input, or the pin does not match.
 """
 from __future__ import annotations
@@ -210,8 +214,16 @@ def pin_problem(repo: Path, law: Path) -> str | None:
     return None
 
 
-def checks(repo: Path, name: str, law: Path, rev: str, private: bool = False) -> list[tuple[str, list[str]]]:
+def checks(repo: Path, name: str, law: Path, rev: str, private: bool = False,
+           non_pass_baseline: Path | None = None) -> list[tuple[str, list[str]]]:
     s = str(law / "scripts")
+    if private:
+        non_pass = [sys.executable, f"{s}/non_pass_ratchet.py", "--private", f"{name}={repo}",
+                    "--baseline", str(non_pass_baseline), "--gates", str(law / "conformance/gates.toml")]
+    else:
+        non_pass = [sys.executable, f"{s}/non_pass_ratchet.py", "--only", f"{name}={repo}",
+                    "--baseline", str(law / "conformance/non-pass-baseline.toml"),
+                    "--gates", str(law / "conformance/gates.toml")]
     return [
         ("g11-table", [sys.executable, f"{s}/g11_table_gen.py", "--repo", str(repo), "--name", name, "--check",
                        "--law", f"{rev}={law}"]),
@@ -220,16 +232,25 @@ def checks(repo: Path, name: str, law: Path, rev: str, private: bool = False) ->
         ("copies", [sys.executable, f"{s}/shared_files_check.py", "--table", str(law / "conformance/shared-files.toml"),
                     "--repo", str(repo), "--name", name] + (["--private"] if private else [])),
         ("manifest", [sys.executable, f"{s}/conformance_roster_check.py", "--check-manifest", str(repo), "--ref", "HEAD"]),
+        ("non-pass", non_pass),
     ]
 
 
-def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path, private: bool = False) -> list[int]:
+def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path, private: bool = False,
+               non_pass_baseline: Path | None = None) -> list[int]:
     """each check's exit status (and the own-target verdict), printing one line per check"""
     codes: list[int] = []
     # the tree checks read the committed tree; the manifest check reads HEAD itself (--ref HEAD)
-    commands = [(label, [tree.as_posix() if x == str(repo) and label != "manifest" else x for x in cmd])
-                for label, cmd in checks(repo, name, law, rev, private)]
+    # the manifest and non-pass checks read HEAD itself (a git tree), the others the committed tree
+    commands = [(label, [tree.as_posix() if x == str(repo) and label not in ("manifest", "non-pass") else x
+                         for x in cmd])
+                for label, cmd in checks(repo, name, law, rev, private, non_pass_baseline)]
     for label, cmd in commands:
+        if label == "non-pass" and private and non_pass_baseline is None:
+            codes.append(2)
+            print("g11 self-check: non-pass: a private crate's baseline is not handed in (--non-pass-baseline FILE): "
+                  "not checked")
+            continue
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         lines = [ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()]
         codes.append(r.returncode)
@@ -283,6 +304,7 @@ def main(argv: list[str] | None = None, law: Path = LAW) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--repo", required=True, type=Path)
     ap.add_argument("--name", required=True)
+    ap.add_argument("--non-pass-baseline", type=Path, help="a private crate's non-pass baseline (kept outside ALICE-Law)")
     a = ap.parse_args(argv)
     repo = a.repo.resolve()
     why = pin_problem(repo, law)
@@ -299,7 +321,7 @@ def main(argv: list[str] | None = None, law: Path = LAW) -> int:
         except (ValueError, OSError) as e:
             print(f"g11 self-check: {e}: nothing was checked", file=sys.stderr)
             return 2
-        codes = run_checks(repo, a.name, law, rev, tree, private)
+        codes = run_checks(repo, a.name, law, rev, tree, private, a.non_pass_baseline)
     verdict = 1 if 1 in codes else 2 if any(c != 0 for c in codes) else 0
     print(f"g11 self-check: {a.name} at ALICE-Law {rev[:12]}: "
           + ("pass" if verdict == 0 else "finding" if verdict == 1 else "not checked (an input could not be read or nothing was compared)"))

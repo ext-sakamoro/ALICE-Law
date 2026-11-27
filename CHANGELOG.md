@@ -8,6 +8,7 @@ workflows are the interface, so changes to what they check are recorded here.
 ## [Unreleased]
 
 ### Added
+- `scripts/non_pass_ratchet.py`: crate ごとの non-pass の gate (roster が fail-known / unverified と読む gate、証拠の無い pass / n/a を含む) の数は下がるだけ 基準は `conformance/non-pass-baseline.toml` (release-train の 18 repository、計 34)、Conformance (live) が roster の読みを `--states-out` で受けて比べる (上回れば red、下回れば同じ commit で行を下げるまで red)、ci/ では form と roster の行、base より上がる行は `raised = "<理由>"` が要る `scripts/g11_self_check.py` に 5 つ目の check `non-pass` を足し、公開 crate は固定した版の基準 (行が無ければ note)、非公開 crate は `--non-pass-baseline` で渡す ALICE-Law の外の基準と比べる (渡されなければ not checked、行が無ければ finding、下回りは note) 試験 20 件 + self-check 試験 3 件、変異 15 件はすべて red
 - `conformance/branch-main-exempt.toml` の window 行: `dependency` / `rev` (40 桁) / `expires` (時差つきの ISO 8601) を持つ行は、その file の指摘のうち、その依存をその commit で取るものだけを例外にする (同じ file の他の指摘は数える) 期限を過ぎた行は表の読み込みで失敗し、使われない行も従来どおり失敗する file の行と window の行が同じ file にあるのは拒む 上流の major な移動で利用側を候補の commit に短い間だけ固定する時に使う (`scripts/branch_main_live.py`、試験 `scripts/test_branch_main_live.py` に 5 本、変異 3 件で red) 最初の行は ALICE-Channel の alice-identity 480d591 (2026-11-29T01:30+09:00 まで)
 
 ### Added

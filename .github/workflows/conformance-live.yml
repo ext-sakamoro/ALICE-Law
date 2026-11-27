@@ -46,7 +46,16 @@ jobs:
       - name: Every release-train manifest at main (the status counts go to the job summary)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/conformance_roster_check.py --summary "$GITHUB_STEP_SUMMARY"
+        run: python3 scripts/conformance_roster_check.py --summary "$GITHUB_STEP_SUMMARY" --states-out "$RUNNER_TEMP/states.json"
+
+      # the non-pass gate ratchet reads the states the step above wrote (no second read of the repositories): per
+      # release-train repository, the gates read fail-known or unverified against conformance/non-pass-baseline.toml
+      - name: Test the non-pass ratchet
+        run: python3 scripts/test_non_pass_ratchet.py
+
+      - name: The release-train repositories' non-pass counts against the baseline
+        shell: bash
+        run: python3 scripts/non_pass_ratchet.py --states "$RUNNER_TEMP/states.json" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # a push run skips the jobs below that read every public repository; a green push run must not be read as
       # their count, so the job summary names them (read from this file)

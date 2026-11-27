@@ -922,6 +922,8 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
     ap.add_argument("--line-baseline", default=str(ROOT / "conformance" / "line-refs-baseline.toml"),
                     help="the line-number references each manifest may still hold (absent: none may)")
     ap.add_argument("--owner", default=None, help="the GitHub owner (default: [train] github of the roster)")
+    ap.add_argument("--states-out", metavar="FILE", help="write each repository's status counts as JSON "
+                    "(read by scripts/non_pass_ratchet.py --states)")
     ap.add_argument("--summary", metavar="FILE",
                     help="append the computed status counts to FILE as a Markdown table (the job summary)")
     mode = ap.add_mutually_exclusive_group()
@@ -998,6 +1000,13 @@ def main(argv: list[str] | None = None, fetch=None) -> int:
         c = states[repo]
         print(f"state: {repo} ({', '.join(sorted(c['crates']))}): "
               + ", ".join(f"{st} {c['counts'][st]}" for st in STATUSES))
+    if a.states_out:
+        try:
+            Path(a.states_out).write_text(json.dumps({r: states[r]["counts"] for r in sorted(states)}, indent=1,
+                                                     sort_keys=True) + "\n", encoding="utf-8")
+        except OSError as e:
+            print(f"error: the states file {a.states_out}: {e}", file=sys.stderr)
+            return 2
     if a.summary:
         try:
             with open(a.summary, "a", encoding="utf-8") as fh:

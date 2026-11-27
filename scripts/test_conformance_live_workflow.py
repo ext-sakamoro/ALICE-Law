@@ -88,7 +88,11 @@ class Workflow(unittest.TestCase):
 
     def test_the_manifests_are_read_at_main_and_the_counts_go_to_the_job_summary(self):
         run = self.step("Every release-train manifest at main (the status counts go to the job summary)")["run"]
-        self.assertEqual(run.strip(), 'python3 scripts/conformance_roster_check.py --summary "$GITHUB_STEP_SUMMARY"')
+        self.assertEqual(run.strip(), 'python3 scripts/conformance_roster_check.py --summary "$GITHUB_STEP_SUMMARY" '
+                                      '--states-out "$RUNNER_TEMP/states.json"')
+        # the states go to a runner temp file the non-pass ratchet reads in the same job, never to the tree
+        ratchet = self.step("The release-train repositories' non-pass counts against the baseline")["run"]
+        self.assertIn('non_pass_ratchet.py --states "$RUNNER_TEMP/states.json"', ratchet)
         # no committed state is compared or written: neither the drift note nor a state file is named
         whole = WORKFLOW.read_text(encoding="utf-8")
         self.assertNotIn("--state-drift-note", whole)

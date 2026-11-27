@@ -1,0 +1,54 @@
+# The non-pass gate ratchet on a ci/ branch: the ratchet's tests, the baseline's own form, and a raised row's reason
+#
+# Conformance (live) compares every release-train repository's count of gates read fail-known or unverified with
+# conformance/non-pass-baseline.toml (scripts/non_pass_ratchet.py --states); a ci/ branch is not red for another
+# repository's count, which it cannot change. Here: scripts/test_non_pass_ratchet.py, the baseline read with
+# --check-baseline (each row a count, 0 or more, and every row a repository of the roster), and against the same file
+# at the base scripts/ci_base.py names: a row whose count rises carries `raised = "<reason>"`.
+
+name: Non-pass ratchet (ci)
+
+on:
+  # also on demand, so a run can be had at a commit whose own push did not touch the paths below
+  workflow_dispatch:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: non-pass-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  non-pass:
+    name: Non-pass ratchet (tests, the baseline's form, a raise's reason)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0  # the base (scripts/ci_base.py) is read from the history
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Test the ratchet
+        run: python3 scripts/test_non_pass_ratchet.py
+
+      - name: The baseline's form and rows, and a raised row's reason against the base
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          git fetch -q origin main
+          base=$(python3 scripts/ci_base.py --event "$EVENT" --ref "$GITHUB_REF" --before "$BEFORE")
+          if git cat-file -e "$base":conformance/non-pass-baseline.toml 2>/dev/null; then
+            git show "$base":conformance/non-pass-baseline.toml > "$RUNNER_TEMP/non-pass-base.toml"
+            python3 scripts/non_pass_ratchet.py --check-baseline --base-baseline "$RUNNER_TEMP/non-pass-base.toml"
+          else
+            echo "the base has no conformance/non-pass-baseline.toml (this change adds it): the form and rows only"
+            python3 scripts/non_pass_ratchet.py --check-baseline
+          fi

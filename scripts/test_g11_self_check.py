@@ -23,7 +23,8 @@ spec = importlib.util.spec_from_file_location("g11sc", HERE / "g11_self_check.py
 sc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sc)
 
-NAMES = ("g11_table_gen.py", "g11_table_check.py", "shared_files_check.py", "conformance_roster_check.py")
+NAMES = ("g11_table_gen.py", "g11_table_check.py", "shared_files_check.py", "conformance_roster_check.py",
+         "non_pass_ratchet.py")
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
        "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
@@ -64,6 +65,10 @@ class SelfCheck(unittest.TestCase):
         subprocess.run(["git", "init", "-q", str(self.crate)], check=True, env=ENV)
         self.pin()
         self.saved_env = dict(os.environ)
+        # a private crate's non-pass baseline is handed in (kept outside ALICE-Law); the stub only records it
+        self.npb = Path(self.tmp.name) / "non-pass-private.toml"
+        self.npb.write_text('[repository."ALICE-X"]\nnon_pass = 0\n', encoding="utf-8")
+        self.extra = ["--non-pass-baseline", str(self.npb)]
 
     def tearDown(self):
         os.environ.clear()
@@ -91,7 +96,7 @@ class SelfCheck(unittest.TestCase):
             os.environ[f"RC_{k}"] = str(v)
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            code = sc.main(["--repo", str(self.crate), "--name", "ALICE-X"], law=self.law)
+            code = sc.main(["--repo", str(self.crate), "--name", "ALICE-X"] + self.extra, law=self.law)
         calls = [json.loads(ln) for ln in self.log.read_text().splitlines()] if self.log.exists() else []
         return code, out.getvalue(), calls
 
@@ -99,7 +104,7 @@ class SelfCheck(unittest.TestCase):
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
         self.assertEqual([c[0] for c in calls], list(NAMES))
-        self.assertEqual(out.count("g11 self-check: "), 6)
+        self.assertEqual(out.count("g11 self-check: "), 7)
         law = f"{self.rev}={self.law}"
         self.assertEqual(calls[0][-3:], ["--check", "--law", law])
         self.assertEqual(calls[1][-2:], ["--law", law])
@@ -107,13 +112,38 @@ class SelfCheck(unittest.TestCase):
         self.assertEqual(calls[3][1:3], ["--check-manifest", str(self.crate.resolve())])
         self.assertIn("summary of g11_table_check.py", out)
 
+    def test_the_non_pass_check_reads_law_s_baseline_for_a_public_crate(self):
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 0, out)
+        np_call = calls[4]
+        self.assertEqual(np_call[0], "non_pass_ratchet.py")
+        self.assertEqual(np_call[1:3], ["--only", f"ALICE-X={self.crate.resolve()}"])
+        self.assertIn(str(self.law / "conformance" / "non-pass-baseline.toml"), np_call)
+        self.assertNotIn(str(self.npb), np_call)
+
+    def test_a_private_crate_s_non_pass_check_reads_the_handed_baseline(self):
+        self.pin(extra="visibility private\n")
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 0, out)
+        np_call = calls[4]
+        self.assertEqual(np_call[1:3], ["--private", f"ALICE-X={self.crate.resolve()}"])
+        self.assertIn(str(self.npb), np_call)
+
+    def test_a_private_crate_without_a_handed_baseline_is_not_checked(self):
+        self.pin(extra="visibility private\n")
+        self.extra = []
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 2, out)
+        self.assertIn("non-pass: a private crate's baseline is not handed in", out)
+        self.assertEqual([c[0] for c in calls], list(NAMES[:4]))
+
     def test_a_finding_in_any_check_is_exit_1_and_every_check_still_runs(self):
-        for n in ("g11_table_gen", "g11_table_check", "shared_files_check", "conformance_roster_check"):
+        for n in ("g11_table_gen", "g11_table_check", "shared_files_check", "conformance_roster_check", "non_pass_ratchet"):
             self.log.unlink(missing_ok=True)
             code, out, calls = self.run_check(**{n: 1})
             os.environ.pop(f"RC_{n}")
             self.assertEqual(code, 1, (n, out))
-            self.assertEqual(len(calls), 4, n)
+            self.assertEqual(len(calls), 5, n)
 
     def test_compared_nothing_is_exit_2_and_a_finding_wins(self):
         code, out, _ = self.run_check(shared_files_check=2)
@@ -155,7 +185,7 @@ class SelfCheck(unittest.TestCase):
         (self.law / "scripts" / "g11_self_check.py").write_text("# a copy\n", encoding="utf-8")
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 5)
 
     def manifest(self, status):
         (self.crate / "alice-law-conformance.toml").write_text(f'[G11]\nstatus = "{status}"\n', encoding="utf-8")
@@ -165,7 +195,7 @@ class SelfCheck(unittest.TestCase):
         os.environ["OFF_N"] = "1"
         code, out, calls = self.run_check()
         self.assertEqual(code, 1, out)
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 5)
         self.assertIn("declares G11 pass, and 1 own copy is not at a pending row's target", out)
 
     def test_own_copies_off_target_do_not_fail_a_crate_that_does_not_declare_pass(self):
@@ -208,7 +238,7 @@ class SelfCheck(unittest.TestCase):
         self.assertEqual(st.stdout, "")  # the checkout is the pinned revision as git reads it
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 5)
 
     def test_the_checks_read_the_crate_s_committed_tree_not_its_converted_checkout(self):
         subprocess.run(["git", "-C", str(self.crate), "config", "core.autocrlf", "true"], check=True, env=ENV)
@@ -228,7 +258,7 @@ class SelfCheck(unittest.TestCase):
         os.symlink("real.txt", self.crate / "link.txt")
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 5)
 
     def test_a_crate_whose_head_has_no_file_is_not_checked(self):
         # an empty HEAD (the pin only in the checkout): nothing to compare, never a pass
@@ -360,7 +390,7 @@ class PrivateCopiesReal(unittest.TestCase):
         (self.law / "conformance").mkdir()
         self.good = b"print('shared v2')\n"
         (self.law / "scripts" / "shared_files_check.py").write_bytes((HERE / "shared_files_check.py").read_bytes())
-        for n in ("g11_table_gen.py", "g11_table_check.py", "conformance_roster_check.py"):
+        for n in ("g11_table_gen.py", "g11_table_check.py", "conformance_roster_check.py", "non_pass_ratchet.py"):
             (self.law / "scripts" / n).write_text("print('ok')\n", encoding="utf-8")
         (self.law / "conformance" / "shared-files.toml").write_text(
             '[[file]]\npath = "scripts/shared_tool.py"\n'
@@ -390,7 +420,8 @@ class PrivateCopiesReal(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.crate), "commit", "-q", "-m", "c"], check=True, env=ENV)
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            code = sc.main(["--repo", str(self.crate), "--name", "ALICE-Private"], law=self.law)
+            code = sc.main(["--repo", str(self.crate), "--name", "ALICE-Private", "--non-pass-baseline",
+                            str(self.crate.parent / "npb.toml")], law=self.law)
         return code, out.getvalue()
 
     def test_a_private_repository_holding_a_stale_copy_fails(self):
