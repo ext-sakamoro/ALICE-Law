@@ -3343,7 +3343,7 @@ unreachable = 0
 assert = 0
 
 [repo."ALICE-Text"]
-unwrap = 6
+unwrap = 4
 expect = 1
 panic = 0
 todo = 0
