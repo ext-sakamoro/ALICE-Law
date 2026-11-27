@@ -35,7 +35,8 @@ first: `git -C <ALICE-Law checkout> checkout --detach <rev>`). Then, from that c
                  targets a held test needs (conformance/shared-test-setup.toml, beside the table) are installed
                  first with `rustup target add` for the crate's toolchain, and a setup that cannot be installed is
                  not checked (exit 2), never a skip (2026-11-28: scripts/test_fneg_fma_ir_check.py needs both linux
-                 targets, which the holders' CI step had not added)
+                 targets, which the holders' CI step had not added); run on a developer's machine, the added
+                 targets stay installed in that toolchain
 
 A private repository (the pin's line `visibility private`; a pin without the line, or with `visibility public`, is a
 public one) is never named in the shared-files table, which lists public repositories only. Its copies check runs in
