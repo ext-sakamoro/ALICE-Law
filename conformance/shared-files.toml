@@ -11,7 +11,8 @@ repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-DB", "ALICE-Edge", "ALICE-LOL"
 
 [[file]]
 path = ".github/workflows/changed-paths-oracle.yml"
-pending = { since = "2026-11-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "7248409be6a475cd87faf5508f5dae2476e386056e646cb803cbcb5533e9d49f", owner = "ALICE-Channel", planned = "fbdcabb4ad78885bb3a40bfc5f132f162bab1774", moved_from = { planned = "44b4c25e08ba68eba38e0de244d84fca07683b43", target = "32414b46e22b1cc9121997b7f32a44e9c88307d5d929570733fe89b5510a99ef" }, variants = { "32414b46e22b1cc9121997b7f32a44e9c88307d5d929570733fe89b5510a99ef" = ["ALICE-Identity"], "7248409be6a475cd87faf5508f5dae2476e386056e646cb803cbcb5533e9d49f" = ["ALICE-Channel", "ALICE-Crypto"] } }
+sha256 = "7248409be6a475cd87faf5508f5dae2476e386056e646cb803cbcb5533e9d49f"
+source = { repo = "ALICE-Channel", rev = "5b7eebc83eb70d35fd2ae79c9114f56b40dbc066" }
 repos = ["ALICE-Channel", "ALICE-Crypto", "ALICE-Identity"]
 
 [[file]]
@@ -20,12 +21,12 @@ own = "each repository's own CI workflow: repositories cut from one template hav
 
 [[file]]
 path = ".github/workflows/eol.yml"
-pending = { since = "2026-11-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "fd9ef0bdcf6d97be74e59f61d9ee681088fae7faa34abf7c71e3164ed3af5e32", owner = "ALICE-Analytics", planned = "c29c09f4539617681d19c959721990edce1860bb", moved_from = { planned = "22be12bbf5792b05aa3c27e73a0b8195d0b10281", target = "1acdeab1e6c9b88d7283b5cf42c3c8822e058857b0a5c2e2a3f55badbe64fa33" }, variants = { "1acdeab1e6c9b88d7283b5cf42c3c8822e058857b0a5c2e2a3f55badbe64fa33" = ["ALICE-Ephemeris", "ALICE-Font", "ALICE-Identity", "ALICE-LOL", "ALICE-Markup", "ALICE-Physics", "ALICE-SDF"], "fd9ef0bdcf6d97be74e59f61d9ee681088fae7faa34abf7c71e3164ed3af5e32" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-Sync", "ALICE-Zip"] } }
+pending = { since = "2026-11-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "fd9ef0bdcf6d97be74e59f61d9ee681088fae7faa34abf7c71e3164ed3af5e32", owner = "ALICE-Analytics", planned = "c29c09f4539617681d19c959721990edce1860bb", moved_from = { planned = "22be12bbf5792b05aa3c27e73a0b8195d0b10281", target = "1acdeab1e6c9b88d7283b5cf42c3c8822e058857b0a5c2e2a3f55badbe64fa33" }, variants = { "1acdeab1e6c9b88d7283b5cf42c3c8822e058857b0a5c2e2a3f55badbe64fa33" = ["ALICE-Ephemeris", "ALICE-Font", "ALICE-LOL", "ALICE-Markup", "ALICE-Physics"], "fd9ef0bdcf6d97be74e59f61d9ee681088fae7faa34abf7c71e3164ed3af5e32" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"] } }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Ephemeris", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-SDF", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
 path = ".github/workflows/public-text.yml"
-pending = { since = "2026-11-15", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "747eae6b8f672e52c24de5aaf55aeb2af4d7f2c695f6f4c878d08d6948e5e7ab", owner = "ALICE-Audit", planned = "07fab9b0e188a1b82615049f437443cbdf01a8d4", moved_from = { planned = "b76e9b0266a02daa6006b529ee85f60bd9a05795", target = "c17a0c4dc16f50e3233b21fb634ebed64ead629c7c0fb13fb4abeb3904d8bbc9" }, variants = { "747eae6b8f672e52c24de5aaf55aeb2af4d7f2c695f6f4c878d08d6948e5e7ab" = ["ALICE-Analytics", "ALICE-Audit", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"], "9b24f9a9b70b91bfcc246abcfe2812b1a6077416495b8e2417cda97aece64998" = ["ALICE-Audio", "ALICE-Auth", "ALICE-Bridge", "ALICE-Cache", "ALICE-Codec", "ALICE-DataShield", "ALICE-Drone", "ALICE-Font", "ALICE-GameEngine", "ALICE-Legal", "ALICE-Markup", "ALICE-Navigation", "ALICE-Queue", "ALICE-Search", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-View", "ALICE-Voice", "text-to-print"], "c17a0c4dc16f50e3233b21fb634ebed64ead629c7c0fb13fb4abeb3904d8bbc9" = ["ALICE-Ephemeris", "ALICE-Identity", "ALICE-LOL", "ALICE-Physics", "ALICE-SDF"] } }
+pending = { since = "2026-11-15", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "747eae6b8f672e52c24de5aaf55aeb2af4d7f2c695f6f4c878d08d6948e5e7ab", owner = "ALICE-Audit", planned = "07fab9b0e188a1b82615049f437443cbdf01a8d4", moved_from = { planned = "b76e9b0266a02daa6006b529ee85f60bd9a05795", target = "c17a0c4dc16f50e3233b21fb634ebed64ead629c7c0fb13fb4abeb3904d8bbc9" }, variants = { "747eae6b8f672e52c24de5aaf55aeb2af4d7f2c695f6f4c878d08d6948e5e7ab" = ["ALICE-Analytics", "ALICE-Audit", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"], "9b24f9a9b70b91bfcc246abcfe2812b1a6077416495b8e2417cda97aece64998" = ["ALICE-Audio", "ALICE-Auth", "ALICE-Bridge", "ALICE-Cache", "ALICE-Codec", "ALICE-DataShield", "ALICE-Drone", "ALICE-Font", "ALICE-GameEngine", "ALICE-Legal", "ALICE-Markup", "ALICE-Navigation", "ALICE-Queue", "ALICE-Search", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-View", "ALICE-Voice", "text-to-print"], "c17a0c4dc16f50e3233b21fb634ebed64ead629c7c0fb13fb4abeb3904d8bbc9" = ["ALICE-Ephemeris", "ALICE-LOL", "ALICE-Physics"] } }
 repos = ["ALICE-Analytics", "ALICE-Audio", "ALICE-Audit", "ALICE-Auth", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Crypto", "ALICE-DB", "ALICE-DataShield", "ALICE-DetMath", "ALICE-Drone", "ALICE-Edge", "ALICE-Ephemeris", "ALICE-Font", "ALICE-GameEngine", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Legal", "ALICE-ML", "ALICE-Markup", "ALICE-Navigation", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Queue", "ALICE-SDF", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Space", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-View", "ALICE-Voice", "ALICE-Zip", "text-to-print"]
 exempt = { "ALICE-Law" = "runs its own scripts/public_text_check.py in place; the crates' workflow fetches that file from here" }
 
@@ -88,8 +89,7 @@ repos = ["ALICE-LOL", "ALICE-TRT"]
 
 [[file]]
 path = "scripts/changed_paths.py"
-sha256 = "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7"
-source = { repo = "ALICE-API", rev = "b6675c55a35c0798826eefa2449e10e8c2cf73a5" }
+pending = { since = "2026-11-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "18fecb93f4e751c8853c728e591fe279bb679936e3c8d8a39728e7a80bb2a2ae", owner = "ALICE-Law", planned = "a1c48a2ef348a89c23f11adfc46cba1b5b5e54a0", moved_from = { planned = "63a579a5cf7c8af6a8ecb557881f5eaaf1c4ff6e", target = "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7" }, first_move = true, variants = { "f8dcad925f69366125dc3815c2b00efb463f58bfc2b4395575ae69769d23a6d7" = ["ALICE-API", "ALICE-Analytics", "ALICE-Audit", "ALICE-Auth", "ALICE-BLE", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Compiler", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Eco-System", "ALICE-Edge", "ALICE-Font", "ALICE-HTTP", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-LoRa", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Presence", "ALICE-SDF", "ALICE-SIMD", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-TRT", "ALICE-Text", "ALICE-View", "ALICE-Voice", "ALICE-WebSocket", "ALICE-Zip", "ALICE-gRPC", "text-to-print"] } }
 repos = ["ALICE-API", "ALICE-Analytics", "ALICE-Audit", "ALICE-Auth", "ALICE-BLE", "ALICE-Bridge", "ALICE-Cache", "ALICE-Channel", "ALICE-Codec", "ALICE-Compiler", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Eco-System", "ALICE-Edge", "ALICE-Font", "ALICE-HTTP", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-LoRa", "ALICE-ML", "ALICE-Markup", "ALICE-OS-Keystore", "ALICE-Physics", "ALICE-Presence", "ALICE-SDF", "ALICE-SIMD", "ALICE-Search", "ALICE-Sign", "ALICE-Signal", "ALICE-Streaming-Protocol", "ALICE-Sync", "ALICE-TRT", "ALICE-Text", "ALICE-View", "ALICE-Voice", "ALICE-WebSocket", "ALICE-Zip", "ALICE-gRPC", "text-to-print"]
 
 [[file]]
@@ -124,7 +124,8 @@ repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/ci_test_coverage_check.py"
-pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "04d22868fdd37fa9e5e09889524fa0f32e22ed205b867f0d46fea1f5b09b9e86", owner = "ALICE-LLM", planned = "566a8cd97b711962cff334379d578acd402798e2", moved_from = { planned = "ec7b0efa33f3c0104274bfbb7ab895bd4419658d", target = "103b24f28c8b7a572b8f30002014b8c1ffeb61d45968669c247ec7547d2d8883" }, variants = { "04d22868fdd37fa9e5e09889524fa0f32e22ed205b867f0d46fea1f5b09b9e86" = ["ALICE-LLM"], "103b24f28c8b7a572b8f30002014b8c1ffeb61d45968669c247ec7547d2d8883" = ["ALICE-SDF"] } }
+sha256 = "04d22868fdd37fa9e5e09889524fa0f32e22ed205b867f0d46fea1f5b09b9e86"
+source = { repo = "ALICE-LLM", rev = "f6abc9dadb4481c115f05e99769e35d5a8323b61" }
 repos = ["ALICE-LLM", "ALICE-SDF"]
 
 [[file]]
@@ -203,7 +204,8 @@ exempt = { "ALICE-DB" = "this repository's own configuration of scripts/gated_te
 
 [[file]]
 path = "scripts/gen_clippy_canary_calls.py"
-pending = { since = "2026-11-26", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "a326faade6c05ad1567d5b5e25f770bf6e24b1e5e8b5da0645ca95bef7b5716b", owner = "ALICE-Analytics", planned = "ada48da61c044b56014c9149e85aae35881611cf", moved_from = { planned = "cc0ad22502cfdd745cce4c2b8373c96b854aac5a", target = "118e2a172c4eb12a996664a50c5a00dbe3eefe3eef861fc679e96db298bc2d31" }, variants = { "118e2a172c4eb12a996664a50c5a00dbe3eefe3eef861fc679e96db298bc2d31" = ["ALICE-Identity"], "a326faade6c05ad1567d5b5e25f770bf6e24b1e5e8b5da0645ca95bef7b5716b" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"] } }
+sha256 = "a326faade6c05ad1567d5b5e25f770bf6e24b1e5e8b5da0645ca95bef7b5716b"
+source = { repo = "ALICE-Analytics", rev = "a43954e71dbf412aff9a79263df40bd98ba5912f" }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -356,8 +358,7 @@ repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-
 
 [[file]]
 path = "scripts/test_changed_paths.py"
-sha256 = "42f15623afba06a618daa29b98179628957d9b92adc920a2326fc8c2173fa65b"
-source = { repo = "ALICE-Analytics", rev = "3d07df308ecc28ddb6fe9721a807d25764a48a01" }
+pending = { since = "2026-11-27", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "3e1be1e2cd58e286fbfa2f35c97c2c9097939fb8386fc634ef4b0adf34d93eef", owner = "ALICE-Law", planned = "3aad4296f7fb4877e700818d43d5276bc5fe75fb", moved_from = { planned = "e835e3955545b9628cfa13f7b41f4004bc34de54", target = "42f15623afba06a618daa29b98179628957d9b92adc920a2326fc8c2173fa65b" }, first_move = true, variants = { "42f15623afba06a618daa29b98179628957d9b92adc920a2326fc8c2173fa65b" = ["ALICE-Analytics", "ALICE-Auth", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"] } }
 repos = ["ALICE-Analytics", "ALICE-Auth", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Font", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-LOL", "ALICE-Law", "ALICE-ML", "ALICE-Physics", "ALICE-SDF", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip", "text-to-print"]
 
 [[file]]
@@ -380,7 +381,8 @@ repos = ["ALICE-DB", "ALICE-DetMath", "ALICE-Law", "ALICE-Physics"]
 
 [[file]]
 path = "scripts/test_ci_test_coverage_check.py"
-pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "85100445bb51f76e07789071538bc805d9276c466c66cb778b9fa8a1e86ff119", owner = "ALICE-LLM", planned = "204501de73c403a730513d00d76e7389d6638d2c", moved_from = { planned = "47addef408e6d942e37ea9a563046406063f4b2c", target = "47f48d312531bcca14ea46781be509ffcb55ecf71aa57bb5b9f50971c6cd0d51" }, variants = { "47f48d312531bcca14ea46781be509ffcb55ecf71aa57bb5b9f50971c6cd0d51" = ["ALICE-SDF"], "85100445bb51f76e07789071538bc805d9276c466c66cb778b9fa8a1e86ff119" = ["ALICE-LLM"] } }
+sha256 = "85100445bb51f76e07789071538bc805d9276c466c66cb778b9fa8a1e86ff119"
+source = { repo = "ALICE-LLM", rev = "f6abc9dadb4481c115f05e99769e35d5a8323b61" }
 repos = ["ALICE-LLM", "ALICE-SDF"]
 
 [[file]]
@@ -432,7 +434,8 @@ repos = ["ALICE-DB", "ALICE-GameEngine", "ALICE-ML", "ALICE-Sync"]
 
 [[file]]
 path = "scripts/test_gen_clippy_canary_calls.py"
-pending = { since = "2026-11-26", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "54b2174e9829ef6c0f1bfad2478dee06bb514a2a4a2d037a3b548f55039b0afc", owner = "ALICE-Analytics", planned = "a291301f590d47d84cf0357a092a608bab6d3c4b", moved_from = { planned = "fc452bdb565ebd1e22de8803e1251c1e91e3b72b", target = "15c0afc25b6cc072693d9e29f47799e137bdb17ff10356a2fe215a6756b0f68f" }, variants = { "15c0afc25b6cc072693d9e29f47799e137bdb17ff10356a2fe215a6756b0f68f" = ["ALICE-Identity"], "54b2174e9829ef6c0f1bfad2478dee06bb514a2a4a2d037a3b548f55039b0afc" = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"] } }
+sha256 = "54b2174e9829ef6c0f1bfad2478dee06bb514a2a4a2d037a3b548f55039b0afc"
+source = { repo = "ALICE-Analytics", rev = "a43954e71dbf412aff9a79263df40bd98ba5912f" }
 repos = ["ALICE-Analytics", "ALICE-Channel", "ALICE-Crypto", "ALICE-DB", "ALICE-DetMath", "ALICE-Edge", "ALICE-Identity", "ALICE-Kinematics", "ALICE-LLM", "ALICE-ML", "ALICE-OS-Keystore", "ALICE-Sign", "ALICE-Sync", "ALICE-Zip"]
 
 [[file]]
@@ -567,7 +570,7 @@ repos = ["ALICE-Physics", "ALICE-SDF"]
 
 [[file]]
 path = "scripts/test_workflow_concurrency.py"
-pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e273bf9b0ebff3e68b40e1c8056b5b98a96a6fed06a624299401ea485448e855", owner = "ALICE-Analytics", planned = "587fe373ecbc33d2a4cf2c4e41dc3b922c47eb93", variants = { "e273bf9b0ebff3e68b40e1c8056b5b98a96a6fed06a624299401ea485448e855" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Zip"], "f2ad8f8e95973a49d5c7ef26150e89b98c7a6397d1b61bf47f0278c9da391135" = ["ALICE-LOL", "ALICE-Law", "ALICE-SDF"] } }
+pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "e273bf9b0ebff3e68b40e1c8056b5b98a96a6fed06a624299401ea485448e855", owner = "ALICE-Analytics", planned = "587fe373ecbc33d2a4cf2c4e41dc3b922c47eb93", variants = { "e273bf9b0ebff3e68b40e1c8056b5b98a96a6fed06a624299401ea485448e855" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-SDF", "ALICE-Zip"], "f2ad8f8e95973a49d5c7ef26150e89b98c7a6397d1b61bf47f0278c9da391135" = ["ALICE-LOL", "ALICE-Law"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
@@ -584,7 +587,7 @@ repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Codec", "ALICE-DetMath", "ALIC
 
 [[file]]
 path = "scripts/test_workflow_tool_pins.py"
-pending = { since = "2026-11-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "7d2d4b3680c3a22941c0fe5635c43c3f2f047badfcda2293be6d2e4f877a9c0c", owner = "ALICE-Analytics", planned = "8830958a25815a946e3ecaa562c0451be9c6f068", variants = { "7d2d4b3680c3a22941c0fe5635c43c3f2f047badfcda2293be6d2e4f877a9c0c" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Zip"], "absent" = ["ALICE-LOL", "ALICE-Law", "ALICE-SDF"] } }
+pending = { since = "2026-11-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "7d2d4b3680c3a22941c0fe5635c43c3f2f047badfcda2293be6d2e4f877a9c0c", owner = "ALICE-Analytics", planned = "8830958a25815a946e3ecaa562c0451be9c6f068", variants = { "7d2d4b3680c3a22941c0fe5635c43c3f2f047badfcda2293be6d2e4f877a9c0c" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-SDF", "ALICE-Zip"], "absent" = ["ALICE-LOL", "ALICE-Law"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
@@ -619,7 +622,7 @@ repos = ["ALICE-Channel", "ALICE-Crypto"]
 
 [[file]]
 path = "scripts/workflow_concurrency.py"
-pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "75ed2773d1f943cf4b6600a8eaa30f711ac791c56093922f9fb7468eae47fcf9", owner = "ALICE-Analytics", planned = "07c4478acdb9643faa266d9e679d435fae3cf724", variants = { "75ed2773d1f943cf4b6600a8eaa30f711ac791c56093922f9fb7468eae47fcf9" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Zip"], "affb6af8760329bb3ab02fb7b9d557d34ef1a58702fa0289d31bff750d8fea0d" = ["ALICE-LOL", "ALICE-Law", "ALICE-SDF"] } }
+pending = { since = "2026-11-23", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "75ed2773d1f943cf4b6600a8eaa30f711ac791c56093922f9fb7468eae47fcf9", owner = "ALICE-Analytics", planned = "07c4478acdb9643faa266d9e679d435fae3cf724", variants = { "75ed2773d1f943cf4b6600a8eaa30f711ac791c56093922f9fb7468eae47fcf9" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-SDF", "ALICE-Zip"], "affb6af8760329bb3ab02fb7b9d557d34ef1a58702fa0289d31bff750d8fea0d" = ["ALICE-LOL", "ALICE-Law"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
@@ -636,7 +639,7 @@ repos = ["ALICE-Analytics", "ALICE-Cache", "ALICE-Codec", "ALICE-DetMath", "ALIC
 
 [[file]]
 path = "scripts/workflow_tool_pins.py"
-pending = { since = "2026-11-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "6b96041f19b567081eb7c0c6c7525881731ebdb85b339f079cba347a13401807", owner = "ALICE-Analytics", planned = "7a9e8dbd9b3a1364fa42ea1e5b541aaf6ace1819", variants = { "6b96041f19b567081eb7c0c6c7525881731ebdb85b339f079cba347a13401807" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-Zip"], "absent" = ["ALICE-LOL", "ALICE-Law", "ALICE-SDF"] } }
+pending = { since = "2026-11-24", exit = "every listed repository's main has the bytes the registry row moves to (its target)", target = "6b96041f19b567081eb7c0c6c7525881731ebdb85b339f079cba347a13401807", owner = "ALICE-Analytics", planned = "7a9e8dbd9b3a1364fa42ea1e5b541aaf6ace1819", variants = { "6b96041f19b567081eb7c0c6c7525881731ebdb85b339f079cba347a13401807" = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-SDF", "ALICE-Zip"], "absent" = ["ALICE-LOL", "ALICE-Law"] } }
 repos = ["ALICE-Analytics", "ALICE-DB", "ALICE-DetMath", "ALICE-LOL", "ALICE-Law", "ALICE-SDF", "ALICE-Zip"]
 
 [[file]]
