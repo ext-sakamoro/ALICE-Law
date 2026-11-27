@@ -323,6 +323,120 @@ class OwnFile(unittest.TestCase):
         self.assertEqual(npr.main(["--write-own", "ALICE-Own=."]), 2)
 
 
+class ZipLanding(unittest.TestCase):
+    """the landing that went unseen: ALICE-Zip 71e89ed moved a license key from one date library to another and added
+    four `.expect()` calls in libalice-enterprise/src/license/key.rs; main held 14 and the row said 14, the landing held
+    18. The push-path check (--only --landing --base main) must refuse it before it lands"""
+
+    @classmethod
+    def setUpClass(cls):
+        npr.scanner()
+
+    @staticmethod
+    def key_rs(n: int) -> str:
+        calls = "\n".join(f'    let v{i} = parse(s, {i}).expect("field {i} of a license key");' for i in range(n))
+        return ("fn parse(s: &str, i: usize) -> Option<u32> { s.split('-').nth(i)?.parse().ok() }\n"
+                f"pub fn decode(s: &str) -> u32 {{\n{calls}\n    0\n}}\n")
+
+    def tree(self, d: Path, name: str, n: int) -> Path:
+        root = d / name / "libalice-enterprise" / "src" / "license"
+        root.mkdir(parents=True)
+        (root / "key.rs").write_text(self.key_rs(n), encoding="utf-8")
+        return d / name
+
+    def test_four_added_expects_are_red_at_the_landing(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            main14, land18 = self.tree(d, "main", 14), self.tree(d, "landing", 18)
+            base = d / "baseline.toml"
+            base.write_text(npr.render({"ALICE-Zip": row(expect=14)}), encoding="utf-8")
+            args = ["--baseline", str(base), "--landing", "--base", str(main14)]
+            self.assertEqual(npr.main(["--only", f"ALICE-Zip={main14}", *args]), 0)
+            import contextlib
+            import io
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(npr.main(["--only", f"ALICE-Zip={land18}", *args]), 1)
+            self.assertIn("ALICE-Zip: expect 18", out.getvalue())
+            # one site more is enough
+            self.assertEqual(npr.main(["--only", f"ALICE-Zip={self.tree(d, 'plus1', 15)}", *args]), 1)
+
+    def test_a_main_with_no_production_file_compares_nothing(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            land = self.tree(d, "landing", 14)
+            empty = d / "empty-main"
+            empty.mkdir()
+            base = d / "baseline.toml"
+            base.write_text(npr.render({"ALICE-Zip": row(expect=14)}), encoding="utf-8")
+            self.assertNotEqual(npr.main(["--only", f"ALICE-Zip={land}", "--baseline", str(base), "--landing",
+                                          "--base", str(empty)]), 0)
+
+
+class ScannerCache(unittest.TestCase):
+    """--scanner-cache: built once per source revision, verified before each use, rebuilt on any mismatch"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.src = Path(self.tmp.name) / "src"
+        (self.src / "src").mkdir(parents=True)
+        (self.src / "Cargo.toml").write_text("[package]\nname = \"s\"\n", encoding="utf-8")
+        (self.src / "src" / "main.rs").write_text("fn main() {}\n", encoding="utf-8")
+        self.cache = Path(self.tmp.name) / "cache"
+        self.builds = 0
+
+    def build(self, target: Path) -> Path:
+        self.builds += 1
+        out = target / "bin"
+        out.write_bytes(b"binary built from " + npr.scanner_source_key(self.src).encode())
+        return out
+
+    def get(self) -> Path:
+        return npr.cached_scanner(self.cache, self.src, self.build)
+
+    def test_a_valid_entry_is_reused(self):
+        a = self.get()
+        b = self.get()
+        self.assertEqual(a, b)
+        self.assertEqual(self.builds, 1)
+        self.assertEqual(a.parent.name, npr.scanner_source_key(self.src))
+
+    def test_a_changed_source_is_a_new_key_and_a_new_build(self):
+        a = self.get()
+        (self.src / "src" / "main.rs").write_text("fn main() { let _ = 1; }\n", encoding="utf-8")
+        b = self.get()
+        self.assertNotEqual(a.parent, b.parent)
+        self.assertEqual(self.builds, 2)
+
+    def test_a_tampered_or_missing_binary_or_key_record_rebuilds(self):
+        a = self.get()
+        a.write_bytes(b"something else")
+        self.get()
+        self.assertEqual(self.builds, 2)
+        a.unlink()
+        self.get()
+        self.assertEqual(self.builds, 3)
+        (a.parent / "source.sha256").write_text("0" * 64 + "\n", encoding="utf-8")
+        self.get()
+        self.assertEqual(self.builds, 4)
+        (a.parent / "binary.sha256").unlink()
+        self.get()
+        self.assertEqual(self.builds, 5)
+
+    def test_prepare_needs_a_cache(self):
+        self.assertEqual(npr.main(["--prepare-scanner"]), 2)
+
+    def test_the_key_ignores_a_target_directory_and_needs_a_manifest(self):
+        k = npr.scanner_source_key(self.src)
+        (self.src / "target" / "release").mkdir(parents=True)
+        (self.src / "target" / "release" / "x").write_bytes(b"x")
+        self.assertEqual(npr.scanner_source_key(self.src), k)
+        (self.src / "Cargo.toml").unlink()
+        with self.assertRaises(npr.hl.Unreadable):
+            npr.scanner_source_key(self.src)
+
+
 class CrossCheck(unittest.TestCase):
     """the syntax-tree scan against the lexical pass, file by file over the production files of the corpus"""
 

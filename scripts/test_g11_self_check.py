@@ -24,9 +24,23 @@ sc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sc)
 
 NAMES = ("g11_table_gen.py", "g11_table_check.py", "shared_files_check.py", "conformance_roster_check.py",
-         "non_pass_ratchet.py")
+         "non_pass_ratchet.py", "no_panic_ratchet.py")
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
        "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+
+def with_origin(crate: Path) -> Path:
+    """a bare origin for the crate (its main is what the no-panic check fetches); returns the origin"""
+    origin = crate.parent / (crate.name + "-origin.git")
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True, env=ENV)
+    subprocess.run(["git", "-C", str(crate), "remote", "add", "origin", str(origin)], check=True, env=ENV)
+    return origin
+
+
+def update_main(crate: Path) -> None:
+    """the crate's origin main set to its HEAD"""
+    subprocess.run(["git", "-C", str(crate), "push", "-q", "origin", "HEAD:refs/heads/main"], check=True,
+                   env=ENV, capture_output=True)
 
 
 def h(p: Path) -> str:
@@ -63,12 +77,17 @@ class SelfCheck(unittest.TestCase):
                                   text=True, check=True, encoding="utf-8").stdout.strip()
         (self.crate / ".github").mkdir(parents=True)
         subprocess.run(["git", "init", "-q", str(self.crate)], check=True, env=ENV)
+        self.origin = with_origin(self.crate)
+        # the private crates' own no-panic row (a public crate's check reads ALICE-Law's baseline instead)
+        (self.crate / "conformance-own").mkdir()
+        (self.crate / "conformance-own" / "no-panic.toml").write_text("# own row\n", encoding="utf-8")
         self.pin()
         self.saved_env = dict(os.environ)
         # a private crate's non-pass baseline is handed in (kept outside ALICE-Law); the stub only records it
         self.npb = Path(self.tmp.name) / "non-pass-private.toml"
         self.npb.write_text('[repository."ALICE-X"]\nnon_pass = 0\n', encoding="utf-8")
-        self.extra = ["--non-pass-baseline", str(self.npb)]
+        self.extra = ["--non-pass-baseline", str(self.npb), "--no-panic-cache", str(root / "npcache")]
+        self.follow_main = True  # the crate's origin main follows each commit (False: main stays where it was)
 
     def tearDown(self):
         os.environ.clear()
@@ -89,6 +108,8 @@ class SelfCheck(unittest.TestCase):
         # the checks read the crate's committed tree (git archive HEAD): commit what the test wrote
         subprocess.run(["git", "-C", str(self.crate), "add", "-A"], check=True, env=ENV)
         subprocess.run(["git", "-C", str(self.crate), "commit", "-q", "--allow-empty", "-m", "c"], check=True, env=ENV)
+        if self.follow_main:
+            update_main(self.crate)
 
     def run_check(self, **rcs):
         self.commit_crate()
@@ -104,7 +125,7 @@ class SelfCheck(unittest.TestCase):
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
         self.assertEqual([c[0] for c in calls], list(NAMES))
-        self.assertEqual(out.count("g11 self-check: "), 7)
+        self.assertEqual(out.count("g11 self-check: "), 8)
         law = f"{self.rev}={self.law}"
         self.assertEqual(calls[0][-3:], ["--check", "--law", law])
         self.assertEqual(calls[1][-2:], ["--law", law])
@@ -135,15 +156,68 @@ class SelfCheck(unittest.TestCase):
         code, out, calls = self.run_check()
         self.assertEqual(code, 2, out)
         self.assertIn("non-pass: a private crate's baseline is not handed in", out)
-        self.assertEqual([c[0] for c in calls], list(NAMES[:4]))
+        self.assertNotIn("non_pass_ratchet.py", [c[0] for c in calls])
+
+    def test_the_no_panic_check_is_a_landing_against_the_fetched_main(self):
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 0, out)
+        np = calls[5]
+        self.assertEqual(np[0], "no_panic_ratchet.py")
+        self.assertEqual(np[1], "--only")
+        self.assertTrue(np[2].startswith("ALICE-X=") and np[2].endswith("/head"), np)  # the committed tree
+        self.assertIn("--landing", np)
+        self.assertTrue(np[np.index("--base") + 1].endswith("/main"), np)
+        self.assertEqual(np[np.index("--baseline") + 1], str(self.law / "conformance" / "no-panic-baseline.toml"))
+        self.assertEqual(np[np.index("--scanner-cache") + 1], self.extra[-1])
+
+    def test_a_private_crate_s_no_panic_row_is_its_own_committed_file(self):
+        self.pin(extra="visibility private\n")
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 0, out)
+        np = calls[5]
+        self.assertTrue(np[np.index("--baseline") + 1].endswith("/head/conformance-own/no-panic.toml"), np)
+
+    def test_a_private_crate_without_its_no_panic_row_is_not_checked(self):
+        self.pin(extra="visibility private\n")
+        (self.crate / "conformance-own" / "no-panic.toml").unlink()
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 2, out)
+        self.assertIn("no-panic: a private crate keeps its row in conformance-own/no-panic.toml", out)
+        self.assertNotIn("no_panic_ratchet.py", [c[0] for c in calls])
+
+    def test_a_main_that_cannot_be_fetched_is_not_checked_never_a_skip(self):
+        subprocess.run(["git", "-C", str(self.crate), "remote", "remove", "origin"], check=True, env=ENV)
+        self.follow_main = False
+        code, out, calls = self.run_check()
+        self.assertEqual(code, 2, out)
+        self.assertIn("no-panic: the crate's main could not be read (git fetch origin main failed", out)
+        self.assertNotIn("no_panic_ratchet.py", [c[0] for c in calls])
+        self.assertIn("not checked", out.splitlines()[-1])
+
+    def test_the_main_is_fetched_at_check_time_not_a_stale_local_ref(self):
+        # the local refs/remotes/origin/main stays at the first commit while origin's main moves on
+        (self.crate / "a.txt").write_text("first\n", encoding="utf-8")
+        self.commit_crate()
+        other = Path(self.tmp.name) / "other"
+        subprocess.run(["git", "clone", "-q", "-b", "main", str(self.origin), str(other)], check=True, env=ENV,
+                       capture_output=True)
+        (other / "a.txt").write_text("second\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(other), "commit", "-qam", "m"], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(other), "push", "-q", "origin", "HEAD:refs/heads/main"], check=True,
+                       env=ENV, capture_output=True)
+        dest = Path(self.tmp.name) / "fetched"
+        dest.mkdir()
+        sc.fetched_main(self.crate, dest)
+        self.assertEqual((dest / "a.txt").read_text(encoding="utf-8"), "second\n")
 
     def test_a_finding_in_any_check_is_exit_1_and_every_check_still_runs(self):
-        for n in ("g11_table_gen", "g11_table_check", "shared_files_check", "conformance_roster_check", "non_pass_ratchet"):
+        for n in ("g11_table_gen", "g11_table_check", "shared_files_check", "conformance_roster_check", "non_pass_ratchet",
+                  "no_panic_ratchet"):
             self.log.unlink(missing_ok=True)
             code, out, calls = self.run_check(**{n: 1})
             os.environ.pop(f"RC_{n}")
             self.assertEqual(code, 1, (n, out))
-            self.assertEqual(len(calls), 5, n)
+            self.assertEqual(len(calls), 6, n)
 
     def test_compared_nothing_is_exit_2_and_a_finding_wins(self):
         code, out, _ = self.run_check(shared_files_check=2)
@@ -185,7 +259,7 @@ class SelfCheck(unittest.TestCase):
         (self.law / "scripts" / "g11_self_check.py").write_text("# a copy\n", encoding="utf-8")
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 6)
 
     def manifest(self, status):
         (self.crate / "alice-law-conformance.toml").write_text(f'[G11]\nstatus = "{status}"\n', encoding="utf-8")
@@ -195,7 +269,7 @@ class SelfCheck(unittest.TestCase):
         os.environ["OFF_N"] = "1"
         code, out, calls = self.run_check()
         self.assertEqual(code, 1, out)
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 6)
         self.assertIn("declares G11 pass, and 1 own copy is not at a pending row's target", out)
 
     def test_own_copies_off_target_do_not_fail_a_crate_that_does_not_declare_pass(self):
@@ -238,7 +312,7 @@ class SelfCheck(unittest.TestCase):
         self.assertEqual(st.stdout, "")  # the checkout is the pinned revision as git reads it
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 6)
 
     def test_the_checks_read_the_crate_s_committed_tree_not_its_converted_checkout(self):
         subprocess.run(["git", "-C", str(self.crate), "config", "core.autocrlf", "true"], check=True, env=ENV)
@@ -258,7 +332,7 @@ class SelfCheck(unittest.TestCase):
         os.symlink("real.txt", self.crate / "link.txt")
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 6)
 
     def test_a_crate_whose_head_has_no_file_is_not_checked(self):
         # an empty HEAD (the pin only in the checkout): nothing to compare, never a pass
@@ -390,7 +464,8 @@ class PrivateCopiesReal(unittest.TestCase):
         (self.law / "conformance").mkdir()
         self.good = b"print('shared v2')\n"
         (self.law / "scripts" / "shared_files_check.py").write_bytes((HERE / "shared_files_check.py").read_bytes())
-        for n in ("g11_table_gen.py", "g11_table_check.py", "conformance_roster_check.py", "non_pass_ratchet.py"):
+        for n in ("g11_table_gen.py", "g11_table_check.py", "conformance_roster_check.py", "non_pass_ratchet.py",
+                  "no_panic_ratchet.py"):
             (self.law / "scripts" / n).write_text("print('ok')\n", encoding="utf-8")
         (self.law / "conformance" / "shared-files.toml").write_text(
             '[[file]]\npath = "scripts/shared_tool.py"\n'
@@ -405,6 +480,10 @@ class PrivateCopiesReal(unittest.TestCase):
         (self.crate / ".github").mkdir(parents=True)
         (self.crate / "scripts").mkdir()
         subprocess.run(["git", "init", "-q", str(self.crate)], check=True, env=ENV)
+        with_origin(self.crate)
+        # a private crate keeps its no-panic row in its own tree (the stub checker only needs the file there)
+        (self.crate / "conformance-own").mkdir()
+        (self.crate / "conformance-own" / "no-panic.toml").write_text("# own row\n", encoding="utf-8")
         (self.crate / ".github" / "shared-files-pin").write_text(
             f"name ALICE-Private\nrev {rev}\n"
             f"table-sha256 {h(self.law / 'conformance' / 'shared-files.toml')}\n"
@@ -418,6 +497,7 @@ class PrivateCopiesReal(unittest.TestCase):
         (self.crate / "scripts" / "shared_tool.py").write_bytes(data)
         subprocess.run(["git", "-C", str(self.crate), "add", "-A"], check=True, env=ENV)
         subprocess.run(["git", "-C", str(self.crate), "commit", "-q", "-m", "c"], check=True, env=ENV)
+        update_main(self.crate)
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
             code = sc.main(["--repo", str(self.crate), "--name", "ALICE-Private", "--non-pass-baseline",

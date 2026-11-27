@@ -5,6 +5,12 @@
     no_panic_ratchet.py --only NAME=DIR [--baseline OWN.toml] [--landing --base MAINDIR]
     no_panic_ratchet.py --write-baseline
     no_panic_ratchet.py --write-own NAME=DIR --baseline conformance-own/no-panic.toml
+    no_panic_ratchet.py --prepare-scanner --scanner-cache DIR
+
+--scanner-cache DIR (any mode) builds the scanner once per source revision into DIR/<sha256 of tools/no-panic-scan>/
+and verifies it before each use (the recorded source key and the binary's recorded sha256): a mismatch or a missing
+file rebuilds, never reuses. --prepare-scanner builds or verifies that entry and exits (a caller that runs builds
+under a resource limit prepares the scanner there, then runs the check).
 
 The count comes from tools/no-panic-scan (syntax tree, no build of the repository): per repository, the sites of
 `.unwrap()`, `.expect(..)`, `panic!`, `todo!`, `unimplemented!`, `unreachable!` and `assert!` / `assert_eq!` /
@@ -51,6 +57,7 @@ Exit 0 when nothing was found, 1 on a finding, 2 when something could not be rea
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import subprocess
@@ -80,6 +87,57 @@ def scanner() -> Path:
     subprocess.run(["cargo", "build", "-q", "--release", "--manifest-path", str(SCANNER_DIR / "Cargo.toml")],
                    check=True, env={**os.environ, "CARGO_TARGET_DIR": str(target)})
     return target / "release" / "no-panic-scan"
+
+
+def scanner_source_key(src: Path = SCANNER_DIR) -> str:
+    """sha256 over the scanner's source (every file under its directory but target/, path and bytes, sorted): the
+    key of a cached binary"""
+    h = hashlib.sha256()
+    files = sorted(p for p in src.rglob("*") if p.is_file() and "target" not in p.relative_to(src).parts)
+    if not any(p.name == "Cargo.toml" for p in files):
+        raise hl.Unreadable(f"{src}: no Cargo.toml (no scanner source)")
+    for p in files:
+        rel = p.relative_to(src).as_posix().encode()
+        h.update(len(rel).to_bytes(8, "big") + rel)
+        data = p.read_bytes()
+        h.update(len(data).to_bytes(8, "big") + data)
+    return h.hexdigest()
+
+
+def file_sha256(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def cached_scanner(cache: Path, src: Path = SCANNER_DIR, build=None) -> Path:
+    """the scanner binary from cache/<source key>/, verified before use: the recorded source key must be the key of
+    the source at hand and the binary's sha256 the one recorded when it was built; a mismatch or a missing file
+    rebuilds (the entry is removed first), never reuses. `build(target_dir)` builds and returns the binary (the
+    tests pass their own)"""
+    key = scanner_source_key(src)
+    entry = cache / key
+    binary, rec_src, rec_bin = entry / "no-panic-scan", entry / "source.sha256", entry / "binary.sha256"
+    try:
+        if (rec_src.read_text(encoding="utf-8").strip() == key and binary.is_file()
+                and rec_bin.read_text(encoding="utf-8").strip() == file_sha256(binary)):
+            return binary
+    except OSError:
+        pass
+    shutil.rmtree(entry, ignore_errors=True)
+    entry.mkdir(parents=True)
+    with tempfile.TemporaryDirectory() as t:
+        built = (build or _cargo_build(src))(Path(t))
+        shutil.copy2(built, binary)
+    rec_bin.write_text(file_sha256(binary) + "\n", encoding="utf-8")
+    rec_src.write_text(key + "\n", encoding="utf-8")
+    return binary
+
+
+def _cargo_build(src: Path):
+    def build(target: Path) -> Path:
+        subprocess.run(["cargo", "build", "-q", "--release", "--manifest-path", str(src / "Cargo.toml")], check=True,
+                       env={**os.environ, "CARGO_TARGET_DIR": str(target)})
+        return target / "release" / "no-panic-scan"
+    return build
 
 
 def parse_scan(out: str) -> dict:
@@ -230,7 +288,22 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --only and --base: a count below the row prints the row to lower and passes; growth "
                          "against the row or against main stays red")
     ap.add_argument("--base", help="with --landing: a checkout of the repository's current main")
+    ap.add_argument("--scanner-cache", type=Path,
+                    help="build the scanner once per source revision into DIR/<source sha256>/ and verify it there "
+                         "before each use (a mismatch or a missing binary rebuilds)")
+    ap.add_argument("--prepare-scanner", action="store_true",
+                    help="with --scanner-cache: build or verify the cached scanner, print its path and exit")
     a = ap.parse_args(argv)
+    if a.prepare_scanner:
+        if not a.scanner_cache:
+            print("no_panic_ratchet: --prepare-scanner needs --scanner-cache DIR", file=sys.stderr)
+            return 2
+        try:
+            print(f"no_panic_ratchet: scanner {cached_scanner(a.scanner_cache)}")
+        except (hl.Unreadable, OSError, subprocess.CalledProcessError) as e:
+            print(f"no_panic_ratchet: the scanner could not be built: {e}", file=sys.stderr)
+            return 2
+        return 0
     if a.landing and not a.only:
         print("no_panic_ratchet: --landing reads one repository: pass --only NAME=DIR", file=sys.stderr)
         return 2
@@ -241,7 +314,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.base and not a.landing:
         print("no_panic_ratchet: --base is the main a landing compares against: pass --landing", file=sys.stderr)
         return 2
-    bin_ = scanner()
+    try:
+        bin_ = cached_scanner(a.scanner_cache) if a.scanner_cache else scanner()
+    except (hl.Unreadable, OSError, subprocess.CalledProcessError) as e:
+        print(f"no_panic_ratchet: the scanner could not be built: {e}", file=sys.stderr)
+        return 2
 
     if a.write_own:
         if a.baseline == BASELINE:
