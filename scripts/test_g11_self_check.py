@@ -625,6 +625,74 @@ class SharedTestSetup(Fixture):
         self.assertEqual(setup["scripts/test_fneg_fma_ir_check.py"],
                          ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"])
 
+    def test_platforms_alone_declare_where_the_test_runs(self):
+        self.setup_file('[[test]]\npath = "scripts/test_shared_probe.py"\nplatforms = ["macos", "linux"]\n'
+                        'why = "the tool runs on Linux and macOS only"\n')
+        self.assertEqual(self.load(), {})
+        self.assertEqual(sc.shared_test_platforms(self.law, self.law / "conformance" / "shared-files.toml"),
+                         {"scripts/test_shared_probe.py": ["linux", "macos"]})
+
+    def test_a_malformed_platform_declaration_is_refused(self):
+        row = '[[test]]\npath = "scripts/test_shared_probe.py"\nplatforms = PLATS\nwhy = "the tool runs here"\n'
+        bad = {"unknown platform": row.replace("PLATS", '["linux", "solaris"]'),
+               "empty platforms": row.replace("PLATS", "[]"),
+               "repeated platform": row.replace("PLATS", '["linux", "linux"]'),
+               "neither targets nor platforms": row.replace("platforms = PLATS\n", "")}
+        for what, text in bad.items():
+            with self.subTest(what):
+                self.setup_file(text)
+                with self.assertRaises(ValueError):
+                    sc.setup_rows(self.law, self.law / "conformance" / "shared-files.toml")
+
+    def test_the_platform_name_of_each_os(self):
+        self.assertEqual([sc.this_platform(n) for n in ("win32", "darwin", "linux", "cygwin")],
+                         ["windows", "macos", "linux", "windows"])
+
+    # the platforms
+    def test_a_test_declared_for_other_platforms_is_not_run_here_and_is_named(self):
+        self.shared_test(self.fill("import pathlib, sys\npathlib.Path(RAN).write_text('ran')\nsys.exit(1)\n"))
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"],
+                                          platforms={"scripts/test_shared_probe.py": ["linux", "macos"]},
+                                          platform="windows", setup={"scripts/test_shared_probe.py":
+                                                                     ["aarch64-unknown-linux-gnu"]},
+                                          rustup=self.rustup)
+        self.assertEqual(code, 0, lines)
+        self.assertIn("not run on windows (declared for other platforms): scripts/test_shared_probe.py (linux/macos)",
+                      lines)
+        self.assertFalse(self.ran.exists())
+        self.assertEqual(self.asked(), [], "the setup of a test not run here is not installed")
+
+    def test_the_same_test_runs_on_a_declared_platform(self):
+        # the mutant of the test above: the platform declared, so the failing test runs and fails
+        self.shared_test(self.fill("import pathlib, sys\npathlib.Path(RAN).write_text('ran')\nsys.exit(1)\n"))
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"],
+                                          platforms={"scripts/test_shared_probe.py": ["linux", "macos"]},
+                                          platform="linux")
+        self.assertEqual(code, 1, lines)
+        self.assertTrue(self.ran.exists())
+
+    def test_an_undeclared_test_runs_on_every_platform(self):
+        self.shared_test(self.fill("import pathlib\npathlib.Path(RAN).write_text('ran')\n"))
+        self.commit_crate()
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"], platforms={},
+                                          platform="windows")
+        self.assertEqual(code, 0, lines)
+        self.assertTrue(self.ran.exists())
+
+    def test_the_self_check_reads_law_s_platforms(self):
+        self.shared_test(self.fill("import pathlib, sys\npathlib.Path(RAN).write_text('ran')\nsys.exit(1)\n"))
+        self.setup_file('[[test]]\npath = "scripts/test_shared_probe.py"\nplatforms = ["linux", "macos"]\n'
+                        'why = "the tool runs on Linux and macOS only"\n')
+        self.commit_law()
+        with mock.patch.object(sc, "this_platform", lambda name=None: "windows"):
+            code, out, _ = self.run_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("g11 self-check: shared-tests: not run on windows (declared for other platforms): "
+                      "scripts/test_shared_probe.py (linux/macos)", out)
+        self.assertFalse(self.ran.exists())
+
     # the install
     def test_a_missing_target_is_added_and_the_test_then_passes(self):
         code, lines = self.run_tests({"scripts/test_shared_probe.py": ["aarch64-unknown-linux-gnu"]})

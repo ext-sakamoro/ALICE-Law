@@ -1,10 +1,33 @@
 # What a shared test (a scripts/test_*.py row of shared-files.toml) needs on the machine before it runs.
 # scripts/g11_self_check.py's shared-tests check installs it in the crate's clone (rustup, the crate's own
 # toolchain) and then runs the test, so a holder's CI step needs no setup of its own; a setup that cannot be
-# installed is not checked (exit 2), the test is never skipped. Keys: path (a shared test row), rustc-targets
-# (target triples for `rustup target add`), why (what the test does with them).
+# installed is not checked (exit 2), the test is never skipped. Keys: path (a shared test row), why (what the test
+# needs), and at least one of rustc-targets (target triples for `rustup target add`) and platforms (the platforms the
+# tested tool runs on in the holders' CI and preflight: the self-check runs the test only there, and names it as not
+# run on another; a tool that runs on a platform has its test run there, so a failure there is the tool's to fix).
 
 [[test]]
 path = "scripts/test_fneg_fma_ir_check.py"
 rustc-targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
-why = "every probe in tools/fneg-fma-ir-probes is compiled to LLVM IR for both architectures (the SIMD probes only build on their own), and the test refuses to run without either target"
+platforms = ["linux", "macos"]
+why = "the probe tests run in g3-ir.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey of the holders' workflows); every probe in tools/fneg-fma-ir-probes is compiled to LLVM IR for both architectures (the SIMD probes only build on their own), and the test refuses to run without either target"
+
+[[test]]
+path = "scripts/test_clippy_canary.py"
+platforms = ["linux", "macos"]
+why = "clippy_canary.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 15 holders)"
+
+[[test]]
+path = "scripts/test_gen_clippy_canary_calls.py"
+platforms = ["linux", "macos"]
+why = "gen_clippy_canary_calls.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 15 holders)"
+
+[[test]]
+path = "scripts/test_id_move_check.py"
+platforms = ["linux", "macos"]
+why = "id_move_check.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 18 holders)"
+
+[[test]]
+path = "scripts/test_public_text.py"
+platforms = ["linux", "macos"]
+why = "public_text.sh runs in the holders' public-text.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 40 holders)"

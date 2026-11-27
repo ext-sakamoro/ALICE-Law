@@ -84,7 +84,9 @@ SHARED_TEST_TIMEOUT = 1200
 # what a shared test needs on the machine before it runs (rustc targets), declared next to the shared-files table:
 # the self-check installs it in the crate's clone (its rust-toolchain), so a holder's CI needs no step of its own
 SETUP = "conformance/shared-test-setup.toml"
-SETUP_KEYS = {"path", "rustc-targets", "why"}
+SETUP_KEYS = {"path", "why"}  # and at least one of SETUP_NEEDS
+SETUP_NEEDS = {"rustc-targets", "platforms"}
+PLATFORMS = ("linux", "macos", "windows")
 TARGET_RE = re.compile(r"^[a-z0-9_]+(?:-[a-z0-9_.]+){1,3}$")
 RUSTUP = ["rustup"]
 
@@ -262,10 +264,12 @@ def shared_tests(table: Path, tree: Path) -> list[str]:
     return [p for p in paths if (tree / p).is_file()]
 
 
-def shared_test_setup(law: Path, table: Path) -> dict[str, list[str]]:
-    """{shared test path: the rustc targets it needs} from ALICE-Law's conformance/shared-test-setup.toml ({} when the
-    file is absent); ValueError on an unknown or missing key, a path that is no shared test row of the table, a target
-    that is not a target triple, an empty target list or a path declared twice"""
+def setup_rows(law: Path, table: Path) -> dict[str, dict]:
+    """{shared test path: {"rustc-targets": [...], "platforms": [...]}} from ALICE-Law's
+    conformance/shared-test-setup.toml ({} when the file is absent; a key not given is absent from the dict);
+    ValueError on an unknown or missing key (path and why, and at least one of rustc-targets and platforms), a path that
+    is no shared test row of the table, a target that is not a target triple, a platform not in PLATFORMS, an empty
+    list or a path declared twice"""
     f = law / SETUP
     if not f.is_file():
         return {}
@@ -274,24 +278,51 @@ def shared_test_setup(law: Path, table: Path) -> dict[str, list[str]]:
     data = tomllib.loads(f.read_text(encoding="utf-8"))
     if set(data) - {"test"}:
         raise ValueError(f"{SETUP}: unknown top-level keys {sorted(set(data) - {'test'})}")
-    out: dict[str, list[str]] = {}
+    out: dict[str, dict] = {}
     for i, t in enumerate(data.get("test", []), 1):
         where = f"{SETUP} test {i}"
-        if not isinstance(t, dict) or set(t) != SETUP_KEYS:
+        if not isinstance(t, dict) or not SETUP_KEYS <= set(t) or not set(t) - SETUP_KEYS \
+                or set(t) - SETUP_KEYS - SETUP_NEEDS:
             got = sorted(t) if isinstance(t, dict) else type(t).__name__
-            raise ValueError(f"{where}: needs exactly the keys {sorted(SETUP_KEYS)}, has {got}")
-        path, targets, why = t["path"], t["rustc-targets"], t["why"]
+            raise ValueError(f"{where}: needs the keys {sorted(SETUP_KEYS)} and at least one of {sorted(SETUP_NEEDS)}, "
+                             f"nothing else, has {got}")
+        path, why = t["path"], t["why"]
         if path not in shared:
             raise ValueError(f"{where}: {path!r} is no shared test row (scripts/test_*.py with repos) of the table")
         if path in out:
             raise ValueError(f"{where}: {path} is declared twice")
-        if not isinstance(targets, list) or not targets or not all(isinstance(x, str) and TARGET_RE.match(x)
-                                                                    for x in targets):
-            raise ValueError(f"{where}: rustc-targets must be a non-empty list of target triples, has {targets!r}")
         if not isinstance(why, str) or not why.strip():
-            raise ValueError(f"{where}: why must say what the test needs the targets for")
-        out[path] = sorted(set(targets))
+            raise ValueError(f"{where}: why must say what the test needs")
+        entry: dict = {}
+        if "rustc-targets" in t:
+            targets = t["rustc-targets"]
+            if not isinstance(targets, list) or not targets or not all(isinstance(x, str) and TARGET_RE.match(x)
+                                                                        for x in targets):
+                raise ValueError(f"{where}: rustc-targets must be a non-empty list of target triples, has {targets!r}")
+            entry["rustc-targets"] = sorted(set(targets))
+        if "platforms" in t:
+            plats = t["platforms"]
+            if not isinstance(plats, list) or not plats or not all(x in PLATFORMS for x in plats) \
+                    or len(set(plats)) != len(plats):
+                raise ValueError(f"{where}: platforms must be a non-empty list of distinct names from {PLATFORMS}, "
+                                 f"has {plats!r}")
+            entry["platforms"] = [p for p in PLATFORMS if p in plats]
+        out[path] = entry
     return out
+
+
+def shared_test_setup(law: Path, table: Path) -> dict[str, list[str]]:
+    """{shared test path: the rustc targets it needs} (the tests that declare targets); see setup_rows"""
+    return {p: e["rustc-targets"] for p, e in setup_rows(law, table).items() if "rustc-targets" in e}
+
+
+def shared_test_platforms(law: Path, table: Path) -> dict[str, list[str]]:
+    """{shared test path: the platforms its tool runs on} (the tests that declare them; any other runs everywhere)"""
+    return {p: e["platforms"] for p, e in setup_rows(law, table).items() if "platforms" in e}
+
+
+def this_platform(name: str = sys.platform) -> str:
+    return "windows" if name.startswith(("win", "cygwin", "msys")) else "macos" if name == "darwin" else "linux"
 
 
 def install_setup(clone: Path, targets: list[str], rustup: list[str]) -> tuple[bool, str]:
@@ -320,11 +351,15 @@ def install_setup(clone: Path, targets: list[str], rustup: list[str]) -> tuple[b
 
 def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHARED_TEST_TIMEOUT,
                      setup: dict[str, list[str]] | None = None,
-                     rustup: list[str] | None = None) -> tuple[int, list[str]]:
+                     rustup: list[str] | None = None,
+                     platforms: dict[str, list[str]] | None = None,
+                     platform: str | None = None) -> tuple[int, list[str]]:
     """(exit status, lines): each shared test file run in a clone of the crate at HEAD (the tests read their own git
     repository), with ALICE-Law's url sent to this checkout (the pinned revision, so a test that fetches ALICE-Law reads
     the same bytes, no network), after the rustc targets `setup` declares for the held tests are installed; 1 when any
-    fails or exceeds `timeout`, 2 when none is held, the clone fails or the setup cannot be installed"""
+    fails or exceeds `timeout`, 2 when none is held, the clone fails or the setup cannot be installed; a test whose
+    `platforms` (declared in ALICE-Law) leave out this platform is not run here and is named (its tool does not run on
+    this platform in any holder, so its other legs run it)"""
     if not tests:
         return 2, ["the committed tree holds no shared test file (nothing compared)"]
     head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True,
@@ -346,13 +381,19 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
             if r.returncode != 0:
                 return 2, [f"{' '.join(cmd[:4])} failed ({r.stderr.strip()[:200]})"]
-        targets = sorted({t for rel in tests for t in (setup or {}).get(rel, [])})
+        here = this_platform() if platform is None else platform
+        elsewhere = [rel for rel in tests if here not in (platforms or {}).get(rel, PLATFORMS)]
+        if elsewhere:
+            lines.append(f"not run on {here} (declared for other platforms): "
+                         + ", ".join(f"{rel} ({'/'.join((platforms or {})[rel])})" for rel in elsewhere))
+        run = [rel for rel in tests if rel not in elsewhere]
+        targets = sorted({t for rel in run for t in (setup or {}).get(rel, [])})
         if targets:
             ok, line = install_setup(clone, targets, RUSTUP if rustup is None else rustup)
             if not ok:
                 return 2, [line]
             lines.append(line)
-        for rel in tests:
+        for rel in run:
             try:
                 r = subprocess.run([sys.executable, rel], cwd=clone, env=env, capture_output=True, text=True,
                                    encoding="utf-8", errors="replace", timeout=timeout)
@@ -366,9 +407,10 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
                 lines.append(f"{rel}: exit {r.returncode}")
                 lines.extend(f"  {ln}" for ln in tail)
     if failed:
-        lines.append(f"{len(failed)} of {len(tests)} shared test file(s) failed: {', '.join(failed)}")
+        lines.append(f"{len(failed)} of {len(run)} shared test file(s) failed: {', '.join(failed)}")
         return 1, lines
-    lines.append(f"{len(tests)} shared test file(s) passed: {', '.join(tests)}")
+    tail = f" ({len(elsewhere)} declared for other platforms, not run here)" if elsewhere else ""
+    lines.append(f"{len(run)} shared test file(s) passed{tail}: {', '.join(run) or '(none)'}")
     return 0, lines
 
 
@@ -476,14 +518,15 @@ def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path, private: 
     try:
         tests = shared_tests(law / "conformance/shared-files.toml", tree)
         setup = shared_test_setup(law, law / "conformance/shared-files.toml")
+        platforms = shared_test_platforms(law, law / "conformance/shared-files.toml")
     except (OSError, ValueError, KeyError) as e:  # tomllib.TOMLDecodeError is a ValueError
         codes.append(2)
         print(f"g11 self-check: shared-tests: the table or {SETUP} could not be read ({e}): not checked")
         return codes
-    code, lines = run_shared_tests(repo, law, tests, setup=setup)
+    code, lines = run_shared_tests(repo, law, tests, setup=setup, platforms=platforms)
     codes.append(code)
     for ln in lines[:-1] if code == 0 else []:  # a failure prints its lines below
-        if ln.startswith("setup: "):
+        if ln.startswith(("setup: ", "not run on ")):
             print(f"g11 self-check: shared-tests: {ln}")
     print(f"g11 self-check: shared-tests: exit {code}: {lines[-1]}")
     if code != 0:
