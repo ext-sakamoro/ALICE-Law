@@ -9,3 +9,4 @@ scripts/test_live_baseline_delta.py
 .github/workflows/public-text-baseline-ci.yml
 scripts/changed_paths.py
 .github/paths/public-text-baseline-ci.txt
+scripts/quiet_tests.py

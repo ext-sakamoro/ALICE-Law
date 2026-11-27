@@ -41,7 +41,7 @@ jobs:
         run: cargo test --locked --manifest-path tools/no-panic-scan/Cargo.toml
 
       - name: Test the ratchet
-        run: python3 scripts/test_no_panic_ratchet.py
+        run: python3 scripts/quiet_tests.py scripts/test_no_panic_ratchet.py
 
       - name: This repository against its row
         run: python3 scripts/no_panic_ratchet.py --only "${GITHUB_REPOSITORY#*/}=."

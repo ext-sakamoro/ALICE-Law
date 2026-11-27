@@ -89,10 +89,10 @@ jobs:
         run: python3 scripts/conformance_docs_schema_check.py
 
       - name: Test the conformance roster checker
-        run: python3 scripts/test_conformance_roster_check.py
+        run: python3 scripts/quiet_tests.py scripts/test_conformance_roster_check.py
 
       - name: Test the landing check of the conformance state
-        run: python3 scripts/test_land_law_state.py
+        run: python3 scripts/quiet_tests.py scripts/test_land_law_state.py
 
       # a test that leaves the date to the wall clock goes red days after it was written
       - name: The date-aging tests with the clock 10 days ahead (tests, then the run)
@@ -192,6 +192,10 @@ jobs:
       - name: Test the strict workflow reader (scripts/changed_paths.py, shared with the crates' CI)
         run: python3 scripts/test_changed_paths.py
 
+      # a passing test file prints only the unittest summary, so a fixture's findings never sit next to real ones
+      - name: Test the quiet test runner (scripts/quiet_tests.py)
+        run: python3 scripts/test_quiet_tests.py
+
       - name: Every branch-triggered workflow has a concurrency group per commit on main
         run: |
           python3 scripts/test_workflow_concurrency.py
@@ -216,7 +220,7 @@ jobs:
       # and the acknowledged-hit file it reads are checked here, so neither reaches main unread
       - name: The new-commit reader (tests) and conformance/public-text-commit-ack.toml
         run: |
-          python3 scripts/test_public_text_commits_live.py
+          python3 scripts/quiet_tests.py scripts/test_public_text_commits_live.py
           python3 scripts/public_text_commits_live.py --check-ack
 
       - name: The note a push run of Conformance (live) writes on the jobs it skips
@@ -230,7 +234,7 @@ jobs:
         run: python3 scripts/test_fold_set_check.py
 
       - name: Test the added-function pin check
-        run: python3 scripts/test_added_function_pins.py
+        run: python3 scripts/quiet_tests.py scripts/test_added_function_pins.py
 
       # G15: the checker the crates run (fetched at a named revision), its baseline (generated, shrink-only)
       - name: Test the surface-claims check (G15) and its baseline

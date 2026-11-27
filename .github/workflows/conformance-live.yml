@@ -38,10 +38,10 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Test the conformance roster checker
-        run: python3 scripts/test_conformance_roster_check.py
+        run: python3 scripts/quiet_tests.py scripts/test_conformance_roster_check.py
 
       - name: Test the landing check of the conformance state
-        run: python3 scripts/test_land_law_state.py
+        run: python3 scripts/quiet_tests.py scripts/test_land_law_state.py
 
       - name: Every release-train manifest at main (the status counts go to the job summary)
         env:
@@ -51,7 +51,7 @@ jobs:
       # the non-pass gate ratchet reads the states the step above wrote (no second read of the repositories): per
       # release-train repository, the gates read fail-known or unverified against conformance/non-pass-baseline.toml
       - name: Test the non-pass ratchet
-        run: python3 scripts/test_non_pass_ratchet.py
+        run: python3 scripts/quiet_tests.py scripts/test_non_pass_ratchet.py
 
       - name: The release-train repositories' non-pass counts against the baseline
         shell: bash
@@ -79,7 +79,7 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Test the reader
-        run: python3 scripts/test_holder_live.py
+        run: python3 scripts/quiet_tests.py scripts/test_holder_live.py
 
       - name: The public repositories against the baseline
         # the daily run fails on a stale entry too (fixed upstream: shrink the baseline); a dispatched run checks a
@@ -117,7 +117,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the public text reader
-        run: python3 scripts/test_public_text_live.py
+        run: python3 scripts/quiet_tests.py scripts/test_public_text_live.py
 
       - name: The public repositories' text against the baseline
         env:
@@ -151,7 +151,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the new-commit reader
-        run: python3 scripts/test_public_text_commits_live.py
+        run: python3 scripts/quiet_tests.py scripts/test_public_text_commits_live.py
 
       - name: Read the public repositories' new commits, keyed
         env:
@@ -187,7 +187,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the runner pin check
-        run: python3 scripts/test_runner_pin_check.py
+        run: python3 scripts/quiet_tests.py scripts/test_runner_pin_check.py
 
       - name: The public repositories' workflows
         env:
@@ -212,7 +212,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the toolchain pin check
-        run: python3 scripts/test_toolchain_pin_check.py
+        run: python3 scripts/quiet_tests.py scripts/test_toolchain_pin_check.py
 
       - name: The public repositories' workflows against the baseline
         env:
@@ -270,7 +270,7 @@ jobs:
         run: rustup toolchain install 1.98.1 --profile minimal
 
       - name: Test the ratchet
-        run: python3 scripts/test_no_panic_ratchet.py
+        run: python3 scripts/quiet_tests.py scripts/test_no_panic_ratchet.py
 
       - name: The public repositories' counts against the baseline
         env:
@@ -294,7 +294,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the ratchet
-        run: python3 scripts/test_pass_anchor_ratchet.py
+        run: python3 scripts/quiet_tests.py scripts/test_pass_anchor_ratchet.py
 
       - name: The release-train repositories' counts against the baseline
         shell: bash
@@ -327,7 +327,7 @@ jobs:
           ast-grep --version
 
       - name: Test the ratchet
-        run: python3 scripts/test_structural_lint.py
+        run: python3 scripts/quiet_tests.py scripts/test_structural_lint.py
 
       - name: The public repositories' counts against the baseline
         env:
@@ -353,7 +353,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the checker
-        run: python3 scripts/test_g1_coverage_live.py
+        run: python3 scripts/quiet_tests.py scripts/test_g1_coverage_live.py
 
       - name: The Law-bearing public repositories against the baseline
         env:
@@ -377,7 +377,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the check
-        run: python3 scripts/test_added_function_pins.py
+        run: python3 scripts/quiet_tests.py scripts/test_added_function_pins.py
 
       - name: The public repositories that call an added function
         env:

@@ -68,7 +68,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the public text reader
-        run: python3 scripts/test_public_text_live.py
+        run: python3 scripts/quiet_tests.py scripts/test_public_text_live.py
 
       - name: Test what a baseline change makes worse
         run: python3 scripts/test_live_baseline_delta.py

@@ -33,7 +33,7 @@ jobs:
           python-version: "3.14"
 
       - name: Test the toolchain pin check
-        run: python3 scripts/test_toolchain_pin_check.py
+        run: python3 scripts/quiet_tests.py scripts/test_toolchain_pin_check.py
 
       - name: This repository's workflows
         run: python3 scripts/toolchain_pin_check.py --repo .
