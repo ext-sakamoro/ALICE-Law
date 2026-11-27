@@ -12,8 +12,10 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import importlib.util
@@ -55,7 +57,8 @@ def h(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-class SelfCheck(unittest.TestCase):
+class Fixture(unittest.TestCase):
+    """a stub ALICE-Law checkout and a crate pinned to it (no tests of its own)"""
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
@@ -145,6 +148,8 @@ class SelfCheck(unittest.TestCase):
             code = sc.main(["--repo", str(self.crate), "--name", "ALICE-X"] + self.extra, law=self.law)
         return code, out.getvalue()
 
+
+class SelfCheck(Fixture):
     def test_all_four_run_against_the_pinned_checkout_and_pass(self):
         code, out, calls = self.run_check()
         self.assertEqual(code, 0, out)
@@ -518,6 +523,181 @@ class SelfCheck(unittest.TestCase):
             self.pin(extra=extra)
             code, out, calls = self.run_check()
             self.assertEqual((code, calls), (2, []), (extra, out))
+
+
+# a stand-in for rustup: `target list --installed` prints the targets in STATE, `target add` adds to it, FAIL_ADD
+# makes the add fail; each call is appended to CALLS (the test reads what the self-check asked for)
+STUB_RUSTUP = """import json, pathlib, sys
+state, calls = pathlib.Path(STATE), pathlib.Path(CALLS)
+have = json.loads(state.read_text(encoding="utf-8")) if state.exists() else []
+args = sys.argv[1:]
+with calls.open("a", encoding="utf-8") as f:
+    f.write(" ".join(args) + "\\n")
+if args[:3] == ["target", "list", "--installed"]:
+    print("\\n".join(have))
+    sys.exit(0)
+if args[:2] == ["target", "add"] and not FAIL_ADD:
+    state.write_text(json.dumps(sorted(set(have) | set(args[2:]))), encoding="utf-8")
+    sys.exit(0)
+sys.exit(4)
+"""
+# the shared test of the fixture: needs aarch64-unknown-linux-gnu installed (as the fneg test needs its targets) and
+# leaves RAN behind, so a test can tell it was not run
+NEEDS_TARGET_TEST = """import json, pathlib, sys
+pathlib.Path(RAN).write_text("ran", encoding="utf-8")
+state = pathlib.Path(STATE)
+have = json.loads(state.read_text(encoding="utf-8")) if state.exists() else []
+sys.exit(0 if "aarch64-unknown-linux-gnu" in have else 5)
+"""
+SETUP_ROW = ('[[test]]\npath = "scripts/test_shared_probe.py"\nrustc-targets = ["aarch64-unknown-linux-gnu"]\n'
+             'why = "the probe compiles for aarch64"\n')
+
+
+class SharedTestSetup(Fixture):
+    """the rustc targets a shared test declares in conformance/shared-test-setup.toml are installed before it runs"""
+
+    def setUp(self):
+        super().setUp()
+        root = Path(self.tmp.name)
+        self.state, self.calls, self.ran = root / "rustup-state.json", root / "rustup-calls.txt", root / "ran.txt"
+        self.shared_test(self.fill(NEEDS_TARGET_TEST))
+        self.stub(fail_add=False)
+
+    def fill(self, text: str) -> str:
+        return (text.replace("STATE", repr(str(self.state))).replace("CALLS", repr(str(self.calls)))
+                .replace("RAN", repr(str(self.ran))))
+
+    def stub(self, fail_add: bool) -> None:
+        self.rustup_py = Path(self.tmp.name) / "rustup_stub.py"
+        self.rustup_py.write_text(self.fill(STUB_RUSTUP).replace("FAIL_ADD", repr(fail_add)), encoding="utf-8")
+        self.rustup = [sys.executable, str(self.rustup_py)]
+
+    def setup_file(self, text: str) -> None:
+        (self.law / "conformance" / "shared-test-setup.toml").write_text(text, encoding="utf-8")
+
+    def commit_law(self) -> None:
+        """ALICE-Law's checkout committed and the crate pinned to the new revision (the self-check refuses a dirty one)"""
+        subprocess.run(["git", "-C", str(self.law), "add", "-A"], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(self.law), "commit", "-q", "-m", "setup"], check=True, env=ENV)
+        self.rev = subprocess.run(["git", "-C", str(self.law), "rev-parse", "HEAD"], capture_output=True,
+                                  text=True, check=True, encoding="utf-8").stdout.strip()
+        self.pin()
+
+    def load(self):
+        return sc.shared_test_setup(self.law, self.law / "conformance" / "shared-files.toml")
+
+    def run_tests(self, setup):
+        self.commit_crate()
+        return sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"], setup=setup,
+                                   rustup=self.rustup)
+
+    def asked(self) -> list[str]:
+        return self.calls.read_text(encoding="utf-8").splitlines() if self.calls.exists() else []
+
+    # the declaration
+    def test_no_setup_file_declares_nothing(self):
+        self.assertEqual(self.load(), {})
+
+    def test_a_row_declares_the_targets_of_its_test(self):
+        self.setup_file(SETUP_ROW)
+        self.assertEqual(self.load(), {"scripts/test_shared_probe.py": ["aarch64-unknown-linux-gnu"]})
+
+    def test_a_malformed_declaration_is_refused(self):
+        bad = {
+            "unknown key": SETUP_ROW + 'skip = true\n',
+            "missing why": SETUP_ROW.replace('why = "the probe compiles for aarch64"\n', ""),
+            "empty why": SETUP_ROW.replace("the probe compiles for aarch64", " "),
+            "no shared test row": SETUP_ROW.replace("test_shared_probe", "test_elsewhere"),
+            "not a triple": SETUP_ROW.replace("aarch64-unknown-linux-gnu", "aarch64; rm -rf x"),
+            "empty targets": SETUP_ROW.replace('["aarch64-unknown-linux-gnu"]', "[]"),
+            "declared twice": SETUP_ROW + SETUP_ROW,
+            "unknown top-level": SETUP_ROW + '[other]\nx = 1\n',
+        }
+        for what, text in bad.items():
+            with self.subTest(what):
+                self.setup_file(text)
+                with self.assertRaises(ValueError):
+                    self.load()
+
+    def test_law_s_own_declaration_reads_against_law_s_table(self):
+        law = HERE.parent
+        setup = sc.shared_test_setup(law, law / "conformance" / "shared-files.toml")
+        self.assertEqual(setup["scripts/test_fneg_fma_ir_check.py"],
+                         ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"])
+
+    # the install
+    def test_a_missing_target_is_added_and_the_test_then_passes(self):
+        code, lines = self.run_tests({"scripts/test_shared_probe.py": ["aarch64-unknown-linux-gnu"]})
+        self.assertEqual(code, 0, lines)
+        self.assertEqual(self.asked(), ["target list --installed", "target add aarch64-unknown-linux-gnu"])
+        self.assertIn("setup: rustc targets added: aarch64-unknown-linux-gnu", lines)
+
+    def test_without_the_setup_the_same_test_fails(self):
+        # the mutant: no declaration, so nothing is installed and the strict test fails (it is not skipped)
+        code, lines = self.run_tests({})
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(self.asked(), [])
+        self.assertIn("1 of 1 shared test file(s) failed: scripts/test_shared_probe.py", lines)
+
+    def test_an_installed_target_is_not_added_again(self):
+        self.state.write_text(json.dumps(["aarch64-unknown-linux-gnu"]), encoding="utf-8")
+        code, lines = self.run_tests({"scripts/test_shared_probe.py": ["aarch64-unknown-linux-gnu"]})
+        self.assertEqual(code, 0, lines)
+        self.assertEqual(self.asked(), ["target list --installed"])
+
+    def test_a_setup_that_cannot_be_installed_is_not_checked_and_runs_no_test(self):
+        self.stub(fail_add=True)
+        code, lines = self.run_tests({"scripts/test_shared_probe.py": ["aarch64-unknown-linux-gnu"]})
+        self.assertEqual(code, 2, lines)
+        self.assertTrue(lines[-1].startswith("setup: rustup target add aarch64-unknown-linux-gnu failed"), lines)
+        self.assertFalse(self.ran.exists())
+
+    def test_no_rustup_is_not_checked(self):
+        self.rustup = [str(Path(self.tmp.name) / "no-such-rustup")]
+        code, lines = self.run_tests({"scripts/test_shared_probe.py": ["aarch64-unknown-linux-gnu"]})
+        self.assertEqual(code, 2, lines)
+        self.assertTrue(lines[-1].startswith("setup: rustup target list --installed failed"), lines)
+        self.assertFalse(self.ran.exists())
+
+    # through the self-check
+    def test_the_self_check_installs_law_s_declared_setup(self):
+        self.setup_file(SETUP_ROW)
+        self.commit_law()
+        with mock.patch.object(sc, "RUSTUP", self.rustup):
+            code, out, _ = self.run_check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("g11 self-check: shared-tests: setup: rustc targets added: aarch64-unknown-linux-gnu", out)
+        self.assertIn("shared-tests: exit 0: 1 shared test file(s) passed", out)
+
+    def test_the_self_check_without_law_s_declaration_fails_the_test(self):
+        with mock.patch.object(sc, "RUSTUP", self.rustup):
+            code, out, _ = self.run_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("shared-tests: exit 1: 1 of 1 shared test file(s) failed", out)
+
+    def test_a_setup_that_cannot_be_installed_leaves_the_whole_self_check_not_checked(self):
+        # every caller (the holders' CI step, the prepass receipt, the board through CI) reads a non-zero exit as red:
+        # an unchecked shared test is exit 2 with the "not checked" verdict, never "pass"
+        self.setup_file(SETUP_ROW)
+        self.commit_law()
+        self.stub(fail_add=True)
+        with mock.patch.object(sc, "RUSTUP", self.rustup):
+            code, out, _ = self.run_check()
+        self.assertEqual(code, 2, out)
+        self.assertIn("g11 self-check: shared-tests: exit 2: setup: rustup target add aarch64-unknown-linux-gnu failed", out)
+        self.assertIn("ALICE-X at ALICE-Law", out)
+        self.assertIn(": not checked (an input could not be read or nothing was compared)", out)
+        self.assertNotIn(": pass\n", out)
+        self.assertFalse(self.ran.exists())
+
+    def test_an_unreadable_declaration_is_not_checked(self):
+        self.setup_file(SETUP_ROW + "skip = true\n")
+        self.commit_law()
+        with mock.patch.object(sc, "RUSTUP", self.rustup):
+            code, out, _ = self.run_check()
+        self.assertEqual(code, 2, out)
+        self.assertIn("shared-tests: the table or conformance/shared-test-setup.toml could not be read", out)
+        self.assertFalse(self.ran.exists())
 
 
 class PrivateCopiesReal(unittest.TestCase):

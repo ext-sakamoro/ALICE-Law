@@ -1,0 +1,10 @@
+# What a shared test (a scripts/test_*.py row of shared-files.toml) needs on the machine before it runs.
+# scripts/g11_self_check.py's shared-tests check installs it in the crate's clone (rustup, the crate's own
+# toolchain) and then runs the test, so a holder's CI step needs no setup of its own; a setup that cannot be
+# installed is not checked (exit 2), the test is never skipped. Keys: path (a shared test row), rustc-targets
+# (target triples for `rustup target add`), why (what the test does with them).
+
+[[test]]
+path = "scripts/test_fneg_fma_ir_check.py"
+rustc-targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+why = "every probe in tools/fneg-fma-ir-probes is compiled to LLVM IR for both architectures (the SIMD probes only build on their own), and the test refuses to run without either target"

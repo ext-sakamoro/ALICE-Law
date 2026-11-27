@@ -390,6 +390,56 @@ jobs:
           [ "$rc1" = 0 ] && [[ "$out1" == *"1 production files, 1 sites, 0 finding"* ]] \
             || { echo "a row of 1 did not pass with one site counted (exit $rc1)"; exit 1; }
 
+      # the shared-tests check installs the rustc targets conformance/shared-test-setup.toml declares
+      # (rustup target add, the crate's toolchain) before it runs a held test: with real rustup on each
+      # lane, a fixture holder whose shared test compiles for every target the fneg test declares passes
+      # after the targets not native to the lane were removed, and the same run without the setup fails
+      - name: The shared-tests check installs the declared rustc targets on each lane
+        shell: bash
+        run: |
+          py=$(command -v python3 || command -v python)
+          host=$(rustc -vV | awk '$1 == "host:" { print $2 }')
+          fx="$RUNNER_TEMP/setup-holder"
+          mkdir -p "$fx/scripts"
+          printf 'pub fn f(x: u8) -> u8 {\n    x\n}\n' > "$fx/probe.rs"
+          cat > "$fx/scripts/test_setup_probe.py" <<'PY'
+          import subprocess, sys, tempfile
+          targets = sys.argv[1:] or ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+          with tempfile.TemporaryDirectory() as out:
+              for t in targets:
+                  r = subprocess.run(["rustc", "--crate-type", "lib", "--emit", "llvm-ir", "--target", t,
+                                      "--out-dir", out, "probe.rs"], capture_output=True, text=True,
+                                     encoding="utf-8", errors="replace")
+                  print(t, r.returncode, r.stderr.strip()[-300:])
+                  if r.returncode != 0:
+                      sys.exit(1)
+          PY
+          git -C "$fx" init -q
+          git -C "$fx" add -A
+          git -C "$fx" -c user.name=t -c user.email=t@t commit -q -m fixture
+          for t in aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu; do
+            [ "$t" = "$host" ] || rustup target remove "$t" 2>/dev/null || true
+          done
+          "$py" - "$fx" conformance/shared-test-setup.toml <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "scripts")
+          import g11_self_check as sc
+          fx, law = Path(sys.argv[1]), Path(".")
+          if sys.argv[2] != sc.SETUP:  # the declaration this step installs from
+              sys.exit(f"{sys.argv[2]} is not the declaration g11_self_check.py reads ({sc.SETUP})")
+          need = sc.shared_test_setup(law, law / "conformance/shared-files.toml")["scripts/test_fneg_fma_ir_check.py"]
+          tests = ["scripts/test_setup_probe.py"]
+          code0, lines0 = sc.run_shared_tests(fx, law, tests, setup={})
+          print("without setup:", code0, *lines0, sep="\n  ")
+          code1, lines1 = sc.run_shared_tests(fx, law, tests, setup={tests[0]: need})
+          print("with setup:", code1, *lines1, sep="\n  ")
+          if code1 != 0 or not any(ln.startswith("setup: ") for ln in lines1):
+              sys.exit("the declared targets were not installed, or the probe failed after the setup")
+          if code0 != 1:
+              sys.exit(f"without the setup the probe should fail on this lane (exit {code0})")
+          PY
+
       # a text-mode subprocess call decodes git's output with the locale's code page (cp1252 on
       # Windows) unless it names its encoding; the scripts a crate runs at its pin read UTF-8 files
       - name: Every text-mode subprocess call names its encoding (tests, then check)
