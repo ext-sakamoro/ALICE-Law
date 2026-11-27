@@ -365,6 +365,59 @@ class FeatureCoverage(unittest.TestCase):
         self.assertEqual(rt.feature_coverage_problems("x", {"consumer-features": [["std", "python", "weak"], ["serde"]]},
                                                       f), ([], 1))
 
+    def test_an_excluded_feature_stays_excluded_only_while_nothing_builds_it(self):
+        entry = {"consumer-features": [["std"]], "exclude-features": {"hw": "tests only"}}
+        f = {"std": [], "hw": []}
+        own = ('[package]\nname = "alice-zip"\n\n[dev-dependencies]\n'
+               'alice-zip = { path = ".", features = ["hw"] }\n')
+        clean = ('[package]\nname = "app"\n\n[dependencies]\nalice-zip = { git = "x", features = ["std"] }\n'
+                 '\n[dev-dependencies]\nalice-zip = { git = "x", features = ["hw"] }\n')
+        self.assertEqual(rt.exclusion_problems("alice-zip", entry, f, own, [("app/Cargo.toml", clean)]), ([], 2))
+        # a feature of the crate that enables it
+        p, _ = rt.exclusion_problems("alice-zip", entry, {"std": ["hw"], "hw": []}, own, [])
+        self.assertEqual(len(p), 1, p)
+        self.assertIn("enabled by the crate's feature 'std'", p[0])
+        # a consumer's normal, build, target or workspace dependency, or its feature naming dep/feature
+        for bad in ('[dependencies]\nalice-zip = { git = "x", features = ["hw"] }\n',
+                    '[build-dependencies]\nzip = { package = "alice-zip", git = "x", features = ["hw"] }\n',
+                    '[target.\'cfg(unix)\'.dependencies]\nalice-zip = { git = "x", features = ["hw"] }\n',
+                    '[workspace.dependencies]\nalice-zip = { git = "x", features = ["hw"] }\n',
+                    '[dependencies]\nalice-zip = { git = "x", optional = true }\n[features]\nboard = ["alice-zip?/hw"]\n',
+                    '[dependencies]\nz = { package = "alice-zip", git = "x" }\n[features]\nboard = ["z/hw"]\n'):
+            text = '[package]\nname = "app"\n\n' + bad
+            p, n = rt.exclusion_problems("alice-zip", entry, f, own, [("app/Cargo.toml", text)])
+            self.assertEqual((n, len(p)), (2, 1), (bad, p))
+            self.assertIn("app/Cargo.toml", p[0])
+        # the crate's own manifest outside its dev-dependencies
+        p, _ = rt.exclusion_problems("alice-zip", entry, f, own.replace("[dev-dependencies]", "[dependencies]"), [])
+        self.assertIn("own manifest [dependencies] alice-zip features ['hw']", p[0])
+        # another crate's feature of the same name is not this one
+        other = '[package]\nname = "app"\n\n[dependencies]\nalice-db = { git = "x", features = ["hw"] }\n'
+        self.assertEqual(rt.exclusion_problems("alice-zip", entry, f, own, [("a", other)]), ([], 2))
+        # nothing excluded: nothing compared
+        self.assertEqual(rt.exclusion_problems("alice-zip", {"consumer-features": [["std"]]}, f, own, []), ([], 0))
+
+    def test_consumer_manifests_reads_the_other_checkouts_and_not_the_crates_own_fixtures(self):
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            for repo, files in {"ALICE-Zip": {"Cargo.toml": "[package]\nname = \"alice-zip\"\n",
+                                              "ci/app/Cargo.toml": "[package]\nname = \"fixture\"\n"},
+                                "ALICE-DB": {"Cargo.toml": "[package]\nname = \"alice-db\"\n",
+                                             "sub/Cargo.toml": "[package]\nname = \"sub\"\n",
+                                             "untracked/Cargo.toml": "x"}}.items():
+                d = root / repo
+                for f, text in files.items():
+                    (d / f).parent.mkdir(parents=True, exist_ok=True)
+                    (d / f).write_text(text, encoding="utf-8")
+                subprocess.run(["git", "init", "-q", str(d)], check=True)
+                tracked = [f for f in files if not f.startswith("untracked")]
+                subprocess.run(["git", "-C", str(d), "add", *tracked], check=True)
+            (root / "not-a-checkout").mkdir()
+            got = [label for label, _ in rt.consumer_manifests(root, "ALICE-Zip")]
+            self.assertEqual(got, ["ALICE-DB/Cargo.toml", "ALICE-DB/sub/Cargo.toml"])
+
     def test_a_crate_without_declared_sets_is_not_compared(self):
         entry = rt.load_roster(ROSTER)["alice-zip"]
         self.assertEqual(rt.feature_coverage_problems("alice-zip", entry, {"anything": []}), ([], 0))

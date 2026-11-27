@@ -343,6 +343,74 @@ def feature_coverage_problems(name: str, entry: dict, features: dict) -> tuple[l
     return problems, 1
 
 
+NON_DEV_TABLES = ("dependencies", "build-dependencies")
+
+
+def excluded_enablers(text: str, crate: str, excluded: set[str]) -> list[str]:
+    """where a manifest turns on an excluded feature of `crate` outside a dev-dependency: the
+    `features` of a normal, build, target or workspace dependency on it, and a feature of the
+    manifest that names `dep/feature` or `dep?/feature` of such a dependency (a dev-dependency
+    may enable it: that is the crate's own test build)"""
+    data = tomllib.loads(text)
+    tables = [(t, data.get(t, {})) for t in NON_DEV_TABLES]
+    for cfg, target in data.get("target", {}).items():
+        tables += [(f"target.{cfg}.{t}", target.get(t, {})) for t in NON_DEV_TABLES]
+    tables.append(("workspace.dependencies", data.get("workspace", {}).get("dependencies", {})))
+    keys, out = set(), []
+    for table, deps in tables:
+        for key, spec in deps.items():
+            if alice_name(spec.get("package", key) if isinstance(spec, dict) else key) != crate:
+                continue
+            keys.add(key)
+            on = sorted(set(spec.get("features", []) if isinstance(spec, dict) else []) & excluded)
+            if on:
+                out.append(f"[{table}] {key} features {on}")
+    for feat, values in data.get("features", {}).items():
+        for v in values:
+            dep, sep, f = v.partition("/")
+            if sep and dep.rstrip("?") in keys and f in excluded:
+                out.append(f"[features] {feat} = {v!r}")
+    return out
+
+
+def exclusion_problems(name: str, entry: dict, features: dict, own_text: str,
+                       consumers: list[tuple[str, str]]) -> tuple[list[str], int]:
+    """(problems, manifests read): an excluded feature stays excluded only while nothing builds it,
+    so no other feature of the crate may enable it (semver_gate.feature_closure) and no manifest,
+    the crate's own or a consumer's ((label, text) pairs), may enable it outside a
+    dev-dependency; with no excluded feature nothing is compared (0); a crate with excluded
+    features and no manifest read is a problem (it compared nothing)"""
+    excluded = set(entry.get("exclude-features", {}))
+    if not excluded:
+        return [], 0
+    problems = []
+    for f in sg.universe_from_features(features):
+        if f in excluded:
+            continue
+        hit = sorted(sg.feature_closure(features, [f]) & excluded)
+        if hit:
+            problems.append(f"{name}: excluded feature(s) {hit} are enabled by the crate's feature {f!r}: "
+                            f"building {f} builds them, so the exclusion is not true")
+    read = 0
+    for label, text in [("own manifest", own_text)] + consumers:
+        read += 1
+        for where in excluded_enablers(text, name, excluded):
+            problems.append(f"{name}: {label} {where} enables an excluded feature outside a dev-dependency: "
+                            f"the exclusion is not true (build it in a declared set instead)")
+    return problems, read
+
+
+def consumer_manifests(repos_root: Path, own_repo: str) -> list[tuple[str, str]]:
+    """(label, text) of every tracked Cargo.toml of the other checkouts under `repos_root` (a
+    checkout is a directory with .git; the crate's own repository is read through its own
+    manifest only: its CI fixtures are not consumers)"""
+    out = []
+    for repo in sorted(p for p in repos_root.iterdir() if (p / ".git").exists() and p.name != own_repo):
+        for f in git(repo, "ls-files", "--", "Cargo.toml", "**/Cargo.toml").split():
+            out.append((f"{repo.name}/{f}", (repo / f).read_text(encoding="utf-8")))
+    return out
+
+
 def feature_coverage(roster: dict[str, dict], repos_root: Path, metadata) -> tuple[list[str], list[str], int]:
     """(problems, crates covered, crates compared) of feature_coverage_problems for every roster
     crate that declares consumer sets, read from the working tree of its repository's checkout
@@ -363,11 +431,16 @@ def feature_coverage(roster: dict[str, dict], repos_root: Path, metadata) -> tup
             continue
         path = c.get("manifest-path", "Cargo.toml")
         head = git(repo, "rev-parse", "--short", "HEAD").strip()
-        p, n = feature_coverage_problems(name, c, package_features(metadata, repo, path, name))
+        features = package_features(metadata, repo, path, name)
+        p, n = feature_coverage_problems(name, c, features)
+        ep, nread = exclusion_problems(name, c, features, (repo / path).read_text(encoding="utf-8"),
+                                   consumer_manifests(repos_root, c["repo"]) if c.get("exclude-features") else [])
+        p += ep
         problems += p
         compared += n
         if not p:
-            ok.append(f"{name}: {c['repo']}/{path} at {head}")
+            ok.append(f"{name}: {c['repo']}/{path} at {head}"
+                      + (f" (excluded features checked against {nread} manifest(s))" if nread else ""))
     return problems, ok, compared
 
 
