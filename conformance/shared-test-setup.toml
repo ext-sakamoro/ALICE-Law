@@ -3,7 +3,7 @@
 # toolchain) and then runs the test, so a holder's CI step needs no setup of its own; a setup that cannot be
 # installed is not checked (exit 2), the test is never skipped. Keys: path (a shared test row), why (what the test
 # needs), and at least one of rustc-targets (target triples for `rustup target add`), cargo-tools (cargo-<name>@<x.y.z>
-# for `cargo install --locked`, skipped when `cargo <name> --version` already prints it) and platforms (the platforms the
+# with a [[tool]] row below; kept when `cargo <name> --version` already prints it) and platforms (the platforms the
 # tested tool runs on in the holders' CI and preflight: the self-check runs the test only there, and names it as not
 # run on another; a tool that runs on a platform has its test run there, so a failure there is the tool's to fix).
 
@@ -48,3 +48,12 @@ why = "gated_tests.py runs in the holders' ci.yml on Linux and in preflight on m
 path = "scripts/test_clippy_external_coverage.py"
 platforms = ["linux", "macos"]
 why = "clippy_external_coverage.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 4 jobs)"
+
+# A cargo tool a test declares: the release archive for the host's target triple is fetched, checked against its
+# SHA-256 here and unpacked into a directory on the tests' PATH (nothing is installed); a host with no archive here
+# builds that exact version with `cargo install --locked`.
+[[tool]]
+name = "cargo-semver-checks"
+version = "0.50.0"
+url = "https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v{version}/cargo-semver-checks-{target}.tar.gz"
+sha256 = { "x86_64-unknown-linux-gnu" = "52a65dc88dc53fa8b57d6087954eb52cda149ca03bcfca78ce3fdecd23f893c4", "aarch64-unknown-linux-gnu" = "e35f435ea322659381f52e7034bb4f0470108f5b267d29f13cf08152fa4af29b", "aarch64-apple-darwin" = "f99f928d67501c29e8410026f27a54cf799fb13611c3b4a6a58f2772cf7e3799", "x86_64-apple-darwin" = "e320f7368a3d37a96d6509c0d5dd1d69bde4e8ef5fcb76d60b5a5a0ae4b755be", "x86_64-pc-windows-msvc" = "82df31e99ea91f73c2906b50ba6c09e82556a5fb1cc936021929d5f0dd948548" }
