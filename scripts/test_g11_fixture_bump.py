@@ -11,6 +11,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import importlib.util
@@ -101,6 +102,20 @@ class Bump(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_a_pin_below_a_held_test_s_minimum_is_refused_before_anything_is_written(self):
+        import g11_self_check
+        seen = []
+
+        def low(law, rev, tests):
+            seen.append(sorted(tests))
+            return ["scripts/moving.py needs ALICE-Law abc or later; def is older"]
+        before = (self.holder / ".github" / "shared-files-pin").read_bytes()
+        with mock.patch.object(g11_self_check, "below_minimum", low):
+            with self.assertRaisesRegex(fb.Unbuildable, "scripts/moving.py needs ALICE-Law abc or later"):
+                fb.bump(self.holder, self.law)
+        self.assertEqual(seen, [["scripts/moving.py", "scripts/uni.py"]])  # the held copies are asked
+        self.assertEqual((self.holder / ".github" / "shared-files-pin").read_bytes(), before)
 
     def table(self, holder_in_uniform: bool, uni_sha: str | None = None) -> None:
         repos = '["ALICE-H", "ALICE-Src"]' if holder_in_uniform else '["ALICE-Src"]'

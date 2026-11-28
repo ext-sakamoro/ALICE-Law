@@ -172,6 +172,14 @@ def bump(holder: Path, law: Path, source_url: str = SOURCE_URL) -> tuple[int, in
     g11_sha = sha256((law / "scripts" / "g11_table_check.py").read_bytes())
     pin = pin_fields((holder / PIN).read_text(encoding="utf-8")) if (holder / PIN).is_file() else {}
     name, private = pin.get("name", ""), pin.get("visibility") == "private"
+    rows = tomllib.loads((law / TABLE).read_text(encoding="utf-8")).get("file", [])
+    held = copies(rows, name, private, holder)
+    # refused before anything is written: a pin below a held shared test's minimum fails that test for a known
+    # reason
+    import g11_self_check  # the minimum revision each shared test declares (main's setup file)
+    low = g11_self_check.below_minimum(law, rev, [r["path"] for r in held])
+    if low:
+        raise Unbuildable("; ".join(low))
     old = write_pin(holder, rev, table_sha, checker_sha)
     has_g11 = write_g11_pin(holder, rev, g11_sha)
     renamed = 0
@@ -179,8 +187,6 @@ def bump(holder: Path, law: Path, source_url: str = SOURCE_URL) -> tuple[int, in
     if m.is_file():
         text, renamed = rename_rev(m.read_text(encoding="utf-8"), old, rev)
         m.write_text(text, encoding="utf-8")
-    rows = tomllib.loads((law / TABLE).read_text(encoding="utf-8")).get("file", [])
-    held = copies(rows, name, private, holder)
     cache = holder.parent / (holder.name + "-sources")
     cache.mkdir(exist_ok=True)
     changed = 0

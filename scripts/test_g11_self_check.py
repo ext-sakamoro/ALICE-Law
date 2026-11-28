@@ -1110,5 +1110,74 @@ class PrivateCopiesReal(unittest.TestCase):
         self.assertEqual(code, 0, out)
 
 
+
+class MinimumRev(unittest.TestCase):
+    """a shared test's law-rev-min: a pin below it is named (the file and the minimum), never run"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.law = Path(self.tmp.name) / "law"
+        (self.law / "conformance").mkdir(parents=True)
+        g = lambda *a: subprocess.run(["git", "-C", str(self.law), *a], check=True, capture_output=True, text=True,
+                                      encoding="utf-8", env=ENV).stdout.strip()
+        self.g = g
+        subprocess.run(["git", "init", "-q", str(self.law)], check=True, env=ENV)
+        (self.law / "conformance" / "shared-files.toml").write_text(
+            '[[file]]\npath = "scripts/test_x.py"\nsha256 = "' + "a" * 64 + '"\nrepos = ["ALICE-H"]\n', encoding="utf-8")
+        g("add", "-A"); g("commit", "-q", "-m", "c1")
+        self.c1 = g("rev-parse", "HEAD")
+        (self.law / "f").write_text("x\n", encoding="utf-8")
+        g("add", "-A"); g("commit", "-q", "-m", "c2")
+        self.c2 = g("rev-parse", "HEAD")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def declare(self, rev: str) -> str:
+        (self.law / "conformance" / "shared-test-setup.toml").write_text(
+            f'[[test]]\npath = "scripts/test_x.py"\nlaw-rev-min = "{rev}"\nwhy = "needs c2"\n', encoding="utf-8")
+        self.g("add", "-A"); self.g("commit", "-q", "-m", "setup")
+        return self.g("rev-parse", "HEAD")
+
+    def test_a_pin_below_the_minimum_names_the_file_and_the_minimum(self):
+        self.declare(self.c2)
+        self.assertEqual(sc.below_minimum(self.law, self.c1, ["scripts/test_x.py"]),
+                         [f"scripts/test_x.py needs ALICE-Law {self.c2[:12]} or later; {self.c1[:12]} is older"])
+
+    def test_a_pin_at_or_past_the_minimum_passes(self):
+        c3 = self.declare(self.c2)
+        self.assertEqual(sc.below_minimum(self.law, self.c2, ["scripts/test_x.py"]), [])
+        self.assertEqual(sc.below_minimum(self.law, c3, ["scripts/test_x.py"]), [])
+
+    def test_a_test_the_holder_does_not_carry_is_not_asked(self):
+        self.declare(self.c2)
+        self.assertEqual(sc.below_minimum(self.law, self.c1, ["scripts/test_y.py"]), [])
+
+    def test_a_minimum_the_clone_does_not_know_is_not_a_pass(self):
+        self.declare("b" * 40)
+        [line] = sc.below_minimum(self.law, self.c2, ["scripts/test_x.py"])
+        self.assertIn("cannot be read", line)
+
+    def test_main_s_declaration_is_read_from_a_clone_at_an_old_pin(self):
+        # the clone sits at c1 (before the setup file), main declares the minimum: still refused
+        c3 = self.declare(self.c2)
+        self.g("update-ref", "refs/remotes/origin/main", c3)
+        self.g("checkout", "-q", "--detach", self.c1)
+        self.assertEqual(len(sc.below_minimum(self.law, self.c1, ["scripts/test_x.py"])), 1)
+
+    def test_a_malformed_minimum_is_refused(self):
+        self.declare(self.c2)
+        (self.law / "conformance" / "shared-test-setup.toml").write_text(
+            '[[test]]\npath = "scripts/test_x.py"\nlaw-rev-min = "a80e63f"\nwhy = "short"\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "law-rev-min must be a 40-hex"):
+            sc.setup_rows(self.law, self.law / "conformance" / "shared-files.toml")
+
+    def test_the_shared_tests_check_refuses_a_pin_below_the_minimum(self):
+        # run_shared_tests stops before any test runs and names the reason (exit 2)
+        with mock.patch.object(sc, "complete_partial_law", lambda law: (True, None)), \
+                mock.patch.object(sc, "below_minimum", lambda law, rev, tests: ["scripts/test_x.py needs ALICE-Law X"]):
+            code, lines = sc.run_shared_tests(self.law, self.law, ["scripts/test_x.py"])
+        self.assertEqual((code, lines), (2, ["pin below a shared test's minimum: scripts/test_x.py needs ALICE-Law X"]))
+
 if __name__ == "__main__":
     unittest.main()

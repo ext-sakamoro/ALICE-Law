@@ -89,7 +89,8 @@ SHARED_TEST_TIMEOUT = 1200
 # the self-check installs it in the crate's clone (its rust-toolchain), so a holder's CI needs no step of its own
 SETUP = "conformance/shared-test-setup.toml"
 SETUP_KEYS = {"path", "why"}  # and at least one of SETUP_NEEDS
-SETUP_NEEDS = {"rustc-targets", "platforms", "cargo-tools"}
+SETUP_NEEDS = {"rustc-targets", "platforms", "cargo-tools", "law-rev-min"}
+REV_RE = re.compile(r"^[0-9a-f]{40}$")
 CARGO_TOOL_RE = re.compile(r"^(cargo-[a-z0-9-]+)@([0-9]+\.[0-9]+\.[0-9]+)$")
 CARGO = ["cargo"]
 TOOL_KEYS = {"name", "version", "url", "sha256"}
@@ -329,7 +330,51 @@ def setup_rows(law: Path, table: Path) -> dict[str, dict]:
             if set(tools) - declared:
                 raise ValueError(f"{where}: cargo-tools {sorted(set(tools) - declared)} have no [[tool]] row")
             entry["cargo-tools"] = sorted(set(tools))
+        if "law-rev-min" in t:
+            rev = t["law-rev-min"]
+            if not isinstance(rev, str) or not REV_RE.match(rev):
+                raise ValueError(f"{where}: law-rev-min must be a 40-hex ALICE-Law commit, has {rev!r}")
+            entry["law-rev-min"] = rev
         out[path] = entry
+    return out
+
+
+def declared_minimums(law: Path) -> dict[str, set[str]]:
+    """{shared test path: the law-rev-min revisions declared for it} by the setup file at ALICE-Law's main (origin/main
+    of the clone) and at the clone's HEAD, both read: a minimum is learnt after the revisions below it, so a clone at
+    an old pin reads it from main, and a candidate commit (the fixture's) from its own tree"""
+    out: dict[str, set[str]] = {}
+    for ref in ("origin/main", "HEAD"):
+        texts = {}
+        for rel in (SETUP, "conformance/shared-files.toml"):
+            r = subprocess.run(["git", "-C", str(law), "show", f"{ref}:{rel}"], capture_output=True, text=True,
+                               encoding="utf-8")
+            if r.returncode == 0:
+                texts[rel] = r.stdout
+        if len(texts) < 2:
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel, text in texts.items():
+                (Path(tmp) / rel).parent.mkdir(parents=True, exist_ok=True)
+                (Path(tmp) / rel).write_text(text, encoding="utf-8")
+            for path, entry in setup_rows(Path(tmp), Path(tmp) / "conformance/shared-files.toml").items():
+                if "law-rev-min" in entry:
+                    out.setdefault(path, set()).add(entry["law-rev-min"])
+    return out
+
+
+def below_minimum(law: Path, rev: str, tests: list[str]) -> list[str]:
+    """each held shared test whose declared law-rev-min the revision `rev` does not contain, as one line naming the
+    file and the minimum (an unknown minimum or revision is a line too: it cannot be shown to be met)"""
+    out = []
+    for path, least in sorted((p, m) for p, ms in declared_minimums(law).items() for m in ms):
+        if path not in tests:
+            continue
+        r = subprocess.run(["git", "-C", str(law), "merge-base", "--is-ancestor", least, rev], capture_output=True)
+        if r.returncode == 1:
+            out.append(f"{path} needs ALICE-Law {least[:12]} or later; {rev[:12]} is older")
+        elif r.returncode != 0:
+            out.append(f"{path} needs ALICE-Law {least[:12]} or later; whether {rev[:12]} contains it cannot be read")
     return out
 
 
@@ -550,6 +595,10 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
         return 2, [law_line]
     if law_line:
         law_line += f" ({time.monotonic() - t0:.1f} s)"
+    pin = subprocess.run(["git", "-C", str(law), "rev-parse", "HEAD"], capture_output=True, text=True, encoding="utf-8")
+    low = below_minimum(law, pin.stdout.strip(), tests) if pin.returncode == 0 else ["ALICE-Law: git rev-parse HEAD failed"]
+    if low:  # a pin below a held test's minimum fails that test for a known reason: say it, do not run it
+        return 2, [f"pin below a shared test's minimum: {ln}" for ln in low]
     env = dict(os.environ)
     n = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
     env[f"GIT_CONFIG_KEY_{n}"] = f"url.{law.resolve().as_uri()}.insteadOf"

@@ -5,7 +5,9 @@
 # needs), and at least one of rustc-targets (target triples for `rustup target add`), cargo-tools (cargo-<name>@<x.y.z>
 # with a [[tool]] row below; kept when `cargo <name> --version` already prints it) and platforms (the platforms the
 # tested tool runs on in the holders' CI and preflight: the self-check runs the test only there, and names it as not
-# run on another; a tool that runs on a platform has its test run there, so a failure there is the tool's to fix).
+# run on another; a tool that runs on a platform has its test run there, so a failure there is the tool's to fix)
+# and law-rev-min (the oldest ALICE-Law commit the test runs on: scripts/g11_fixture_bump.py refuses a pin below it
+# and the self-check names it instead of running the test, both reading main's declaration).
 
 [[test]]
 path = "scripts/test_fneg_fma_ir_check.py"
@@ -57,3 +59,8 @@ name = "cargo-semver-checks"
 version = "0.50.0"
 url = "https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v{version}/cargo-semver-checks-{target}.tar.gz"
 sha256 = { "x86_64-unknown-linux-gnu" = "52a65dc88dc53fa8b57d6087954eb52cda149ca03bcfca78ce3fdecd23f893c4", "aarch64-unknown-linux-gnu" = "e35f435ea322659381f52e7034bb4f0470108f5b267d29f13cf08152fa4af29b", "aarch64-apple-darwin" = "f99f928d67501c29e8410026f27a54cf799fb13611c3b4a6a58f2772cf7e3799", "x86_64-apple-darwin" = "e320f7368a3d37a96d6509c0d5dd1d69bde4e8ef5fcb76d60b5a5a0ae4b755be", "x86_64-pc-windows-msvc" = "82df31e99ea91f73c2906b50ba6c09e82556a5fb1cc936021929d5f0dd948548" }
+
+[[test]]
+path = "scripts/test_g11_table.py"
+law-rev-min = "a80e63f9730c1926456ae153e012002414a40934"
+why = "its fixture fetches an older ALICE-Law revision, which a blobless (partial) clone cannot serve; the self-check completes a partial clone from ALICE-Law a80e63f on, so a pin below it fails this test for that reason alone (2026-11-28: ALICE-Analytics and ALICE-SDF at 04e44e4)"
