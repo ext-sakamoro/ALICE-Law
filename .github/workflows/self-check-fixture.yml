@@ -1,4 +1,4 @@
-# The self-check on real holders, on Linux, macOS and Windows, before any holder takes this revision
+# The self-check on real holders, on Linux and Windows (macOS weekly), before any holder takes this revision
 #
 # Each holder below is cloned at its main and bumped to this commit by scripts/g11_fixture_bump.py (the pins, the
 # manifest's ALICE-Law names and every shared copy at its row's target, as the holder's own bump commit writes them),
@@ -62,7 +62,9 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        os: [ubuntu-24.04, macos-latest, windows-latest]
+        # a ci/ push: Linux and Windows (hosted macOS is not run on push; the macOS evidence is the local preflight
+        # on a Mac); the weekly and dispatched runs add macOS
+        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-24.04","windows-latest"]') || fromJSON('["ubuntu-24.04","windows-latest","macos-latest"]') }}
         # the fewest holders that together carry every shared test file a pinned holder holds
         holder:
           - ALICE-Analytics
