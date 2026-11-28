@@ -63,6 +63,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import tomllib
 import urllib.request
 import zipfile
@@ -543,9 +544,12 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
                           encoding="utf-8", errors="replace")
     if head.returncode != 0:
         return 2, [f"git rev-parse HEAD failed ({head.stderr.strip()[:200]})"]
+    t0 = time.monotonic()
     complete, law_line = complete_partial_law(law)
     if not complete:
         return 2, [law_line]
+    if law_line:
+        law_line += f" ({time.monotonic() - t0:.1f} s)"
     env = dict(os.environ)
     n = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
     env[f"GIT_CONFIG_KEY_{n}"] = f"url.{law.resolve().as_uri()}.insteadOf"
@@ -583,10 +587,13 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
             lines.append(line)
             if bin_dir.is_dir():
                 env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+        took: dict[str, float] = {}
         for rel in run:
+            t0 = time.monotonic()
             try:
                 r = subprocess.run([sys.executable, rel], cwd=clone, env=env, capture_output=True, text=True,
                                    encoding="utf-8", errors="replace", timeout=timeout)
+                took[rel] = time.monotonic() - t0
             except subprocess.TimeoutExpired:
                 failed.append(rel)
                 lines.append(f"{rel}: did not finish in {timeout} s")
@@ -600,7 +607,10 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
         lines.append(f"{len(failed)} of {len(run)} shared test file(s) failed: {', '.join(failed)}")
         return 1, lines
     tail = f" ({len(elsewhere)} declared for other platforms, not run here)" if elsewhere else ""
-    lines.append(f"{len(run)} shared test file(s) passed{tail}: {', '.join(run) or '(none)'}")
+    slow = sorted(took.items(), key=lambda kv: -kv[1])[:3]
+    timing = (f" ({sum(took.values()):.1f} s; slowest: " + ", ".join(f"{rel} {t:.1f} s" for rel, t in slow) + ")"
+              if took else "")
+    lines.append(f"{len(run)} shared test file(s) passed{tail}: {', '.join(run) or '(none)'}{timing}")
     return 0, lines
 
 
@@ -659,10 +669,12 @@ def run_checks(repo: Path, name: str, law: Path, rev: str, tree: Path, private: 
             print("g11 self-check: non-pass: a private crate's baseline is not handed in (--non-pass-baseline FILE): "
                   "not checked")
             continue
+        t0 = time.monotonic()  # each check's time is printed: a slow leg (a Windows runner) is measured, not guessed
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         lines = [ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()]
         codes.append(r.returncode)
-        print(f"g11 self-check: {label}: exit {r.returncode}: {lines[-1] if lines else '(no output)'}")
+        print(f"g11 self-check: {label}: exit {r.returncode}: {lines[-1] if lines else '(no output)'} "
+              f"({time.monotonic() - t0:.1f} s)", flush=True)
         if r.returncode != 0:
             for ln in lines[-12:-1]:
                 print(f"  {ln}")

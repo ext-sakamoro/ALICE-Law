@@ -161,6 +161,8 @@ class SelfCheck(Fixture):
         self.assertIn(str(self.law / "conformance" / "shared-files.toml"), calls[2])
         self.assertEqual(calls[3][1:3], ["--check-manifest", str(self.crate.resolve())])
         self.assertIn("summary of g11_table_check.py", out)
+        for label in ("g11-table", "g11-rows", "copies", "manifest"):  # each check line ends with its time
+            self.assertRegex(out, rf"(?m)^g11 self-check: {label}: exit 0: .* \(\d+\.\d s\)$")
 
     def test_a_failing_shared_test_is_a_finding_and_every_check_still_runs(self):
         self.shared_test("import sys\nprint('a fixture finding')\nsys.exit(1)\n")
@@ -1013,7 +1015,12 @@ class PartialLaw(unittest.TestCase):
     def test_a_partial_law_clone_is_completed_and_the_old_revision_is_read(self):
         code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"])
         self.assertEqual(code, 0, lines)
-        self.assertIn("setup: ALICE-Law was a partial clone: every object fetched once from its origin", lines)
+        setup = [ln for ln in lines if ln.startswith("setup: ALICE-Law was a partial clone: every object fetched once")]
+        self.assertEqual(len(setup), 1, lines)
+        # each phase's time is printed, so a slow leg (a Windows runner) is measured, not guessed
+        self.assertRegex(setup[0], r" \(\d+\.\d s\)$")
+        self.assertRegex(lines[-1], r"passed: scripts/test_shared_probe\.py \(\d+\.\d s; slowest: "
+                                    r"scripts/test_shared_probe\.py \d+\.\d s\)$")
 
     def test_without_the_completion_the_old_revision_cannot_be_read(self):
         # the mutant: the blobless clone is used as it is, so the test's fetch of the older revision fails
