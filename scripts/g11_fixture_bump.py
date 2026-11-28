@@ -91,9 +91,14 @@ def write_g11_pin(holder: Path, rev: str, checker_sha: str) -> bool:
     return True
 
 
+OTHER_PIN_RE = re.compile(r"\.github/([a-z0-9-]+-pin)\b")
+BUMPED_PINS = {"shared-files-pin", "g11-table-pin"}
+
+
 def rename_rev(text: str, old: str, new: str) -> tuple[str, int]:
     """every `ALICE-Law <hex>` whose hex is a prefix (7 digits or more) of `old`, renamed to `new` with as many
-    digits; the longest match is taken, so an 8-digit form is never left with a stray digit"""
+    digits; the longest match is taken, so an 8-digit form is never left with a stray digit; a line that names
+    another pin (`.github/public-text-pin` ...) is left alone: that pin keeps its revision, which may equal the old one"""
     n = 0
 
     def sub(m: re.Match) -> str:
@@ -103,7 +108,14 @@ def rename_rev(text: str, old: str, new: str) -> tuple[str, int]:
             n += 1
             return f"ALICE-Law {new[:len(h)]}"
         return m.group(0)
-    return re.sub(r"ALICE-Law ([0-9a-f]{7,40})(?![0-9a-f])", sub, text), n
+    lines = text.splitlines(keepends=True)
+    out = []
+    for line in lines:
+        if set(OTHER_PIN_RE.findall(line)) - BUMPED_PINS:
+            out.append(line)
+        else:
+            out.append(re.sub(r"ALICE-Law ([0-9a-f]{7,40})(?![0-9a-f])", sub, line))
+    return "".join(out), n
 
 
 def copies(rows: list[dict], name: str, private: bool, holder: Path) -> list[dict]:
@@ -140,7 +152,7 @@ def target_bytes(row: dict, law: Path, holder: Path, source_url: str, cache: Pat
         src = row["source"]
         repo = cache / src["repo"]
         if not repo.is_dir():
-            subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+            subprocess.run(["git", "init", "-q", "--", str(repo)], check=True, capture_output=True)
         git(repo, "fetch", "-q", "--depth", "1", source_url.format(repo=src["repo"]), src["rev"])
         r = subprocess.run(["git", "-C", str(repo), "show", f"{src['rev']}:{row['path']}"], capture_output=True)
         if r.returncode != 0:
@@ -153,6 +165,7 @@ def target_bytes(row: dict, law: Path, holder: Path, source_url: str, cache: Pat
 
 def bump(holder: Path, law: Path, source_url: str = SOURCE_URL) -> tuple[int, int, bool]:
     """(copies set, manifest names renamed, g11 pin present); raises Unbuildable"""
+    holder, law = holder.resolve(), law.resolve()  # `--holder .` has no name or parent to build the cache beside
     rev = git(law, "rev-parse", "HEAD").stdout.strip()
     table_sha = sha256((law / TABLE).read_bytes())
     checker_sha = sha256((law / "scripts" / "shared_files_check.py").read_bytes())
@@ -194,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
     except (Unbuildable, OSError, KeyError, ValueError) as e:  # tomllib.TOMLDecodeError is a ValueError
         print(f"g11 fixture bump: {a.holder}: not built ({e})")
         return 2
-    print(f"g11 fixture bump: {a.holder.name}: {changed} copies set to their targets, {renamed} manifest name(s) "
+    print(f"g11 fixture bump: {a.holder.resolve().name}: {changed} copies set to their targets, {renamed} manifest name(s) "
           f"renamed, g11-table-pin {'moved' if has_g11 else 'absent'}")
     return 0
 

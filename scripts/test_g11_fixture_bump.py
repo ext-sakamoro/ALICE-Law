@@ -51,6 +51,16 @@ class RenameRev(unittest.TestCase):
         out, _ = fb.rename_rev(f"ALICE-Law {OLD[:8]}'s table", OLD, "4501108d" + "0" * 32)
         self.assertEqual(out, "ALICE-Law 4501108d's table")
 
+    def test_a_line_naming_another_pin_keeps_its_revision(self):
+        # a note about .github/public-text-pin may name the same revision as the old shared-files pin: that pin does
+        # not move, so its note does not either (2026-11-28 Physics: a blanket replace renamed it)
+        text = (f"a: .github/public-text-pin pins ALICE-Law {OLD[:8]}\n"
+                f"b: .github/shared-files-pin (ALICE-Law {OLD[:7]})\nc: ALICE-Law {OLD[:7]}\n")
+        out, n = fb.rename_rev(text, OLD, "1" * 40)
+        self.assertEqual(out, f"a: .github/public-text-pin pins ALICE-Law {OLD[:8]}\n"
+                              f"b: .github/shared-files-pin (ALICE-Law 1111111)\nc: ALICE-Law 1111111\n")
+        self.assertEqual(n, 2)
+
     def test_another_revision_and_a_short_prefix_are_left_alone(self):
         text = f"ALICE-Law 0e8c14e and ALICE-Law {OLD[:6]}"
         self.assertEqual(fb.rename_rev(text, OLD, "1" * 40), (text, 0))
@@ -133,6 +143,24 @@ class Bump(unittest.TestCase):
         self.assertEqual((self.holder / "scripts" / "own.sh").read_bytes(), b"own\n")
         self.assertIn("2 copies set to their targets, 1 manifest name(s) renamed, g11-table-pin moved", out)
         self.assertEqual(git(self.holder, "status", "--porcelain"), "", "the bump is committed")
+
+    def test_the_holder_given_as_a_relative_path_and_a_row_read_from_its_source(self):
+        # `--holder .` from inside the clone, with a copy that must be fetched from the source repository
+        # (2026-11-28 ALICE-LOL: the cache path became "-sources/..." and git read it as an option)
+        (self.holder / "scripts" / "uni.py").unlink(missing_ok=True)
+        git(self.holder, "commit", "-q", "--allow-empty", "-m", "no uni")
+        cwd = os.getcwd()
+        os.chdir(self.holder)
+        try:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = fb.main(["--holder", ".", "--law", str(self.law), "--source-url", str(self.src.parent / "{repo}")])
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertEqual((self.holder / "scripts" / "uni.py").read_bytes(), self.uni)
+        self.assertIn("g11 fixture bump: holder: ", out.getvalue())
+        self.assertFalse((self.holder / "-sources").exists())
 
     def test_a_row_not_listing_the_public_holder_is_not_copied(self):
         self.table(holder_in_uniform=False)
