@@ -40,6 +40,7 @@ python3 scripts/workflow_gh_token_check.py
 python3 scripts/test_g11_table_check.py
 python3 scripts/test_g11_table_gen.py
 python3 scripts/test_g11_self_check.py
+python3 scripts/test_g11_fixture_bump.py
 python3 scripts/test_subprocess_encoding_check.py
 python3 scripts/subprocess_encoding_check.py
 python3 scripts/test_checker_case.py

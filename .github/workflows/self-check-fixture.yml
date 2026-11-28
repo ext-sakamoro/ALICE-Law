@@ -1,0 +1,116 @@
+# The self-check on real holders, on Linux and Windows (macOS weekly), before any holder takes this revision
+#
+# Each holder below is cloned at its main and bumped to this commit by scripts/g11_fixture_bump.py (the pins, the
+# manifest's ALICE-Law names and every shared copy at its row's target, as the holder's own bump commit writes them),
+# then scripts/g11_self_check.py runs on it: the table, rows, copies, manifest, non-pass, no-panic and every shared
+# test file the holder carries (on the platforms conformance/shared-test-setup.toml declares for it). The holders
+# together carry every shared test file a pinned holder holds, so a change to the self-check, the table, a shared
+# test file or its declared setup is run on every OS here first. A fixture that cannot be built is red.
+#
+# On a ci/ push that changes the self-check, its checkers, the table or a shared test (patterns:
+# .github/paths/self-check-fixture.txt), weekly, and on demand.
+
+name: Self-check fixture
+
+on:
+  schedule:
+    - cron: "17 5 * * 2"   # Tuesdays 05:17 UTC
+  workflow_dispatch:
+  push:
+    # ci/** only: a landing fast-forwards main to the commit the ci/ run already proved (no second run of the same sha)
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-check-fixture-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # which files changed — scripts/changed_paths.py (a schedule or manual run always runs; any error runs)
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+      - name: decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --before "$BEFORE" --after "$AFTER" --created "$CREATED" --forced "$FORCED"
+          --patterns-file .github/paths/self-check-fixture.txt
+
+  fixture:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    name: Self-check of ${{ matrix.holder }} bumped to this commit (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        # a ci/ push: Linux and Windows (hosted macOS is not run on push; the macOS evidence is the local preflight
+        # on a Mac); the weekly and dispatched runs add macOS
+        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-24.04","windows-latest"]') || fromJSON('["ubuntu-24.04","windows-latest","macos-latest"]') }}
+        # the fewest holders that together carry every shared test file a pinned holder holds
+        holder:
+          - ALICE-Analytics
+          - ALICE-Physics
+          - ALICE-Channel
+          - ALICE-SDF
+          - ALICE-Kinematics
+          - ALICE-ML
+          - ALICE-Zip
+          - ALICE-Edge
+          # runs its self-check in a 3-OS job (its Windows leg was the first to fail the shared tests, 2026-11-28)
+          - ALICE-Sign
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # a shared test reads ALICE-Law at older pins (the holders' CI clones it whole)
+      - name: Bump ${{ matrix.holder }} to this commit
+        shell: bash
+        env:
+          HOLDER: ${{ matrix.holder }}
+        run: |
+          py=$(command -v python3 || command -v python)
+          git -c core.autocrlf=false clone --quiet "https://github.com/ext-sakamoro/$HOLDER.git" "$RUNNER_TEMP/$HOLDER"
+          "$py" scripts/g11_fixture_bump.py --holder "$RUNNER_TEMP/$HOLDER"
+          cd "$RUNNER_TEMP/$HOLDER"
+          rustup toolchain install || rustup show
+      - name: The self-check on the bumped holder
+        shell: bash
+        env:
+          HOLDER: ${{ matrix.holder }}
+        run: |
+          py=$(command -v python3 || command -v python)
+          law=$PWD
+          cd "$RUNNER_TEMP/$HOLDER"
+          "$py" "$law/scripts/g11_self_check.py" --repo . --name "$HOLDER"
+
+  gate:
+    name: Gate
+    if: always()
+    needs: [changes, fixture]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"

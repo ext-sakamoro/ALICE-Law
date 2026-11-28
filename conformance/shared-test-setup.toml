@@ -1,10 +1,59 @@
 # What a shared test (a scripts/test_*.py row of shared-files.toml) needs on the machine before it runs.
 # scripts/g11_self_check.py's shared-tests check installs it in the crate's clone (rustup, the crate's own
 # toolchain) and then runs the test, so a holder's CI step needs no setup of its own; a setup that cannot be
-# installed is not checked (exit 2), the test is never skipped. Keys: path (a shared test row), rustc-targets
-# (target triples for `rustup target add`), why (what the test does with them).
+# installed is not checked (exit 2), the test is never skipped. Keys: path (a shared test row), why (what the test
+# needs), and at least one of rustc-targets (target triples for `rustup target add`), cargo-tools (cargo-<name>@<x.y.z>
+# with a [[tool]] row below; kept when `cargo <name> --version` already prints it) and platforms (the platforms the
+# tested tool runs on in the holders' CI and preflight: the self-check runs the test only there, and names it as not
+# run on another; a tool that runs on a platform has its test run there, so a failure there is the tool's to fix).
 
 [[test]]
 path = "scripts/test_fneg_fma_ir_check.py"
 rustc-targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
-why = "every probe in tools/fneg-fma-ir-probes is compiled to LLVM IR for both architectures (the SIMD probes only build on their own), and the test refuses to run without either target"
+platforms = ["linux", "macos"]
+why = "the probe tests run in g3-ir.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey of the holders' workflows); every probe in tools/fneg-fma-ir-probes is compiled to LLVM IR for both architectures (the SIMD probes only build on their own), and the test refuses to run without either target"
+
+[[test]]
+path = "scripts/test_clippy_canary.py"
+platforms = ["linux", "macos"]
+why = "clippy_canary.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 15 holders)"
+
+[[test]]
+path = "scripts/test_gen_clippy_canary_calls.py"
+platforms = ["linux", "macos"]
+why = "gen_clippy_canary_calls.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 15 holders)"
+
+[[test]]
+path = "scripts/test_id_move_check.py"
+platforms = ["linux", "macos"]
+why = "id_move_check.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 18 holders)"
+
+[[test]]
+path = "scripts/test_public_text.py"
+platforms = ["linux", "macos"]
+why = "public_text.sh runs in the holders' public-text.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 40 holders)"
+
+[[test]]
+path = "scripts/test_semver_gate.py"
+cargo-tools = ["cargo-semver-checks@0.50.0"]
+platforms = ["linux", "macos"]
+why = "SemverEndToEnd runs the real cargo-semver-checks (the holders' semver-checks.yml installs 0.50.0 on Linux, preflight runs it on macOS) and refuses to run without it; semver_gate.py never runs on Windows (2026-11-28 survey: 17 jobs)"
+
+[[test]]
+path = "scripts/test_gated_tests.py"
+platforms = ["linux", "macos"]
+why = "gated_tests.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 7 jobs)"
+
+[[test]]
+path = "scripts/test_clippy_external_coverage.py"
+platforms = ["linux", "macos"]
+why = "clippy_external_coverage.py runs in the holders' ci.yml on Linux and in preflight on macOS, never on Windows (2026-11-28 survey: 4 jobs)"
+
+# A cargo tool a test declares: the release archive for the host's target triple is fetched, checked against its
+# SHA-256 here and unpacked into a directory on the tests' PATH (nothing is installed); a host with no archive here
+# builds that exact version with `cargo install --locked`.
+[[tool]]
+name = "cargo-semver-checks"
+version = "0.50.0"
+url = "https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v{version}/cargo-semver-checks-{target}.tar.gz"
+sha256 = { "x86_64-unknown-linux-gnu" = "52a65dc88dc53fa8b57d6087954eb52cda149ca03bcfca78ce3fdecd23f893c4", "aarch64-unknown-linux-gnu" = "e35f435ea322659381f52e7034bb4f0470108f5b267d29f13cf08152fa4af29b", "aarch64-apple-darwin" = "f99f928d67501c29e8410026f27a54cf799fb13611c3b4a6a58f2772cf7e3799", "x86_64-apple-darwin" = "e320f7368a3d37a96d6509c0d5dd1d69bde4e8ef5fcb76d60b5a5a0ae4b755be", "x86_64-pc-windows-msvc" = "82df31e99ea91f73c2906b50ba6c09e82556a5fb1cc936021929d5f0dd948548" }

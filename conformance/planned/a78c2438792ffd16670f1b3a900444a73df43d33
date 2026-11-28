@@ -162,8 +162,11 @@ class SharedFiles(unittest.TestCase):
         archive = subprocess.run(["git", "-C", str(ROOT), "-c", "core.autocrlf=false", "-c", "core.eol=lf",
                                   "archive", "HEAD"], check=True, capture_output=True)
         subprocess.run(["tar", "-x", "-C", str(self.tree)], input=archive.stdout, check=True)
+        # the committed bytes, as the rest of the tree: a working copy checked out with CRLF (Windows without an
+        # eol attribute) would be a finding of its own
         for rel in ("scripts/shared_files.sh", ".github/shared-files-pin"):
-            shutil.copy(ROOT / rel, self.tree / rel)
+            shown = subprocess.run(["git", "-C", str(ROOT), "show", f"HEAD:{rel}"], check=True, capture_output=True)
+            (self.tree / rel).write_bytes(shown.stdout)
 
     def tearDown(self):
         self.tmp.cleanup()
