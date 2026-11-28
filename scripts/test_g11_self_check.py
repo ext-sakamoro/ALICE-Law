@@ -967,6 +967,74 @@ class SharedTestSetup(Fixture):
         self.assertFalse(self.ran.exists())
 
 
+# fetches ALICE-Law's older revision OLD by its public url and reads a file only that revision has
+OLD_REV_TEST = ("import pathlib, subprocess, sys, tempfile\n"
+                "d = tempfile.mkdtemp()\n"
+                "subprocess.run(['git', 'init', '-q', d], check=True)\n"
+                "r = subprocess.run(['git', '-C', d, 'fetch', '-q', 'https://github.com/ext-sakamoro/ALICE-Law', 'OLD'],"
+                " capture_output=True, text=True)\n"
+                "s = subprocess.run(['git', '-C', d, 'show', 'OLD:old.txt'], capture_output=True, text=True)\n"
+                "sys.exit(0 if r.returncode == 0 and s.stdout == 'only in the old revision\\n' else 3)\n")
+
+
+class PartialLaw(unittest.TestCase):
+    """a holder's CI clones ALICE-Law with --filter=blob:none: a shared test that fetches an older revision from that
+    checkout reads it only after the self-check completes the clone"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        src, self.law, self.crate = root / "src", root / "law", root / "crate"
+        src.mkdir()
+        subprocess.run(["git", "init", "-q", str(src)], check=True, env=ENV)
+        (src / "old.txt").write_text("only in the old revision\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(src), "add", "-A"], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(src), "commit", "-q", "-m", "old"], check=True, env=ENV)
+        self.old = subprocess.run(["git", "-C", str(src), "rev-parse", "HEAD"], capture_output=True, text=True,
+                                  check=True, encoding="utf-8").stdout.strip()
+        (src / "old.txt").unlink()
+        (src / "new.txt").write_text("new\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(src), "add", "-A"], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(src), "commit", "-q", "-m", "new"], check=True, env=ENV)
+        for k in ("uploadpack.allowFilter", "uploadpack.allowAnySHA1InWant"):
+            subprocess.run(["git", "-C", str(src), "config", k, "true"], check=True, env=ENV)
+        subprocess.run(["git", "clone", "-q", "--no-local", "--filter=blob:none", src.resolve().as_uri(),
+                        str(self.law)], check=True, env=ENV, capture_output=True)
+        (self.crate / "scripts").mkdir(parents=True)
+        (self.crate / "scripts" / "test_shared_probe.py").write_text(OLD_REV_TEST.replace("OLD", self.old),
+                                                                     encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(self.crate)], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(self.crate), "add", "-A"], check=True, env=ENV)
+        subprocess.run(["git", "-C", str(self.crate), "commit", "-q", "-m", "c"], check=True, env=ENV)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_partial_law_clone_is_completed_and_the_old_revision_is_read(self):
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"])
+        self.assertEqual(code, 0, lines)
+        self.assertIn("setup: ALICE-Law was a partial clone: every object fetched once from its origin", lines)
+
+    def test_without_the_completion_the_old_revision_cannot_be_read(self):
+        # the mutant: the blobless clone is used as it is, so the test's fetch of the older revision fails
+        with mock.patch.object(sc, "complete_partial_law", lambda law: (True, None)):
+            code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"])
+        self.assertEqual(code, 1, lines)
+
+    def test_a_full_clone_is_left_as_it_is(self):
+        self.assertEqual(sc.complete_partial_law(self.law), (True, "setup: ALICE-Law was a partial clone: every object "
+                                                                  "fetched once from its origin"))
+        self.assertEqual(sc.complete_partial_law(self.law), (True, None))
+
+    def test_a_partial_clone_whose_origin_cannot_be_reached_is_not_checked(self):
+        subprocess.run(["git", "-C", str(self.law), "remote", "set-url", "origin", str(Path(self.tmp.name) / "gone")],
+                       check=True, env=ENV)
+        code, lines = sc.run_shared_tests(self.crate, self.law, ["scripts/test_shared_probe.py"])
+        self.assertEqual(code, 2, lines)
+        self.assertTrue(lines[-1].startswith("setup: ALICE-Law is a partial clone and `git fetch --refetch origin` "
+                                             "failed"), lines)
+
+
 class PrivateCopiesReal(unittest.TestCase):
     """the private mode with the real scripts/shared_files_check.py: a private repository holding a stale copy of a
     shared file fails, the row's bytes pass (the other three checks are stubs)"""

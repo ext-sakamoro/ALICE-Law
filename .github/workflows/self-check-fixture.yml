@@ -78,18 +78,23 @@ jobs:
           # runs its self-check in a 3-OS job (its Windows leg was the first to fail the shared tests, 2026-11-28)
           - ALICE-Sign
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-        with:
-          persist-credentials: false
-          fetch-depth: 0  # a shared test reads ALICE-Law at older pins (the holders' CI clones it whole)
+      # ALICE-Law exactly as a holder's CI step clones it (blobless, detached at the commit): a shared test that reads
+      # ALICE-Law from it meets the same checkout here first (2026-11-28: a full checkout here hid that a blobless
+      # clone cannot serve an older revision)
+      - name: ALICE-Law at this commit, cloned as a holder clones it
+        shell: bash
+        run: |
+          git -c core.autocrlf=false clone --quiet --filter=blob:none "https://github.com/$GITHUB_REPOSITORY.git" "$RUNNER_TEMP/alice-law"
+          git -C "$RUNNER_TEMP/alice-law" checkout --quiet --detach "$GITHUB_SHA"
       - name: Bump ${{ matrix.holder }} to this commit
         shell: bash
         env:
           HOLDER: ${{ matrix.holder }}
         run: |
           py=$(command -v python3 || command -v python)
+          law="$RUNNER_TEMP/alice-law"
           git -c core.autocrlf=false clone --quiet "https://github.com/ext-sakamoro/$HOLDER.git" "$RUNNER_TEMP/$HOLDER"
-          "$py" scripts/g11_fixture_bump.py --holder "$RUNNER_TEMP/$HOLDER"
+          "$py" "$law/scripts/g11_fixture_bump.py" --holder "$RUNNER_TEMP/$HOLDER" --law "$law"
           cd "$RUNNER_TEMP/$HOLDER"
           rustup toolchain install || rustup show
       - name: The self-check on the bumped holder
@@ -98,7 +103,7 @@ jobs:
           HOLDER: ${{ matrix.holder }}
         run: |
           py=$(command -v python3 || command -v python)
-          law=$PWD
+          law="$RUNNER_TEMP/alice-law"
           cd "$RUNNER_TEMP/$HOLDER"
           "$py" "$law/scripts/g11_self_check.py" --repo . --name "$HOLDER"
 

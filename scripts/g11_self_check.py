@@ -475,6 +475,27 @@ def this_platform(name: str = sys.platform) -> str:
     return "windows" if name.startswith(("win", "cygwin", "msys")) else "macos" if name == "darwin" else "linux"
 
 
+def complete_partial_law(law: Path) -> tuple[bool, str | None]:
+    """(ok, line): a partial clone of ALICE-Law (a holder's CI clones it with --filter=blob:none) cannot serve an
+    older revision's blobs to the tests that fetch ALICE-Law from it (upload-pack does not fetch lazily: "lazy
+    fetching disabled ... could not fetch <blob> from promisor remote"), so its filter is dropped and every object is
+    fetched once from its origin (`git fetch --refetch`); (True, None) for a full clone, False when the fetch fails"""
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(law), *args], capture_output=True, text=True, encoding="utf-8",
+                              errors="replace")
+    partial = git("config", "--get", "remote.origin.promisor").stdout.strip() == "true" \
+        or bool(git("config", "--get", "extensions.partialclone").stdout.strip())
+    if not partial:
+        return True, None
+    git("config", "--unset", "remote.origin.partialclonefilter")
+    git("config", "--unset", "remote.origin.promisor")
+    r = git("fetch", "-q", "--refetch", "origin")
+    if r.returncode != 0:
+        return False, (f"setup: ALICE-Law is a partial clone and `git fetch --refetch origin` failed "
+                       f"({r.stderr.strip()[:200]}): the shared tests are not run")
+    return True, "setup: ALICE-Law was a partial clone: every object fetched once from its origin"
+
+
 def install_setup(clone: Path, targets: list[str], rustup: list[str]) -> tuple[bool, str]:
     """(installed, line): `rustup target add` for the targets the crate's toolchain (rustup run in the clone, so its
     rust-toolchain file chooses) does not have yet; False when rustup cannot be run or either call fails"""
@@ -522,6 +543,9 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
                           encoding="utf-8", errors="replace")
     if head.returncode != 0:
         return 2, [f"git rev-parse HEAD failed ({head.stderr.strip()[:200]})"]
+    complete, law_line = complete_partial_law(law)
+    if not complete:
+        return 2, [law_line]
     env = dict(os.environ)
     n = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
     env[f"GIT_CONFIG_KEY_{n}"] = f"url.{law.resolve().as_uri()}.insteadOf"
@@ -529,7 +553,7 @@ def run_shared_tests(repo: Path, law: Path, tests: list[str], timeout: int = SHA
     env["GIT_CONFIG_COUNT"] = str(n + 1)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     failed: list[str] = []
-    lines: list[str] = []
+    lines: list[str] = [law_line] if law_line else []
     with tempfile.TemporaryDirectory() as tmp:
         clone = Path(tmp) / "clone"
         for cmd in (["git", "clone", "-q", "--no-checkout", "--shared", str(repo), str(clone)],
